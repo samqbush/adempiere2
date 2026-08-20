@@ -5,11 +5,6 @@ plugins {
 }
 
 
-repositories {
-    mavenLocal()
-    mavenCentral()
-}
-
 allprojects {
     tasks.withType(Javadoc) {
     	options.addStringOption('Xdoclint:none', '-quiet')
@@ -97,6 +92,45 @@ sourceSets {
 	main {
 		java {
 			srcDirs = ['src']
+		}
+	}
+	test {
+		java {
+			srcDirs = ['test/src', '../org.adempiere.test/src/test/java']
+		}
+		resources {
+			srcDirs = ['../org.adempiere.test/src/test/resource']
+		}
+	}
+}
+
+dependencies {
+	testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+	testImplementation 'org.junit.jupiter:junit-jupiter-params:5.7.0'
+	testImplementation 'org.junit.platform:junit-platform-engine:1.7.0'
+	testImplementation 'org.junit.platform:junit-platform-launcher:1.7.0'
+	testImplementation 'junit:junit:4.13.2'
+	testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+	testImplementation 'org.mockito:mockito-junit-jupiter:4.11.0'
+	testImplementation 'org.mockito:mockito-inline:4.11.0'
+	testImplementation files('../tools/lib/testing/SuperCSV-with_src-1.52.jar')
+	testImplementation files('../tools/lib/commons-lang-2.1.jar')
+}
+
+tasks.named('test') {
+	useJUnitPlatform {
+		includeTags 'UnitTest'
+	}
+	testLogging {
+		events 'passed', 'skipped', 'failed'
+	}
+	doFirst {
+		def standalone = classpath.files.find {
+			it.name.startsWith('junit-platform-console-standalone')
+		}
+		if (standalone != null) {
+			throw new GradleException(
+				"Shaded JUnit console must not be on test runtime: ${standalone}")
 		}
 	}
 }

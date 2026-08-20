@@ -34,14 +34,14 @@ import org.junit.jupiter.api.Test;
 @Tag("ImpFormat")
 @Tag("MImpFormat")
 @Tag("MImpFormatRow")
-@Tag("UnitTest")
+@Tag("IntegrationTest")
 class UT_ImpFormat extends CommonGWSetup {
 
 	static MImpFormat importFormat = null;
 
 
 	@BeforeEach
-	static void beforeEach() {
+	void beforeEach() {
 		// Accounting - Accounts
 		importFormat = new MImpFormat(ctx, 102, trxName);
 	}

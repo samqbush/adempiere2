@@ -2,15 +2,43 @@ plugins {
 	id 'java-library'
 	id 'maven-publish'
 	id 'signing'
-}
-
-
-repositories {
-    mavenLocal()
-    mavenCentral()
+	id 'org.cyclonedx.bom' version '1.8.2'
 }
 
 allprojects {
+    apply plugin: 'java-library'
+    group = 'io.github.adempiere'
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(17)
+        }
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        if (project.path == ':serverRoot') {
+            sourceCompatibility = JavaVersion.VERSION_11.toString()
+            targetCompatibility = JavaVersion.VERSION_11.toString()
+        } else {
+            options.release = 11
+        }
+    }
+
+    dependencyLocking {
+        lockAllConfigurations()
+    }
+
+    plugins.withId('maven-publish') {
+        publishing {
+            repositories {
+                maven {
+                    name = 'phase1'
+                    url = rootProject.layout.buildDirectory.dir('phase1-maven-repo')
+                }
+            }
+        }
+    }
+
 	tasks.withType(Javadoc) {
     	options.addStringOption('Xdoclint:none', '-quiet')
     }
@@ -23,6 +51,139 @@ dependencies {
 java {
     withJavadocJar()
     withSourcesJar()
+}
+
+def java11CompatibilityExceptions = [':serverRoot']
+
+tasks.register('verifyJavaCompatibilityExceptions') {
+    doLast {
+        def unexpected = allprojects.findAll { project ->
+            project.path != ':' && project.tasks.withType(JavaCompile).any {
+                !it.options.release.present
+            } && !java11CompatibilityExceptions.contains(project.path)
+        }*.path
+        if (!unexpected.empty) {
+            throw new GradleException("Unregistered Java 11 compatibility exceptions: ${unexpected}")
+        }
+    }
+}
+
+tasks.register('verifyJava11Bytecode') {
+    dependsOn allprojects.collect { it.tasks.matching { task -> task.name == 'classes' } }
+    doLast {
+        def incompatible = []
+        allprojects.each { project ->
+            project.fileTree(project.layout.buildDirectory.dir('classes/java/main')).matching {
+                include '**/*.class'
+            }.each { classFile ->
+                classFile.withInputStream { input ->
+                    def header = new DataInputStream(input)
+                    if (header.readInt() == 0xCAFEBABE) {
+                        header.readUnsignedShort()
+                        def major = header.readUnsignedShort()
+                        if (major > 55) {
+                            incompatible << "${project.path}:${classFile.name}=${major}"
+                        }
+                    }
+                }
+            }
+        }
+        if (!incompatible.empty) {
+            throw new GradleException(
+                "Published classes exceed Java 11 bytecode: ${incompatible.take(20)}")
+        }
+    }
+}
+
+tasks.register('verifyProjectTopology') {
+    doLast {
+        def expected = file('gradle/phase1/gradle-projects.txt').readLines()
+            .findAll { !it.blank && !it.startsWith('#') }
+        def actual = rootProject.subprojects*.path.sort()
+        if (actual != expected.sort()) {
+            throw new GradleException("Gradle topology differs. Expected ${expected}, got ${actual}")
+        }
+        if (findProject(':base:test') != null) {
+            throw new GradleException('Dormant base/test project must remain unregistered')
+        }
+    }
+}
+
+tasks.register('verifyTestClassification') {
+    doLast {
+        def roots = [
+            file('base/test/src'),
+            file('org.adempiere.test/src/test/java')
+        ]
+        def failures = []
+        roots.each { root ->
+            fileTree(root).matching { include '**/*.java' }.each { source ->
+                def text = source.text
+                def executable = text =~ /@(Test|ParameterizedTest|RepeatedTest|TestFactory)\b/
+                if (executable) {
+                    def unit = text.contains('@Tag("UnitTest")') ||
+                        text.contains('extends CommonUnitTestSetup') ||
+                        text.contains('implements UnitTestTag')
+                    def integration = text.contains('@Tag("IntegrationTest")') ||
+                        text.contains('extends CommonGWSetup') ||
+                        text.contains('extends CommonSystemSetup') ||
+                        text.contains('extends CommonIntegrationTestUtilities') ||
+                        text.contains('implements IntegrationTestTag')
+                    if (unit == integration) {
+                        failures << "${root.toPath().relativize(source.toPath())}: " +
+                            (unit ? 'ambiguous' : 'unclassified')
+                    }
+                }
+            }
+        }
+        if (!failures.empty) {
+            throw new GradleException("Test classification failures: ${failures}")
+        }
+    }
+}
+
+tasks.register('verifyTestResults') {
+    dependsOn ':base:test'
+    doLast {
+        def resultFiles = fileTree('base/build/test-results/test') {
+            include 'TEST-*.xml'
+        }
+        if (resultFiles.empty) {
+            throw new GradleException('No :base JUnit XML results were produced')
+        }
+        def executed = 0
+        resultFiles.each { result ->
+            executed += new XmlSlurper().parse(result).@tests.toInteger()
+        }
+        if (executed == 0) {
+            throw new GradleException(':base executed zero tests')
+        }
+        logger.lifecycle(":base executed ${executed} tests")
+    }
+}
+
+tasks.register('verifyPublicationContracts') {
+    doLast {
+        def expected = [:]
+        file('gradle/phase1/publications.tsv').eachLine { line ->
+            if (line && !line.startsWith('#')) {
+                def fields = line.split('\t')
+                expected[fields[0]] = [fields[1], fields[2]]
+            }
+        }
+        def actual = [:]
+        subprojects.each { project ->
+            def publishing = project.extensions.findByName('publishing')
+            def publication = publishing?.publications?.findByName('mavenJava')
+            if (publication != null) {
+                actual[project.path] = [publication.groupId, publication.artifactId]
+            }
+        }
+        if (actual != expected) {
+            throw new GradleException(
+                "Publication contracts differ. Expected ${expected}, got ${actual}")
+        }
+    }
 }
 
 tasks.withType(Javadoc) {

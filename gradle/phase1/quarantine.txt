@@ -1,0 +1,13 @@
+# Ant-only or runtime surfaces outside the Phase 1 Gradle safety gate.
+JasperReportsWebApp
+com.kkalice.adempiere.migrate
+database restore and XML migration execution
+installer and silent setup
+org.adempiere.webservice
+org.compiere.mobile
+serverApps
+sqlj
+webCM
+webStore
+zkwebui
+Ant-packaged ZK outputs for extension modules

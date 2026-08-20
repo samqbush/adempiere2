@@ -23,6 +23,21 @@
 The _ADempiere Business Suite_ _ERP/CRM/MFG/SCM/POS_ is done the Bazaar way in an open and unabated fashion. \
 Focus is on the Community that includes Technical Specialists, Functional Specialists, Implementors and End-Users. 
 
+## Reproducible core build
+
+The Phase 1 core/module gate uses the committed Gradle 8.10.2 wrapper on JDK 17
+while retaining Java 11 published bytecode:
+
+```bash
+./gradlew build verifyJava11Bytecode verifyTestClassification verifyTestResults \
+  --dependency-verification=strict
+```
+
+This covers the root and 28 included Gradle projects. It is not a replacement
+for the full Ant distribution build. Ant-only web applications, installer and
+database operations remain explicitly quarantined in
+`gradle/phase1/quarantine.txt`.
+
 - Official Page: http://www.adempiere.io
 - Official Docs: http://adempiere.io/docs
 - Download and debug source: https://www.adempiere.io/product/source-code.html#cloning-the-repository-with-a-slow-connection

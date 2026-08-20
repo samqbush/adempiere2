@@ -114,13 +114,13 @@ jobs:
            nodbrestore: true
 
       - name: Upload Binary Files
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
             name: adempiere-binary-files
             path: adempiere/install/
 
       - name: Upload Seed
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: steps.changed-files.outputs.xml-files == 'true'
         with:
             name: adempiere-postgresql-seed

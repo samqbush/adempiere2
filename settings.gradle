@@ -1,3 +1,17 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        mavenCentral()
+    }
+}
+
 rootProject.name = 'adempiere'
 
 include ':tools'
@@ -24,7 +38,6 @@ include ':org.spin.hr_time_and_attendance'
 include ':org.spin.finance_management'
 include ':org.spin.loan_management'
 include ':org.spin.store'
-include ':org.spin.authentication'
 include ':org.spin.notifier.discord'
 include ':org.spin.notifier.telegram'
 include ':JasperReports'
