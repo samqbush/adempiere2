@@ -1,0 +1,13 @@
+diff --git a/base/src/org/compiere/process/DocumentEngine.java b/base/src/org/compiere/process/DocumentEngine.java
+index 087874510..96325cb0e 100644
+--- a/base/src/org/compiere/process/DocumentEngine.java
++++ b/base/src/org/compiere/process/DocumentEngine.java
+@@ -1007,7 +1007,7 @@ public class DocumentEngine implements DocAction
+ 		//	Complete                    ..  CO
+ 		else if (docStatus.equals(STATUS_Completed))
+ 		{
+-			options[index++] = ACTION_Close;
++			options[index++] = ACTION_None;
+ 		}
+ 		//	Waiting Payment
+ 		else if (docStatus.equals(STATUS_WaitingPayment)

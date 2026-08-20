@@ -33,7 +33,7 @@ every deployable surface.
 | Primary language/runtime | Java 11 | CI installs Temurin 11 and the installer compiles for Java 11 (`.github/workflows/main.yml#L41-L51`, `install/build.xml#L45-L57`). |
 | Secondary language | Scala, with three incompatible version lines: 3.2.1, 2.13.6, and 2.11.8 | Root and module sbt definitions (`build.sbt#L15-L22`, `org.adempiere.test/build.sbt#L15-L21`, `org.adempiere.pos/build.sbt#L1-L9`). |
 | Primary full-product build | Apache Ant 1.10.10 | The root build delegates to the 32-entry Ant reactor; CI downloads Ant 1.10.10 (`build.xml#L25-L52`, `utils_dev/build.xml#L20-L54`, `.github/actions/adempiere-build/action.yml#L14-L27`). |
-| Library/module build | Gradle, without a committed wrapper | Root Gradle convention and 29 include declarations / 28 unique projects (`build.gradle#L1-L45`, `settings.gradle#L3-L31`). No `gradlew` or wrapper directory was found in the checkout. |
+| Library/module build | Gradle 8.10.2 wrapper on JDK 17, publishing Java 11 bytecode | Root Gradle convention, committed dependency locks/verification, and 28 unique included projects (`build.gradle`, `settings.gradle`, `gradle/phase1/gradle-projects.txt`). |
 | Experimental web/test build | sbt 1.6.2 with sbt-web, Tomcat, Jetty, assembly, and dotenv plugins | `project/build.properties#L1`, `project/plugins.sbt#L1-L6`, `build.sbt#L18-L178`. |
 | Desktop UI | Java Swing | The desktop main class launches `org.compiere.apps.AMenu` (`client/src/org/adempiere/Adempiere.java#L647-L675`). |
 | Primary web UI | ZK 3.6.3 on Servlet 2.4-era descriptors | ZK and custom servlet mappings are in `zkwebui/WEB-INF/web.xml#L1-L75`; 3.6.3 is recorded in the tracked ZK JAR manifests. |
@@ -73,8 +73,8 @@ developer-oriented experimental path with machine-specific assumptions.
 |---|---|---|
 | `ant build -Dnodbrestore=true` | Canonical CI-style full product build, deploy, and silent setup while skipping seed restore/migration. Requires the configured Java, ADempiere home, and app-server environment. | Root orchestration and composite CI action (`build.xml#L25-L106`, `.github/actions/adempiere-build/action.yml#L29-L38`). |
 | `ant build -Dnodbrestore=false` | Full Ant build with database restore/migration path enabled. Used when relevant build or migration files change and for release packaging. | `.github/workflows/main.yml#L80-L112`, `.github/workflows/release.yml#L47-L69`. |
-| `gradle build` | Builds the Gradle module set and is the Gradle PR/push check. It does **not** build every Ant deployable. | `.github/workflows/build_with_gradle.yml#L25-L49`, `settings.gradle#L3-L31`. |
-| `gradle publish` | Publishes Gradle artifacts to Maven Central staging during a published release. | `.github/workflows/publish_with_gradle.yml#L20-L38`. |
+| `./gradlew build --dependency-verification=strict` | Reproducible JDK 17 module gate across 28 included projects. It executes 832 core unit tests and retains Java 11 bytecode. It does **not** build every Ant deployable. | `.github/workflows/build_with_gradle.yml`, `settings.gradle`, `docs/modernization/phase-1-evidence.md`. |
+| `./gradlew publish --dependency-verification=strict` | Publishes Gradle artifacts to Maven Central staging during a published release using JDK 17. PRs validate the same coordinates in an isolated repository. | `.github/workflows/publish_with_gradle.yml`, `.github/workflows/build_with_gradle.yml`. |
 | `./utils/RUN_Adempiere.sh` | Starts the desktop Swing client. | `utils/RUN_Adempiere.sh#L20-L42`. |
 | `./utils/RUN_Server2.sh` | Starts the selected external WildFly, Tomcat, or Jetty server. | `utils/RUN_Server2.sh#L20-L85`. |
 | `./utils/RUN_ImportAdempiere.sh` | Restores the selected PostgreSQL or Oracle seed database. Destructive/database-affecting; inspect environment first. | `utils/RUN_ImportAdempiere.sh#L1-L220`. |

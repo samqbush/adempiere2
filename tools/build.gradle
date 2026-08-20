@@ -5,11 +5,6 @@ plugins {
 }
 
 
-repositories {
-	mavenLocal()
-	mavenCentral()
-}
-
 allprojects {
 	tasks.withType(Javadoc) {
 		options.addStringOption('Xdoclint:none', '-quiet')

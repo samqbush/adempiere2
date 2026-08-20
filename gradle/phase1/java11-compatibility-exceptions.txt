@@ -1,0 +1,2 @@
+# Project | reason | enforcement
+:serverRoot | JDK-internal LDAP imports require --add-exports, which javac rejects with --release | source/target 11 plus verifyJava11Bytecode

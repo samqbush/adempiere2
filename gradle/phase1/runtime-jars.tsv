@@ -1,0 +1,408 @@
+# path	classification	reason
+JasperReportsTools/lib/commons-beanutils-1.9.3.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+JasperReportsTools/lib/commons-digester-2.1.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+JasperReportsTools/lib/iReport.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+JasperReportsTools/lib/iText-2.1.7.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+JasperReportsTools/lib/jasperreports-6.17.0.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+JasperReportsTools/lib/jasperreports-fonts-6.17.0.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+JasperReportsTools/lib/jfreechart-1.0.13.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+JasperReportsWebApp/deploy/WebApp.ear/webAppEJB.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+data/seed/Adempiere.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+data/seed/Adempiere_pg.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+db/ddlutils/lib/DdlUtils-1.0-RC1.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+db/ddlutils/lib/ant-contrib-1.0b1.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+db/ddlutils/lib/commons-beanutils-1.7.0.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+db/ddlutils/lib/commons-betwixt-0.8-RC1.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+db/ddlutils/lib/commons-codec-1.3.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+db/ddlutils/lib/commons-dbcp-1.2.1.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+db/ddlutils/lib/commons-digester-1.7.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+db/ddlutils/lib/commons-lang-2.1.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+db/ddlutils/lib/commons-logging-1.0.4.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+db/ddlutils/lib/commons-pool-1.2.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+db/ddlutils/lib/dom4j-1.4.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+db/ddlutils/lib/fyracle.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+db/ddlutils/lib/jakarta-oro-2.0.8.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+db/ddlutils/lib/ojdbc6.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+db/ddlutils/lib/postgresql.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+db/ddlutils/lib/stax-api-1.0.1.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+db/ddlutils/lib/wstx-asl-3.0.2.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+extend/CostingEngine/dist/lib/liberoCE.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+glassfishfacet/lib/appserv-admin.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+glassfishfacet/lib/appserv-deployment-client.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+glassfishfacet/lib/appserv-ext.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+glassfishfacet/lib/appserv-rt.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+gradle/wrapper/gradle-wrapper.jar	source-built	Pinned Gradle 8.10.2 wrapper bootstrap
+lib/customization.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+lib/jetty.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+lib/mariadb-java-client.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+lib/mysql-connector-java-5.1.13-bin.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+lib/patches.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+lib/tomcat.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+lib/wildfly.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+lib/zkcustomization.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+lib/zkpatches.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+org.adempiere.pos/packages/ADempierePOS/lib/ADempierePOS.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.pos/zkpackages/ADempierePOS/lib/ADempierePOSzk.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/XmlSchema-1.0.3.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/activation-1.1.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/ant-1.5.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/avalon-framework-4.1.3.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/classworlds-1.1-alpha-2.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/commons-attributes-api-2.1.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/commons-beanutils-1.6.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/commons-codec-1.3.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/commons-digester-1.7.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/commons-httpclient-3.0.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/commons-logging-1.0.4.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/dom4j-1.6.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/generated_xmlbeans-sources.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/generated_xmlbeans.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/jaxen-1.1-beta-9.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/jboss-1.0.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/jcommon-1.0.0.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/jdom-1.0.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/jdtcore-3.1.0.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/jsr173_1.0_api.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/junit-3.8.1.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/logkit-1.0.1.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/plexus-container-default-1.0-alpha-8.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/plexus-utils-1.0.0.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/plexus-utils-1.0.4.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/qdox-1.5.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/spring-1.2.6.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/stax-1.1.2-dev.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/stax-api-1.0.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/stax-utils-20040917.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/wagon-provider-api-1.0-alpha-5.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/wsdl4j-1.5.2.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/wstx-asl-2.9.3.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/xbean-spring-2.8.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/xbean.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/xercesImpl-2.4.0.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/xfire-all-1.2.6-sources.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/xfire-all-1.2.6.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/xml-apis-1.3.02.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/xml-resolver-1.1.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/xmlParserAPIs-2.6.2.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.adempiere.webservice/WEB-INF/lib/xmlbeans-2.4.0-sources.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.compiere.mobile/WEB-INF/lib/commons-beanutils-bean-collections.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.compiere.mobile/WEB-INF/lib/commons-beanutils-core.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.compiere.mobile/WEB-INF/lib/commons-beanutils.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.compiere.mobile/WEB-INF/lib/commons-codec-1.3.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.compiere.mobile/WEB-INF/lib/commons-digester-1.7.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.compiere.mobile/WEB-INF/lib/commons-fileupload.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.compiere.mobile/WEB-INF/lib/commons-lang-2.1.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+org.compiere.mobile/WEB-INF/lib/commons-validator-1.2.0.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+serverApps/src/web/WEB-INF/lib/commons-beanutils-bean-collections.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+serverApps/src/web/WEB-INF/lib/commons-beanutils-core.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+serverApps/src/web/WEB-INF/lib/commons-beanutils.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+serverApps/src/web/WEB-INF/lib/commons-codec-1.3.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+serverApps/src/web/WEB-INF/lib/commons-digester-1.7.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+serverApps/src/web/WEB-INF/lib/commons-fileupload.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+serverApps/src/web/WEB-INF/lib/commons-lang-2.1.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+serverApps/src/web/WEB-INF/lib/commons-validator-1.2.0.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+serverRoot/src/web/WEB-INF/lib/jardiff.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+serverRoot/src/web/WEB-INF/lib/jnlp-servlet.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+tools/lib/HikariCP-5.0.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/OpenForecast-0.5.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/Verisign.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/activemq-core-5.7.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/etc/ant-bootstrap.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-antlr.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-apache-bcel.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-apache-bsf.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-apache-log4j.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-apache-oro.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-apache-regexp.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-apache-resolver.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-apache-xalan2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-commons-logging.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-commons-net.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-imageio.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-jai.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-javamail.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-jdepend.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-jmf.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-jsch.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-junit.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-junit4.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-junitlauncher.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-launcher.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-netrexx.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-swing.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-testutil.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant-xz.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ant/apache-ant-1.10.10/lib/ant.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/aws/aws-java-sdk-core-1.11.827.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/aws/aws-java-sdk-kms-1.11.827.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/aws/aws-java-sdk-s3-1.11.827.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/aws/joda-time-2.8.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/barbecue-1.5-beta1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/batik-all-1.9.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/bsh-2.0b6.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/bsh-engine.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/byte-buddy-1.12.19.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/commons-codec-1.10.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/commons-codec-1.6.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/commons-collections4-4.4.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/commons-io.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/commons-lang-2.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/commons-logging-1.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/commons-net-1.4.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/commons-validator-1.7.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/cron4j-2.2.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/discord/JDA-5.0.0-alpha.11.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/discord/annotations-23.0.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/discord/jackson-annotations-2.13.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/discord/jackson-core-2.13.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/discord/jackson-databind-2.13.2.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/discord/jsr305-3.0.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/discord/kotlin-stdlib-1.4.10.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/discord/kotlin-stdlib-common-1.4.10.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/discord/nv-websocket-client-2.14.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/discord/okhttp-4.9.3.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/discord/okio-jvm-2.8.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/discord/opus-java-1.1.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/discord/opus-java-api-1.1.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/discord/opus-java-natives-1.1.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/discord/trove4j-3.0.3.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ejb-api-3.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/fluent-hc-4.5.6.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/groovy-all-2.4.15.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/groovy-engine.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/harness-1.0.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/httpclient-4.5.6.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/httpclient-cache-4.5.6.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/httpclient-win-4.5.6.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/httpcore-4.4.10.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/httpmime-4.5.6.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/icepdf-core-6.2.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/icepdf-viewer-6.2.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/io-7.1.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/itext-carriage-0.8.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/itextpdf-5.5.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/jakarta.servlet-api-5.0.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/jakarta.servlet.jsp-api-3.0.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/javax.activation-1.2.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/javax.annotation-api-1.3.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/javax.inject-1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/javax.jms-api-2.0.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/javax.servlet-api-4.0.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/jcommon-1.0.18.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/jfreechart-1.0.15.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/jgraph.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/jna-4.4.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/jna-5.5.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/jna-platform-4.4.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/jnlp.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/jpayment.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/jsp-api.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/jstl.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit-old/cglib-nodep-3.2.9.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit-old/hamcrest-core-1.3-javadoc.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit-old/hamcrest-core-1.3-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit-old/hamcrest-core-1.3.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit-old/javassist-3.24.0-GA.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit-old/junit-4.13-javadoc.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit-old/junit-4.13-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit-old/junit-4.13.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit-old/mockito-core-3.5.13.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit-old/mockito-inline-3.5.13.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit-old/powermock-mockito2-2.0.2-full.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/apiguardian-api-1.1.0-javadoc.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/apiguardian-api-1.1.0-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/apiguardian-api-1.1.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/byte-buddy-1.10.15.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/byte-buddy-agent-1.10.15.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-jupiter-api-5.7.0-javadoc.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-jupiter-api-5.7.0-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-jupiter-api-5.7.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-jupiter-engine-5.7.0-javadoc.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-jupiter-engine-5.7.0-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-jupiter-engine-5.7.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-jupiter-migrationsupport-5.7.0-javadoc.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-jupiter-migrationsupport-5.7.0-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-jupiter-migrationsupport-5.7.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-jupiter-params-5.7.0-javadoc.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-jupiter-params-5.7.0-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-jupiter-params-5.7.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-commons-1.7.0-javadoc.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-commons-1.7.0-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-commons-1.7.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-console-1.7.0-javadoc.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-console-1.7.0-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-console-1.7.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-console-standalone-1.7.0-all.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-console-standalone-1.7.0-javadoc.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-console-standalone-1.7.0-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-console-standalone-1.7.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-engine-1.7.0-javadoc.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-engine-1.7.0-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-engine-1.7.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-launcher-1.7.0-javadoc.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-launcher-1.7.0-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-launcher-1.7.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-runner-1.7.0-javadoc.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-runner-1.7.0-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-runner-1.7.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-suite-api-1.7.0-javadoc.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-suite-api-1.7.0-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-suite-api-1.7.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-testkit-1.7.0-javadoc.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-testkit-1.7.0-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/junit-platform-testkit-1.7.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/mockito-core-3.6.0-javadoc.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/mockito-core-3.6.0-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/mockito-core-3.6.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/mockito-inline-3.6.0-javadoc.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/mockito-inline-3.6.0-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/mockito-inline-3.6.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/mockito-junit-jupiter-3.6.0-javadoc.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/mockito-junit-jupiter-3.6.0-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/mockito-junit-jupiter-3.6.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/objenesis-3.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/opentest4j-1.2.0-javadoc.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/opentest4j-1.2.0-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/opentest4j-1.2.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/jython-engine.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/jython.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/kernel-7.1.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/lablib-checkboxtree-3.3.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/layout-7.1.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/legacy/cashflow-support-legacy-1.0.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/legacy/crm-support-legacy-1.0.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/legacy/distribution-support-legacy-1.0.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/legacy/financial-support-legacy-1.0.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/legacy/fixed-asset-support-legacy-1.0.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/legacy/freight-support-legacy-1.0.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/legacy/hr-support-legacy-1.0.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/legacy/production-support-legacy-1.0.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/legacy/project-support-legacy-1.0.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/legacy/request-request-support-legacy-1.0.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/legacy/wms-support-legacy-1.0.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/log4j-1.2-api-2.17.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/log4j-api-2.17.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/log4j-core-2.17.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/logkit.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/looks-2.0.4.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/mail.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/mariadb-java-client.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/miglayout-3.7.1-swing.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/mysql-connector-java-5.1.13-bin.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/ooxml-schemas-1.3.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/openid/accessors-smart-2.4.8.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/openid/content-type-2.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/openid/json-smart-2.4.8.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/openid/nimbus-jose-jwt-9.22.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/openid/oauth2-oidc-sdk-9.35.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/oracle.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/org.krysalis.barcode4j_2.1.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/payflow.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/pdfa-7.1.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/poi-3.17.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/poi-ooxml-3.17.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/postgresql.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/sardine-5.9-SNAPSHOT.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/slf4j-api-1.7.36.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/slf4j-simple-1.7.36.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/standard.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/HdrHistogram-2.1.9.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/aggs-matrix-stats-client-7.9.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/commons-codec-1.11.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/commons-logging-1.1.3.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/compiler-0.9.6.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/elasticsearch-7.9.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/elasticsearch-cli-7.9.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/elasticsearch-core-7.9.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/elasticsearch-geo-7.9.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/elasticsearch-rest-client-7.9.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/elasticsearch-rest-high-level-client-7.9.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/elasticsearch-secure-sm-7.9.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/elasticsearch-x-content-7.9.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/hppc-0.8.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/httpasyncclient-4.1.4.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/httpclient-4.5.10.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/httpcore-4.4.12.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/httpcore-nio-4.4.12.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/jackson-dataformat-cbor-2.10.4.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/jackson-dataformat-smile-2.10.4.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/jackson-dataformat-yaml-2.10.4.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/joda-time-2.10.4.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/jopt-simple-5.0.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/lang-mustache-client-7.9.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/lucene-analyzers-common-8.6.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/lucene-backward-codecs-8.6.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/lucene-core-8.6.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/lucene-grouping-8.6.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/lucene-highlighter-8.6.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/lucene-join-8.6.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/lucene-memory-8.6.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/lucene-misc-8.6.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/lucene-queries-8.6.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/lucene-queryparser-8.6.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/lucene-sandbox-8.6.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/lucene-spatial-extras-8.6.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/lucene-spatial3d-8.6.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/lucene-suggest-8.6.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/mapper-extras-client-7.9.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/parent-join-client-7.9.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/rank-eval-client-7.9.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/snakeyaml-1.26.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/storefront/t-digest-3.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/swingx-1.6.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/telegrambots-6.0.1-jar-with-dependencies.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/testing/SuperCSV-with_src-1.52.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/testing/commons-validator-1.7-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/testing/groovy-all-2.4.15-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/testing/harness-1.0.0-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/testing/itextpdf-5.5.2-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/testing/spiffy-with_source-all-0.05.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/vavr-1.0.0-alpha-4.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/wizard.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/xercesImpl.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/xjavadoc-1.1.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/xml-apis-1.3.04.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/xml-apis-ext-1.3.04.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/xmlbeans-2.6.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/xmlgraphics-commons-2.2.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/zxing-2.3.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+wildfly/client/lib/jbossall-client-4.2.2.GA.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/Filters.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/asm.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/bsh.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/commons-el.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/commons-fileupload.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/commons-io.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/fckez.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/gmapsz.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/jruby.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/js.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/json_simple.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/jxl.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/jython.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/keylistener.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/mvel.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/ognl.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/timelinez-sources.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/timelinez.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/timeplotz.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/xercesImpl.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/zcommon-sources.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/zcommon.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/zcommons-el.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/zhtml-sources.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/zhtml.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/zk-sources.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/zk.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/zkex-sources.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/zkex.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/zkmax-sources.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/zkmax.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/zkplus-sources.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/zkplus.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/zml-sources.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/zml.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/zul-sources.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/zul.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/zweb-sources.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
+zkwebui/WEB-INF/lib/zweb.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity

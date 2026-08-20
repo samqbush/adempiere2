@@ -1,0 +1,6 @@
+install/build/*.zip
+install/build/*.zip.MD5
+install/build/*.tar.gz
+install/build/*.tar.gz.MD5
+adempiere/Adempiere/data/Adempiere_pg.dmp
+adempiere/Adempiere/data/Adempiere_pg.jar

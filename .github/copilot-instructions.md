@@ -20,11 +20,11 @@ by a phase become canonical only after that phase's exit criteria prove them.
 |---|---|---|
 | Full product build, no DB restore | `ant build -Dnodbrestore=true` | Authoritative Ant distribution path; not proven locally during planning |
 | Full product build with DB restore/migrations | `ant build -Dnodbrestore=false` | Database-affecting; run only against an approved disposable environment |
-| Gradle module build | `gradle build` | Uses ambient Gradle until Phase 1 commits a wrapper; omits Ant-only deployables |
+| Gradle module build | `./gradlew build --dependency-verification=strict` | Reproducible Phase 1 gate on JDK 17 with Java 11 bytecode; omits quarantined Ant-only deployables |
 | Base unit tests | `ant -f tools/build.xml && ant -f base/build.xml unit-tests` | `tools` must run first to create `lib/CCTools.jar` and related outputs; the complete Ant reactor already preserves this order |
 | Base integration tests | `ant -f base/build.xml integration-tests -Dtest.performIntegrationTests=true` | Requires configured application/database environment |
-| Base Gradle test task | `gradle :base:test` | Currently false-green: reports `NO-SOURCE`; do not count as test coverage |
-| Single Gradle test after Phase 1 wiring | `./gradlew :base:test --tests '<fully.qualified.Test>'` | Planned Phase 1 command; `org.adempiere.test` remains a published test-support artifact |
+| Base Gradle test task | `./gradlew :base:test --dependency-verification=strict` | Executes the fail-closed `UnitTest` classification and emits JUnit XML |
+| Single Gradle test | `./gradlew :base:test --tests '<fully.qualified.Test>'` | `org.adempiere.test` remains a published test-support artifact |
 | Desktop client | `./utils/RUN_Adempiere.sh` | Requires installed product and database configuration |
 | Application server | `./utils/RUN_Server2.sh` | Requires installed product and selected Tomcat/WildFly/Jetty |
 | Restore seed | `./utils/RUN_ImportAdempiere.sh` | Destructive/database-affecting; inspect environment first |
@@ -34,11 +34,10 @@ by a phase become canonical only after that phase's exit criteria prove them.
 | Typecheck | Java compilation through the applicable Ant/Gradle build | No separate typecheck command |
 | End-to-end/contract | None currently canonical | Introduced incrementally in Phases 2-5 |
 
-Existing CI lives under `.github/workflows/`. The Ant graph is configured to run
-base unit tests; Gradle test tasks currently execute no sources. Required-check
-enforcement and current Ant test counts are unverified. Phase 1 must record the
-Ant baseline, preserve all 28 Gradle projects through `./gradlew build`, use the
-committed wrapper, and report non-zero test counts for declared test modules.
+Existing CI lives under `.github/workflows/`. Phase 1 records 1,075 passing Ant
+unit tests and 832 passing Gradle core tests, preserves all 28 included Gradle
+projects, and enforces non-zero results for declared test modules. Required-check
+enforcement remains a manual repository-administrator action.
 
 **CI enforcement is manual.** An agent can author workflows, but a GitHub
 administrator must enable branch protection and required status checks for

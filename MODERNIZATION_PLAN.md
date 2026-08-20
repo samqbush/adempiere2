@@ -499,7 +499,10 @@ on an automated test before its own Testability Milestone.
 existing Ant unit-test gate and turning CI into a reproducible, observable
 partial gate.
 
-**Regime:** Core transitions from pre-testability ("dark") to
+**Status:** Implemented on `phase-1-reproducible-core-gate`; CI enforcement
+remains residual risk R8 until enabled by a repository administrator.
+
+**Regime:** Core has transitioned from pre-testability ("dark") to
 post-testability ("lit"); web/API/install remain dark.
 
 **Safety rung:** L1 -> L3. Residual risk: deployment, database integration, and
@@ -565,26 +568,26 @@ Ant-only modules remain quarantined until Phases 2-3.
 
 #### Verification & Exit Criteria (Definition of Done)
 
-- [ ] `./gradlew build` succeeds across all 28 unique Gradle projects on the
+- [x] `./gradlew build` succeeds across all 28 unique Gradle projects on the
       pinned Java 17 toolchain using strict dependency verification and only
       versions present in committed lockfiles.
-- [ ] Regenerating dependency locks produces no diff; unverified artifacts or
+- [x] Regenerating dependency locks produces no diff; unverified artifacts or
       `mavenLocal()` resolution fail the gate.
-- [ ] The existing Ant unit-test count is recorded; CI reports Gradle test counts,
+- [x] The existing Ant unit-test count is recorded; CI reports Gradle test counts,
       and a zero-test result fails for modules named in the committed
       test-enabled-module manifest.
-- [ ] `ant -f tools/build.xml && ant -f base/build.xml unit-tests` reaches and
+- [x] `ant -f tools/build.xml && ant -f base/build.xml unit-tests` reaches and
       executes the unit test runner on the documented Java 11 bridge without
       adding a divergent base classpath.
-- [ ] JUnit Platform excludes `IntegrationTest`; every test class is explicitly
+- [x] JUnit Platform excludes `IntegrationTest`; every test class is explicitly
       tagged/classified; no `:base`/`:org.adempiere.test` project cycle exists.
-- [ ] A deliberate behavior mutation made the new Gradle seam test red; after
+- [x] A deliberate behavior mutation made the new Gradle seam test red; after
       revert the same test is green.
-- [ ] Published artifacts built on Java 17 retain Java 11 class-file compatibility,
+- [x] Published artifacts built on Java 17 retain Java 11 class-file compatibility,
       and build/publish workflows use the same pinned build JDK.
-- [ ] The complete Phase 1 quarantine and effective dependency inventory are
+- [x] The complete Phase 1 quarantine and effective dependency inventory are
       committed.
-- [ ] No behavior, database schema, or runtime logic changed.
+- [x] No behavior, database schema, or runtime logic changed.
 - [ ] CI workflow is authored and green. Branch-protection enforcement is either
       enabled by a human or recorded as outstanding residual risk R8.
 

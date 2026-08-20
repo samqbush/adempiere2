@@ -4,11 +4,11 @@ plugins {
 	id 'signing'
 }
 
-
 repositories {
     mavenLocal()
     mavenCentral()
 }
+
 
 if (JavaVersion.current().isJava8Compatible()) {
     allprojects {

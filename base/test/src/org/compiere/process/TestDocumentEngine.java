@@ -458,7 +458,7 @@ class TestDocumentEngine extends CommonUnitTestSetup {
         map.put("C_Order", 259);
         map.put("M_Requisition", 702);
         map.put("M_InOut", 319);
-        map.put("C_Invoice", 318);
+        map.put("C_Invoice", MInvoice.Table_ID);
         map.put("C_Payment", 335);
         map.put("GL_Journal", 224);
         map.put("GL_JournalBatch", 225);
@@ -597,7 +597,7 @@ class TestDocumentEngine extends CommonUnitTestSetup {
     { "M_Requisition", 702, STATUS_Completed, ACTION_Void, ACTION_ReActivate },
     { "M_Requisition", 702, STATUS_WaitingPayment, ACTION_ReActivate, ACTION_Close },
     { "M_InOut", 319, STATUS_Completed, ACTION_Void, ACTION_Reverse_Correct, ACTION_Reverse_Accrual},
-    { "C_Invoice", 318, STATUS_Completed, ACTION_Void, ACTION_Reverse_Correct, ACTION_Reverse_Accrual},
+    { "C_Invoice", MInvoice.Table_ID, STATUS_Completed, ACTION_Void, ACTION_Reverse_Correct, ACTION_Reverse_Accrual},
     { "C_Payment", 335, STATUS_Completed, ACTION_Void, ACTION_Reverse_Correct, ACTION_Reverse_Accrual},
     { "GL_Journal", 224, STATUS_Completed, ACTION_Reverse_Correct, ACTION_Reverse_Accrual, ACTION_ReActivate},
     { "GL_JournalBatch", 225, STATUS_Completed, ACTION_Reverse_Correct, ACTION_Reverse_Accrual, ACTION_ReActivate},
