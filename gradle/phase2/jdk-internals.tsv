@@ -1,6 +1,11 @@
 # kind	location	match	owner
 module-flag	.idea/compiler.xml:20	<module name="adempiere" options="--add-exports java.desktop/sun.swing=ALL-UNNAMED --add-exports java.desktop/sun.awt=ALL-UNNAMED --add-exports java.base/sun.security.provider=ALL-UNNAMED" />	Phase 2: runtime/module flag review
 reflection	JasperReports/src/org/compiere/jr/report/ReportStarter.java:177	Class.forName("org.compiere.interfaces.MD5"); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/phase2-smoke/src/test/java/org/adempiere/phase2/Phase2RuntimeBootstrap.java:118	Field field = CConnection.class.getDeclaredField("s_cc");	Phase 2: runtime smoke test isolation
+reflection	base/phase2-smoke/src/test/java/org/adempiere/phase2/Phase2RuntimeBootstrap.java:119	field.setAccessible(true);	Phase 2: runtime smoke test isolation
+reflection	base/phase2-smoke/src/test/java/org/adempiere/phase2/Phase2RuntimeBootstrap.java:81	Field cacheField = Trx.class.getDeclaredField("s_cache");	Phase 2: runtime smoke test isolation
+reflection	base/phase2-smoke/src/test/java/org/adempiere/phase2/Phase2RuntimeBootstrap.java:82	cacheField.setAccessible(true);	Phase 2: runtime smoke test isolation
+module-flag	base/phase2-smoke/src/test/java/org/adempiere/phase2/runtime/WritePhase2RuntimeConfig.java:44	"-Dfile.encoding=UTF-8 -Xms128m -Xmx1024m --add-opens java.base/java.lang=ALL-UNNAMED");	Phase 2: runtime smoke test isolation
 reflection	base/src/org/adempiere/as/ASFactory.java:42	Class<?> c = Class.forName(s); 	Phase 2: reviewed application extension/reflection seam
 reflection	base/src/org/adempiere/engine/CostingMethodFactory.java:54	Class<? extends ICostingMethod> clazz = (Class<? extends ICostingMethod>) Class.forName(className); 	Phase 2: reviewed application extension/reflection seam
 reflection	base/src/org/adempiere/model/InterfaceWrapperHelper.java:258	field.setAccessible(true); 	Phase 2: reviewed application extension/reflection seam
@@ -92,7 +97,17 @@ internal-import	glassfishfacet/src/org/adempiere/as/glassfish/AdempiereRealm.jav
 internal-import	glassfishfacet/src/org/adempiere/as/glassfish/AdempiereRealm.java:20	import com.sun.enterprise.security.auth.realm.NoSuchUserException; 	Phase 3: quarantined GlassFish adapter
 internal-import	glassfishfacet/src/org/adempiere/as/glassfish/GlassFish.java:22	import com.sun.appserv.security.ProgrammaticLogin; 	Phase 3: quarantined GlassFish adapter
 reflection	glassfishfacet/src/org/adempiere/as/glassfish/GlassFish.java:36	Class.forName("com.sun.enterprise.naming.SerialInitContextFactory"); 	Phase 3: quarantined GlassFish adapter
+version-gate	gradle/phase2/runtime.gradle:15	languageVersion = JavaLanguageVersion.of(Integer.parseInt(phase2RuntimeProperties.getProperty('java.version')))	Phase 2: JDK/runtime verification tooling
+version-gate	gradle/phase2/runtime.properties:1	java.version=21	Phase 2: JDK/runtime verification tooling
 module-flag	install/Adempiere/AdempiereEnvTemplate.properties:12	ADEMPIERE_JAVA_OPTIONS=-Dfile.encoding=UTF-8 -Xms128m -Xmx1024m --add-opens java.base/java.lang=ALL-UNNAMED 	Phase 2: runtime/module flag review
+version-gate	install/src/org/compiere/install/JavaToolSupport.java:150	String error = "Missing java.specification.version for Java Home: "	Phase 2: JDK validation/keytool replacement
+version-gate	install/src/org/compiere/install/JavaToolSupport.java:163	String error = "Malformed java.specification.version '" + specificationVersion	Phase 2: JDK validation/keytool replacement
+version-gate	install/src/org/compiere/install/JavaToolSupport.java:372	throw new IllegalArgumentException("Invalid java.specification.version: "	Phase 2: JDK validation/keytool replacement
+version-gate	install/src/org/compiere/install/JavaToolSupport.java:46	private static final String JAVA_SPECIFICATION_VERSION = "java.specification.version";	Phase 2: JDK validation/keytool replacement
+version-gate	install/src/test/java/org/compiere/install/JavaToolSupportTest.java:110	assertTrue(result.getErrorMessage().contains("Missing java.specification.version"));	Phase 2: JDK validation/keytool test coverage
+version-gate	install/src/test/java/org/compiere/install/JavaToolSupportTest.java:131	+ "echo ' java.specification.version = 21'\n"	Phase 2: JDK validation/keytool test coverage
+version-gate	install/src/test/java/org/compiere/install/JavaToolSupportTest.java:181	script.append("echo ' java.specification.version = ")	Phase 2: JDK validation/keytool test coverage
+version-gate	install/src/test/java/org/compiere/install/JavaToolSupportTest.java:99	assertTrue(result.getErrorMessage().contains("Malformed java.specification.version"));	Phase 2: JDK validation/keytool test coverage
 reflection	jbossfacet/src/org/adempiere/as/jboss/JBoss.java:31	Class.forName("org.jboss.security.jndi.JndiLoginInitialContextFactory"); 	Phase 2: reviewed application extension/reflection seam
 reflection	migration/src/oracle/DBDifference.java:1908	Class.forName(driverName); 	Phase 2: reviewed application extension/reflection seam
 reflection	org.adempiere.pos/src/main/java/base/org/adempiere/pos/util/POSTicketHandler.java:104	constructor = clazz.getDeclaredConstructor(new Class[]{CPOS.class});	Phase 2: reviewed application extension/reflection seam
@@ -116,6 +131,8 @@ reflection	org.eevolution.warehouse/src/main/java/base/org/eevolution/wms/engine
 reflection	org.eevolution.warehouse/src/main/java/base/org/eevolution/wms/engine/WMRuleEngine.java:227	return (Class<T>) Class.forName(getPackageName() + "." + className);	Phase 2: reviewed application extension/reflection seam
 reflection	org.spin.finance_management/src/main/java/base/org/spin/investment/model/MFMFunctionalSetting.java:108	Constructor<?> constructor = clazz.getDeclaredConstructor(new Class[]{MFMFunctionalSetting.class});	Phase 2: reviewed application extension/reflection seam
 reflection	org.spin.finance_management/src/main/java/base/org/spin/investment/model/MFMFunctionalSetting.java:70	Class<?> clazz = Class.forName(className);	Phase 2: reviewed application extension/reflection seam
+module-flag	scripts/phase2/probe-tomcat9.sh:32	export CATALINA_OPTS="--add-opens java.base/java.lang=ALL-UNNAMED"	Phase 2: JDK/runtime verification tooling
+version-gate	scripts/phase2/verify-runtime-pins.sh:6	expected_java=$(sed -n 's/^java.version=//p' gradle/phase2/runtime.properties)	Phase 2: JDK/runtime verification tooling
 reflection	serverApps/src/main/servlet/org/compiere/www/WProcessCtl.java:460	Class myClass = Class.forName(m_pi.getClassName()); 	Phase 2: reviewed application extension/reflection seam
 reflection	serverRoot/src/main/server/org/compiere/server/ReplicationProcessor.java:116	Class clazz = Class.forName(javaClass); 	Phase 2: reviewed application extension/reflection seam
 version-gate	tools/lib/ant/apache-ant-1.10.10/lib/libraries.properties:77	tcljava.version=${jacl.version}	Phase 2: Ant dependency property, not a JVM version gate

@@ -43,7 +43,7 @@
 	<echo message="Copy AdempiereEnvTemplate.properties to AdempiereEnv.properties"/>
 	<copy file="${AdempierePropertiesFrom}" tofile="${AdempierePropertiesTo}" filtering="yes" overwrite="yes" />
 	<replaceregexp file="${AdempierePropertiesTo}" match="ADEMPIERE_HOME=/opt/Adempiere" replace="ADEMPIERE_HOME=${env.ADEMPIERE_HOME}" byline="true"/>
-	<replaceregexp file="${AdempierePropertiesTo}" match="JAVA_HOME=/usr/lib/jvm/jdk-11" replace="JAVA_HOME=${env.JAVA_HOME}" byline="true"/>
+	<replaceregexp file="${AdempierePropertiesTo}" match="^JAVA_HOME=.*$" replace="JAVA_HOME=${env.JAVA_HOME}" byline="true"/>
 	<property file="${AdempierePropertiesTo}"/>
 	<filter filtersfile="${AdempierePropertiesTo}" />
 	<echo message="Generate myEnvironment.sh"/>

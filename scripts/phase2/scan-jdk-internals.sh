@@ -6,7 +6,8 @@ cd "$(git rev-parse --show-toplevel)"
 printf '# kind\tlocation\tmatch\towner\n'
 git grep -nI -E \
   '(import (sun|com\.sun|jdk\.internal)\.|Class\.forName\(|getDeclared(Method|Field|Constructor)\(|setAccessible\(|--add-(opens|exports)|java\.(version|specification\.version))' \
-  -- '*.java' '*.gradle' '*.xml' '*.properties' '*.sh' '*.bat' '*.yml' '*.yaml' |
+  -- '*.java' '*.gradle' '*.xml' '*.properties' '*.sh' '*.bat' '*.yml' '*.yaml' \
+  ':(exclude)scripts/phase2/scan-jdk-internals.sh' |
   while IFS=: read -r file line text; do
     kind=reflection
     owner=UNCLASSIFIED
@@ -23,8 +24,14 @@ git grep -nI -E \
       serverRoot/src/main/server/org/compiere/ldap/*) owner='Phase 2: LDAP BER replacement' ;;
       install/src/org/compiere/install/*|base/src/org/compiere/util/Login.java)
         owner='Phase 2: JDK validation/keytool replacement' ;;
+      install/src/test/java/org/compiere/install/*)
+        owner='Phase 2: JDK validation/keytool test coverage' ;;
       install/Adempiere/*|utils/*|build.xml|serverRoot/build.gradle|base/build.xml|.idea/*)
         owner='Phase 2: runtime/module flag review' ;;
+      base/phase2-smoke/*)
+        owner='Phase 2: runtime smoke test isolation' ;;
+      gradle/phase2/*|scripts/phase2/*)
+        owner='Phase 2: JDK/runtime verification tooling' ;;
       base/src/org/compiere/util/CLogMgt.java)
         owner='Phase 2: stack-trace text only' ;;
       base/src/org/compiere/util/EMail.java)
