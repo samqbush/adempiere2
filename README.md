@@ -34,7 +34,7 @@ publishes Java 21 bytecode:
   verifyJdepsInternals --dependency-verification=strict
 ```
 
-This covers the root and 28 included Gradle projects. It is not a replacement
+This covers the root and 29 included Gradle projects. It is not a replacement
 for the full Ant distribution build.
 
 Phase 3 adds guarded Gradle orchestration around the authoritative Ant product
@@ -66,6 +66,13 @@ Phase 3 quarantine because its checked-in library implements the JDK-removed
 The Tomcat smoke requires HTTP 2xx/3xx from each deployed context except
 `ADInterface`, whose unrouted base path is explicitly expected to return 404;
 SOAP behavior remains a Phase 4 contract gate.
+
+Phase 3 is merged to `develop` as
+`eb1953d091836db59fabb153ccde41d8e07b7cf1` with all five PR checks green.
+Phase 4 first proves all four live XFire services, then replaces XFire with a
+CXF 4.1.x/Jakarta API runtime on isolated Tomcat 10.1 while the existing Tomcat
+9 deployment preserves historical SOAP URLs through a compatibility router.
+The non-SOAP ZK and servlet Jakarta migration remains Phase 5.
 
 The DB-backed metadata gate fails on new or stale process, validator, workflow,
 entity-package, or generated-model findings. Sixteen pre-existing active process

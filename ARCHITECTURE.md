@@ -72,10 +72,10 @@ developer-oriented experimental path with machine-specific assumptions.
 | Command | Purpose and status | Evidence |
 |---|---|---|
 | `./gradlew phase3NoDatabaseDistribution --dependency-verification=strict` | Canonical guarded full-product build, install, silent setup, topology check, and normalized artifact manifest without seed restore. | `gradle/phase3/distribution.gradle`, `.github/workflows/main.yml`. |
-| `xvfb-run -a ./gradlew phase3InstalledProduct ... --dependency-verification=strict` | Full installed-product gate against marker-owned disposable PostgreSQL 14.6 and Tomcat 9, including the Phase 2 DB-backed smoke and final database/role cleanup. Context base paths require HTTP 2xx/3xx except the explicitly deployment-only `ADInterface` 404. | `gradle/phase3/distribution.gradle`, `scripts/phase3/`, `.github/workflows/main.yml`. |
+| `xvfb-run -a ./gradlew phase3InstalledProduct ... --dependency-verification=strict` | Full installed-product gate against marker-owned disposable PostgreSQL 14.6 and Tomcat 9, including the Phase 2 DB-backed smoke and final database/role cleanup. Context base paths require HTTP 2xx/3xx except the explicitly deployment-only `ADInterface` 404. Phase 3 merged with all five PR checks green; Phase 4 owns live SOAP behavior. | `gradle/phase3/distribution.gradle`, `scripts/phase3/`, `.github/workflows/main.yml`, `docs/modernization/phase-3-evidence.md`. |
 | `ant build -Dnodbrestore=true` | Underlying authoritative Ant product build without database restore. The Phase 3 Gradle task supplies guarded installation paths and JDK 21. | `build.xml`, `gradle/phase3/distribution.gradle`. |
 | `ant build -Dnodbrestore=false` | Underlying database-enabled Ant build. Run only through an approved disposable environment with explicit release scoping. | `build.xml`, `gradle/phase3/distribution.gradle`. |
-| `./gradlew build --dependency-verification=strict` | Reproducible JDK 21 module gate across 28 included projects. It executes the core unit gate and publishes Java 21 bytecode. It does **not** build every Ant deployable. | `.github/workflows/build_with_gradle.yml`, `settings.gradle`, `docs/modernization/phase-1-evidence.md`. |
+| `./gradlew build --dependency-verification=strict` | Reproducible JDK 21 module gate across 29 included projects. It executes the core unit gate and publishes Java 21 bytecode. It does **not** build every Ant deployable. | `.github/workflows/build_with_gradle.yml`, `settings.gradle`, `docs/modernization/phase-1-evidence.md`. |
 | `./gradlew publish --dependency-verification=strict` | Publishes Gradle artifacts to Maven Central staging during a published release using JDK 21. Release publication rejects previously used versions and declares JDK 21 as the minimum. | `.github/workflows/publish_with_gradle.yml`, `.github/workflows/build_with_gradle.yml`, `gradle/phase2/release-contract.properties`. |
 | `./utils/RUN_Adempiere.sh` | Starts the desktop Swing client. | `utils/RUN_Adempiere.sh#L20-L42`. |
 | `./utils/RUN_Server2.sh` | Starts the selected external WildFly, Tomcat, or Jetty server. | `utils/RUN_Server2.sh#L20-L85`. |
@@ -143,7 +143,7 @@ path; `ant build` is the product distribution path.
 
 Phase 3 makes that asymmetry executable rather than implicit:
 `gradle/phase3/topology.tsv` classifies all 32 Ant reactor entries, the separate
-installer and embedded surfaces, all 28 Gradle projects, and the JBoss facet
+installer and embedded surfaces, all 29 Gradle projects, and the JBoss facet
 quarantine. The installed Tomcat 9 bridge deploys seven WARs. DB-backed metadata
 validation checks active process, validator, workflow/reference, entity, and
 generated-model bindings; 16 pre-existing active process bindings are an
@@ -157,6 +157,7 @@ explicit fail-on-drift quarantine in `gradle/phase3/metadata-quarantine.tsv`.
 | Installer Java | JDK 21 runtime and bytecode | The environment template selects JDK 21 and Phase 3 rejects Java 11 carry-over pins (`install/Adempiere/AdempiereEnvTemplate.properties`, `gradle/phase3/distribution.gradle`). |
 | CI database | PostgreSQL 14.6 | Service container in Ant and release workflows (`.github/workflows/main.yml#L22-L38`, `.github/workflows/release.yml#L18-L31`). |
 | CI application server | Tomcat 9.0.121 | Checksum-verified and exercised with the installed seven-WAR product (`gradle/phase2/runtime.properties`, `scripts/phase3/prepare-tomcat9.sh`, `scripts/phase3/smoke-tomcat9.sh`). |
+| Planned Phase 4 API server | Isolated Tomcat 10.1 on JDK 21 with CXF 4.1.x/Jakarta EE 10 | The supported SOAP replacement runs separately from the legacy Tomcat 9 UI/apps. A Tomcat 9 compatibility router preserves historical API URLs; exact patch pins and executable evidence are Phase 4 deliverables (`MODERNIZATION_PLAN.md#phase-4-contract-preserving-api-and-edge-modernization-t-shirt-size-xl`). |
 | Installed application server | External Tomcat by default, under `/opt/tomcat`; WildFly and Jetty are selectable | `install/Adempiere/AdempiereEnvTemplate.properties#L28-L38`, `utils/RUN_Server2.sh#L20-L85`. No runtime version is pinned by the environment template. |
 | Experimental sbt servers | Tomcat/webapp-runner 9.0.41.0 and Jetty 10.0.12 | `build.sbt#L99-L178`. |
 | Product version | 3.9.4 / `394LTS`; environment template release `3.9.4` | `utils_dev/build.properties#L5-L6`, `install/Adempiere/AdempiereEnvTemplate.properties#L74-L76`. |

@@ -1,0 +1,65 @@
+plugins {
+	id 'java-library'
+	id 'maven-publish'
+}
+
+dependencies {
+	api files('WEB-INF/lib/xbean.jar')
+}
+
+sourceSets {
+	main {
+		java {
+			srcDirs = ['src/neutral/java']
+		}
+	}
+}
+
+java {
+	withJavadocJar()
+	withSourcesJar()
+}
+
+version = System.getenv('ADEMPIERE_LIBRARY_VERSION') ?: 'local-1.0.0'
+
+jar {
+	manifest {
+		attributes(
+			'Implementation-Title': 'ADempiere Web Service Neutral Seam',
+			'Implementation-Version': version,
+			'EntityType': 'D')
+	}
+}
+
+publishing {
+	publications {
+		mavenJava(MavenPublication) {
+			groupId = 'io.github.adempiere'
+			artifactId = 'webservice'
+			from components.java
+		}
+	}
+}
+
+tasks.register('verifyNeutralSeamPurity') {
+	dependsOn tasks.named('classes')
+	doLast {
+		def forbidden = [
+			'org.codehaus.xfire',
+			'javax.servlet',
+			'jakarta.servlet',
+			'org.apache.cxf'
+		]
+		def violations = sourceSets.main.allJava.files.findAll { source ->
+			forbidden.any { source.text.contains(it) }
+		}
+		if (!violations.isEmpty()) {
+			throw new GradleException(
+				"Transport framework leaked into the neutral seam: ${violations}")
+		}
+	}
+}
+
+tasks.named('check') {
+	dependsOn tasks.named('verifyNeutralSeamPurity')
+}

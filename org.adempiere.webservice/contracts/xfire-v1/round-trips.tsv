@@ -1,0 +1,5 @@
+# service	http_status	soap_fault
+ADService	200	false
+ModelADService	200	false
+ExternalSales	500	true
+WebService	500	true

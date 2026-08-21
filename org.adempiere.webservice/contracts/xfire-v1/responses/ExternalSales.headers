@@ -1,0 +1,6 @@
+HTTP/1.1 500 
+Content-Type: text/xml;charset=UTF-8
+Transfer-Encoding: chunked
+Date: <DATE>
+Connection: close
+

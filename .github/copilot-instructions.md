@@ -11,6 +11,13 @@ component is testable. The plan-wide reproducible-CI Milestone is Phase 1, when
 the existing Ant unit-test baseline is recorded and Gradle must become
 reproducible and execute meaningful tests instead of `NO-SOURCE`.
 
+Phases 1-3 are merged to `develop`. Phase 4 is the active roadmap phase. It must
+prove the four XFire services as a live oracle before migration, preserve static
+WSDL/wire behavior, and move SOAP directly to CXF 4.1.x/Jakarta EE 10 on an
+isolated Tomcat 10.1/JDK 21 API runtime. A Tomcat 9 compatibility router
+preserves both historical endpoint paths; ZK and non-SOAP servlet migration
+remain Phase 5.
+
 ## Commands
 
 These are the canonical commands visible in the current checkout. Commands added
@@ -37,8 +44,10 @@ by a phase become canonical only after that phase's exit criteria prove them.
 | Typecheck | Java compilation through the applicable Ant/Gradle build | No separate typecheck command |
 | End-to-end/contract | None currently canonical | Introduced incrementally in Phases 2-5 |
 
-Existing CI lives under `.github/workflows/`. Phase 3 preserves all 28 included
-Gradle projects and all 32 Ant reactor entries, adds explicit no-database and
+Existing CI lives under `.github/workflows/`. Phase 4 currently includes 29
+Gradle projects after promoting the XFire-free web-service seam while Ant
+continues to own the legacy WAR. Phase 3 preserved all 32
+Ant reactor entries and added explicit no-database and
 installed-product lanes, and retains the three-test disposable runtime smoke.
 The `jbossfacet` surface is explicitly quarantined because its checked-in JBoss
 API depends on `java.security.acl.Group`, which JDK 21 removed. Required-check
