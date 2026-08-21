@@ -1,0 +1,8 @@
+# Current legacy contexts deployed by the Phase 3 Tomcat 9 bridge.
+ROOT.war
+adempiere.war
+ADInterface.war
+admin.war
+mobile.war
+webui.war
+wstore.war

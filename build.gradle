@@ -285,6 +285,8 @@ tasks.register('verifyPhase2RuntimePins', Exec) {
     commandLine 'bash', 'scripts/phase2/verify-runtime-pins.sh'
 }
 
+apply from: 'gradle/phase3/distribution.gradle'
+
 tasks.withType(Javadoc) {
 	failOnError false
 	options.addStringOption('Xdoclint:none', '-quiet')

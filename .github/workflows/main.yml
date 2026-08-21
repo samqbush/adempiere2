@@ -1,133 +1,90 @@
-# This is a basic workflow to help you get started with Actions
-# This file was contributed by Carlos Parada and Yamel Senih from ERP Consultores y Asociados, C.A.
-# Modifications by Mario Calderon, Systemhaus Westfalia 
-# Modifications by Edwin Betancourt
+name: ADempiere Phase 3 Build
 
-name: ADempiere Build With ANT
-
-# Controls when the action will run. 
 on:
-  # Triggers the workflow on push or pull request events with prefix "bugfix/" or "feature/". 
-  # It builds and installs always; create a database seed in Postgres only when xml migration files changed.
   push:
     branches:
-        - master
-        - develop
-        - bugfix/**
-        - feature/**
-        - hotfix/**
-        - test/**
+      - master
+      - develop
+      - bugfix/**
+      - feature/**
+      - hotfix/**
+      - test/**
   pull_request:
     branches:
-        - master
-        - develop
-        - bugfix/**
-        - feature/**
-        - hotfix/**
-        - test/**
+      - master
+      - develop
+      - bugfix/**
+      - feature/**
+      - hotfix/**
+      - test/**
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+permissions:
+  contents: read
+
 jobs:
-  # This workflow contains a single job called "build-all"
-  build-all:
-    # The type of runner that the job will run on
-    # For Linux, only Ubuntu is supported.
-    # Taking the last version.
+  no-database-distribution:
+    name: Full product without database
     runs-on: ubuntu-latest
-    # Service containers to run with `container-job`
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Build complete Phase 3 distribution
+        uses: ./.github/actions/adempiere-build
+        with:
+          task: phase3NoDatabaseDistribution
+      - name: Upload distribution evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-no-database-evidence
+          if-no-files-found: error
+          path: |
+            build/phase3/evidence/
+            install/build/Adempiere_*.zip
+            install/build/Adempiere_*.tar.gz
+
+  installed-product:
+    name: PostgreSQL 14.6 and Tomcat 9 installed product
+    runs-on: ubuntu-latest
     services:
-      # Label used to access the service container
       postgres:
-        # Docker Hub image
-        # Take the specific latest Postgres version that runs with latest Ubuntu version.
         image: postgres:14.6
-        # Provide the password for postgres
         env:
           POSTGRES_PASSWORD: postgres
         ports:
           - 5432:5432
-        # Set health checks to wait until postgres has started
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-          
-    # Steps represent a sequence of tasks that will be executed as part of the job
+    env:
+      ADEMPIERE_PHASE2_DB_SYSTEM_PASSWORD: postgres
+      ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD: postgres
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v3
-      
-      # Phase 2 minimum runtime
-      - name: Setup Java JDK
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
-            distribution: 'temurin'
-            java-version: '21'
-            
-      # Deploy Tomcat-Server 
-      - name: Deploy Tomcat ...
-        run: |
-            echo  "Installing Tomcat version 9"
-            cd /opt
-            TOMCAT_VERSION="$(sed -n 's/^tomcat.version=//p' "$GITHUB_WORKSPACE/gradle/phase2/runtime.properties")"
-            echo  "Download Tomcat version $TOMCAT_VERSION"
-            curl --fail --location --silent --show-error \
-              "https://downloads.apache.org/tomcat/tomcat-9/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz" \
-              --output "apache-tomcat-${TOMCAT_VERSION}.tar.gz"
-            curl --fail --location --silent --show-error \
-              "https://downloads.apache.org/tomcat/tomcat-9/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz.sha512" \
-              --output "apache-tomcat-${TOMCAT_VERSION}.tar.gz.sha512"
-            shasum -a 512 -c "apache-tomcat-${TOMCAT_VERSION}.tar.gz.sha512"
-            echo  "Extract Tomcat version 9"
-            tar -zxf "apache-tomcat-${TOMCAT_VERSION}.tar.gz"
-            echo  "Rename to tomcat"
-            mv "apache-tomcat-${TOMCAT_VERSION}" tomcat
-            echo  "Installing Tomcat version 9 FINISHED"
-
-      # Filter files to discern whether to run with or without database restore 
-      # Restore due when following files are modified: migration xml files, Github action files and utils scripts.
-      - name: Discern which files changed ...
-        uses: dorny/paths-filter@v2
-        id: changed-files
-        with:
-          filters: |
-            xml-files:
-              - 'migration/**/*.xml'
-              - '.github/workflows/*.yml'
-              # ant build
-              - 'build.xml'
-              - '**/build.xml'
-              # shell/batch files
-              - 'utils/RUN*.*'
-              # standalone libs
-              - 'lib/*-ds.xml'
-              - 'lib/*.jar'
-              - 'tools/lib/*.jar'
-
-      # Build ADempiere with ant, if there are changes in XML files
-      - name: Build Adempiere with database restore...
-        if: steps.changed-files.outputs.xml-files == 'true'
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Run installed-product gate
         uses: ./.github/actions/adempiere-build
         with:
-           nodbrestore: false
-
-      # Build ADempiere with ant, if there are no changes in XML files
-      - name: Build Adempiere without database restore...
-        if: steps.changed-files.outputs.xml-files == 'false'
-        uses: ./.github/actions/adempiere-build
-        with:
-           nodbrestore: true
-
-      - name: Upload Binary Files
+          task: phase3InstalledProduct
+      - name: Upload installed-product evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-            name: adempiere-binary-files
-            path: adempiere/install/
-
-      - name: Upload Seed
-        uses: actions/upload-artifact@v4
-        if: steps.changed-files.outputs.xml-files == 'true'
-        with:
-            name: adempiere-postgresql-seed
-            path: adempiere/Adempiere/data/Adempiere_pg.dmp
+          name: phase3-installed-product-evidence
+          if-no-files-found: error
+          path: |
+            build/phase3/evidence/
+            base/build/phase2/evidence/
+            base/build/phase3/evidence/
+            base/build/test-results/
+            base/build/reports/tests/

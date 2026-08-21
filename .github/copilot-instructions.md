@@ -18,8 +18,10 @@ by a phase become canonical only after that phase's exit criteria prove them.
 
 | Action | Command | Current qualification |
 |---|---|---|
-| Full product build, no DB restore | `ant build -Dnodbrestore=true` | JDK 21 compatibility gate; Phase 2 recorded 1,387 passing tests, but silent setup/startup remains Phase 3 |
-| Full product build with DB restore/migrations | `ant build -Dnodbrestore=false` | Database-affecting; run only against an approved disposable environment |
+| Phase 3 full product, no DB restore | `./gradlew phase3NoDatabaseDistribution --dependency-verification=strict` | Guarded JDK 21 Ant build, install, silent setup, topology check, and normalized artifact manifest |
+| Phase 3 installed product | `xvfb-run -a ./gradlew phase3InstalledProduct -Pphase2DbSystemPassword='<password>' -Pphase3DbSystemPassword='<password>' --dependency-verification=strict` | Requires disposable local PostgreSQL 14.6; runs DB-backed smoke, full install, metadata validation, evidence capture, installed Tomcat 9 smoke, and marker-guarded database/role cleanup |
+| Full product build, no DB restore | `ant build -Dnodbrestore=true` | Authoritative underlying Ant reactor; prefer the guarded Phase 3 lifecycle for CI |
+| Full product build with DB restore/migrations | `ant build -Dnodbrestore=false` | Database-affecting underlying reactor; run only against an approved disposable environment |
 | Gradle module build | `./gradlew build --dependency-verification=strict` | Reproducible Phase 2 gate on JDK 21 with Java 21 bytecode; omits quarantined Ant-only deployables |
 | Base unit tests | `ant -f tools/build.xml && ant -f base/build.xml unit-tests` | `tools` must run first to create `lib/CCTools.jar` and related outputs; the complete Ant reactor already preserves this order |
 | Base integration tests | `ant -f base/build.xml integration-tests -Dtest.performIntegrationTests=true` | Requires configured application/database environment |
@@ -35,10 +37,17 @@ by a phase become canonical only after that phase's exit criteria prove them.
 | Typecheck | Java compilation through the applicable Ant/Gradle build | No separate typecheck command |
 | End-to-end/contract | None currently canonical | Introduced incrementally in Phases 2-5 |
 
-Existing CI lives under `.github/workflows/`. Phase 2 preserves all 28 included
-Gradle projects, records 863 passing Gradle tests and 1,387 passing Ant reactor
-tests locally, and adds a three-test disposable runtime smoke. Required-check
+Existing CI lives under `.github/workflows/`. Phase 3 preserves all 28 included
+Gradle projects and all 32 Ant reactor entries, adds explicit no-database and
+installed-product lanes, and retains the three-test disposable runtime smoke.
+The `jbossfacet` surface is explicitly quarantined because its checked-in JBoss
+API depends on `java.security.acl.Group`, which JDK 21 removed. Required-check
 enforcement remains a manual repository-administrator action.
+
+Phase 3 metadata validation is fail-closed but carries 16 named pre-existing
+active process-binding residuals in `gradle/phase3/metadata-quarantine.tsv`.
+Do not describe them as clean metadata; additions or stale quarantine entries
+must fail, and Phase 7 owns the usage/retirement decision.
 
 **CI enforcement is manual.** An agent can author workflows, but a GitHub
 administrator must enable branch protection and required status checks for

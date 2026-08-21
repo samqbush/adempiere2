@@ -113,6 +113,28 @@ dbCatalog="$9" # ignored for postgresql
 dbSchema="${10}"
 dbSeedFile="${11}"
 dbSqljFile="${12}" # ignored for postgresql
+compatibilityRoleCreated=0
+compatibilityRoleGranted=0
+databaseMarker="${ADEMPIERE_DISPOSABLE_DATABASE_MARKER:-}"
+roleMarker="${ADEMPIERE_DISPOSABLE_ROLE_MARKER:-}"
+
+cleanupCompatibilityRole()
+{
+	PGPASSWORD=$sysPwd psql -h "$dbHost" -p "$dbPort" -U "$sysUser" -d "$dbName" \
+		-v ON_ERROR_STOP=0 -c "REASSIGN OWNED BY adempiere TO $dbUser" 1> /dev/null 2>&1 || true
+	PGPASSWORD=$sysPwd psql -h "$dbHost" -p "$dbPort" -U "$sysUser" -d "$dbName" \
+		-v ON_ERROR_STOP=0 -c "DROP OWNED BY adempiere" 1> /dev/null 2>&1 || true
+	if [ "$compatibilityRoleGranted" -eq 1 ]
+	then
+		PGPASSWORD=$sysPwd psql -h "$dbHost" -p "$dbPort" -U "$sysUser" -d postgres \
+			-v ON_ERROR_STOP=0 -c "REVOKE adempiere FROM $dbUser" 1> /dev/null 2>&1 || true
+	fi
+	if [ "$compatibilityRoleCreated" -eq 1 ]
+	then
+		PGPASSWORD=$sysPwd dropuser -h "$dbHost" -p "$dbPort" -U "$sysUser" adempiere \
+			1> /dev/null 2>&1 || true
+	fi
+}
 
 # make sure this script is called for the correct vendor
 if [ "$dbVendor" != "PostgreSQL" ]
@@ -124,6 +146,28 @@ fi
 # drop existing database
 # (allowed to fail in case database does not exist)
 echo "drop database \"$dbName\""
+if [ -n "$databaseMarker" ]
+then
+	currentDatabaseMarker=$(PGPASSWORD=$sysPwd psql -h $dbHost -p $dbPort -U $sysUser -d postgres -Atqc \
+		"SELECT COALESCE(shobj_description(oid, 'pg_database'), '__UNTAGGED__') FROM pg_database WHERE datname='$dbName'")
+	if [ -n "$currentDatabaseMarker" ] && [ "$currentDatabaseMarker" != "$databaseMarker" ]
+	then
+		echo "refusing to drop unmarked database \"$dbName\""
+		exit $errorDropDatabase
+	fi
+fi
+
+if [ -n "$roleMarker" ]
+then
+	currentRoleMarker=$(PGPASSWORD=$sysPwd psql -h $dbHost -p $dbPort -U $sysUser -d postgres -Atqc \
+		"SELECT COALESCE(shobj_description(oid, 'pg_authid'), '__UNTAGGED__') FROM pg_roles WHERE rolname='$dbUser'")
+	if [ -n "$currentRoleMarker" ] && [ "$currentRoleMarker" != "$roleMarker" ]
+	then
+		echo "refusing to drop unmarked role \"$dbUser\""
+		exit $errorDropUser
+	fi
+fi
+
 PGPASSWORD=$sysPwd dropdb -h $dbHost -p $dbPort -U $sysUser $dbName 2> /dev/null
 
 # drop existing user
@@ -152,6 +196,44 @@ then
 	echo "create database failed with exit code $result"
 	exit $errorCreateDatabase
 fi
+if [ -n "$roleMarker" ]
+then
+	PGPASSWORD=$sysPwd psql -h $dbHost -p $dbPort -U $sysUser -d postgres \
+		-v ON_ERROR_STOP=1 -c "COMMENT ON ROLE $dbUser IS '$roleMarker'" 1> /dev/null
+fi
+if [ -n "$databaseMarker" ]
+then
+	PGPASSWORD=$sysPwd psql -h $dbHost -p $dbPort -U $sysUser -d postgres \
+		-v ON_ERROR_STOP=1 -c "COMMENT ON DATABASE $dbName IS '$databaseMarker'" 1> /dev/null
+fi
+
+# The committed seed assigns objects to the historical adempiere role even when
+# the installed database uses a different owner.
+if [ "$dbUser" != "adempiere" ]
+then
+	if [[ ! "$dbUser" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]
+	then
+		echo "Invalid PostgreSQL role name: $dbUser"
+		exit $errorCreateUser
+	fi
+	roleCount=$(PGPASSWORD=$sysPwd psql -h $dbHost -p $dbPort -U $sysUser -d postgres -Atqc \
+		"SELECT count(*) FROM pg_roles WHERE rolname='adempiere'")
+	if [ "$roleCount" = "0" ]
+	then
+		PGPASSWORD=$sysPwd psql -h $dbHost -p $dbPort -U $sysUser -d postgres \
+			-v ON_ERROR_STOP=1 -c "CREATE ROLE adempiere NOLOGIN" 1> /dev/null
+		compatibilityRoleCreated=1
+	fi
+	roleMembership=$(PGPASSWORD=$sysPwd psql -h $dbHost -p $dbPort -U $sysUser -d postgres -Atqc \
+		"SELECT pg_has_role('$dbUser', 'adempiere', 'MEMBER')")
+	if [ "$roleMembership" != "t" ]
+	then
+		PGPASSWORD=$sysPwd psql -h $dbHost -p $dbPort -U $sysUser -d postgres \
+			-v ON_ERROR_STOP=1 -c "GRANT adempiere TO $dbUser" 1> /dev/null
+		compatibilityRoleGranted=1
+	fi
+	trap cleanupCompatibilityRole EXIT
+fi
 
 # create plpgsql language
 echo "create language \"plpgsql\""
@@ -161,7 +243,8 @@ PGPASSWORD=$dbPwd psql -h $dbHost -p $dbPort -d $dbName -U $dbUser -c "CREATE LA
 echo "----------------------------------------"
 echo "Importing $dbSeedFile"
 echo "----------------------------------------"
-PGPASSWORD=$dbPwd psql -h $dbHost -p $dbPort -d $dbName -U $dbUser -f "$dbSeedFile"
+PGPASSWORD=$dbPwd psql -h $dbHost -p $dbPort -d $dbName -U $dbUser \
+	-v ON_ERROR_STOP=1 -f "$dbSeedFile"
 result=$?
 if [ $result -ne 0 ]
 then
@@ -214,6 +297,15 @@ then
 	if [ $result -ne 0 ]
 	then
 		echo "change schema ownership failed with exit code $result"
+		exit $errorModifySchema
+	fi
+	cleanupCompatibilityRole
+	trap - EXIT
+	roleCount=$(PGPASSWORD=$sysPwd psql -h $dbHost -p $dbPort -U $sysUser -d postgres -Atqc \
+		"SELECT count(*) FROM pg_roles WHERE rolname='adempiere'")
+	if [ "$compatibilityRoleCreated" -eq 1 ] && [ "$roleCount" != "0" ]
+	then
+		echo "temporary compatibility role cleanup failed"
 		exit $errorModifySchema
 	fi
 fi

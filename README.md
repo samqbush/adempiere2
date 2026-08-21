@@ -23,10 +23,10 @@
 The _ADempiere Business Suite_ _ERP/CRM/MFG/SCM/POS_ is done the Bazaar way in an open and unabated fashion. \
 Focus is on the Community that includes Technical Specialists, Functional Specialists, Implementors and End-Users. 
 
-## Reproducible core build
+## Reproducible builds
 
-The Phase 2 core/module gate uses the committed Gradle 8.10.2 wrapper on JDK 21
-and publishes Java 21 bytecode:
+The core/module gate uses the committed Gradle 8.10.2 wrapper on JDK 21 and
+publishes Java 21 bytecode:
 
 ```bash
 ./gradlew build verifyJava21Bytecode verifyTestClassification \
@@ -35,9 +35,43 @@ and publishes Java 21 bytecode:
 ```
 
 This covers the root and 28 included Gradle projects. It is not a replacement
-for the full Ant distribution build. Ant-only web applications, installer and
-database operations remain explicitly quarantined in
-`gradle/phase1/quarantine.txt`.
+for the full Ant distribution build.
+
+Phase 3 adds guarded Gradle orchestration around the authoritative Ant product
+reactor:
+
+```bash
+./gradlew phase3NoDatabaseDistribution --dependency-verification=strict
+```
+
+The installed-product gate requires a disposable local PostgreSQL 14.6 service
+and runs the full Ant install, release-scoped migration, database evidence,
+metadata checks, Phase 2 DB-backed smoke, and installed Tomcat 9 smoke:
+
+```bash
+xvfb-run -a ./gradlew phase3InstalledProduct \
+  -Pphase2DbSystemPassword='<password>' \
+  -Pphase3DbSystemPassword='<password>' \
+  --dependency-verification=strict
+```
+
+Both Phase 3 tasks refuse any database identity other than the exact local
+`adempiere_phase3_ci` database and role, refuse installation paths outside
+`build/phase3`, and delete only objects carrying the Phase 3 ownership markers.
+The installed manifest records per-file hashes rather than timestamp-sensitive
+archive hashes. The JBoss facet is the only explicit
+Phase 3 quarantine because its checked-in library implements the JDK-removed
+`java.security.acl.Group`; Tomcat 9 is the acceptance bridge.
+
+The Tomcat smoke requires HTTP 2xx/3xx from each deployed context except
+`ADInterface`, whose unrouted base path is explicitly expected to return 404;
+SOAP behavior remains a Phase 4 contract gate.
+
+The DB-backed metadata gate fails on new or stale process, validator, workflow,
+entity-package, or generated-model findings. Sixteen pre-existing active process
+bindings without compatible classes are explicitly tracked in
+`gradle/phase3/metadata-quarantine.tsv` for a Phase 7 usage/retirement decision;
+they are not reported as clean coverage.
 
 The JDK 21 runtime walking skeleton can be exercised against disposable
 PostgreSQL 14.6:
@@ -54,8 +88,8 @@ must be local and disposable; tagged runtime objects are removed on success or
 failure.
 
 Release publication requires a new, previously unused version and declares JDK
-21 as the minimum runtime. The empty-container compatibility bridge is pinned
-to Tomcat 9.0.121 in `gradle/phase2/runtime.properties`.
+21 as the minimum runtime. The installed compatibility bridge is pinned to
+Tomcat 9.0.121 in `gradle/phase2/runtime.properties`.
 
 - Official Page: http://www.adempiere.io
 - Official Docs: http://adempiere.io/docs

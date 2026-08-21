@@ -1,0 +1,17 @@
+# record_type	record_id	class_name	closing_phase	reason
+AD_Process	137	org.compiere.process.M_Production_Run	Phase 7	Legacy active process binding has no matching class; require usage evidence before correcting or retiring it.
+AD_Process	352	org.compiere.cm.MediaDirectDeploy	Phase 7	Legacy active process binding does not implement ProcessCall; require usage evidence before correcting or retiring it.
+AD_Process	50006	com.compiere.packbuilder.Select_File	Phase 7	Legacy active process binding has no matching class; require usage evidence before correcting or retiring it.
+AD_Process	53091	org.compiere.asset.process.ImportAssetJournal	Phase 7	Legacy active process binding has no matching class; require usage evidence before correcting or retiring it.
+AD_Process	53101	org.compiere.asset.process.AssetSplit	Phase 7	Legacy active process binding has no matching class; require usage evidence before correcting or retiring it.
+AD_Process	53103	org.compiere.asset.process.AssetDisposed	Phase 7	Legacy active process binding has no matching class; require usage evidence before correcting or retiring it.
+AD_Process	53105	org.compiere.asset.process.AssetTransfer	Phase 7	Legacy active process binding has no matching class; require usage evidence before correcting or retiring it.
+AD_Process	53139	org.compiere.asset.process.ImportAsset	Phase 7	Legacy active process binding has no matching class; require usage evidence before correcting or retiring it.
+AD_Process	53227	org.compiere.process.ProductionProcess	Phase 7	Legacy active process binding has no matching class; require usage evidence before correcting or retiring it.
+AD_Process	53370	org.eevolution.process.SchedulingActivities	Phase 7	Legacy active process binding has no matching class; require usage evidence before correcting or retiring it.
+AD_Process	53371	org.eevolution.process.ActivityControlReport	Phase 7	Legacy active process binding has no matching class; require usage evidence before correcting or retiring it.
+AD_Process	53955	org.eevolution.distribution.process.CopyDriver	Phase 7	Legacy active process binding has no matching class; require usage evidence before correcting or retiring it.
+AD_Process	54004	org.eevolution.process.GenerateRequest	Phase 7	Legacy active process binding has no matching class; require usage evidence before correcting or retiring it.
+AD_Process	54091	org.spin.process.GenerateInvoiceFromLoan	Phase 7	Legacy active process binding has no matching class; require usage evidence before correcting or retiring it.
+AD_Process	54215	org.spin.report.OpenILoanToDate	Phase 7	Legacy active process binding has no matching class; require usage evidence before correcting or retiring it.
+AD_Process	54371	org.compiere.process.AssetDelivery	Phase 7	Legacy active process binding has no matching class; require usage evidence before correcting or retiring it.

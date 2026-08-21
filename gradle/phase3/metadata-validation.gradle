@@ -1,0 +1,194 @@
+def baseProject = project(':base')
+def phase3MetadataSourceSet = baseProject.sourceSets.phase3MetadataValidation
+def phase3MetadataTag = 'Phase3Metadata'
+def phase3MetadataUnitTag = 'Phase3MetadataUnit'
+def phase3MetadataDbTag = 'Phase3MetadataDb'
+def phase2RuntimeHome = baseProject.layout.buildDirectory.dir('phase2/runtime/home')
+def phase2DbHost = providers.gradleProperty('phase2DbHost')
+	.orElse(providers.environmentVariable('ADEMPIERE_PHASE2_DB_HOST'))
+	.orElse('127.0.0.1')
+def phase2DbPort = providers.gradleProperty('phase2DbPort')
+	.orElse(providers.environmentVariable('ADEMPIERE_PHASE2_DB_PORT'))
+	.orElse('5432')
+def phase2DbName = providers.gradleProperty('phase2DbName')
+	.orElse(providers.environmentVariable('ADEMPIERE_PHASE2_DB_NAME'))
+	.orElse('adempiere_phase2_smoke')
+def phase2DbUser = providers.gradleProperty('phase2DbUser')
+	.orElse(providers.environmentVariable('ADEMPIERE_PHASE2_DB_USER'))
+	.orElse('adempiere_phase2_smoke')
+def phase2DbPassword = providers.gradleProperty('phase2DbPassword')
+	.orElse(providers.environmentVariable('ADEMPIERE_PHASE2_DB_PASSWORD'))
+	.orElse('adempiere_phase2_smoke')
+def phase3JavaLauncher = javaToolchains.launcherFor {
+	languageVersion = JavaLanguageVersion.of(21)
+}
+
+tasks.register('verifyPhase3MetadataValidationSources') {
+	group = 'verification'
+	description = 'Fails when the dedicated Phase 3 metadata validation source set is absent or unclassified'
+	doLast {
+		def root = file('phase3-metadata-validation/src/test/java')
+		if (!root.isDirectory()) {
+			throw new GradleException("Phase 3 metadata validation source root is missing: ${root}")
+		}
+		def sources = fileTree(root).matching { include '**/*.java' }.files
+		if (sources.empty) {
+			throw new GradleException("Phase 3 metadata validation source root contains no Java sources: ${root}")
+		}
+		def executableSources = sources.findAll {
+			it.text =~ /@(Test|ParameterizedTest|RepeatedTest|TestFactory|TestTemplate)\b/
+		}
+		if (executableSources.empty) {
+			throw new GradleException('Phase 3 metadata validation contains no executable tests')
+		}
+		def unclassified = executableSources.findAll {
+			!it.text.contains("@Tag(\"${phase3MetadataTag}\")")
+				&& !it.text.contains('@Tag(Phase3MetadataTags.METADATA)')
+		}
+		if (!unclassified.empty) {
+			throw new GradleException(
+				"Phase 3 metadata tests must declare @Tag(\"${phase3MetadataTag}\"): ${unclassified}")
+		}
+		if (!executableSources.any {
+			it.text.contains("@Tag(\"${phase3MetadataDbTag}\")")
+				|| it.text.contains('@Tag(Phase3MetadataTags.DATABASE)')
+		}) {
+			throw new GradleException(
+				"Phase 3 metadata validation must include a @Tag(\"${phase3MetadataDbTag}\") database test")
+		}
+	}
+}
+
+def configurePhase3Test = { Test testTask, String includedTag, String resultName ->
+	testTask.group = 'verification'
+	testTask.dependsOn tasks.named('phase3MetadataValidationClasses')
+	testTask.dependsOn tasks.named('verifyPhase3MetadataValidationSources')
+	testTask.testClassesDirs = phase3MetadataSourceSet.output.classesDirs
+	testTask.classpath = phase3MetadataSourceSet.runtimeClasspath
+	testTask.maxParallelForks = 1
+	testTask.javaLauncher = phase3JavaLauncher
+	testTask.useJUnitPlatform {
+		includeTags includedTag
+	}
+	testTask.reports.junitXml.required = true
+	testTask.reports.junitXml.outputLocation =
+		layout.buildDirectory.dir("test-results/${resultName}")
+	testTask.reports.html.required = true
+	testTask.reports.html.outputLocation =
+		layout.buildDirectory.dir("reports/tests/${resultName}")
+	testTask.testLogging {
+		events 'passed', 'skipped', 'failed'
+	}
+}
+
+tasks.register('phase3MetadataUnitTest', Test) {
+	description = 'Runs database-independent Phase 3 metadata validator contract tests'
+	configurePhase3Test(delegate, phase3MetadataUnitTag, 'phase3MetadataUnit')
+}
+
+tasks.register('phase3MetadataDbTest', Test) {
+	description = 'Validates the live ADempiere metadata and extension graph'
+	configurePhase3Test(delegate, phase3MetadataDbTag, 'phase3MetadataDb')
+	dependsOn tasks.named('verifyPhase2DatabaseRelease')
+	systemProperty 'phase2.runtime.home', phase2RuntimeHome.get().asFile.absolutePath
+	systemProperty 'phase2.db.host', phase2DbHost.get()
+	systemProperty 'phase2.db.port', phase2DbPort.get()
+	systemProperty 'phase2.db.name', phase2DbName.get()
+	systemProperty 'phase2.db.user', phase2DbUser.get()
+	systemProperty 'phase2.db.password', phase2DbPassword.get()
+	systemProperty 'phase3.metadata.quarantine',
+		rootProject.file('gradle/phase3/metadata-quarantine.tsv').absolutePath
+	systemProperty 'phase3.metadata.report',
+		layout.buildDirectory.file('phase3/evidence/metadata-validation.tsv').get().asFile.absolutePath
+	inputs.file rootProject.file('gradle/phase3/metadata-quarantine.tsv')
+}
+
+def registerResultVerification = { String taskName, String testTaskName, String resultName ->
+	tasks.register(taskName) {
+		group = 'verification'
+		description = "Fails closed when ${testTaskName} produces no results or skips tests"
+		dependsOn tasks.named(testTaskName)
+		doLast {
+			def resultFiles = fileTree(layout.buildDirectory.dir("test-results/${resultName}")) {
+				include 'TEST-*.xml'
+			}
+			if (resultFiles.empty) {
+				throw new GradleException("${testTaskName} produced no JUnit XML results")
+			}
+			def executed = 0
+			def skipped = 0
+			resultFiles.each { result ->
+				def suite = new XmlSlurper().parse(result)
+				executed += suite.@tests.toInteger()
+				skipped += suite.@skipped.toInteger()
+			}
+			if (executed == 0) {
+				throw new GradleException("${testTaskName} executed zero tests")
+			}
+			if (skipped != 0) {
+				throw new GradleException(
+					"${testTaskName} skipped ${skipped} tests; success-shaped skips are not allowed")
+			}
+			logger.lifecycle("${testTaskName} executed ${executed} tests without skips")
+		}
+	}
+}
+
+registerResultVerification(
+	'verifyPhase3MetadataUnitResults',
+	'phase3MetadataUnitTest',
+	'phase3MetadataUnit')
+registerResultVerification(
+	'verifyPhase3MetadataDbResults',
+	'phase3MetadataDbTest',
+	'phase3MetadataDb')
+
+tasks.register('phase3MetadataValidation') {
+	group = 'verification'
+	description = 'Fail-closed Phase 3 database-backed metadata and extension graph gate'
+	dependsOn tasks.named('phase2RuntimeSmoke')
+}
+
+tasks.named('phase2DisposableRuntimeSmoke') {
+	dependsOn tasks.named('verifyPhase3MetadataUnitResults')
+	dependsOn tasks.named('verifyPhase3MetadataDbResults')
+}
+
+tasks.named('capturePhase2RuntimeEvidence') {
+	mustRunAfter tasks.named('restorePhase2Database')
+	mustRunAfter tasks.named('runPhase2MigrationLoader')
+	mustRunAfter tasks.named('verifyPhase2DatabaseRelease')
+	mustRunAfter tasks.named('phase3MetadataDbTest')
+	mustRunAfter tasks.named('verifyPhase3MetadataDbResults')
+	mustRunAfter tasks.named('phase3MetadataValidation')
+}
+
+tasks.named('destroyPhase2Database') {
+	mustRunAfter tasks.named('capturePhase2RuntimeEvidence')
+}
+
+tasks.named('cleanupPhase2Runtime') {
+	mustRunAfter tasks.named('capturePhase2RuntimeEvidence'), tasks.named('destroyPhase2Database')
+}
+
+def phase3MetadataValidationRequested = gradle.startParameter.taskNames.any {
+	it == 'phase3MetadataValidation' || it.endsWith(':phase3MetadataValidation')
+}
+
+if (phase3MetadataValidationRequested) {
+	tasks.named('preparePhase2AdempiereHome') {
+		finalizedBy tasks.named('capturePhase2RuntimeEvidence')
+		finalizedBy tasks.named('destroyPhase2Database')
+		finalizedBy tasks.named('cleanupPhase2Runtime')
+	}
+}
+
+gradle.projectsEvaluated {
+	def runtimeProjects = rootProject.subprojects.findAll {
+		it.plugins.hasPlugin('java') && it.sourceSets.findByName('main') != null
+	}
+	tasks.named('phase3MetadataDbTest', Test) {
+		dependsOn runtimeProjects.collect { it.tasks.named('classes') }
+		classpath += files(runtimeProjects.collect { it.sourceSets.main.runtimeClasspath })
+	}
+}
