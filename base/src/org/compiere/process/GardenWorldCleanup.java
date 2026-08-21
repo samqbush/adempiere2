@@ -493,7 +493,10 @@ public class GardenWorldCleanup extends GardenWorldCleanupAbstract {
         final String whereClientID =
                 " WHERE AD_Client_ID=" + GARDEN_WORLD_CLIENT_ID;
         DB.executeUpdateEx("DELETE FROM AD_PInstance"
-                + whereClientID, get_TrxName());
+                + whereClientID
+                + " AND AD_PInstance_ID<>?",
+                new Object[] { getAD_PInstance_ID() },
+                get_TrxName());
 
         DB.executeUpdateEx("DELETE FROM AD_ChangeLog cl"
                 + " WHERE cl.AD_SESSION_ID IN (SELECT AD_SESSION_ID FROM AD_Session"

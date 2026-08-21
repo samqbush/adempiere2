@@ -16,10 +16,6 @@
  *****************************************************************************/
 package org.compiere.install;
 
-import java.io.File;
-
-import org.compiere.util.CLogMgt;
-
 
 /**
  *	Open JDK JVM Configuration
@@ -29,6 +25,8 @@ import org.compiere.util.CLogMgt;
  */
 public class ConfigVMOpenJDK extends Config
 {
+	private static final JavaToolSupport JAVA_TOOL_SUPPORT = JavaToolSupport.DEFAULT;
+
 	/**
 	 * 	@param data configuration
 	 */
@@ -42,12 +40,7 @@ public class ConfigVMOpenJDK extends Config
 	 */
 	public void init()
 	{
-		//	Java Home, e.g. D:\j2sdk1.4.1\jre
-		String javaHome = System.getProperty("java.home");
-		log.fine(javaHome);
-		if (javaHome.endsWith("jre"))
-			javaHome = javaHome.substring(0, javaHome.length()-4);
-		p_data.setJavaHome(javaHome);
+		JAVA_TOOL_SUPPORT.initJavaHome(p_data);
 	}
 	
 	/**
@@ -56,52 +49,7 @@ public class ConfigVMOpenJDK extends Config
 	 */
 	public String test()
 	{
-		//	Java Home
-		File javaHome = new File (p_data.getJavaHome());
-		boolean pass = javaHome.exists();
-		String error = "Not found: Java Home";
-		if (getPanel() != null)
-			signalOK(getPanel().okJavaHome, "ErrorJavaHome",
-				pass, true, error);
-		if (!pass)
-			return error;
-		if (CLogMgt.isLevelFinest())
-			CLogMgt.printProperties(System.getProperties(), "System", true);
-		//
-		log.info("OK: JavaHome=" + javaHome.getAbsolutePath());
-		setProperty(ConfigurationData.JAVA_HOME, javaHome.getAbsolutePath());
-		System.setProperty(ConfigurationData.JAVA_HOME, javaHome.getAbsolutePath());
-		
-		//	Java Version
-		final String VERSION_11 = "11";	//	The real one
-		final String VERSION_17 = "17";	//
-
-		pass = false;
-		String jh = javaHome.getAbsolutePath();
-		if (!pass && jh.indexOf(VERSION_11) != -1)	//
-			pass = true;
-		if (!pass && jh.indexOf(VERSION_17) != -1)	//
-			pass = true;
-		String thisJH = System.getProperty("java.home");
-		if (thisJH.indexOf(jh) != -1)	//	we are running the version currently
-		{
-			String thisJV = System.getProperty("java.version");
-			if (!pass && thisJV.indexOf(VERSION_11) != -1)
-				pass = true;
-			if (!pass && thisJV.indexOf(VERSION_17) != -1)
-				pass = true;
-			if (pass)
-			  log.info("OK: Version=" + thisJV);
-		}
-		error = "Wrong Java Version: Should be " + VERSION_11;
-		if (getPanel() != null)
-			signalOK(getPanel().okJavaHome, "ErrorJavaHome", pass, true, error);
-		if (!pass)
-			return error;
-		//
-		setProperty(ConfigurationData.JAVA_TYPE, p_data.getJavaType());
-
-		return null;
+		return JAVA_TOOL_SUPPORT.validateJavaHome(this, p_data);
 	}
 
 }

@@ -102,6 +102,16 @@ sourceSets {
 			srcDirs = ['../org.adempiere.test/src/test/resource']
 		}
 	}
+	phase2Smoke {
+		java {
+			srcDirs = ['phase2-smoke/src/test/java']
+		}
+		resources {
+			srcDirs = ['phase2-smoke/src/test/resources']
+		}
+		compileClasspath += sourceSets.main.output
+		runtimeClasspath += output + compileClasspath
+	}
 }
 
 dependencies {
@@ -113,8 +123,29 @@ dependencies {
 	testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
 	testImplementation 'org.mockito:mockito-junit-jupiter:4.11.0'
 	testImplementation 'org.mockito:mockito-inline:4.11.0'
+	testImplementation 'net.bytebuddy:byte-buddy:1.15.4'
+	testImplementation 'net.bytebuddy:byte-buddy-agent:1.15.4'
 	testImplementation files('../tools/lib/testing/SuperCSV-with_src-1.52.jar')
 	testImplementation files('../tools/lib/commons-lang-2.1.jar')
+
+	phase2SmokeImplementation sourceSets.main.output
+	phase2SmokeImplementation project(path: ':client')
+	phase2SmokeImplementation project(path: ':serverRoot')
+	phase2SmokeImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+	phase2SmokeImplementation 'org.junit.jupiter:junit-jupiter-params:5.7.0'
+	phase2SmokeRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+	phase2SmokeRuntimeOnly files('../tools/lib/groovy-all-2.4.15.jar')
+}
+
+def phase2SmokeConfig = new Properties()
+file('phase2-smoke/src/test/resources/phase2-smoke.properties').withInputStream {
+	phase2SmokeConfig.load(it)
+}
+def phase2SmokeTag = phase2SmokeConfig.getProperty('phase2.tag')
+def phase2SmokeSuiteClass = phase2SmokeConfig.getProperty('phase2.suite.class')
+if (!phase2SmokeTag || !phase2SmokeSuiteClass) {
+	throw new GradleException(
+		'base/phase2-smoke/src/test/resources/phase2-smoke.properties must define phase2.tag and phase2.suite.class')
 }
 
 tasks.named('test') {
@@ -132,6 +163,114 @@ tasks.named('test') {
 			throw new GradleException(
 				"Shaded JUnit console must not be on test runtime: ${standalone}")
 		}
+	}
+}
+
+tasks.register('verifyPhase2SmokeClassification') {
+	group = 'verification'
+	description = 'Verifies Phase 2 smoke tests carry the explicit Phase2Smoke classification tag'
+	doLast {
+		def root = file('phase2-smoke/src/test/java')
+		if (!root.exists()) {
+			throw new GradleException("Phase 2 smoke source root is missing: ${root}")
+		}
+		def failures = []
+		fileTree(root).matching { include '**/*.java' }.each { source ->
+			def text = source.text
+			def executable = text =~ /@(Test|ParameterizedTest|RepeatedTest|TestFactory|TestTemplate)\b/
+			if (executable) {
+				def tagged = text.contains("@Tag(\"${phase2SmokeTag}\")") ||
+					text.contains('@Tag(Phase2SmokeTag.NAME)')
+				if (!tagged) {
+					failures << root.toPath().relativize(source.toPath()).toString()
+				}
+			}
+		}
+		if (!failures.empty) {
+			throw new GradleException(
+				"Phase 2 smoke tests must declare @Tag(\"${phase2SmokeTag}\"): ${failures}")
+		}
+	}
+}
+
+tasks.register('phase2SmokeTest', Test) {
+	group = 'verification'
+	description = 'Runs the Phase 2 disposable runtime smoke suite'
+	dependsOn tasks.named('phase2SmokeClasses'), tasks.named('verifyPhase2SmokeClassification')
+	testClassesDirs = sourceSets.phase2Smoke.output.classesDirs
+	classpath = sourceSets.phase2Smoke.runtimeClasspath
+	maxParallelForks = 1
+	javaLauncher = javaToolchains.launcherFor {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+	useJUnitPlatform {
+		includeTags phase2SmokeTag
+	}
+	systemProperty 'phase2.smoke.config.resource', 'phase2-smoke.properties'
+	systemProperty 'phase2.smoke.tag', phase2SmokeTag
+	systemProperty 'phase2.smoke.suite.class', phase2SmokeSuiteClass
+	systemProperty 'phase2.runtime.home',
+		layout.buildDirectory.dir('phase2/runtime/home').get().asFile.absolutePath
+	systemProperty 'phase2.db.host',
+		providers.gradleProperty('phase2DbHost')
+			.orElse(providers.environmentVariable('ADEMPIERE_PHASE2_DB_HOST'))
+			.orElse('127.0.0.1')
+			.get()
+	systemProperty 'phase2.db.port',
+		providers.gradleProperty('phase2DbPort')
+			.orElse(providers.environmentVariable('ADEMPIERE_PHASE2_DB_PORT'))
+			.orElse('5432')
+			.get()
+	systemProperty 'phase2.db.name',
+		providers.gradleProperty('phase2DbName')
+			.orElse(providers.environmentVariable('ADEMPIERE_PHASE2_DB_NAME'))
+			.orElse('adempiere_phase2_smoke')
+			.get()
+	systemProperty 'phase2.db.user',
+		providers.gradleProperty('phase2DbUser')
+			.orElse(providers.environmentVariable('ADEMPIERE_PHASE2_DB_USER'))
+			.orElse('adempiere_phase2_smoke')
+			.get()
+	systemProperty 'phase2.db.password',
+		providers.gradleProperty('phase2DbPassword')
+			.orElse(providers.environmentVariable('ADEMPIERE_PHASE2_DB_PASSWORD'))
+			.orElse('adempiere_phase2_smoke')
+			.get()
+	reports.junitXml.required = true
+	reports.junitXml.outputLocation = layout.buildDirectory.dir('test-results/phase2Smoke')
+	reports.html.required = true
+	reports.html.outputLocation = layout.buildDirectory.dir('reports/tests/phase2Smoke')
+	testLogging {
+		events 'passed', 'skipped', 'failed'
+	}
+}
+
+tasks.register('verifyPhase2SmokeResults') {
+	group = 'verification'
+	description = 'Fails closed when the Phase 2 smoke suite produces zero JUnit results'
+	dependsOn tasks.named('phase2SmokeTest')
+	doLast {
+		def resultFiles = fileTree(layout.buildDirectory.dir('test-results/phase2Smoke')) {
+			include 'TEST-*.xml'
+		}
+		if (resultFiles.empty) {
+			throw new GradleException('No Phase 2 smoke JUnit XML results were produced')
+		}
+		def executed = 0
+		def skipped = 0
+		resultFiles.each { result ->
+			def suite = new XmlSlurper().parse(result)
+			executed += suite.@tests.toInteger()
+			skipped += suite.@skipped.toInteger()
+		}
+		if (executed == 0) {
+			throw new GradleException('Phase 2 smoke suite executed zero tests')
+		}
+		if (skipped != 0) {
+			throw new GradleException(
+				"Phase 2 smoke suite skipped ${skipped} tests; success-shaped skips are not allowed")
+		}
+		logger.lifecycle("Phase 2 smoke suite executed ${executed} tests")
 	}
 }
 
@@ -230,3 +369,5 @@ signing {
 	useInMemoryPgpKeys(signingKey, signingPassword)
 	sign publishing.publications.mavenJava
 }
+
+apply from: rootProject.file('gradle/phase2/runtime.gradle')

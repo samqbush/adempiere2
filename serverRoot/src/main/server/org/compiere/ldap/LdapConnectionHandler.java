@@ -113,6 +113,11 @@ public class LdapConnectionHandler extends Thread
 				//	Read
 				byte[] buffer = new byte[512];
 				int length = in.read(buffer, 0, 512);
+				if (length < 0)
+				{
+					out.close();
+					break;
+				}
 				
 				// Decode the input message buffer
 				result.reset(msg, ldapUser);

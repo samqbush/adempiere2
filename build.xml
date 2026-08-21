@@ -43,7 +43,7 @@
 	<echo message="Copy AdempiereEnvTemplate.properties to AdempiereEnv.properties"/>
 	<copy file="${AdempierePropertiesFrom}" tofile="${AdempierePropertiesTo}" filtering="yes" overwrite="yes" />
 	<replaceregexp file="${AdempierePropertiesTo}" match="ADEMPIERE_HOME=/opt/Adempiere" replace="ADEMPIERE_HOME=${env.ADEMPIERE_HOME}" byline="true"/>
-	<replaceregexp file="${AdempierePropertiesTo}" match="JAVA_HOME=/usr/lib/jvm/jdk-11" replace="JAVA_HOME=${env.JAVA_HOME}" byline="true"/>
+	<replaceregexp file="${AdempierePropertiesTo}" match="^JAVA_HOME=.*$" replace="JAVA_HOME=${env.JAVA_HOME}" byline="true"/>
 	<property file="${AdempierePropertiesTo}"/>
 	<filter filtersfile="${AdempierePropertiesTo}" />
 	<echo message="Generate myEnvironment.sh"/>
@@ -56,8 +56,6 @@
 	<echo message="Install ADempiere with SilentSetup start"/>
 	<java dir="${env.ADEMPIERE_HOME}" classname="org.compiere.install.SilentSetup" fork="true">
 	  <arg value="ALL"/>
-	  <jvmarg value="--add-opens"/>
-	  <jvmarg value="java.base/sun.security.tools.keytool=ALL-UNNAMED"/>
 	  <jvmarg value="--add-exports"/>
 	  <jvmarg value="java.base/jdk.internal.misc=ALL-UNNAMED"/>
 	  <jvmarg value="--add-opens"/>

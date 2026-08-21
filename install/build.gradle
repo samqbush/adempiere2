@@ -32,7 +32,27 @@ sourceSets {
     main {
 		java {
 			srcDirs = ['src']
+			exclude 'test/**'
 		}
+	}
+	test {
+		java {
+			srcDirs = ['src/test/java']
+		}
+	}
+}
+
+dependencies {
+	testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+	testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.1'
+}
+
+tasks.named('test') {
+	useJUnitPlatform {
+		includeTags 'UnitTest'
+	}
+	testLogging {
+		events 'passed', 'skipped', 'failed'
 	}
 }
 

@@ -70,6 +70,7 @@ import org.compiere.model.Query;
  */
 public class Login
 {
+	private static final int MINIMUM_JAVA_FEATURE = 21;
 	protected Integer authenticatedUserId = null;
 
 	/**
@@ -117,38 +118,31 @@ public class Login
 	 */
 	public static boolean isJavaOK (boolean isClient)
 	{
-		//	Java System version check
-		String jVersion = System.getProperty("java.version");
-		//if (jVersion.startsWith("1.5.0"))
-		//	return true;
-        //vpj-cd e-evolution support to java 6
-        if (jVersion.startsWith("11"))
-            return true;
-		//Add ADEMPIERE-86 Add JAVA 11.0 support in ADempiere
-		if (jVersion.startsWith("17"))
+		if (isSupportedJavaFeature(Runtime.version().feature()))
 			return true;
-        //end
-		//  Warning
-		boolean ok = false;
-	//	if (jVersion.startsWith("1.4")
-	//		|| jVersion.startsWith("1.5.1"))	//  later/earlier release
-	//		ok = true;
 
-		//  Error Message
+		String jVersion = System.getProperty("java.version");
 		StringBuffer msg = new StringBuffer();
 		msg.append(System.getProperty("java.vm.name")).append(" - ").append(jVersion);
-		if (ok)
-			msg.append("(untested)");
-        msg.append(" <> 11, 17");
-		//
+		msg.append(" <> ").append(getSupportedJavaVersionLabel());
 		if (isClient)
 			JOptionPane.showMessageDialog(null, msg.toString(),
 				org.compiere.Adempiere.getName() + " - Java Version Check",
-				ok ? JOptionPane.WARNING_MESSAGE : JOptionPane.ERROR_MESSAGE);
+				JOptionPane.ERROR_MESSAGE);
 		else
 			log.severe(msg.toString());
-		return ok;
+		return false;
 	}   //  isJavaOK
+
+	static boolean isSupportedJavaFeature (int javaFeatureVersion)
+	{
+		return javaFeatureVersion >= MINIMUM_JAVA_FEATURE;
+	}
+
+	static String getSupportedJavaVersionLabel ()
+	{
+		return MINIMUM_JAVA_FEATURE + " or newer";
+	}
 
 	
 	/**************************************************************************

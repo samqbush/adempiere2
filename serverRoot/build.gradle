@@ -12,10 +12,6 @@ allprojects {
 }
 
 dependencies {
-	// https://mvnrepository.com/artifact/com.sun.jndi.ldap/ldapbp
-	// implementation group: 'com.sun.jndi.ldap', name: 'ldapbp', version: '1.0'
-	// implementation group: 'com.sun.jndi', name: 'ldap', version: '1.2.4'
-
     // https://mvnrepository.com/artifact/javaee/javaee-api
 	api 'javaee:javaee-api:5'
     // https://mvnrepository.com/artifact/org.apache.activemq/activemq-core
@@ -25,12 +21,23 @@ dependencies {
 
 	// Local
 	api project(path: ':org.adempiere.project')
+
+	testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+	testImplementation 'org.junit.jupiter:junit-jupiter-params:5.7.0'
+	testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.1'
+	testImplementation 'org.mockito:mockito-junit-jupiter:4.11.0'
 }
 
 sourceSets {
 	main {
 		java {
 			srcDirs = ['src/main/server']
+		}
+	}
+	test {
+		java {
+			srcDirs = ['src/test/server']
+			include 'org/compiere/ldap/**'
 		}
 	}
 }
@@ -47,12 +54,14 @@ tasks.withType(Javadoc) {
 	options.addStringOption('charSet', 'UTF-8')
 }
 
-compileJava {
-	options.compilerArgs.add('--add-exports=java.base/jdk.internal.vm.annotation=ALL-UNNAMED')
-	options.compilerArgs.add('--add-opens=java.base/jdk.internal.loader=ALL-UNNAMED')
-	options.compilerArgs.add('--add-exports=java.naming/com.sun.jndi.ldap=ALL-UNNAMED')
+tasks.named('test') {
+	useJUnitPlatform {
+		includeTags 'UnitTest'
+	}
+	testLogging {
+		events 'passed', 'skipped', 'failed'
+	}
 }
-
 
 def entityType = 'D'
 version = System.getenv("ADEMPIERE_LIBRARY_VERSION") ?: "local-1.0.0"

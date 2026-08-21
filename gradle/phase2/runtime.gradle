@@ -1,0 +1,280 @@
+def phase2RuntimeProperties = new Properties()
+rootProject.file('gradle/phase2/runtime.properties').withInputStream {
+	phase2RuntimeProperties.load(it)
+}
+
+def baseProject = rootProject.project(':base')
+def phase2RuntimeDir = baseProject.layout.buildDirectory.dir('phase2/runtime')
+def phase2RuntimeHome = phase2RuntimeDir.map { it.dir('home') }
+def phase2EvidenceDir = baseProject.layout.buildDirectory.dir('phase2/evidence')
+def phase2SeedFile = phase2RuntimeHome.map { it.file('data/Adempiere_pg.dmp') }
+def phase2MigrationHome = phase2RuntimeHome.map { it.dir('migration') }
+def phase2SmokeSourceSet = baseProject.sourceSets.phase2Smoke
+def phase2RuntimeHelperClasspath = phase2SmokeSourceSet.runtimeClasspath
+def phase2JavaLauncher = javaToolchains.launcherFor {
+	languageVersion = JavaLanguageVersion.of(Integer.parseInt(phase2RuntimeProperties.getProperty('java.version')))
+}
+def phase2MigrationRelease = phase2RuntimeProperties.getProperty('migration.release')
+def phase2ExpectedReleasePrefix = phase2MigrationRelease.replaceAll(/(\d)(\d)(\d)lts/, '$1.$2.$3')
+
+def phase2DbHost = providers.gradleProperty('phase2DbHost')
+	.orElse(providers.environmentVariable('ADEMPIERE_PHASE2_DB_HOST'))
+	.orElse('127.0.0.1')
+def phase2DbPort = providers.gradleProperty('phase2DbPort')
+	.orElse(providers.environmentVariable('ADEMPIERE_PHASE2_DB_PORT'))
+	.orElse('5432')
+def phase2DbName = providers.gradleProperty('phase2DbName')
+	.orElse(providers.environmentVariable('ADEMPIERE_PHASE2_DB_NAME'))
+	.orElse('adempiere_phase2_smoke')
+def phase2DbUser = providers.gradleProperty('phase2DbUser')
+	.orElse(providers.environmentVariable('ADEMPIERE_PHASE2_DB_USER'))
+	.orElse('adempiere_phase2_smoke')
+def phase2DbPassword = providers.gradleProperty('phase2DbPassword')
+	.orElse(providers.environmentVariable('ADEMPIERE_PHASE2_DB_PASSWORD'))
+	.orElse('adempiere_phase2_smoke')
+def phase2DbSystemUser = providers.gradleProperty('phase2DbSystemUser')
+	.orElse(providers.environmentVariable('ADEMPIERE_PHASE2_DB_SYSTEM_USER'))
+	.orElse('postgres')
+def phase2DbSystemPassword = providers.gradleProperty('phase2DbSystemPassword')
+	.orElse(providers.environmentVariable('ADEMPIERE_PHASE2_DB_SYSTEM_PASSWORD'))
+	.orElse('')
+def phase2PostgresVersion = phase2RuntimeProperties.getProperty('postgres.version')
+
+def phase2RuntimeProjects = [
+	rootProject.project(':tools'),
+	rootProject.project(':base'),
+	rootProject.project(':client'),
+	rootProject.project(':install'),
+	rootProject.project(':migration'),
+	rootProject.project(':serverRoot'),
+	rootProject.project(':org.adempiere.project'),
+	rootProject.project(':org.adempiere.request'),
+	rootProject.project(':JasperReports')
+]
+
+tasks.register('preparePhase2AdempiereHome', Sync) {
+	group = 'verification'
+	description = 'Assembles a disposable ADEMPIERE_HOME from Gradle outputs and the 394lts seed inputs'
+	dependsOn phase2RuntimeProjects.collect { it.tasks.named('jar') }
+	into phase2RuntimeHome
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+	from({ zipTree(rootProject.file('data/seed/Adempiere_pg.jar')) }) {
+		into 'data'
+		include 'Adempiere_pg.dmp'
+	}
+	from({ phase2RuntimeProjects.collect { it.tasks.named('jar').get().archiveFile.get().asFile } }) {
+		into 'lib'
+	}
+	from({
+		phase2RuntimeProjects.collectMany { projectWithRuntime ->
+			def runtimeClasspath = projectWithRuntime.configurations.findByName('runtimeClasspath')
+			runtimeClasspath == null ? [] : runtimeClasspath.files
+		}
+	}) {
+		into 'lib'
+	}
+	from(rootProject.file('migration')) {
+		into 'migration'
+		include "*${phase2MigrationRelease}*/**"
+	}
+}
+
+tasks.register('writePhase2RuntimeConfig', JavaExec) {
+	group = 'verification'
+	description = 'Writes the disposable Phase 2 AdempiereEnv.properties without invoking the Ant installer'
+	dependsOn baseProject.tasks.named('phase2SmokeClasses'), tasks.named('preparePhase2AdempiereHome')
+	classpath = phase2RuntimeHelperClasspath
+	mainClass = 'org.adempiere.phase2.runtime.WritePhase2RuntimeConfig'
+	javaLauncher = phase2JavaLauncher
+	doFirst {
+		args(
+			phase2RuntimeHome.get().asFile.absolutePath,
+			phase2DbHost.get(),
+			phase2DbPort.get(),
+			phase2DbName.get(),
+			phase2DbUser.get(),
+			phase2DbPassword.get(),
+			phase2DbSystemPassword.get())
+	}
+
+}
+
+tasks.register('preparePhase2Runtime') {
+	group = 'verification'
+	description = 'Prepares the disposable Phase 2 runtime home and configuration'
+	dependsOn tasks.named('writePhase2RuntimeConfig')
+}
+
+tasks.register('restorePhase2Database', Exec) {
+	group = 'verification'
+	description = 'Restores the extracted ADempiere_pg.dmp into a guarded local PostgreSQL 14.6 Phase 2 smoke database'
+	dependsOn tasks.named('preparePhase2AdempiereHome')
+	doFirst {
+		commandLine(
+			'bash',
+			rootProject.file('scripts/phase2/restore-phase2-postgres.sh').absolutePath,
+			'restore',
+			phase2SeedFile.get().asFile.absolutePath,
+			phase2DbHost.get(),
+			phase2DbPort.get(),
+			phase2DbName.get(),
+			phase2DbUser.get(),
+			phase2DbPassword.get(),
+			phase2DbSystemUser.get(),
+			phase2DbSystemPassword.get(),
+			phase2PostgresVersion)
+	}
+}
+
+tasks.register('runPhase2MigrationLoader', JavaExec) {
+	group = 'verification'
+	description = 'Runs MigrationLoader over the copied *394lts* migration directories'
+	dependsOn tasks.named('writePhase2RuntimeConfig'), tasks.named('restorePhase2Database')
+	classpath = phase2RuntimeHelperClasspath
+	mainClass = 'org.adempiere.phase2.runtime.Phase2MigrationLoaderBootstrap'
+	javaLauncher = phase2JavaLauncher
+	doFirst {
+		args(
+			phase2RuntimeHome.get().asFile.absolutePath,
+			phase2DbHost.get(),
+			phase2DbPort.get(),
+			phase2DbName.get(),
+			phase2DbUser.get(),
+			phase2DbPassword.get(),
+			phase2MigrationHome.get().asFile.absolutePath)
+	}
+
+}
+
+tasks.register('migratePhase2Database') {
+	group = 'verification'
+	description = 'Applies only the release-scoped 394lts migrations to the disposable database'
+	dependsOn tasks.named('runPhase2MigrationLoader')
+}
+
+tasks.register('verifyPhase2DatabaseRelease', JavaExec) {
+	group = 'verification'
+	description = 'Verifies AD_System ReleaseNo/Version after the Phase 2 migration loader run'
+	dependsOn tasks.named('runPhase2MigrationLoader')
+	classpath = phase2RuntimeHelperClasspath
+	mainClass = 'org.adempiere.phase2.runtime.VerifyPhase2DatabaseRelease'
+	javaLauncher = phase2JavaLauncher
+	doFirst {
+		args(
+			phase2RuntimeHome.get().asFile.absolutePath,
+			phase2DbHost.get(),
+			phase2DbPort.get(),
+			phase2DbName.get(),
+			phase2DbUser.get(),
+			phase2DbPassword.get(),
+			phase2ExpectedReleasePrefix)
+	}
+}
+
+baseProject.tasks.named('phase2SmokeTest') {
+	systemProperty 'phase2.runtime.home', phase2RuntimeHome.get().asFile.absolutePath
+	systemProperty 'phase2.db.host', phase2DbHost.get()
+	systemProperty 'phase2.db.port', phase2DbPort.get()
+	systemProperty 'phase2.db.name', phase2DbName.get()
+	systemProperty 'phase2.db.user', phase2DbUser.get()
+	systemProperty 'phase2.db.password', phase2DbPassword.get()
+}
+
+tasks.register('phase2DisposableRuntimeSmoke') {
+	group = 'verification'
+	description = 'Prepares the disposable runtime, restores the guarded database, runs MigrationLoader, and executes the Phase 2 smoke suite'
+	dependsOn tasks.named('verifyPhase2DatabaseRelease')
+	dependsOn baseProject.tasks.named('verifyPhase2SmokeResults')
+}
+
+tasks.register('phase2RuntimeSmoke') {
+	group = 'verification'
+	description = 'Canonical Phase 2 disposable runtime, database, Swing, Groovy, and server smoke gate'
+	dependsOn tasks.named('phase2DisposableRuntimeSmoke')
+}
+
+tasks.register('destroyPhase2Database', Exec) {
+	group = 'verification'
+	description = 'Drops only the exact guarded Phase 2 smoke database and role'
+	doFirst {
+		commandLine(
+			'bash',
+			rootProject.file('scripts/phase2/restore-phase2-postgres.sh').absolutePath,
+			'drop',
+			phase2SeedFile.get().asFile.absolutePath,
+			phase2DbHost.get(),
+			phase2DbPort.get(),
+			phase2DbName.get(),
+			phase2DbUser.get(),
+			phase2DbPassword.get(),
+			phase2DbSystemUser.get(),
+			phase2DbSystemPassword.get(),
+			phase2PostgresVersion)
+	}
+}
+
+tasks.register('capturePhase2RuntimeEvidence', Sync) {
+	group = 'verification'
+	description = 'Copies non-secret Phase 2 runtime evidence outside the disposable runtime before cleanup'
+	into phase2EvidenceDir
+	from(phase2RuntimeHome.map { it.dir('log') }) {
+		into 'log'
+	}
+	from(rootProject.file('gradle/phase2/runtime.properties'))
+	doLast {
+		def migrationRoot = phase2MigrationHome.get().asFile.toPath()
+		def migrationFiles = fileTree(phase2MigrationHome).files
+			.collect { migrationRoot.relativize(it.toPath()).toString() }
+			.sort()
+		def manifest = phase2EvidenceDir.get().file('migration-files.txt').asFile
+		manifest.parentFile.mkdirs()
+		manifest.text = migrationFiles.join(System.lineSeparator()) + System.lineSeparator()
+	}
+}
+
+tasks.register('cleanupPhase2Runtime', Delete) {
+	group = 'verification'
+	description = 'Deletes only the exact Phase 2 disposable runtime directory under base/build'
+	delete phase2RuntimeDir
+}
+
+tasks.named('phase2DisposableRuntimeSmoke') {
+	finalizedBy tasks.named('capturePhase2RuntimeEvidence')
+	finalizedBy tasks.named('destroyPhase2Database')
+	finalizedBy tasks.named('cleanupPhase2Runtime')
+}
+
+def phase2RuntimeCompletionTasks = [
+	tasks.named('restorePhase2Database'),
+	tasks.named('runPhase2MigrationLoader'),
+	tasks.named('verifyPhase2DatabaseRelease'),
+	baseProject.tasks.named('phase2SmokeTest'),
+	baseProject.tasks.named('verifyPhase2SmokeResults'),
+	tasks.named('phase2DisposableRuntimeSmoke'),
+	tasks.named('phase2RuntimeSmoke')
+]
+
+tasks.named('capturePhase2RuntimeEvidence') {
+	mustRunAfter phase2RuntimeCompletionTasks
+}
+
+tasks.named('destroyPhase2Database') {
+	mustRunAfter tasks.named('capturePhase2RuntimeEvidence')
+}
+
+tasks.named('cleanupPhase2Runtime') {
+	mustRunAfter tasks.named('capturePhase2RuntimeEvidence'), tasks.named('destroyPhase2Database')
+}
+
+def phase2RuntimeSmokeRequested = gradle.startParameter.taskNames.any {
+	it == 'phase2RuntimeSmoke' || it.endsWith(':phase2RuntimeSmoke')
+}
+
+if (phase2RuntimeSmokeRequested) {
+	tasks.named('preparePhase2AdempiereHome') {
+		finalizedBy tasks.named('capturePhase2RuntimeEvidence')
+		finalizedBy tasks.named('destroyPhase2Database')
+		finalizedBy tasks.named('cleanupPhase2Runtime')
+	}
+}

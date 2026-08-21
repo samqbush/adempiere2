@@ -58,25 +58,31 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v3
       
-      # Ensure a compatible version of java is used
+      # Phase 2 minimum runtime
       - name: Setup Java JDK
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
-            # For available options: see https://github.com/actions/setup-java#supported-distributions
             distribution: 'temurin'
-            java-version: '11.0'
+            java-version: '21'
             
       # Deploy Tomcat-Server 
       - name: Deploy Tomcat ...
         run: |
             echo  "Installing Tomcat version 9"
             cd /opt
-            echo  "Download Tomcat version 9- version 9.0.65"
-            wget --no-check-certificate https://archive.apache.org/dist/tomcat/tomcat-9/v9.0.65/bin/apache-tomcat-9.0.65.tar.gz
+            TOMCAT_VERSION="$(sed -n 's/^tomcat.version=//p' "$GITHUB_WORKSPACE/gradle/phase2/runtime.properties")"
+            echo  "Download Tomcat version $TOMCAT_VERSION"
+            curl --fail --location --silent --show-error \
+              "https://downloads.apache.org/tomcat/tomcat-9/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz" \
+              --output "apache-tomcat-${TOMCAT_VERSION}.tar.gz"
+            curl --fail --location --silent --show-error \
+              "https://downloads.apache.org/tomcat/tomcat-9/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz.sha512" \
+              --output "apache-tomcat-${TOMCAT_VERSION}.tar.gz.sha512"
+            shasum -a 512 -c "apache-tomcat-${TOMCAT_VERSION}.tar.gz.sha512"
             echo  "Extract Tomcat version 9"
-            tar -zxvf apache-tomcat-9.0.65.tar.gz
+            tar -zxf "apache-tomcat-${TOMCAT_VERSION}.tar.gz"
             echo  "Rename to tomcat"
-            mv apache-tomcat-9.0.65 tomcat
+            mv "apache-tomcat-${TOMCAT_VERSION}" tomcat
             echo  "Installing Tomcat version 9 FINISHED"
 
       # Filter files to discern whether to run with or without database restore 

@@ -6,8 +6,10 @@
 >
 > **Planning date:** 2026-08-20.
 >
-> **Status:** Proposed. No implementation phase is complete until its
-> Verification & Exit Criteria are executed and recorded here.
+> **Status:** Phase 1 is merged. Phase 2 implementation and local verification
+> are complete on `phase-2-jdk21-runtime`; the phase remains open until its PR
+> workflow is green, an unused release identifier is supplied for publication,
+> and required checks are enabled by a repository administrator.
 
 ## 1. Executive summary
 
@@ -148,10 +150,10 @@ Observed:
 | Component | Spike result | Strategy | Current rung | Testability Milestone | Target rung after milestone |
 |---|---|---|---|---|---|
 | Core model/process/workflow/accounting | Gradle compiles on Java 17; Gradle tests are `NO-SOURCE`; Ant compile fails before tests | **A - Freeze-then-lift.** The code nearly builds under both paths and existing tests can be wired rather than rewritten. | **L1**: reversible changes and source review only | **Phase 1**: JDK 17, wrapper/locks, successful build, and at least one meaningful unit test in CI | **L3**: core build/unit/characterization gate; integration and deployables explicitly quarantined |
-| Swing client and POS core | Gradle client assembles; no tests execute; application not booted | **A - Freeze-then-lift** behind core seam tests and a scripted login/menu smoke path | **L1** | **Phase 2**: client boots against a disposable database on JDK 21 and one smoke/contract test passes in CI | **L3** |
-| Background server and scheduler | Gradle server assembles; tests are `NO-SOURCE`; no database-backed boot | **A - Freeze-then-lift** with processor discovery/scheduler characterization | **L1** | **Phase 2**: server starts on JDK 21 against disposable PostgreSQL and one processor/scheduler test passes | **L3** |
+| Swing client and POS core | Phase 2 boots the real Garden World login/role/menu path on JDK 21 and executes a deterministic process under a virtual display | **A - Freeze-then-lift** behind core seam tests and a scripted login/menu smoke path | **L3** | **Phase 2 milestone crossed locally**; PR CI remains the authoritative merge gate | **L3** |
+| Background server and scheduler | Phase 2 executes an isolated scheduler fixture exactly once and proves transaction/context cleanup on JDK 21 | **A - Freeze-then-lift** with processor discovery/scheduler characterization | **L3** | **Phase 2 milestone crossed locally**; PR CI remains the authoritative merge gate | **L3** |
 | Full Ant distribution and installer | The complete reactor is configured to build `tools` before `base`, but no local product archive or setup run was completed | **B - Beachhead-then-expand.** Make a minimal installable distribution first, then expand reactor coverage. | **L1** | **Phase 3**: installer builds, silent setup completes, product starts, and at least one DB-backed test passes in CI | **L3** |
-| Database seed and XML migrations | Existing CI path and artifacts are documented, but no local restore/release-scoped migration run was completed | **A - Freeze-then-lift** using seed checksum, schema inventory, and release-scoped migration contracts | **L2**: source/seed artifacts can be frozen, execution not observed | **Phase 3**: disposable PostgreSQL restore plus release-scoped migration replay succeeds in CI | **L3** |
+| Database seed and XML migrations | Phase 2 restores the committed seed to disposable PostgreSQL 14.6, applies only `394lts`, and verifies `AD_System` release/version | **A - Freeze-then-lift** using seed checksum, schema inventory, and release-scoped migration contracts | **L3** | **Phase 2 milestone crossed locally**; Phase 3 expands this into the full distribution/installer gate | **L3** |
 | ZK web UI/session boundary | Ant-only; 298 Java files reference `org.zkoss` (279 through imports); no boot or tests | **B - Beachhead-then-expand** via a login/menu/read-only window walking skeleton, then incremental screen migration | **L1** | **Phase 5**: modern ZK/Jakarta slice boots on the target runtime and passes session/tenant isolation tests | **L3**, then L4 as route/e2e coverage expands |
 | SOAP and legacy servlet applications | XFire and servlet descriptors are present; no endpoint booted; 11 route descriptors | **B - Beachhead-then-expand** using a contract-preserving adapter and per-route cutover | **L1** | **Phase 4**: one real SOAP operation and one route class pass replay/contract tests on the target stack | **L3** |
 | Domain extension modules | Most Gradle modules compile transitively, but tests and metadata bindings are not exercised | Mixed: **A** for compilable modules, **B** for Ant-only UI/deployment pieces | **L1** | **Phase 3** for Gradle/Ant buildability; feature-specific testability follows Phases 4-6 | **L3** |
@@ -167,18 +169,20 @@ committed dependency locks, preserves the full 28-project Gradle build breadth,
 and runs tests that have been proven to fail when behavior is deliberately
 mutated.
 
-Phase 3 expands that gate to the full product distribution and database restore/
-migration path. Making either workflow an **enforced required status check** is
-a separate manual GitHub administrator action. Until a human configures branch
-protection, CI runs but does not necessarily block merges.
+Phase 2 adds a disposable Gradle-owned PostgreSQL restore/migration and
+Swing/server smoke. Phase 3 expands that proven path to the full installed
+product distribution, metadata graph, and installer. Making either workflow an
+**enforced required status check** is a separate manual GitHub administrator
+action. Until a human configures branch protection, CI runs but does not
+necessarily block merges.
 
 ### 3.5 Residual-risk register
 
 | ID | Component | Residual risk below L4 | Accepted until | Closing action |
 |---|---|---|---|---|
-| R1 | Core | Unit/characterization coverage initially protects only selected seams; metadata-only failures remain | Phase 3 | Add disposable-DB metadata/process integration tests and migration replay. |
-| R2 | Swing/POS | Compilation does not prove startup, rendering, or operator workflows | Phase 2 | Script login, menu load, and one document/process smoke path. |
-| R3 | Background jobs | Thread context, locking, and duplicate-worker behavior remain unproven | Phase 2/6 | Add processor discovery, scheduler, transaction, and observability checks. |
+| R1 | Core | Unit/characterization and the Phase 2 smoke protect selected seams; metadata-only failures remain | Phase 3 | Add metadata/process integration tests and replay migrations through the full installed distribution. |
+| R2 | Swing/POS | Closed for the Phase 2 Garden World login/role/menu/process slice; broader operator workflows remain outside this phase | Closed in Phase 2; broader coverage Phase 5 | The semantic Xvfb smoke is now gated; expand coverage during the ZK/client modernization. |
+| R3 | Background jobs | Exact-once scheduler execution and context/transaction cleanup are proven; production discovery breadth and observability remain | Phase 6 | Expand processor discovery and add operational metrics/alerts. |
 | R4 | Web UI | First modern slice may be self-frozen without a trustworthy external oracle | Phase 5 | Human/domain review blesses the first snapshot; later changes diff against it. |
 | R5 | SOAP/servlets | Unknown consumers and undocumented route classes may break | Phase 4 | Inventory consumers, freeze WSDL/HTTP fixtures, and run parallel replay. |
 | R6 | Database | Production size, custom schema, supported engines, and rollback windows are unknown | Phase 6 | Approve customer-specific migration runbook and rehearse on a sanitized copy. |
@@ -596,6 +600,11 @@ Ant-only modules remain quarantined until Phases 2-3.
 **Goal:** Run the core, Swing client, and background server on JDK 21 while
 retaining Tomcat 9/`javax` as an explicit compatibility bridge.
 
+**Status:** Implementation and local verification complete on
+`phase-2-jdk21-runtime`. Remote PR CI, required-check enforcement, and the final
+unused release identifier remain open; see
+[`docs/modernization/phase-2-evidence.md`](docs/modernization/phase-2-evidence.md).
+
 **Regime:** Core remains lit; Swing and background server cross their Testability
 Milestones; Ant-only web/API/install remain dark.
 
@@ -640,6 +649,14 @@ not yet gated.
   though full installer packaging remains dark until Phase 3.
 - The seed smoke always applies the release-scoped migration set and verifies
   `AD_System.Version`; it never assumes the committed seed is already current.
+- PostgreSQL 14.6 and the `394lts` migration path crossed a disposable-runtime
+  testability milestone in Phase 2. Phase 3 retains ownership of installer,
+  packaged-distribution, metadata-graph, and deployed-application parity.
+- The Ant reactor keeps Java 11 bytecode for its Phase 3 carry-over surfaces by
+  using the JDK 21 compiler's `--release 11` API view where removed JDK APIs
+  would otherwise prevent compilation. Gradle publications are Java 21.
+- Mockito remains 4.11 in Gradle and the checked-in Ant test runtime; Byte Buddy
+  is aligned at 1.15.4 so both paths execute on class-file major 65.
 - Published Gradle artifacts move to Java 21 bytecode only under a new release
   version whose POM/release notes declare JDK 21; no existing artifact version
   is overwritten with a higher class-file level.
@@ -650,28 +667,32 @@ not yet gated.
 
 #### Verification & Exit Criteria (Definition of Done)
 
-- [ ] `./gradlew build` is green across all 28 unique Gradle projects on JDK 21
-      in CI.
-- [ ] The Gradle smoke-runtime task creates a temporary runnable layout and
+- [x] `./gradlew build` is green locally across all 28 unique Gradle projects
+      on JDK 21. The PR workflow remains the authoritative merge gate.
+- [x] The Gradle smoke-runtime task creates a temporary runnable layout and
       restores the committed seed without invoking the Ant installer.
-- [ ] Swing login/menu/process smoke passes against that disposable database.
-- [ ] Background processor/scheduler smoke passes exactly once and verifies
+- [x] Swing login/menu/process smoke passes against that disposable database.
+- [x] Background processor/scheduler smoke passes exactly once and verifies
       transaction/context cleanup.
-- [ ] Empty Tomcat 9 starts on JDK 21 with the documented JVM module flags.
+- [x] Empty Tomcat 9.0.121 starts on JDK 21 with the documented JVM module flags.
       Application artifact deployment is explicitly deferred to Phase 3.
-- [ ] All Gradle, CI, installer-template, launch-script, version-allowlist, and
+- [x] All Gradle, CI, installer-template, launch-script, version-allowlist, and
       runtime-documentation pins owned by Phase 2 accept/use JDK 21. Remaining
       Ant/Javadoc/XMLBeans source-target pins are enumerated and owned by Phase 3.
-- [ ] Published artifacts use class-file version 65 only under a new release
-      version, and POM/release documentation declares JDK 21 as the minimum.
-- [ ] JDK-internal API inventory is empty or each remaining item has an owner,
+- [ ] Candidate publications use class-file version 65 and POM metadata declares
+      JDK 21; production publication remains blocked until a stakeholder supplies
+      an unused release identifier.
+- [x] JDK-internal API inventory is empty or each remaining item has an owner,
       adapter, and closing phase.
-- [ ] Core seam snapshots match Phase 1.
+- [x] Core seam snapshots match Phase 1; the full Gradle gate and Ant
+      no-database-restore reactor are green on JDK 21.
+- [ ] The Phase 2 PR workflow is green and a repository administrator has made
+      the checks required on `develop` (residual risk R8 until completed).
 
-### Phase 3: Full distribution and database testability (T-shirt size: XL)
+### Phase 3: Installed distribution and metadata testability (T-shirt size: XL)
 
-**Goal:** Cross the full-product, installer, migration, and extension
-Testability Milestones on the JDK 21/Tomcat 9 bridge.
+**Goal:** Cross the installed full-product and extension Testability Milestones
+on the JDK 21/Tomcat 9 bridge, building on Phase 2's disposable migration proof.
 
 **Regime:** Full product transitions from dark to lit.
 
@@ -686,9 +707,9 @@ final stack are not yet migrated.
 
 | ID | Task | Component | Blocked by |
 |---|---|---|---|
-| 3.1 | Make all 32 Ant `jar` reactor entries plus the installer compile/package on JDK 21; reconcile them bidirectionally with 28 unique Gradle projects | Distribution | Phase 2 |
+| 3.1 | Preserve the Phase 2 JDK 21 Ant reactor baseline, verify all 32 `jar` entries and installer outputs, and reconcile them bidirectionally with 28 unique Gradle projects | Distribution | Phase 2 |
 | 3.2 | Add Gradle lifecycle tasks that invoke and inventory the Ant distribution without pretending parity | Build bridge | 3.1 |
-| 3.3 | Restore the `394lts` PostgreSQL seed and apply the release-scoped migration set selected by `migration/build.properties` (currently 249 files from `393lts-394lts` and `394lts-3.9.4.001`) | Database | 3.1 |
+| 3.3 | Promote the Phase 2 PostgreSQL 14.6 seed/`394lts` replay into the full distribution and installer path, retaining its version and migration-manifest evidence | Database | 3.1 |
 | 3.4 | Add metadata graph validation for model classes, processes, validators, workflows, entity packages, and generated models | Metadata | 3.3 |
 | 3.5 | Run silent setup, produce ZIP/TAR, start the installed product, and exercise health/login/process/database seams | Installer/runtime | 3.2-3.4 |
 | 3.6 | Generate artifact manifests and compare Ant output against an approved baseline | Packaging | 3.5 |
@@ -1110,8 +1131,8 @@ explicitly permits it. Store the normalization policy with each fixture.
 
 - **Phase 1:** pure unit and characterization tests on the core.
 - **Phase 2:** JDK/runtime startup smoke for Swing and server workers.
-- **Phase 3:** disposable-DB integration, metadata graph, release-scoped migration replay,
-  installer, and full distribution.
+- **Phase 3:** promote disposable-DB integration and migration replay into the
+  installer/full-distribution path, then add metadata-graph coverage.
 - **Phase 4:** SOAP/HTTP contract and route/security tests.
 - **Phase 5:** web session/tenant concurrency, semantic UI/e2e, and parallel
   behavior diff.

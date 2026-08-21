@@ -1,0 +1,67 @@
+package org.compiere.ldap;
+
+final class LdapTestFixtures
+{
+	static final String USER_ID = "jdoe";
+	static final String PASSWORD = "secret";
+	static final String ORG = "GardenWorld";
+	static final String ORG_UNIT = "LawnCare";
+	static final String BASE_DN = "o=GardenWorld,ou=LawnCare";
+	static final String USER_DN = "cn=jdoe,o=GardenWorld,ou=LawnCare";
+
+	static final byte[] ANONYMOUS_BIND_REQUEST =
+		bytes("300c020101600702010304008000");
+	static final byte[] UNSUPPORTED_VERSION_BIND_REQUEST =
+		bytes("300c020101600702010204008000");
+	static final byte[] AUTHENTICATED_BIND_REQUEST =
+		bytes("3033020102602e0201030421636e3d6a646f652c6f3d47617264656e576f726c642c6f753d4c61776e436172658006736563726574");
+	static final byte[] INVALID_CN_BIND_REQUEST =
+		bytes("302b020103602602010304196f3d47617264656e576f726c642c6f753d4c61776e436172658006736563726574");
+	static final byte[] UNSUPPORTED_AUTH_BIND_REQUEST =
+		bytes("301602010460110201030400a30a04084352414d2d4d4435");
+	static final byte[] UNBIND_REQUEST =
+		bytes("30050201056200");
+	static final byte[] BARE_SEARCH_REQUEST =
+		bytes("303e020106633904196f3d47617264656e576f726c642c6f753d4c61776e436172650a01020a0100020100020100010100a30b040375696404046a646f653000");
+	static final byte[] AND_SEARCH_REQUEST =
+		bytes("304d020107634804196f3d47617264656e576f726c642c6f753d4c61776e436172650a01020a0100020100020100010100a01a870b6f626a656374436c617373a30b040375696404046a646f653000");
+	static final byte[] UNSUPPORTED_OPERATION_REQUEST =
+		bytes("30050201086600");
+	static final byte[] MALFORMED_BIND_REQUEST =
+		bytes("300c020101600704010304008000");
+	static final byte[] TRUNCATED_BIND_REQUEST =
+		bytes("300c020101600702010304008001");
+
+	static final byte[] ANONYMOUS_BIND_SUCCESS_RESPONSE =
+		bytes("300c02010161070a010004000400");
+	static final byte[] AUTHENTICATED_BIND_SUCCESS_RESPONSE =
+		bytes("300c02010261070a010004000400");
+	static final byte[] AUTHENTICATED_BIND_FAILURE_RESPONSE =
+		bytes("302802010261230a01300400041c496e617070726f7072696174652041757468656e7469636174696f6e");
+	static final byte[] INVALID_CN_BIND_ERROR_RESPONSE =
+		bytes("302c02010361270a0120040004204e6f2053756368204f626a6563743a2022636e22206e6f7420646566696e6564");
+	static final byte[] SEARCH_SUCCESS_RESPONSE =
+		bytes("3010020106640b0407636e3d6a646f653000302502010665200a010004196f3d47617264656e576f726c642c6f753d4c61776e436172650400");
+	static final byte[] PROTOCOL_ERROR_SEARCH_RESPONSE =
+		bytes("302f020108652a0a01020400042350726f746f636f6c204572726f723a20556e737570706f727465642052657175657374");
+	static final byte[] PROTOCOL_ERROR_BIND_RESPONSE =
+		bytes("302d02010161280a01020400042150726f746f636f6c204572726f723a204d616c666f726d65642052657175657374");
+
+	private LdapTestFixtures()
+	{
+	}
+
+	private static byte[] bytes(String hex)
+	{
+		if ((hex.length() & 1) != 0)
+			throw new IllegalArgumentException("Hex input must have an even number of characters");
+
+		byte[] bytes = new byte[hex.length() / 2];
+		for (int i = 0; i < bytes.length; i++)
+		{
+			int index = i * 2;
+			bytes[i] = (byte) Integer.parseInt(hex.substring(index, index + 2), 16);
+		}
+		return bytes;
+	}
+}

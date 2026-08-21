@@ -114,7 +114,8 @@ public class Scheduler extends AdempiereServer
 		Timestamp ts = new Timestamp(System.currentTimeMillis());
 		SimpleDateFormat dateFormat4Timestamp = new SimpleDateFormat("yyyy-MM-dd"); 
 		Env.setContext(schedulerContext, "#Date", dateFormat4Timestamp.format(ts)+" 00:00:00" );    //  JDBC format
-		Properties currentctx = Env.getCtx();
+		Properties currentctx = new Properties();
+		currentctx.putAll(Env.getCtx());
 		Env.setCtx(schedulerContext);
 
 		transaction = Trx.get(Trx.createTrxName("Scheduler"), true);

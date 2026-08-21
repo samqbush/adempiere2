@@ -21,16 +21,28 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v4
 
-      - name: Set up Java JDK 17
+      - name: Set up Java JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
           cache: gradle
 
-      - name: Publish with Gradle
-        run: ./gradlew publish --dependency-verification=strict
+      - name: Reject an existing Maven Central version
         env:
+          RELEASE_VERSION: ${{ github.event.release.tag_name }}
+        run: |
+          test -n "$RELEASE_VERSION"
+          status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            "https://repo1.maven.org/maven2/io/github/adempiere/base/${RELEASE_VERSION}/base-${RELEASE_VERSION}.pom")"
+          test "$status" = "404"
+
+      - name: Publish with Gradle
+        run: |
+          ./gradlew verifyReleaseVersion verifyPublicationContracts publish \
+            --dependency-verification=strict
+        env:
+          ADEMPIERE_RELEASE: 'true'
           ADEMPIERE_LIBRARY_VERSION: ${{ github.event.release.tag_name }}
           ORG_GRADLE_PROJECT_signingKey: ${{ secrets.PGP_SECRET }}
           ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.PGP_PASSPHRASE }}
