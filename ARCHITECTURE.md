@@ -30,9 +30,9 @@ every deployable surface.
 
 | Layer | Technology | Evidence |
 |---|---|---|
-| Primary language/runtime | JDK 21; remaining Ant source-target 11 pins are explicit Phase 3 carry-over | CI and runtime templates select JDK 21; Gradle emits class-file major 65 (`.github/workflows/main.yml`, `.github/workflows/build_with_gradle.yml`, `build.gradle`, `gradle/phase2/ant-java-carryover.txt`). |
+| Primary language/runtime | JDK 21 across Gradle and the Phase 3-owned Ant/Javadoc/XMLBeans build surfaces | CI and runtime templates select JDK 21; Gradle emits class-file major 65 and `verifyPhase3AntJavaLevel` rejects reintroduced Java 11 pins (`.github/workflows/main.yml`, `build.gradle`, `gradle/phase3/distribution.gradle`). |
 | Secondary language | Scala, with three incompatible version lines: 3.2.1, 2.13.6, and 2.11.8 | Root and module sbt definitions (`build.sbt#L15-L22`, `org.adempiere.test/build.sbt#L15-L21`, `org.adempiere.pos/build.sbt#L1-L9`). |
-| Primary full-product build | Apache Ant 1.10.10 | The root build delegates to the 32-entry Ant reactor; CI downloads Ant 1.10.10 (`build.xml#L25-L52`, `utils_dev/build.xml#L20-L54`, `.github/actions/adempiere-build/action.yml#L14-L27`). |
+| Primary full-product build | Apache Ant, orchestrated by guarded Phase 3 Gradle lifecycle tasks | The root build delegates to the 32-entry Ant reactor; `gradle/phase3/topology.tsv` reconciles it with the 28-project Gradle graph (`build.xml`, `utils_dev/build.xml`, `gradle/phase3/distribution.gradle`). |
 | Library/module build | Gradle 8.10.2 wrapper on JDK 21, publishing Java 21 bytecode | Root Gradle convention, committed dependency locks/verification, and 28 unique included projects (`build.gradle`, `settings.gradle`, `gradle/phase1/gradle-projects.txt`). |
 | Experimental web/test build | sbt 1.6.2 with sbt-web, Tomcat, Jetty, assembly, and dotenv plugins | `project/build.properties#L1`, `project/plugins.sbt#L1-L6`, `build.sbt#L18-L178`. |
 | Desktop UI | Java Swing | The desktop main class launches `org.compiere.apps.AMenu` (`client/src/org/adempiere/Adempiere.java#L647-L675`). |
@@ -71,8 +71,10 @@ developer-oriented experimental path with machine-specific assumptions.
 
 | Command | Purpose and status | Evidence |
 |---|---|---|
-| `ant build -Dnodbrestore=true` | Canonical CI-style full product build, deploy, and silent setup while skipping seed restore/migration. Requires the configured Java, ADempiere home, and app-server environment. | Root orchestration and composite CI action (`build.xml#L25-L106`, `.github/actions/adempiere-build/action.yml#L29-L38`). |
-| `ant build -Dnodbrestore=false` | Full Ant build with database restore/migration path enabled. Used when relevant build or migration files change and for release packaging. | `.github/workflows/main.yml#L80-L112`, `.github/workflows/release.yml#L47-L69`. |
+| `./gradlew phase3NoDatabaseDistribution --dependency-verification=strict` | Canonical guarded full-product build, install, silent setup, topology check, and normalized artifact manifest without seed restore. | `gradle/phase3/distribution.gradle`, `.github/workflows/main.yml`. |
+| `xvfb-run -a ./gradlew phase3InstalledProduct ... --dependency-verification=strict` | Full installed-product gate against marker-owned disposable PostgreSQL 14.6 and Tomcat 9, including the Phase 2 DB-backed smoke and final database/role cleanup. Context base paths require HTTP 2xx/3xx except the explicitly deployment-only `ADInterface` 404. | `gradle/phase3/distribution.gradle`, `scripts/phase3/`, `.github/workflows/main.yml`. |
+| `ant build -Dnodbrestore=true` | Underlying authoritative Ant product build without database restore. The Phase 3 Gradle task supplies guarded installation paths and JDK 21. | `build.xml`, `gradle/phase3/distribution.gradle`. |
+| `ant build -Dnodbrestore=false` | Underlying database-enabled Ant build. Run only through an approved disposable environment with explicit release scoping. | `build.xml`, `gradle/phase3/distribution.gradle`. |
 | `./gradlew build --dependency-verification=strict` | Reproducible JDK 21 module gate across 28 included projects. It executes the core unit gate and publishes Java 21 bytecode. It does **not** build every Ant deployable. | `.github/workflows/build_with_gradle.yml`, `settings.gradle`, `docs/modernization/phase-1-evidence.md`. |
 | `./gradlew publish --dependency-verification=strict` | Publishes Gradle artifacts to Maven Central staging during a published release using JDK 21. Release publication rejects previously used versions and declares JDK 21 as the minimum. | `.github/workflows/publish_with_gradle.yml`, `.github/workflows/build_with_gradle.yml`, `gradle/phase2/release-contract.properties`. |
 | `./utils/RUN_Adempiere.sh` | Starts the desktop Swing client. | `utils/RUN_Adempiere.sh#L20-L42`. |
@@ -139,14 +141,22 @@ appears twice (`settings.gradle#L3-L31`).
 and SQLJ. Therefore `gradle build` is a library/module validation and publication
 path; `ant build` is the product distribution path.
 
+Phase 3 makes that asymmetry executable rather than implicit:
+`gradle/phase3/topology.tsv` classifies all 32 Ant reactor entries, the separate
+installer and embedded surfaces, all 28 Gradle projects, and the JBoss facet
+quarantine. The installed Tomcat 9 bridge deploys seven WARs. DB-backed metadata
+validation checks active process, validator, workflow/reference, entity, and
+generated-model bindings; 16 pre-existing active process bindings are an
+explicit fail-on-drift quarantine in `gradle/phase3/metadata-quarantine.tsv`.
+
 ### Deployment and runtime surface
 
 | Surface | Pin or selection | Evidence and implication |
 |---|---|---|
 | CI Java | Temurin 21 | Ant, Gradle, and release workflows install Java 21 (`.github/workflows/main.yml`, `.github/workflows/build_with_gradle.yml`, `.github/workflows/release.yml`). |
-| Installer Java | JDK 21 runtime; Ant source-target carry-over is Phase 3 | Environment template selects JDK 21 while remaining Ant source-target pins are inventoried (`install/Adempiere/AdempiereEnvTemplate.properties`, `gradle/phase2/ant-java-carryover.txt`). |
+| Installer Java | JDK 21 runtime and bytecode | The environment template selects JDK 21 and Phase 3 rejects Java 11 carry-over pins (`install/Adempiere/AdempiereEnvTemplate.properties`, `gradle/phase3/distribution.gradle`). |
 | CI database | PostgreSQL 14.6 | Service container in Ant and release workflows (`.github/workflows/main.yml#L22-L38`, `.github/workflows/release.yml#L18-L31`). |
-| CI application server | Tomcat 9.0.121 | Pinned once for the Ant lane and empty-container JDK 21 probe (`gradle/phase2/runtime.properties`, `.github/workflows/main.yml`, `scripts/phase2/probe-tomcat9.sh`). |
+| CI application server | Tomcat 9.0.121 | Checksum-verified and exercised with the installed seven-WAR product (`gradle/phase2/runtime.properties`, `scripts/phase3/prepare-tomcat9.sh`, `scripts/phase3/smoke-tomcat9.sh`). |
 | Installed application server | External Tomcat by default, under `/opt/tomcat`; WildFly and Jetty are selectable | `install/Adempiere/AdempiereEnvTemplate.properties#L28-L38`, `utils/RUN_Server2.sh#L20-L85`. No runtime version is pinned by the environment template. |
 | Experimental sbt servers | Tomcat/webapp-runner 9.0.41.0 and Jetty 10.0.12 | `build.sbt#L99-L178`. |
 | Product version | 3.9.4 / `394LTS`; environment template release `3.9.4` | `utils_dev/build.properties#L5-L6`, `install/Adempiere/AdempiereEnvTemplate.properties#L74-L76`. |

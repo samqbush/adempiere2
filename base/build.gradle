@@ -112,6 +112,16 @@ sourceSets {
 		compileClasspath += sourceSets.main.output
 		runtimeClasspath += output + compileClasspath
 	}
+	phase3MetadataValidation {
+		java {
+			srcDirs = ['phase3-metadata-validation/src/test/java']
+		}
+		resources {
+			srcDirs = ['phase3-metadata-validation/src/test/resources']
+		}
+		compileClasspath += sourceSets.main.output + sourceSets.phase2Smoke.output
+		runtimeClasspath += output + compileClasspath
+	}
 }
 
 dependencies {
@@ -135,6 +145,11 @@ dependencies {
 	phase2SmokeImplementation 'org.junit.jupiter:junit-jupiter-params:5.7.0'
 	phase2SmokeRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
 	phase2SmokeRuntimeOnly files('../tools/lib/groovy-all-2.4.15.jar')
+
+	phase3MetadataValidationImplementation sourceSets.main.output
+	phase3MetadataValidationImplementation sourceSets.phase2Smoke.output
+	phase3MetadataValidationImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+	phase3MetadataValidationRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
 }
 
 def phase2SmokeConfig = new Properties()
@@ -371,3 +386,4 @@ signing {
 }
 
 apply from: rootProject.file('gradle/phase2/runtime.gradle')
+apply from: rootProject.file('gradle/phase3/metadata-validation.gradle')

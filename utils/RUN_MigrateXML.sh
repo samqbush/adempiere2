@@ -64,8 +64,11 @@ then
 	echo "WARNING: If the database is not a fresh import of the seed, make sure "
 	echo "you have a backup!"
 	echo
-	echo "Press enter to continue ..."
-	read in
+	if [[ "${ADEMPIERE_NONINTERACTIVE:-false}" != "true" ]]
+	then
+		echo "Press enter to continue ..."
+		read in
+	fi
 	
 	CP=$ADEMPIERE_HOME/lib/CInstall.jar:$ADEMPIERE_HOME/lib/Adempiere.jar:$ADEMPIERE_HOME/lib/CCTools.jar:$ADEMPIERE_HOME/lib/oracle.jar:$ADEMPIERE_HOME/lib/postgresql.jar:
 	JAVA=$JAVA_HOME/bin/java

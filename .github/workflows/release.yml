@@ -15,6 +15,9 @@ jobs:
   publish:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
+    env:
+      ADEMPIERE_PHASE2_DB_SYSTEM_PASSWORD: postgres
+      ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD: postgres
     # Service containers to run with `container-job`
     services:
       # Label used to access the service container
@@ -36,7 +39,7 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       # Ensure a compatible version of java is used
       - name: Setup Java JDK
@@ -80,10 +83,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.TOKEN_ACCESS }}
         with:
-          args: 'adempiere/Adempiere/data/Adempiere_pg.dmp'
+          args: 'build/phase3/runtime/Adempiere/data/Adempiere_pg.dmp'
       - name: Upload Compressed Seed (Database)
         uses: skx/github-action-publish-binaries@master
         env:
           GITHUB_TOKEN: ${{ secrets.TOKEN_ACCESS }}
         with:
-          args: 'adempiere/Adempiere/data/Adempiere_pg.jar'
+          args: 'build/phase3/runtime/Adempiere/data/Adempiere_pg.jar'

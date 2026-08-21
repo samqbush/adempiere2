@@ -1,0 +1,2 @@
+# Surface	Reason	Closing phase
+jbossfacet	Legacy org.jboss.security.SimpleGroup implements the removed java.security.acl.Group API; WildFly/JBoss is outside the approved Phase 3 Tomcat bridge.	Phase 7 usage/retirement decision

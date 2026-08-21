@@ -150,7 +150,7 @@
   <target name="compile.test" depends="compile, clean.tests"
         if="${test.performTests}">
     <mkdir dir="${test.build.dir}"/>
-    <javac source="11" target="11" encoding="UTF-8" fork="true" includeantruntime="false"
+    <javac source="21" target="21" encoding="UTF-8" fork="true" includeantruntime="false"
         destdir="${test.build.dir}" deprecation="on" debug="on" 
         memoryinitialsize="512m" memorymaximumsize="512m">
       <src path="${test.src}"/>

@@ -180,14 +180,15 @@ necessarily block merges.
 
 | ID | Component | Residual risk below L4 | Accepted until | Closing action |
 |---|---|---|---|---|
-| R1 | Core | Unit/characterization and the Phase 2 smoke protect selected seams; metadata-only failures remain | Phase 3 | Add metadata/process integration tests and replay migrations through the full installed distribution. |
+| R1 | Core | Phase 2 smoke and Phase 3 DB-backed metadata validation protect selected runtime and dictionary seams; broader business behavior remains | Phase 5 | Expand representative document, accounting, and UI behavior coverage. |
 | R2 | Swing/POS | Closed for the Phase 2 Garden World login/role/menu/process slice; broader operator workflows remain outside this phase | Closed in Phase 2; broader coverage Phase 5 | The semantic Xvfb smoke is now gated; expand coverage during the ZK/client modernization. |
 | R3 | Background jobs | Exact-once scheduler execution and context/transaction cleanup are proven; production discovery breadth and observability remain | Phase 6 | Expand processor discovery and add operational metrics/alerts. |
 | R4 | Web UI | First modern slice may be self-frozen without a trustworthy external oracle | Phase 5 | Human/domain review blesses the first snapshot; later changes diff against it. |
 | R5 | SOAP/servlets | Unknown consumers and undocumented route classes may break | Phase 4 | Inventory consumers, freeze WSDL/HTTP fixtures, and run parallel replay. |
 | R6 | Database | Production size, custom schema, supported engines, and rollback windows are unknown | Phase 6 | Approve customer-specific migration runbook and rehearse on a sanitized copy. |
-| R7 | Extension metadata | Reflected class names and dictionary bindings can remain compile-clean but runtime-broken | Phase 3 | Add metadata graph validation for processes, validators, models, and workflows. |
+| R7 | Extension metadata | The fail-closed validator names 16 pre-existing active `AD_Process` bindings with absent or incompatible classes | Phase 7 | Obtain usage evidence, then correct or retire every row in `gradle/phase3/metadata-quarantine.tsv`; additions and stale quarantine rows fail CI. |
 | R8 | CI governance | Checks may run without blocking merges | Human action after Phase 1 | Enable branch protection and required status checks on `develop`. |
+| R9 | JBoss facet | Checked-in `jboss.jar` implements removed JDK API `java.security.acl.Group`, so the unused-by-Phase-3 facet cannot emit Java 21 bytecode | Phase 7 | Establish deployable usage, then replace the dependency or retire the facet; `gradle/phase3/quarantine.txt` must remain explicit meanwhile. |
 
 ### 3.6 Oracle decision
 
@@ -691,6 +692,10 @@ not yet gated.
 
 ### Phase 3: Installed distribution and metadata testability (T-shirt size: XL)
 
+**Status:** Implementation complete locally on
+`phase-3-installed-distribution`; the phase remains open until the authored PR
+workflow is green. Required-check enforcement remains residual risk R8.
+
 **Goal:** Cross the installed full-product and extension Testability Milestones
 on the JDK 21/Tomcat 9 bridge, building on Phase 2's disposable migration proof.
 
@@ -724,7 +729,8 @@ final stack are not yet migrated.
   **Mitigation:** Replace hand-maintained filters with generated dependency/input
   sets or run the DB gate on every relevant PR until evidence supports narrowing.
 - **Risk:** Seed/migration replay mutates durable data.
-  **Mitigation:** CI database is explicitly ephemeral and uniquely named.
+  **Mitigation:** The exact local `adempiere_phase3_ci` database and role must
+  carry immutable Phase 3 ownership markers before any reset or cleanup.
 
 #### Decisions made
 
@@ -733,8 +739,26 @@ final stack are not yet migrated.
 - The database gate uses PostgreSQL 14.6 initially to isolate product
   resurrection from the database-major move.
 - Integration tests no longer default silently off in CI.
+- The Phase 3 acceptance bridge is PostgreSQL 14.6 and checksum-verified Tomcat
+  9.0.121. Oracle, MySQL/MariaDB, WildFly, and Jetty remain compatibility
+  surfaces but are not Phase 3 acceptance gates.
+- `jbossfacet` is explicitly quarantined because its checked-in JBoss API
+  depends on the JDK-removed `java.security.acl.Group`; `glassfishfacet` remains
+  compiled through `base`.
+- The metadata gate checks active records and generated-model bindings. Sixteen
+  pre-existing active process bindings are named in
+  `gradle/phase3/metadata-quarantine.tsv`; new findings and stale quarantine
+  entries fail closed. This is an explicit L3 residual, not clean L4 metadata.
+- SOAP wire behavior and semantic ZK session/UI behavior are deferred to Phases
+  4 and 5 respectively. Their current WARs must deploy and initialize in Phase
+  3.
+- Context reachability requires HTTP 2xx/3xx except for the deployment-only
+  `ADInterface` base path, whose explicit 404 policy does not claim SOAP
+  behavior. The aggregate captures evidence before marker-guarded cleanup of
+  the Phase 3 database and role.
 - **Hazard red-team:** H1 fired (all 32 Ant `jar` entries, installer, and 28
-  unique Gradle projects inventoried bidirectionally; no silent quarantine);
+  unique Gradle projects inventoried bidirectionally; the JBoss facet and 16
+  metadata bindings are explicit quarantines);
   H2/H3 cleared because no new major is
   introduced; H4 cleared because routes are not cut over; H5 applies only to
   ephemeral CI and the explicit destructive reset/re-seed is approved; H6
@@ -742,16 +766,25 @@ final stack are not yet migrated.
 
 #### Verification & Exit Criteria (Definition of Done)
 
-- [ ] `ant build -Dnodbrestore=true` succeeds on JDK 21.
-- [ ] `ant build -Dnodbrestore=false` succeeds against a disposable PostgreSQL
+- [x] `ant build -Dnodbrestore=true` succeeds on JDK 21 through
+      `phase3NoDatabaseDistribution`.
+- [x] `ant build -Dnodbrestore=false` succeeds against a disposable PostgreSQL
       14.6 service and replays the release-scoped migration set.
-- [ ] At least one meaningful DB-backed integration test passes in CI.
-- [ ] Silent setup produces runnable archives; installed product starts and
+- [ ] The authored CI installed-product lane runs its three meaningful
+      DB-backed smoke tests and metadata test without skips.
+- [x] Silent setup produces runnable archives; installed product starts and
       passes the smoke checklist.
-- [ ] Metadata graph validation and generated-model diff are clean.
-- [ ] Artifact/module manifests account for every approved deployable; no
-      Phase 1 quarantine remains unnamed.
-- [ ] Phase 1-2 characterization fixtures remain equivalent.
+- [x] Destructive reset and final cleanup refuse unmarked database objects, and
+      context HTTP status policy fails closed without pulling SOAP semantics
+      into Phase 3.
+- [x] Metadata graph validation is fail-closed; generated-model bindings are
+      clean and the 16 pre-existing process-binding residuals are explicitly
+      quarantined with a Phase 7 closing action.
+- [x] The normalized 396-file installed manifest and topology inventory account
+      for every approved deployable; the JBoss facet quarantine is named.
+- [x] Phase 1-2 characterization fixtures remain equivalent locally: the
+      canonical Gradle build is green and the Phase 2 smoke executes three
+      tests with no skips.
 
 ### Phase 4: Contract-preserving API and edge modernization (T-shirt size: XL)
 

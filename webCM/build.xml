@@ -47,7 +47,7 @@
     </path>
   	
     <javac
-      source="11" target="11" encoding="UTF-8"
+      source="21" target="21" encoding="UTF-8"
 	  destdir="${build.war.dir}"
 	  debug="on"
 	  deprecation="off"

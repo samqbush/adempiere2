@@ -8,21 +8,31 @@
 
   <property environment="env" />
   <!-- set global properties for this build -->
-  <property name="env_directory" location="adempiere/Adempiere/utils"/>
-  <property name="AD_directory" location="adempiere/Adempiere"/>
+  <property name="env_directory" location="${env.ADEMPIERE_HOME}/utils"/>
+  <property name="AD_directory" location="${env.ADEMPIERE_HOME}"/>
   <property name="adempiere_build" location="utils_dev/build.xml"/>
-  <property name="myEnvironment" location="adempiere/Adempiere/utils/myEnvironment.sh"/>
-  <property name="myEnvironmentTemplate" location="adempiere/Adempiere/utils/myEnvironmentTemplate.sh"/>
-  <property name="RUN_DBRestore" location="adempiere/Adempiere/utils/RUN_DBRestore.sh"/>
-  <property name="RUN_DBExport" location="adempiere/Adempiere/utils/RUN_DBExport.sh"/>
-  <property name="RUN_ExportReference" location="adempiere/Adempiere/utils/RUN_ExportReference.sh"/>
-  <property name="RUN_ImportAdempiere" location="adempiere/Adempiere/utils/RUN_ImportAdempiere.sh"/>
-  <property name="RUN_MigrateXML" location="adempiere/Adempiere/utils/RUN_MigrateXML.sh"/>
-  <property name="RUN_silentsetup" location="adempiere/Adempiere/RUN_silentsetup.sh"/>
-  <property name="AdempierePropertiesFrom" location="adempiere/Adempiere/AdempiereEnvTemplate.properties"/>
-  <property name="AdempierePropertiesTo" location="adempiere/Adempiere/AdempiereEnv.properties"/>
-  <property name="myDBcopyTemplate" location="adempiere/Adempiere/utils/myDBcopyTemplate.sh"/>
-  <property name="myDBcopy" location="adempiere/Adempiere/utils/myDBcopy.sh"/>
+  <property name="myEnvironment" location="${AD_directory}/utils/myEnvironment.sh"/>
+  <property name="myEnvironmentTemplate" location="${AD_directory}/utils/myEnvironmentTemplate.sh"/>
+  <property name="RUN_DBRestore" location="${AD_directory}/utils/RUN_DBRestore.sh"/>
+  <property name="RUN_DBExport" location="${AD_directory}/utils/RUN_DBExport.sh"/>
+  <property name="RUN_ExportReference" location="${AD_directory}/utils/RUN_ExportReference.sh"/>
+  <property name="RUN_ImportAdempiere" location="${AD_directory}/utils/RUN_ImportAdempiere.sh"/>
+  <property name="RUN_MigrateXML" location="${AD_directory}/utils/RUN_MigrateXML.sh"/>
+  <property name="RUN_silentsetup" location="${AD_directory}/RUN_silentsetup.sh"/>
+  <property name="AdempierePropertiesFrom" location="${AD_directory}/AdempiereEnvTemplate.properties"/>
+  <property name="AdempierePropertiesTo" location="${AD_directory}/AdempiereEnv.properties"/>
+  <property name="myDBcopyTemplate" location="${AD_directory}/utils/myDBcopyTemplate.sh"/>
+  <property name="myDBcopy" location="${AD_directory}/utils/myDBcopy.sh"/>
+  <property name="migration.clean.mode" value=""/>
+  <property name="migration.force.mode" value=""/>
+  <property name="migration.path" value=""/>
+  <property name="phase3.apps.path" value="/opt/tomcat"/>
+  <property name="phase3.db.host" value="localhost"/>
+  <property name="phase3.db.port" value="5432"/>
+  <property name="phase3.db.name" value="adempiere"/>
+  <property name="phase3.db.user" value="adempiere"/>
+  <property name="phase3.db.password" value="adempiere"/>
+  <property name="phase3.db.system.password" value="postgres"/>
 
   <target name="build" description="Step 1: Create installation artifacts">
   	<echo message="Building ADempiere"/>
@@ -44,6 +54,13 @@
 	<copy file="${AdempierePropertiesFrom}" tofile="${AdempierePropertiesTo}" filtering="yes" overwrite="yes" />
 	<replaceregexp file="${AdempierePropertiesTo}" match="ADEMPIERE_HOME=/opt/Adempiere" replace="ADEMPIERE_HOME=${env.ADEMPIERE_HOME}" byline="true"/>
 	<replaceregexp file="${AdempierePropertiesTo}" match="^JAVA_HOME=.*$" replace="JAVA_HOME=${env.JAVA_HOME}" byline="true"/>
+	<replaceregexp file="${AdempierePropertiesTo}" match="^ADEMPIERE_APPS_PATH=.*$" replace="ADEMPIERE_APPS_PATH=${phase3.apps.path}" byline="true"/>
+	<replaceregexp file="${AdempierePropertiesTo}" match="^ADEMPIERE_DB_SERVER=.*$" replace="ADEMPIERE_DB_SERVER=${phase3.db.host}" byline="true"/>
+	<replaceregexp file="${AdempierePropertiesTo}" match="^ADEMPIERE_DB_PORT=.*$" replace="ADEMPIERE_DB_PORT=${phase3.db.port}" byline="true"/>
+	<replaceregexp file="${AdempierePropertiesTo}" match="^ADEMPIERE_DB_NAME=.*$" replace="ADEMPIERE_DB_NAME=${phase3.db.name}" byline="true"/>
+	<replaceregexp file="${AdempierePropertiesTo}" match="^ADEMPIERE_DB_USER=.*$" replace="ADEMPIERE_DB_USER=${phase3.db.user}" byline="true"/>
+	<replaceregexp file="${AdempierePropertiesTo}" match="^ADEMPIERE_DB_PASSWORD=.*$" replace="ADEMPIERE_DB_PASSWORD=${phase3.db.password}" byline="true"/>
+	<replaceregexp file="${AdempierePropertiesTo}" match="^ADEMPIERE_DB_SYSTEM=.*$" replace="ADEMPIERE_DB_SYSTEM=${phase3.db.system.password}" byline="true"/>
 	<property file="${AdempierePropertiesTo}"/>
 	<filter filtersfile="${AdempierePropertiesTo}" />
 	<echo message="Generate myEnvironment.sh"/>
@@ -54,7 +71,7 @@
 
   <target name="silent-setup" description="Step 3: Run SilentSetup">
 	<echo message="Install ADempiere with SilentSetup start"/>
-	<java dir="${env.ADEMPIERE_HOME}" classname="org.compiere.install.SilentSetup" fork="true">
+	<java dir="${env.ADEMPIERE_HOME}" classname="org.compiere.install.SilentSetup" fork="true" failonerror="true">
 	  <arg value="ALL"/>
 	  <jvmarg value="--add-exports"/>
 	  <jvmarg value="java.base/jdk.internal.misc=ALL-UNNAMED"/>
@@ -98,6 +115,9 @@
   	<echo message="Execute XML migration files with RUN_MigrateXML start"/>
 	<exec dir="${AD_directory}" executable="/bin/bash" failonerror="true">
     	<arg value="${RUN_MigrateXML}"/>
+		<arg value="${migration.clean.mode}"/>
+		<arg value="${migration.force.mode}"/>
+		<arg value="${migration.path}"/>
   	</exec>
   	<echo message="Execute XML migration files with RUN_MigrateXML finished"/>
     <!-- If this target is not executed, the next ANT call is also not executed -->

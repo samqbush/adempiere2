@@ -53,7 +53,7 @@
   <!-- =========================================== -->
   <target name="cashflowCompile" depends="cashflowMakedir">
     <!-- compile the java code from ${src} into ${build.dir} -->
-    <javac source="11" target="11" encoding="UTF-8" srcdir="${src}" destdir="${build.dir}" deprecation="on" debug="on" includeantruntime="false">
+    <javac source="21" target="21" encoding="UTF-8" srcdir="${src}" destdir="${build.dir}" deprecation="on" debug="on" includeantruntime="false">
       <classpath refid="project.class.path"/>
     </javac>
     <!-- copy all image & sound files from src to the build directory -->
