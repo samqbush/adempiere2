@@ -30,8 +30,12 @@ git grep -nI -E \
         owner='Phase 2: runtime/module flag review' ;;
       base/phase2-smoke/*)
         owner='Phase 2: runtime smoke test isolation' ;;
+      base/phase3-metadata-validation/*)
+        owner='Phase 3: metadata extension validation' ;;
       gradle/phase2/*|scripts/phase2/*)
         owner='Phase 2: JDK/runtime verification tooling' ;;
+      scripts/phase3/*)
+        owner='Phase 3: installed runtime verification tooling' ;;
       base/src/org/compiere/util/CLogMgt.java)
         owner='Phase 2: stack-trace text only' ;;
       base/src/org/compiere/util/EMail.java)

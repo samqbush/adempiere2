@@ -6,6 +6,7 @@ reflection	base/phase2-smoke/src/test/java/org/adempiere/phase2/Phase2RuntimeBoo
 reflection	base/phase2-smoke/src/test/java/org/adempiere/phase2/Phase2RuntimeBootstrap.java:81	Field cacheField = Trx.class.getDeclaredField("s_cache");	Phase 2: runtime smoke test isolation
 reflection	base/phase2-smoke/src/test/java/org/adempiere/phase2/Phase2RuntimeBootstrap.java:82	cacheField.setAccessible(true);	Phase 2: runtime smoke test isolation
 module-flag	base/phase2-smoke/src/test/java/org/adempiere/phase2/runtime/WritePhase2RuntimeConfig.java:44	"-Dfile.encoding=UTF-8 -Xms128m -Xmx1024m --add-opens java.base/java.lang=ALL-UNNAMED");	Phase 2: runtime smoke test isolation
+reflection	base/phase3-metadata-validation/src/test/java/org/adempiere/phase3/MetadataExtensionGraphValidator.java:70	if (!Modifier.isPublic(loaded.getDeclaredConstructor().getModifiers())) {	Phase 3: metadata extension validation
 reflection	base/src/org/adempiere/as/ASFactory.java:42	Class<?> c = Class.forName(s); 	Phase 2: reviewed application extension/reflection seam
 reflection	base/src/org/adempiere/engine/CostingMethodFactory.java:54	Class<? extends ICostingMethod> clazz = (Class<? extends ICostingMethod>) Class.forName(className); 	Phase 2: reviewed application extension/reflection seam
 reflection	base/src/org/adempiere/model/InterfaceWrapperHelper.java:258	field.setAccessible(true); 	Phase 2: reviewed application extension/reflection seam
@@ -67,8 +68,8 @@ reflection	base/src/org/spin/util/TokenGeneratorHandler.java:137	Class<?> clazz 
 reflection	base/src/org/spin/util/TokenGeneratorHandler.java:177	Constructor<?> constructor = clazz.getDeclaredConstructor();	Phase 2: reviewed application extension/reflection seam
 reflection	base/src/org/spin/util/support/AppSupportHandler.java:107	Class<?> clazz = Class.forName(className);	Phase 2: reviewed application extension/reflection seam
 reflection	base/src/org/spin/util/support/AppSupportHandler.java:148	Constructor<?> constructor = clazz.getDeclaredConstructor();	Phase 2: reviewed application extension/reflection seam
-module-flag	build.xml:59	<jvmarg value="--add-exports"/>	Phase 2: runtime/module flag review
-module-flag	build.xml:61	<jvmarg value="--add-opens"/>	Phase 2: runtime/module flag review
+module-flag	build.xml:76	<jvmarg value="--add-exports"/>	Phase 2: runtime/module flag review
+module-flag	build.xml:78	<jvmarg value="--add-opens"/>	Phase 2: runtime/module flag review
 reflection	client/src/org/adempiere/Adempiere.java:626	Class.forName(className);	Phase 2: reviewed application extension/reflection seam
 reflection	client/src/org/adempiere/Adempiere.java:629	Class.forName(className);	Phase 2: reviewed application extension/reflection seam
 reflection	client/src/org/adempiere/Adempiere.java:665	Class<?> startClass = Class.forName(className);	Phase 2: reviewed application extension/reflection seam
@@ -133,6 +134,7 @@ reflection	org.spin.finance_management/src/main/java/base/org/spin/investment/mo
 reflection	org.spin.finance_management/src/main/java/base/org/spin/investment/model/MFMFunctionalSetting.java:70	Class<?> clazz = Class.forName(className);	Phase 2: reviewed application extension/reflection seam
 module-flag	scripts/phase2/probe-tomcat9.sh:32	export CATALINA_OPTS="--add-opens java.base/java.lang=ALL-UNNAMED"	Phase 2: JDK/runtime verification tooling
 version-gate	scripts/phase2/verify-runtime-pins.sh:6	expected_java=$(sed -n 's/^java.version=//p' gradle/phase2/runtime.properties)	Phase 2: JDK/runtime verification tooling
+module-flag	scripts/phase3/smoke-tomcat9.sh:41	export CATALINA_OPTS="-DADEMPIERE_HOME=$adempiere_home -DPropertyFile=$adempiere_home/AdempiereEnv.properties --add-opens java.base/java.lang=ALL-UNNAMED"	Phase 3: installed runtime verification tooling
 reflection	serverApps/src/main/servlet/org/compiere/www/WProcessCtl.java:460	Class myClass = Class.forName(m_pi.getClassName()); 	Phase 2: reviewed application extension/reflection seam
 reflection	serverRoot/src/main/server/org/compiere/server/ReplicationProcessor.java:116	Class clazz = Class.forName(javaClass); 	Phase 2: reviewed application extension/reflection seam
 version-gate	tools/lib/ant/apache-ant-1.10.10/lib/libraries.properties:77	tcljava.version=${jacl.version}	Phase 2: Ant dependency property, not a JVM version gate
