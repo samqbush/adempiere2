@@ -18,13 +18,14 @@ by a phase become canonical only after that phase's exit criteria prove them.
 
 | Action | Command | Current qualification |
 |---|---|---|
-| Full product build, no DB restore | `ant build -Dnodbrestore=true` | Authoritative Ant distribution path; not proven locally during planning |
+| Full product build, no DB restore | `ant build -Dnodbrestore=true` | JDK 21 compatibility gate; Phase 2 recorded 1,387 passing tests, but silent setup/startup remains Phase 3 |
 | Full product build with DB restore/migrations | `ant build -Dnodbrestore=false` | Database-affecting; run only against an approved disposable environment |
-| Gradle module build | `./gradlew build --dependency-verification=strict` | Reproducible Phase 1 gate on JDK 17 with Java 11 bytecode; omits quarantined Ant-only deployables |
+| Gradle module build | `./gradlew build --dependency-verification=strict` | Reproducible Phase 2 gate on JDK 21 with Java 21 bytecode; omits quarantined Ant-only deployables |
 | Base unit tests | `ant -f tools/build.xml && ant -f base/build.xml unit-tests` | `tools` must run first to create `lib/CCTools.jar` and related outputs; the complete Ant reactor already preserves this order |
 | Base integration tests | `ant -f base/build.xml integration-tests -Dtest.performIntegrationTests=true` | Requires configured application/database environment |
 | Base Gradle test task | `./gradlew :base:test --dependency-verification=strict` | Executes the fail-closed `UnitTest` classification and emits JUnit XML |
 | Single Gradle test | `./gradlew :base:test --tests '<fully.qualified.Test>'` | `org.adempiere.test` remains a published test-support artifact |
+| Phase 2 runtime smoke | `xvfb-run -a ./gradlew :base:phase2RuntimeSmoke -Pphase2DbSystemPassword='<password>' --dependency-verification=strict` | Requires disposable local PostgreSQL 14.6; restores the seed, applies `394lts`, and cleans up on success or failure |
 | Desktop client | `./utils/RUN_Adempiere.sh` | Requires installed product and database configuration |
 | Application server | `./utils/RUN_Server2.sh` | Requires installed product and selected Tomcat/WildFly/Jetty |
 | Restore seed | `./utils/RUN_ImportAdempiere.sh` | Destructive/database-affecting; inspect environment first |
@@ -34,9 +35,9 @@ by a phase become canonical only after that phase's exit criteria prove them.
 | Typecheck | Java compilation through the applicable Ant/Gradle build | No separate typecheck command |
 | End-to-end/contract | None currently canonical | Introduced incrementally in Phases 2-5 |
 
-Existing CI lives under `.github/workflows/`. Phase 1 records 1,075 passing Ant
-unit tests and 832 passing Gradle core tests, preserves all 28 included Gradle
-projects, and enforces non-zero results for declared test modules. Required-check
+Existing CI lives under `.github/workflows/`. Phase 2 preserves all 28 included
+Gradle projects, records 863 passing Gradle tests and 1,387 passing Ant reactor
+tests locally, and adds a three-test disposable runtime smoke. Required-check
 enforcement remains a manual repository-administrator action.
 
 **CI enforcement is manual.** An agent can author workflows, but a GitHub
@@ -79,8 +80,9 @@ is allowed only when the residual risk, owner, and closing phase are recorded.
   JAR.
 - Preserve published Maven coordinates/POMs and release artifact names unless a
   phase explicitly versions and communicates a compatibility break.
-- When Gradle runs on Java 17 during Phase 1, retain Java 11 published bytecode
-  with `options.release = 11`; assert the class-file version in CI.
+- Gradle runs on JDK 21 and publishes Java 21 bytecode; assert class-file major
+  65 in CI. Never overwrite an existing Maven version with the higher bytecode
+  level.
 - Do not use `mavenLocal()` in the reproducible CI resolution path.
 - Do not remove an old UI/API/application only because it is old. Require usage
   and consumer evidence.

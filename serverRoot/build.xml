@@ -73,7 +73,7 @@
 
     <!--	Compile all -->
     <javac
-      target="11" encoding="UTF-8"
+      source="11" target="11" encoding="UTF-8"
 	  destdir="${build.classes.dir}"
 	  debug="on"
 	  deprecation="off"
@@ -83,7 +83,6 @@
       <src path="${src.ejb.dir}"/>
       <src path="${src.servlet.dir}"/>
       <src path="${src.server.dir}"/>
-      <compilerarg line="--add-exports java.naming/com.sun.jndi.ldap=ALL-UNNAMED"/>
     </javac>
 
   </target>
@@ -220,7 +219,7 @@
   <target name="compile.test" depends="adempiereRootCompile, clean.tests"
         if="${test.performTests}">
     <mkdir dir="${test.build.dir}"/>
-    <javac target="11" encoding="UTF-8" fork="true" includeantruntime="false"
+    <javac source="11" target="11" encoding="UTF-8" fork="true" includeantruntime="false"
         destdir="${test.build.dir}" deprecation="on" debug="on" 
         memoryinitialsize="512m" memorymaximumsize="512m">
       <src path="${test.src}"/>

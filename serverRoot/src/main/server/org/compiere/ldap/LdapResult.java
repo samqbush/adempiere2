@@ -21,8 +21,6 @@ import org.compiere.model.MLdapProcessor;
 import org.compiere.model.MLdapUser;
 import org.compiere.util.CLogger;
 
-import com.sun.jndi.ldap.BerEncoder;
-
 /**
  * 	Ldap Wire Response
  *	
@@ -34,7 +32,7 @@ public class LdapResult
 	/** LdapMesssage */
 	private LdapMessage ldapMsg = null;
 	/** Encoder							*/
-	private BerEncoder m_encoder = null;
+	private LdapBerWriter m_encoder = null;
 	/**	Logger	*/
 	private static CLogger log = CLogger.getCLogger (LdapResult.class);
 	/** Error number */
@@ -56,9 +54,10 @@ public class LdapResult
 	public void reset(LdapMessage ldapMsg, MLdapUser ldapUser)
 	{
 		this.ldapMsg = ldapMsg;
-		m_encoder = new BerEncoder();
+		m_encoder = new LdapBerWriter();
 		errNo = LDAP_SUCCESS;
 		errStr = "";
+		disconnect = false;
 		this.ldapUser = ldapUser;
 	}  // reset()
 	
@@ -75,7 +74,7 @@ public class LdapResult
 					((ldapMsg.getOperation()==LdapMessage.BIND_REQUEST)?
 							LdapMessage.BIND_RESPONSE:LdapMessage.SEARCH_RES_RESULT),
 							errNo, ldapErrorMessage[errNo] + errStr);
-			m_encoder.getTrimmedBuf();
+			return m_encoder.getTrimmedBuf();
 		}
 		
 		try
@@ -189,23 +188,16 @@ public class LdapResult
 	private void generateResult(String dn, int resultProtocol, 
 			                    int resultCode, String errMsg)
 	{
-		try
-		{
-		    m_encoder.beginSeq(48);  // Hard coded here for Envelope header
-		    m_encoder.encodeInt(ldapMsg.getMsgId());
-		    m_encoder.beginSeq(resultProtocol);  
-		    m_encoder.encodeInt(resultCode, 10);   // Enumeration - 10
-	        // Adding LDAPDN
-	        m_encoder.encodeString(dn, true);
-	        // Adding error message
-	        m_encoder.encodeString((errMsg == null)?"":errMsg, true);
-	        m_encoder.endSeq();
-	        m_encoder.endSeq();
-		}
-	    catch (Exception ex)
-	    {
-			log.log(Level.SEVERE, "", ex);
-	    }
+	    m_encoder.beginSeq(48);  // Hard coded here for Envelope header
+	    m_encoder.encodeInt(ldapMsg.getMsgId());
+	    m_encoder.beginSeq(resultProtocol);
+	    m_encoder.encodeInt(resultCode, 10);   // Enumeration - 10
+        // Adding LDAPDN
+        m_encoder.encodeString(dn, true);
+        // Adding error message
+        m_encoder.encodeString((errMsg == null)?"":errMsg, true);
+        m_encoder.endSeq();
+        m_encoder.endSeq();
 	}  // generateResult()
 	
 	/*

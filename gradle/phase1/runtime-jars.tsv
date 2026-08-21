@@ -141,7 +141,7 @@ tools/lib/barbecue-1.5-beta1.jar	quarantined	Shipped Ant/runtime binary retained
 tools/lib/batik-all-1.9.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
 tools/lib/bsh-2.0b6.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
 tools/lib/bsh-engine.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
-tools/lib/byte-buddy-1.12.19.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/byte-buddy-1.15.4.jar	quarantined	Shipped Ant/runtime binary upgraded for JDK 21 Mockito compatibility
 tools/lib/commons-codec-1.10.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
 tools/lib/commons-codec-1.6.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
 tools/lib/commons-collections4-4.4.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
@@ -212,8 +212,8 @@ tools/lib/junit-old/powermock-mockito2-2.0.2-full.jar	quarantined	Shipped Ant/ru
 tools/lib/junit/apiguardian-api-1.1.0-javadoc.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
 tools/lib/junit/apiguardian-api-1.1.0-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
 tools/lib/junit/apiguardian-api-1.1.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
-tools/lib/junit/byte-buddy-1.10.15.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
-tools/lib/junit/byte-buddy-agent-1.10.15.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
+tools/lib/junit/byte-buddy-1.15.4.jar	quarantined	Shipped Ant/runtime binary upgraded for JDK 21 Mockito compatibility
+tools/lib/junit/byte-buddy-agent-1.15.4.jar	quarantined	Shipped Ant/runtime binary upgraded for JDK 21 Mockito compatibility
 tools/lib/junit/junit-jupiter-api-5.7.0-javadoc.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
 tools/lib/junit/junit-jupiter-api-5.7.0-sources.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation
 tools/lib/junit/junit-jupiter-api-5.7.0.jar	quarantined	Shipped Ant/runtime binary retained pending coordinate reconciliation

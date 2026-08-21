@@ -25,18 +25,37 @@ Focus is on the Community that includes Technical Specialists, Functional Specia
 
 ## Reproducible core build
 
-The Phase 1 core/module gate uses the committed Gradle 8.10.2 wrapper on JDK 17
-while retaining Java 11 published bytecode:
+The Phase 2 core/module gate uses the committed Gradle 8.10.2 wrapper on JDK 21
+and publishes Java 21 bytecode:
 
 ```bash
-./gradlew build verifyJava11Bytecode verifyTestClassification verifyTestResults \
-  --dependency-verification=strict
+./gradlew build verifyJava21Bytecode verifyTestClassification \
+  verifyTestResults verifyPublicationContracts verifyJdkInternalApiInventory \
+  verifyJdepsInternals --dependency-verification=strict
 ```
 
 This covers the root and 28 included Gradle projects. It is not a replacement
 for the full Ant distribution build. Ant-only web applications, installer and
 database operations remain explicitly quarantined in
 `gradle/phase1/quarantine.txt`.
+
+The JDK 21 runtime walking skeleton can be exercised against disposable
+PostgreSQL 14.6:
+
+```bash
+xvfb-run -a ./gradlew :base:phase2RuntimeSmoke \
+  -Pphase2DbSystemPassword='<password>' \
+  --dependency-verification=strict
+```
+
+This restores the committed seed, applies the `394lts` migrations, verifies the
+database release, and runs the Swing, Groovy, and scheduler smokes. The target
+must be local and disposable; tagged runtime objects are removed on success or
+failure.
+
+Release publication requires a new, previously unused version and declares JDK
+21 as the minimum runtime. The empty-container compatibility bridge is pinned
+to Tomcat 9.0.121 in `gradle/phase2/runtime.properties`.
 
 - Official Page: http://www.adempiere.io
 - Official Docs: http://adempiere.io/docs

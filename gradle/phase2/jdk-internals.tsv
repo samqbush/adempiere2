@@ -1,0 +1,125 @@
+# kind	location	match	owner
+module-flag	.idea/compiler.xml:20	<module name="adempiere" options="--add-exports java.desktop/sun.swing=ALL-UNNAMED --add-exports java.desktop/sun.awt=ALL-UNNAMED --add-exports java.base/sun.security.provider=ALL-UNNAMED" />	Phase 2: runtime/module flag review
+reflection	JasperReports/src/org/compiere/jr/report/ReportStarter.java:177	Class.forName("org.compiere.interfaces.MD5"); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/adempiere/as/ASFactory.java:42	Class<?> c = Class.forName(s); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/adempiere/engine/CostingMethodFactory.java:54	Class<? extends ICostingMethod> clazz = (Class<? extends ICostingMethod>) Class.forName(className); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/adempiere/model/InterfaceWrapperHelper.java:258	field.setAccessible(true); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/adempiere/model/InterfaceWrapperHelper.java:281	field.setAccessible(true); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/adempiere/process/Export.java:198	Class clazz = Class.forName(javaClass); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/adempiere/process/InitialClientSetup.java:145	Class<?> ppClass = Class.forName("org.compiere.model.MSetup_" + country.getCountryCode()); 	Phase 2: reviewed application extension/reflection seam
+version-gate	base/src/org/adempiere/process/rpl/exp/TopicExportProcessor.java:128	String jVersion = System.getProperty("java.version"); 	Phase 2: legacy version branch review
+reflection	base/src/org/adempiere/util/ProcessUtil.java:164	process = (ProcessCall) processClass.getDeclaredConstructor().newInstance(); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/adempiere/util/Services.java:117	serviceClassCtor.setAccessible(true); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/adempiere/util/Services.java:174	serviceClassCtor.setAccessible(true); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/Adempiere.java:429	Class.forName(className);	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/Adempiere.java:432	Class.forName(className);	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/acct/Doc.java:2646	cClass = Class.forName(className); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/acct/DocFactory.java:274	Class<?> cClass = Class.forName(className.get());	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/impexp/ImpFormat.java:102	Class<?> clazz = Class.forName(className); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/impexp/ImpFormatRow.java:290	Class cClass = Class.forName(callout.substring(0,methodStart)); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/model/GridTab.java:2701	Class<?> cClass = Class.forName(cmd.substring(0,methodStart));	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/model/MBankStatementLoader.java:123	Class bsrClass = Class.forName(getStmtLoaderClass());	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/model/MBankStatementMatcher.java:150	Class matcherClass = Class.forName(className); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/model/MEXPProcessorType.java:66	Class<?> clazz = Class.forName(getJavaClass()); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/model/MIMPProcessorType.java:54	Class<?> clazz = Class.forName(getJavaClass());	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/model/MMeasure.java:635	Class<?> clazz = Class.forName(cmd); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/model/MSLACriteria.java:143	Class clazz = Class.forName(getClassname()); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/model/MTable.java:380	Class<?> clazz = Class.forName(className); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/model/MTable.java:562	constructor = clazz.getDeclaredConstructor(new Class[]{Properties.class, int.class, String.class}); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/model/MTable.java:624	Constructor<?> constructor = clazz.getDeclaredConstructor(new Class[]{Properties.class, ResultSet.class, String.class}); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/model/ModelValidationEngine.java:139	Class<?> clazz = Class.forName(className); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/model/PO.java:2387	Class.forName("org.compiere.wf.DocWorkflowManager");	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/model/PaymentProcessor.java:85	Class<?> ppClass = Class.forName(className); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/process/ReplenishReport.java:377	Class<?> clazz = Class.forName(className); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/process/ServerProcessCtl.java:305	Class<?> processClass = Class.forName(processInstance.getClassName()); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/process/SvrProcess.java:1007	constructor = clazz.getDeclaredConstructor(); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/process/SvrProcess.java:799	Class<?> clazz = Class.forName(className); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/process/SvrProcess.java:993	clazz = Class.forName("org.eevolution.form.VPrintDocument"); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/process/SvrProcess.java:995	constructor = clazz.getDeclaredConstructor(); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/util/DB.java:165	Class<?> clazz = Class.forName("org.compiere.MigrateData"); 	Phase 2: reviewed application extension/reflection seam
+internal-import	base/src/org/compiere/util/EMail.java:54	import com.sun.mail.smtp.SMTPMessage; 	Phase 2: JavaMail implementation API, not a JDK internal
+internal-import	base/src/org/compiere/util/EMail.java:55	import com.sun.mail.smtp.SMTPTransport; 	Phase 2: JavaMail implementation API, not a JDK internal
+version-gate	base/src/org/compiere/util/Login.java:124	String jVersion = System.getProperty("java.version");	Phase 2: JDK validation/keytool replacement
+reflection	base/src/org/compiere/util/Msg.java:416	Class<?> clazz = Class.forName(className);	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/util/Queue.java:61	Class.forName("oracle.AQ.AQOracleDriver"); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/compiere/util/SecureEngine.java:191	Class clazz = Class.forName(realClass); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/eevolution/grid/BrowserRow.java:509	Class<?> cClass = Class.forName(cmd.substring(0, methodStart)); 	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/eevolution/services/dsl/ProcessBuilder.java:240	clazz = Class.forName(className);	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/eevolution/services/dsl/ProcessBuilder.java:243	constructor = clazz.getDeclaredConstructor(ASyncProcess.class, ProcessInfo.class, Trx.class);	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/eevolution/services/dsl/ProcessBuilder.java:247	constructor = clazz.getDeclaredConstructor(ASyncProcess.class, Integer.class, ProcessInfo.class, Trx.class);	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/spin/model/MADPackageExpCustom.java:125	Class<?> clazz = Class.forName(className);	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/spin/model/MADPackageExpCustom.java:163	Constructor<?> constructor = clazz.getDeclaredConstructor(new Class[]{});	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/spin/process/GenerateDocsFromMenu.java:68	Class<?> clazz = Class.forName(getDocsExportFormat());	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/spin/queue/notification/util/UpdateHandlerUtil.java:106	Class<?> clazz = Class.forName(handler);	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/spin/queue/notification/util/UpdateHandlerUtil.java:147	Constructor<?> constructor = clazz.getDeclaredConstructor();	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/spin/queue/util/QueueLoader.java:117	Class<?> clazz = Class.forName(className);	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/spin/queue/util/QueueLoader.java:151	Constructor<?> constructor = clazz.getDeclaredConstructor();	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/spin/util/ReportExportHandler.java:122	constructor = clazz.getDeclaredConstructor(new Class[]{Properties.class, ReportEngine.class});	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/spin/util/ReportExportHandler.java:87	Class<?> clazz = Class.forName(className);	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/spin/util/SetupUtil.java:65	clazz = Class.forName(className);	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/spin/util/SetupUtil.java:80	Constructor<?> constructor = clazz.getDeclaredConstructor();	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/spin/util/TokenGeneratorHandler.java:137	Class<?> clazz = Class.forName(className);	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/spin/util/TokenGeneratorHandler.java:177	Constructor<?> constructor = clazz.getDeclaredConstructor();	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/spin/util/support/AppSupportHandler.java:107	Class<?> clazz = Class.forName(className);	Phase 2: reviewed application extension/reflection seam
+reflection	base/src/org/spin/util/support/AppSupportHandler.java:148	Constructor<?> constructor = clazz.getDeclaredConstructor();	Phase 2: reviewed application extension/reflection seam
+module-flag	build.xml:59	<jvmarg value="--add-exports"/>	Phase 2: runtime/module flag review
+module-flag	build.xml:61	<jvmarg value="--add-opens"/>	Phase 2: runtime/module flag review
+reflection	client/src/org/adempiere/Adempiere.java:626	Class.forName(className);	Phase 2: reviewed application extension/reflection seam
+reflection	client/src/org/adempiere/Adempiere.java:629	Class.forName(className);	Phase 2: reviewed application extension/reflection seam
+reflection	client/src/org/adempiere/Adempiere.java:665	Class<?> startClass = Class.forName(className);	Phase 2: reviewed application extension/reflection seam
+reflection	client/src/org/adempiere/Adempiere.java:666	startClass.getDeclaredConstructor().newInstance();	Phase 2: reviewed application extension/reflection seam
+reflection	client/src/org/adempiere/controller/FileImportController.java:177	constructor = clazz.getDeclaredConstructor(new Class[]{Properties.class});	Phase 2: reviewed application extension/reflection seam
+reflection	client/src/org/adempiere/plaf/AdempierePLAF.java:327	Class.forName("com.jgoodies.looks.plastic.Plastic3DLookAndFeel");	Phase 2: legacy version branch review
+reflection	client/src/org/adempiere/plaf/AdempierePLAF.java:480	lafClass = Class.forName(plaf.getValue());	Phase 2: legacy version branch review
+reflection	client/src/org/adempiere/plaf/AdempierePLAF.java:511	Class<?> c = Class.forName(theme.getValue());	Phase 2: legacy version branch review
+version-gate	client/src/org/adempiere/plaf/AdempierePLAF.java:667	String jVersion = System.getProperty("java.version");	Phase 2: legacy version branch review
+reflection	client/src/org/adempiere/plaf/AdempierePLAF.java:691	startClass = Class.forName(className);	Phase 2: legacy version branch review
+reflection	client/src/org/compiere/apps/ProcessCtl.java:558	Class<?> processClass = Class.forName(processInstance.getClassName());	Phase 2: reviewed application extension/reflection seam
+reflection	client/src/org/compiere/apps/form/FormFrame.java:336	m_panel = (FormPanel)Class.forName(className).newInstance(); 	Phase 2: reviewed application extension/reflection seam
+reflection	client/src/org/compiere/apps/form/VPayPrint.java:368	Class<?> clazz = Class.forName(paymentExportClass);	Phase 2: reviewed application extension/reflection seam
+version-gate	client/src/org/compiere/grid/ed/AutoCompletion.java:108	hidePopupOnFocusLoss=System.getProperty("java.version").startsWith("1.5"); 	Phase 2: legacy version branch review
+reflection	com.kkalice.adempiere.migrate/src/com/kkalice/adempiere/migrate/DBConnection.java:171	Class.forName(getDriver());	Phase 2: reviewed application extension/reflection seam
+reflection	com.kkalice.adempiere.migrate/src/com/kkalice/adempiere/migrate/DBConnection.java:207	Class.forName(getDriver());	Phase 2: reviewed application extension/reflection seam
+reflection	com.kkalice.adempiere.migrate/src/com/kkalice/adempiere/migrate/DBEngine.java:1165	engineClass = (Class<DBEngineInterface>) Class.forName(interfaceName);	Phase 2: reviewed application extension/reflection seam
+reflection	com.kkalice.adempiere.migrate/src/com/kkalice/adempiere/migrate/Gui.java:1625	Class.forName(driver);	Phase 2: reviewed application extension/reflection seam
+reflection	com.kkalice.adempiere.migrate/src/com/kkalice/adempiere/migrate/HelpAbout.java:138	Class ademp = Class.forName("org.compiere.Adempiere", false, this.getClass().getClassLoader());	Phase 2: reviewed application extension/reflection seam
+internal-import	glassfishfacet/src/org/adempiere/as/glassfish/AdempiereLoginModule.java:21	import com.sun.appserv.security.AppservPasswordLoginModule; 	Phase 3: quarantined GlassFish adapter
+internal-import	glassfishfacet/src/org/adempiere/as/glassfish/AdempiereRealm.java:15	import com.sun.appserv.security.AppservRealm; 	Phase 3: quarantined GlassFish adapter
+internal-import	glassfishfacet/src/org/adempiere/as/glassfish/AdempiereRealm.java:16	import com.sun.enterprise.security.auth.realm.BadRealmException; 	Phase 3: quarantined GlassFish adapter
+internal-import	glassfishfacet/src/org/adempiere/as/glassfish/AdempiereRealm.java:17	import com.sun.enterprise.security.auth.realm.IASRealm; 	Phase 3: quarantined GlassFish adapter
+internal-import	glassfishfacet/src/org/adempiere/as/glassfish/AdempiereRealm.java:18	import com.sun.enterprise.security.auth.realm.InvalidOperationException; 	Phase 3: quarantined GlassFish adapter
+internal-import	glassfishfacet/src/org/adempiere/as/glassfish/AdempiereRealm.java:19	import com.sun.enterprise.security.auth.realm.NoSuchRealmException; 	Phase 3: quarantined GlassFish adapter
+internal-import	glassfishfacet/src/org/adempiere/as/glassfish/AdempiereRealm.java:20	import com.sun.enterprise.security.auth.realm.NoSuchUserException; 	Phase 3: quarantined GlassFish adapter
+internal-import	glassfishfacet/src/org/adempiere/as/glassfish/GlassFish.java:22	import com.sun.appserv.security.ProgrammaticLogin; 	Phase 3: quarantined GlassFish adapter
+reflection	glassfishfacet/src/org/adempiere/as/glassfish/GlassFish.java:36	Class.forName("com.sun.enterprise.naming.SerialInitContextFactory"); 	Phase 3: quarantined GlassFish adapter
+module-flag	install/Adempiere/AdempiereEnvTemplate.properties:12	ADEMPIERE_JAVA_OPTIONS=-Dfile.encoding=UTF-8 -Xms128m -Xmx1024m --add-opens java.base/java.lang=ALL-UNNAMED 	Phase 2: runtime/module flag review
+reflection	jbossfacet/src/org/adempiere/as/jboss/JBoss.java:31	Class.forName("org.jboss.security.jndi.JndiLoginInitialContextFactory"); 	Phase 2: reviewed application extension/reflection seam
+reflection	migration/src/oracle/DBDifference.java:1908	Class.forName(driverName); 	Phase 2: reviewed application extension/reflection seam
+reflection	org.adempiere.pos/src/main/java/base/org/adempiere/pos/util/POSTicketHandler.java:104	constructor = clazz.getDeclaredConstructor(new Class[]{CPOS.class});	Phase 2: reviewed application extension/reflection seam
+reflection	org.adempiere.pos/src/main/java/base/org/adempiere/pos/util/POSTicketHandler.java:91	Class<?> clazz = Class.forName(className);	Phase 2: reviewed application extension/reflection seam
+reflection	org.adempiere.production/src/main/java/base/org/compiere/production/process/ReplenishReportProduction.java:393	Class<?> clazz = Class.forName(className);	Phase 2: reviewed application extension/reflection seam
+reflection	org.compiere.mobile/WEB-INF/src/org/compiere/mobile/WProcessCtl.java:456	Class myClass = Class.forName(m_pi.getClassName()); 	Phase 2: reviewed application extension/reflection seam
+reflection	org.eevolution.freight/src/main/java/base/org/eevolution/freight/engine/FreightEngine.java:101	constructor = cl.getDeclaredConstructor();	Phase 2: reviewed application extension/reflection seam
+reflection	org.eevolution.freight/src/main/java/base/org/eevolution/freight/engine/FreightEngine.java:72	return (Class<T>) Class.forName(className);	Phase 2: reviewed application extension/reflection seam
+reflection	org.eevolution.freight/src/main/java/base/org/eevolution/freight/engine/FreightEngine.java:91	constructor = cl.getDeclaredConstructor();	Phase 2: reviewed application extension/reflection seam
+reflection	org.eevolution.hr_and_payroll/src/main/java/base/org/spin/hr/util/PayrollEngineHandler.java:129	Constructor<?> constructor = clazz.getDeclaredConstructor();	Phase 2: reviewed application extension/reflection seam
+reflection	org.eevolution.hr_and_payroll/src/main/java/base/org/spin/hr/util/PayrollEngineHandler.java:89	Class<?> clazz = Class.forName(className);	Phase 2: reviewed application extension/reflection seam
+reflection	org.eevolution.hr_and_payroll/src/main/java/base/org/spin/pr/model/MHRProcessReport.java:151	Class<?> clazz = Class.forName(className);	Phase 2: reviewed application extension/reflection seam
+reflection	org.eevolution.hr_and_payroll/src/main/java/base/org/spin/pr/model/MHRProcessReport.java:189	Constructor<?> constructor = clazz.getDeclaredConstructor(new Class[]{Properties.class});	Phase 2: reviewed application extension/reflection seam
+reflection	org.eevolution.hr_and_payroll/src/main/java/ui/swing/org/eevolution/form/VHRPayPrint.java:360	Class<?> clazz = Class.forName(m_PaymentExportClass);	Phase 2: reviewed application extension/reflection seam
+reflection	org.eevolution.hr_and_payroll/src/main/java/ui/zk/org/eevolution/form/WHRPayPrint.java:370	Class<?> clazz = Class.forName(m_PaymentExportClass);	Phase 2: reviewed application extension/reflection seam
+reflection	org.eevolution.manufacturing/src/main/java/base/org/eevolution/manufacturing/engine/forecast/ForecastEngine.java:122	return (Class<T>) Class.forName(getPackageName() + "." + className);	Phase 2: reviewed application extension/reflection seam
+reflection	org.eevolution.manufacturing/src/main/java/base/org/eevolution/manufacturing/engine/forecast/ForecastEngine.java:157	constructor = cl.getDeclaredConstructor();	Phase 2: reviewed application extension/reflection seam
+reflection	org.eevolution.manufacturing/src/main/java/base/org/eevolution/manufacturing/engine/forecast/ForecastEngine.java:168	constructor = cl.getDeclaredConstructor();	Phase 2: reviewed application extension/reflection seam
+reflection	org.eevolution.warehouse/src/main/java/base/org/eevolution/wms/engine/WMRuleEngine.java:192	constructor = cl.getDeclaredConstructor();	Phase 2: reviewed application extension/reflection seam
+reflection	org.eevolution.warehouse/src/main/java/base/org/eevolution/wms/engine/WMRuleEngine.java:204	constructor = cl.getDeclaredConstructor();	Phase 2: reviewed application extension/reflection seam
+reflection	org.eevolution.warehouse/src/main/java/base/org/eevolution/wms/engine/WMRuleEngine.java:227	return (Class<T>) Class.forName(getPackageName() + "." + className);	Phase 2: reviewed application extension/reflection seam
+reflection	org.spin.finance_management/src/main/java/base/org/spin/investment/model/MFMFunctionalSetting.java:108	Constructor<?> constructor = clazz.getDeclaredConstructor(new Class[]{MFMFunctionalSetting.class});	Phase 2: reviewed application extension/reflection seam
+reflection	org.spin.finance_management/src/main/java/base/org/spin/investment/model/MFMFunctionalSetting.java:70	Class<?> clazz = Class.forName(className);	Phase 2: reviewed application extension/reflection seam
+reflection	serverApps/src/main/servlet/org/compiere/www/WProcessCtl.java:460	Class myClass = Class.forName(m_pi.getClassName()); 	Phase 2: reviewed application extension/reflection seam
+reflection	serverRoot/src/main/server/org/compiere/server/ReplicationProcessor.java:116	Class clazz = Class.forName(javaClass); 	Phase 2: reviewed application extension/reflection seam
+version-gate	tools/lib/ant/apache-ant-1.10.10/lib/libraries.properties:77	tcljava.version=${jacl.version}	Phase 2: Ant dependency property, not a JVM version gate
+reflection	tools/src/org/adempiere/legacy/apache/ecs/HtmlColor.java:767	colObject = Class.forName("org.apache.ecs.HtmlColor") 	Phase 2: reviewed application extension/reflection seam
+reflection	webCM/src/main/servlet/org/compiere/cm/utils/RequestAnalyzer.java:220	Class clazz = Class.forName(className); 	Phase 2: reviewed application extension/reflection seam
+reflection	webCM/src/main/servlet/org/compiere/cm/utils/RequestAnalyzer.java:248	Constructor constructor = thisProcClass.getDeclaredConstructor(new Class[]{HttpServletRequest.class, Properties.class}); 	Phase 2: reviewed application extension/reflection seam
+reflection	zkwebui/WEB-INF/src/org/adempiere/webui/apps/form/WPayPrint.java:359	Class<?> clazz = Class.forName(paymentExportClass);	Phase 2: reviewed application extension/reflection seam

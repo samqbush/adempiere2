@@ -56,8 +56,6 @@
 	<echo message="Install ADempiere with SilentSetup start"/>
 	<java dir="${env.ADEMPIERE_HOME}" classname="org.compiere.install.SilentSetup" fork="true">
 	  <arg value="ALL"/>
-	  <jvmarg value="--add-opens"/>
-	  <jvmarg value="java.base/sun.security.tools.keytool=ALL-UNNAMED"/>
 	  <jvmarg value="--add-exports"/>
 	  <jvmarg value="java.base/jdk.internal.misc=ALL-UNNAMED"/>
 	  <jvmarg value="--add-opens"/>

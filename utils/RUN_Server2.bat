@@ -43,7 +43,7 @@ IF EXIST %WILDFLY_HOME%\login-modules.configured (
 
 :TOMCAT
 @Set NOPAUSE=Yes
-@Set JAVA_OPTS=-server %ADEMPIERE_JAVA_OPTIONS% %SECURE% -Dorg.adempiere.server.embedded=true --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED
+@Set JAVA_OPTS=-server %ADEMPIERE_JAVA_OPTIONS% %SECURE% -Dorg.adempiere.server.embedded=true
 @Echo Start Adempiere Apps Server %ADEMPIERE_HOME% (%ADEMPIERE_DB_NAME%)
 @Call START %CATALINA_BASE%\bin\startup.bat
 @Echo Done  Adempiere Apps Server %ADEMPIERE_HOME% (%ADEMPIERE_DB_NAME%)

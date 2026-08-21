@@ -1,0 +1,25 @@
+# Ant-only Java source/target pins remain owned by Phase 3.
+# Phase 2 preserves the existing Ant no-database-restore lane on JDK 21 but does
+# not claim Gradle distribution parity or deployed-application testability.
+base/build.xml
+client/build.xml
+com.kkalice.adempiere.migrate/build.xml
+extend/build.xml
+install/build.xml
+JasperReports/build.xml
+JasperReportsWebApp/build.xml
+looks/build.xml
+looks/javadoc.xml
+org.adempiere.asset/build.xml
+org.adempiere.production/build.xml
+org.adempiere.webservice/build.xml
+org.compiere.mobile/build.xml
+org.eevolution.cashflow/build.xml
+org.eevolution.hr_and_payroll/build.xml
+org.eevolution.manufacturing/build.xml
+serverApps/build.xml
+serverRoot/build.xml
+sqlj/build.xml
+tools/build.xml
+webCM/build.xml
+zkwebui/build.xml

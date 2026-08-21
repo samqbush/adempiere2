@@ -34,11 +34,11 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v4
 
-      - name: Set up Java JDK 17
+      - name: Set up Java JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
           cache: gradle
 
       - name: Build and test with the wrapper
@@ -46,9 +46,12 @@ jobs:
           scripts/phase1/generate-runtime-jar-inventory.sh
           git diff --exit-code -- gradle/phase1/runtime-jars.tsv
           ./gradlew build cyclonedxBom \
-            verifyProjectTopology verifyJavaCompatibilityExceptions \
-            verifyJava11Bytecode verifyTestClassification verifyTestResults \
-            verifyPublicationContracts --dependency-verification=strict
+            verifyProjectTopology verifyJava21Bytecode \
+            verifyTestClassification verifyTestResults \
+            verifyPublicationContracts verifyReleaseVersion \
+            verifyJdkInternalApiInventory verifyJdepsInternals \
+            verifyPhase2RuntimePins \
+            --dependency-verification=strict
           test -s build/reports/bom.json
           test -s build/reports/bom.xml
         env:
@@ -60,15 +63,19 @@ jobs:
       - name: Restore complete core test evidence
         run: ./gradlew :base:test verifyTestResults --rerun-tasks
 
+      - name: Probe empty Tomcat 9 bridge on JDK 21
+        run: scripts/phase2/probe-tomcat9.sh
+
       - name: Publish test and supply-chain evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: phase-1-gradle-evidence
+          name: phase-2-gradle-evidence
           path: |
             base/build/test-results/test/
             base/build/reports/tests/test/
             build/reports/bom.*
+            build/phase2/
 
   publication-contract:
     name: Publication contract
@@ -78,12 +85,57 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
           cache: gradle
       - name: Generate POMs and publish to an isolated repository
         run: |
           ./gradlew generatePomFileForMavenJavaPublication \
-            publishMavenJavaPublicationToPhase1Repository \
+            publishMavenJavaPublicationToPhase2Repository \
             verifyPublicationContracts --dependency-verification=strict
         env:
           ADEMPIERE_LIBRARY_VERSION: 'test-version'
+
+  phase-2-runtime:
+    name: JDK 21 disposable runtime smoke
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:14.6
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: gradle
+      - name: Install runtime smoke dependencies
+        run: sudo apt-get update && sudo apt-get install --yes xvfb postgresql-client
+      - name: Run database, Swing, Groovy, and scheduler smoke
+        run: |
+          xvfb-run -a ./gradlew :base:phase2RuntimeSmoke \
+            -Pphase2DbSystemPassword=postgres \
+            --dependency-verification=strict
+      - name: Upload runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-runtime-evidence
+          path: |
+            base/build/test-results/phase2Smoke/
+            base/build/reports/tests/phase2Smoke/
+            base/build/phase2/evidence/
+      - name: Clean disposable runtime and database
+        if: always()
+        run: |
+          ./gradlew :base:destroyPhase2Database :base:cleanupPhase2Runtime \
+            -Pphase2DbSystemPassword=postgres \
+            --dependency-verification=strict

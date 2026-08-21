@@ -19,8 +19,6 @@ import java.util.logging.Level;
 
 import org.compiere.util.CLogger;
 
-import com.sun.jndi.ldap.BerDecoder;
-
 /**
  * 	Ldap Message 
  *	
@@ -45,11 +43,12 @@ public class LdapMessage
 	static public final int FILTER_OR = 161;
 	static public final int FILTER_NOT = 162;
 	static public final int FILTER_EQUALITYMATCH = 163;
+	static public final int FILTER_PRESENT = 135;
 	
 	static public final int SEQUENCE = 48;
 	
 	/** Decoder */
-	private BerDecoder decoder = null;
+	private LdapBerReader decoder = null;
 	/**	Logger	*/
 	private static CLogger log = CLogger.getCLogger (LdapMessage.class);
 	/** Protocol Operation		*/
@@ -103,27 +102,23 @@ public class LdapMessage
 	 */
 	public void decode(byte[] data, int length)
 	{
-		try
+		if (length <= 0)
 		{
-			// Create the decoder
-			decoder = new BerDecoder(data, 0, length);
-		}
-		catch (Exception e)
-		{
-			log.log(Level.SEVERE, data.toString(), e);
+			failProtocol(": Malformed Request", null);
 			return;
 		}
-		
+
 		try
 		{
-			// Parse the message envelope
-			decoder.parseSeq(null);
+			LdapBerReader message = new LdapBerReader(data, 0, length).readSequence(SEQUENCE);
 	
 			//  Parse message Id
-			msgId = decoder.parseInt();
+			msgId = message.readInteger();
 	
 			// Parse the operation protocol
-			m_protocolOp = decoder.parseSeq(null);
+			LdapBerReader.Element operation = message.readElement();
+			m_protocolOp = operation.getTag();
+			decoder = operation.getReader();
 			
 			//
 			//	Payload
@@ -140,10 +135,9 @@ public class LdapMessage
 				log.warning("#" + msgId + ": Unknown Op + " + m_protocolOp);
 			}
 		}
-		catch (Exception ex)
+		catch (LdapBerException ex)
 		{
-			result.setErrorNo(LdapResult.LDAP_PROTOCOL_ERROR);
-			log.log(Level.SEVERE, "", ex);
+			failProtocol(": Malformed Request", ex);
 		}
 	}	//	decode
 
@@ -155,41 +149,23 @@ public class LdapMessage
 		try
 		{
 			// Parse the base Object
-			baseObj = decoder.parseString(true);
+			baseObj = decoder.readString();
 			parseDN(baseObj);
 			
-			decoder.parseEnumeration();  // scope
-			decoder.parseEnumeration();  // derefAliases
-			decoder.parseInt();  // sizeLimit
-			decoder.parseInt();  // timeLimit
-			decoder.parseBoolean();  // typeOnly
+			decoder.readEnumeration();  // scope
+			decoder.readEnumeration();  // derefAliases
+			decoder.readInteger();  // sizeLimit
+			decoder.readInteger();  // timeLimit
+			decoder.readBoolean();  // typeOnly
 			
-			boolean equalityFilter = false;
-			while (true)
-			{
-				int filter = decoder.parseSeq(null); //Filter
-				if (filter == FILTER_EQUALITYMATCH)
-				{
-					decoder.parseString(true);
-					userId = decoder.parseString(true);
-					equalityFilter = true;
-					break;
-				}
-				else if (filter == FILTER_AND)
-					decoder.parseStringWithTag(135, true, null);
-				else if (filter == SEQUENCE)
-					break;
-			}  // while true
-			
-			if (!equalityFilter)  // Didn't find the it
-			{
-				result.setErrorNo(LdapResult.LDAP_PROTOCOL_ERROR);
-				result.setErrorString("Can't can't Filter - EqualityMatch");
-			}
+			if (!parseSearchFilter(decoder.readElement()))
+				return;
+
+			decoder.readSequence(SEQUENCE);  // attributes
 		}
-		catch (Exception ex)
+		catch (LdapBerException ex)
 		{
-			log.log(Level.SEVERE, "", ex);
+			failProtocol(": Malformed Request", ex);
 		}
 	}   // handleSearch()
 	
@@ -201,7 +177,7 @@ public class LdapMessage
 		try
 		{
 			// Parse LDAP version; only support v3
-			int version = decoder.parseInt();
+			int version = decoder.readInteger();
 			if (version != 3)
 			{
 				result.setErrorNo(LdapResult.LDAP_PROTOCOL_ERROR);
@@ -211,10 +187,10 @@ public class LdapMessage
 			}
 	
 			// Parse DN
-			dn = decoder.parseString(true);
+			dn = decoder.readString();
 			
 			// Peek on AuthenticationChoice; only support simple authentication
-			int auth = decoder.peekByte();
+			int auth = decoder.peekTag();
 			if (auth != SIMPLE_AUTHENTICATION)  // 0x80 - simple authentication
 			{
 				result.setErrorNo(LdapResult.LDAP_AUTH_METHOD_NOT_SUPPORTED);
@@ -223,7 +199,7 @@ public class LdapMessage
 			}
 			
 			// It is simple authentication, get the authentication string
-			passwd = decoder.parseStringWithTag(SIMPLE_AUTHENTICATION, true, null);
+			passwd = decoder.readString(SIMPLE_AUTHENTICATION);
 			if (passwd != null && passwd.length() > 0)
 			{
 				parseDN(dn);
@@ -239,11 +215,70 @@ public class LdapMessage
 			// Log the information 
 			log.info("#" + msgId + ": bind - version=" + version + ", userId=" + userId);
 		}
-		catch (Exception ex)
+		catch (LdapBerException ex)
 		{
-			log.log(Level.SEVERE, "", ex);
+			failProtocol(": Malformed Request", ex);
 		}
 	}  // handleBind()
+
+	private boolean parseSearchFilter(LdapBerReader.Element filter) throws LdapBerException
+	{
+		if (filter.getTag() == FILTER_EQUALITYMATCH)
+		{
+			parseEqualityFilter(filter.getReader());
+			return true;
+		}
+		if (filter.getTag() == FILTER_AND)
+			return parseAndFilter(filter.getReader());
+
+		result.setErrorNo(LdapResult.LDAP_PROTOCOL_ERROR);
+		result.setErrorString(": Unsupported Search Filter");
+		return false;
+	}
+
+	private boolean parseAndFilter(LdapBerReader filterReader) throws LdapBerException
+	{
+		boolean equalityFilter = false;
+		while (filterReader.hasRemaining())
+		{
+			LdapBerReader.Element filter = filterReader.readElement();
+			if (filter.getTag() == FILTER_PRESENT)
+			{
+				filter.getReader().readRawString();
+			}
+			else if (filter.getTag() == FILTER_EQUALITYMATCH)
+			{
+				parseEqualityFilter(filter.getReader());
+				equalityFilter = true;
+			}
+			else
+			{
+				result.setErrorNo(LdapResult.LDAP_PROTOCOL_ERROR);
+				result.setErrorString(": Unsupported Search Filter");
+				return false;
+			}
+		}
+		if (!equalityFilter)
+		{
+			result.setErrorNo(LdapResult.LDAP_PROTOCOL_ERROR);
+			result.setErrorString("Can't can't Filter - EqualityMatch");
+		}
+		return equalityFilter;
+	}
+
+	private void parseEqualityFilter(LdapBerReader filterReader) throws LdapBerException
+	{
+		filterReader.readString();
+		userId = filterReader.readString();
+	}
+
+	private void failProtocol(String errorString, Exception ex)
+	{
+		result.setErrorNo(LdapResult.LDAP_PROTOCOL_ERROR);
+		result.setErrorString(errorString);
+		if (ex != null)
+			log.log(Level.SEVERE, "", ex);
+	}
 	
 	/*
 	 * Parse the DN to find user id, organization and organization unit

@@ -19,15 +19,15 @@ package org.compiere.install;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.security.Key;
 import java.security.KeyStore;
 import java.security.cert.Certificate;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
-import java.util.StringTokenizer;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.logging.Level;
 
 import javax.swing.JFrame;
@@ -78,8 +78,9 @@ public class KeyStoreMgt
 	public static String		KEYSTORE_NAME = "myKeystore";
 	/** Certificate Alias				*/
 	public static String		CERTIFICATE_ALIAS = "adempiere";
-	
-	public static String KEYTOOL_JAVA8 = "sun.security.tools.keytool.Main";
+
+	static final String KEYTOOL_STOREPASS_ENV = "ADEMPIERE_KEYSTORE_PASS";
+	static final String KEYTOOL_KEYPASS_ENV = "ADEMPIERE_KEYPASS";
 	
 
 	/**
@@ -102,7 +103,15 @@ public class KeyStoreMgt
 		//	No KeyStore
 		if (ks == null)
 		{
-			createCertificate(CERTIFICATE_ALIAS, parent);
+			try
+			{
+				createCertificate(CERTIFICATE_ALIAS, parent);
+			}
+			catch (Exception e)
+			{
+				log.log(Level.SEVERE, "createCertificate", e);
+				return e.getMessage();
+			}
 			try
 			{
 				ks = getKeyStore();
@@ -231,15 +240,8 @@ public class KeyStoreMgt
 		if (dname == null)
 			return;
 		//
-		try
-		{
-			genkey (alias, m_password, m_file.getAbsolutePath(), dname);
-			selfcert (alias, m_password, m_file.getAbsolutePath(), dname);
-		}
-		catch (Exception e)
-		{
-			log.log(Level.SEVERE, "certificate", e);
-		}
+		genkey (alias, m_password, m_file.getAbsolutePath(), dname);
+		selfcert (alias, m_password, m_file.getAbsolutePath(), dname);
 	}	//	createCertificate
 	
 	public void setCommonName(String cn)
@@ -387,15 +389,17 @@ public class KeyStoreMgt
 	 */
 	public static void genkey (String alias, char[] password, String fileName, String dname)
 	{
-		StringBuffer cmd = new StringBuffer ("-genkey -keyalg rsa");
-		cmd.append(" -alias ").append(alias);
-		cmd.append(" -dname \"").append(dname).append("\"");
-		cmd.append(" -keypass ").append(password).append(" -validity 999");
-		if (fileName.indexOf(' ') != -1)
-			cmd.append(" -keystore \"").append(fileName).append("\" -storepass ").append(password);
-		else
-			cmd.append(" -keystore ").append(fileName).append(" -storepass ").append(password);
-		keytool (cmd.toString());
+		keytool(Arrays.asList(
+			"-genkeypair",
+			"-keyalg", "rsa",
+			"-alias", alias,
+			"-dname", dname,
+			"-keypass:env", KEYTOOL_KEYPASS_ENV,
+			"-validity", "999",
+			"-storetype", "JKS",
+			"-keystore", fileName,
+			"-storepass:env", KEYTOOL_STOREPASS_ENV),
+			password, password);
 	}	//	genkey
 	
 	/**
@@ -407,78 +411,51 @@ public class KeyStoreMgt
 	 */
 	public static void selfcert (String alias, char[] password, String fileName, String dname)
 	{
-		StringBuffer cmd = new StringBuffer ("-selfcert");
-		cmd.append(" -alias ").append(alias);
-		cmd.append(" -dname \"").append(dname).append("\"");
-		cmd.append(" -keypass ").append(password).append(" -validity 999");
-		if (fileName.indexOf(' ') != -1)
-			cmd.append(" -keystore \"").append(fileName).append("\" -storepass ").append(password);
-		else
-			cmd.append(" -keystore ").append(fileName).append(" -storepass ").append(password);
-		keytool (cmd.toString());
+		keytool(Arrays.asList(
+			"-selfcert",
+			"-alias", alias,
+			"-dname", dname,
+			"-keypass:env", KEYTOOL_KEYPASS_ENV,
+			"-validity", "999",
+			"-storetype", "JKS",
+			"-keystore", fileName,
+			"-storepass:env", KEYTOOL_STOREPASS_ENV),
+			password, password);
 	}	//	selfcert
 	
 	/**
 	 * 	Submit Command to Key Tool
-	 *	@param cmd command
+	 *	@param args command arguments
+	 *	@param storePassword key store password
+	 *	@param keyPassword certificate password
 	 */
-	public static void keytool(String cmd)
+	private static void keytool (List<String> args, char[] storePassword, char[] keyPassword)
 	{
-		log.info("keytool " + cmd);
-		ArrayList<String> list = new ArrayList<String>();
-		StringTokenizer st = new StringTokenizer(cmd, " ");
-		String quoteBuffer = null;
-		while (st.hasMoreTokens())
-		{
-			String token = st.nextToken();
-		//	System.out.println("= " + token + " = quoteBuffer=" + quoteBuffer + " - Size=" + list.size() );
-			if (quoteBuffer == null)
-			{
-				if (token.startsWith("\""))
-					quoteBuffer = token.substring(1);
-				else
-					list.add(token);
-			}
-			else
-				quoteBuffer += " " + token;
-			if (token.endsWith("\""))
-			{
-				String str = quoteBuffer.substring(0, quoteBuffer.length()-1); 
-			//	System.out.println("  Buffer= " + str );
-				list.add(str);
-				quoteBuffer = null;
-			}
-		}	//	all tokens
-		
-		//
-		String[] args = new String[list.size()];
-		list.toArray(args);
-		//vpj-cd add support java 8
-		Class<?> keyTool = null;
-		try
-		{
-			final String version = System.getProperty("java.version");
-			if (version.startsWith("1.8"))
-				keyTool = Class.forName(KEYTOOL_JAVA8);
-			if (version.startsWith("11"))
-				keyTool = Class.forName(KEYTOOL_JAVA8);
-			if (version.startsWith("17"))
-				keyTool = Class.forName(KEYTOOL_JAVA8);
-
-			Class[] argTypes = new Class[] { String[].class };
-			Method main = keyTool.getDeclaredMethod("main", argTypes);
-			main.invoke(null, (Object)args);
-
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
-		} catch (NoSuchMethodException e) {
-			e.printStackTrace();
-		} catch (IllegalAccessException e) {
-			e.printStackTrace();
-		} catch (InvocationTargetException e) {
-			e.printStackTrace();
-		}
+		log.info("keytool " + String.join(" ", args));
+		Map<String, String> environment = new HashMap<String, String>();
+		environment.put(KEYTOOL_STOREPASS_ENV, String.valueOf(storePassword));
+		environment.put(KEYTOOL_KEYPASS_ENV, String.valueOf(keyPassword));
+		JavaToolSupport.CommandResult result
+			= JavaToolSupport.DEFAULT.executeConfiguredKeytool(args, environment);
+		if (result.isTimedOut())
+			throw new IllegalStateException("Keytool timed out after "
+				+ JavaToolSupport.DEFAULT.getCommandTimeoutMillis() + "ms");
+		if (result.getExitCode() != 0)
+			throw new IllegalStateException(buildKeytoolFailureMessage(result));
+		String diagnostics = JavaToolSupport.summarizeDiagnostics(result.getOutput());
+		if (diagnostics.length() > 0)
+			log.fine(diagnostics);
 	}	//	ketyool
+
+	private static String buildKeytoolFailureMessage (JavaToolSupport.CommandResult result)
+	{
+		StringBuffer message = new StringBuffer("Keytool failed (exit code ")
+			.append(result.getExitCode()).append(")");
+		String diagnostics = JavaToolSupport.summarizeDiagnostics(result.getOutput());
+		if (diagnostics.length() > 0)
+			message.append(": ").append(diagnostics);
+		return message.toString();
+	}
 	
 	/**
 	 * 	Get Keystore File Name

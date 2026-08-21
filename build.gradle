@@ -11,17 +11,12 @@ allprojects {
 
     java {
         toolchain {
-            languageVersion = JavaLanguageVersion.of(17)
+            languageVersion = JavaLanguageVersion.of(21)
         }
     }
 
     tasks.withType(JavaCompile).configureEach {
-        if (project.path == ':serverRoot') {
-            sourceCompatibility = JavaVersion.VERSION_11.toString()
-            targetCompatibility = JavaVersion.VERSION_11.toString()
-        } else {
-            options.release = 11
-        }
+        options.release = 21
     }
 
     dependencyLocking {
@@ -32,8 +27,14 @@ allprojects {
         publishing {
             repositories {
                 maven {
-                    name = 'phase1'
-                    url = rootProject.layout.buildDirectory.dir('phase1-maven-repo')
+                    name = 'phase2'
+                    url = rootProject.layout.buildDirectory.dir('phase2-maven-repo')
+                }
+            }
+            publications.withType(MavenPublication).configureEach {
+                pom {
+                    properties.put('maven.compiler.release', '21')
+                    properties.put('adempiere.minimumJdk', '21')
                 }
             }
         }
@@ -53,22 +54,7 @@ java {
     withSourcesJar()
 }
 
-def java11CompatibilityExceptions = [':serverRoot']
-
-tasks.register('verifyJavaCompatibilityExceptions') {
-    doLast {
-        def unexpected = allprojects.findAll { project ->
-            project.path != ':' && project.tasks.withType(JavaCompile).any {
-                !it.options.release.present
-            } && !java11CompatibilityExceptions.contains(project.path)
-        }*.path
-        if (!unexpected.empty) {
-            throw new GradleException("Unregistered Java 11 compatibility exceptions: ${unexpected}")
-        }
-    }
-}
-
-tasks.register('verifyJava11Bytecode') {
+tasks.register('verifyJava21Bytecode') {
     dependsOn allprojects.collect { it.tasks.matching { task -> task.name == 'classes' } }
     doLast {
         def incompatible = []
@@ -81,7 +67,7 @@ tasks.register('verifyJava11Bytecode') {
                     if (header.readInt() == 0xCAFEBABE) {
                         header.readUnsignedShort()
                         def major = header.readUnsignedShort()
-                        if (major > 55) {
+                        if (major != 65) {
                             incompatible << "${project.path}:${classFile.name}=${major}"
                         }
                     }
@@ -90,7 +76,7 @@ tasks.register('verifyJava11Bytecode') {
         }
         if (!incompatible.empty) {
             throw new GradleException(
-                "Published classes exceed Java 11 bytecode: ${incompatible.take(20)}")
+                "Published classes are not Java 21 bytecode: ${incompatible.take(20)}")
         }
     }
 }
@@ -113,7 +99,9 @@ tasks.register('verifyTestClassification') {
     doLast {
         def roots = [
             file('base/test/src'),
-            file('org.adempiere.test/src/test/java')
+            file('org.adempiere.test/src/test/java'),
+            file('install/src/test/java'),
+            file('serverRoot/src/test/server/org/compiere/ldap')
         ]
         def failures = []
         roots.each { root ->
@@ -142,23 +130,36 @@ tasks.register('verifyTestClassification') {
     }
 }
 
+def testEnabledProjects = file('gradle/phase2/test-enabled-projects.txt').readLines()
+    .collect { it.trim() }
+    .findAll { it && !it.startsWith('#') }
+
 tasks.register('verifyTestResults') {
-    dependsOn ':base:test'
+    dependsOn testEnabledProjects.collect { "${it}:test" }
     doLast {
-        def resultFiles = fileTree('base/build/test-results/test') {
-            include 'TEST-*.xml'
+        testEnabledProjects.each { projectPath ->
+            def project = findProject(projectPath)
+            if (project == null) {
+                throw new GradleException(
+                    "Unknown test-enabled project ${projectPath}")
+            }
+            def resultFiles = project.fileTree(
+                project.layout.buildDirectory.dir('test-results/test')) {
+                include 'TEST-*.xml'
+            }
+            if (resultFiles.empty) {
+                throw new GradleException(
+                    "No ${projectPath} JUnit XML results were produced")
+            }
+            def executed = 0
+            resultFiles.each { result ->
+                executed += new XmlSlurper().parse(result).@tests.toInteger()
+            }
+            if (executed == 0) {
+                throw new GradleException("${projectPath} executed zero tests")
+            }
+            logger.lifecycle("${projectPath} executed ${executed} tests")
         }
-        if (resultFiles.empty) {
-            throw new GradleException('No :base JUnit XML results were produced')
-        }
-        def executed = 0
-        resultFiles.each { result ->
-            executed += new XmlSlurper().parse(result).@tests.toInteger()
-        }
-        if (executed == 0) {
-            throw new GradleException(':base executed zero tests')
-        }
-        logger.lifecycle(":base executed ${executed} tests")
     }
 }
 
@@ -183,7 +184,105 @@ tasks.register('verifyPublicationContracts') {
             throw new GradleException(
                 "Publication contracts differ. Expected ${expected}, got ${actual}")
         }
+        subprojects.each { project ->
+            def publication = project.extensions.findByName('publishing')
+                ?.publications?.findByName('mavenJava')
+            if (publication != null) {
+                def properties = publication.pom.properties.get()
+                if (properties['maven.compiler.release'] != '21' ||
+                    properties['adempiere.minimumJdk'] != '21') {
+                    throw new GradleException(
+                        "${project.path} does not declare JDK 21 publication metadata")
+                }
+            }
+        }
     }
+}
+
+tasks.register('verifyReleaseVersion') {
+    doLast {
+        if (!System.getenv('ADEMPIERE_RELEASE')?.toBoolean()) {
+            return
+        }
+        def candidate = System.getenv('ADEMPIERE_LIBRARY_VERSION')
+        if (candidate == null || candidate.blank ||
+            candidate.startsWith('local') || candidate.endsWith('-SNAPSHOT')) {
+            throw new GradleException(
+                'A non-local, non-SNAPSHOT ADEMPIERE_LIBRARY_VERSION is required for release')
+        }
+        if (!(candidate ==~ /[A-Za-z0-9][A-Za-z0-9._-]*/)) {
+            throw new GradleException(
+                "Release version ${candidate} contains unsupported characters")
+        }
+        def used = file('gradle/phase2/used-release-versions.txt').readLines()
+            .collect { it.trim() }
+            .findAll { it && !it.startsWith('#') }
+        if (used.contains(candidate)) {
+            throw new GradleException(
+                "Release version ${candidate} already exists in the repository ledger")
+        }
+    }
+}
+
+tasks.register('verifyJdkInternalApiInventory') {
+    doLast {
+        def inventoryOutput = new ByteArrayOutputStream()
+        exec {
+            commandLine 'bash', 'scripts/phase2/scan-jdk-internals.sh'
+            standardOutput = inventoryOutput
+        }
+        def expected = file('gradle/phase2/jdk-internals.tsv').text
+        def actual = inventoryOutput.toString('UTF-8')
+        if (actual != expected) {
+            throw new GradleException(
+                'JDK internal/reflection inventory changed; regenerate and classify gradle/phase2/jdk-internals.tsv')
+        }
+        def unowned = actual.readLines().findAll {
+            it && !it.startsWith('#') && it.split('\t', -1).last() == 'UNCLASSIFIED'
+        }
+        if (!unowned.empty) {
+            throw new GradleException(
+                "Unclassified JDK internal/reflection findings: ${unowned.take(20)}")
+        }
+    }
+}
+
+tasks.register('verifyJdepsInternals') {
+    dependsOn allprojects.collect { it.tasks.matching { task -> task.name == 'jar' } }
+    doLast {
+        def launcher = javaToolchains.launcherFor {
+            languageVersion = JavaLanguageVersion.of(21)
+        }.get()
+        def jdeps = launcher.metadata.installationPath.file('bin/jdeps').asFile
+        def findings = []
+        subprojects.each { project ->
+            project.tasks.matching { it.name == 'jar' }.each { jarTask ->
+                def archive = jarTask.archiveFile.get().asFile
+                if (archive.exists()) {
+                    def jdepsOutput = new ByteArrayOutputStream()
+                    def errors = new ByteArrayOutputStream()
+                    def result = exec {
+                        commandLine jdeps, '--jdk-internals', '--multi-release', '21', archive
+                        standardOutput = jdepsOutput
+                        errorOutput = errors
+                        ignoreExitValue = true
+                    }
+                    def report = jdepsOutput.toString('UTF-8').trim()
+                    if (result.exitValue != 0 || report) {
+                        findings << "${project.path}: ${report ?: errors.toString('UTF-8').trim()}"
+                    }
+                }
+            }
+        }
+        if (!findings.empty) {
+            throw new GradleException(
+                "JDK-internal bytecode dependencies found: ${findings.take(20)}")
+        }
+    }
+}
+
+tasks.register('verifyPhase2RuntimePins', Exec) {
+    commandLine 'bash', 'scripts/phase2/verify-runtime-pins.sh'
 }
 
 tasks.withType(Javadoc) {
