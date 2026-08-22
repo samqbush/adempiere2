@@ -88,3 +88,40 @@ jobs:
             base/build/phase3/evidence/
             base/build/test-results/
             base/build/reports/tests/
+
+  phase-4-xfire-oracle:
+    name: Phase 4 frozen XFire contract
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:14.6
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Replay and compare the frozen XFire oracle
+        uses: ./.github/actions/adempiere-build
+        with:
+          task: verifyPhase4OracleMatchesFrozen
+      - name: Upload Phase 4 contract evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase4-xfire-oracle-evidence
+          if-no-files-found: error
+          path: |
+            build/phase4/evidence/

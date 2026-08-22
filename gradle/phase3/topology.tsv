@@ -6,7 +6,7 @@ extend	jar	:extend	shared
 JasperReports	jar	:JasperReports	shared
 client	jar	:client	shared
 JasperReportsWebApp	jar	-	ant-only
-org.adempiere.webservice	jar	-	ant-only
+org.adempiere.webservice	jar	:org.adempiere.webservice	shared
 serverRoot	jar	:serverRoot	shared
 serverApps	jar	-	ant-only
 webStore	jar	-	ant-only

@@ -1,0 +1,27 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ad="http://3e.pl/ADInterface">
+  <soapenv:Body>
+    <ad:queryData>
+      <ad:ModelCRUDRequest>
+        <ad:ModelCRUD>
+          <ad:serviceType>phase4-oracle</ad:serviceType>
+          <ad:TableName>AD_User</ad:TableName>
+          <ad:RecordID>0</ad:RecordID>
+          <ad:Filter>1=0</ad:Filter>
+          <ad:RetriveResultAs>Element</ad:RetriveResultAs>
+          <ad:Action>Read</ad:Action>
+          <ad:PageNo>0</ad:PageNo>
+        </ad:ModelCRUD>
+        <ad:ADLoginRequest>
+          <ad:user>phase4-invalid</ad:user>
+          <ad:pass>phase4-invalid</ad:pass>
+          <ad:lang>en_US</ad:lang>
+          <ad:ClientID>0</ad:ClientID>
+          <ad:RoleID>0</ad:RoleID>
+          <ad:OrgID>0</ad:OrgID>
+          <ad:WarehouseID>0</ad:WarehouseID>
+          <ad:stage>0</ad:stage>
+        </ad:ADLoginRequest>
+      </ad:ModelCRUDRequest>
+    </ad:queryData>
+  </soapenv:Body>
+</soapenv:Envelope>

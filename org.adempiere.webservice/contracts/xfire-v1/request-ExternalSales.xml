@@ -1,0 +1,3 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ext="http://externalSales.ws.erpCommon.openbravo.org">
+  <soapenv:Body><ext:getProductsCatalog><ext:in0>0</ext:in0><ext:in1>0</ext:in1><ext:in2>0</ext:in2><ext:in3>phase4-invalid</ext:in3><ext:in4>phase4-invalid</ext:in4></ext:getProductsCatalog></soapenv:Body>
+</soapenv:Envelope>

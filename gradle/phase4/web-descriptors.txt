@@ -1,0 +1,12 @@
+# Canonical source descriptors inventoried by the Phase 4 edge gate.
+JasperReportsWebApp/deploy/WebApp.ear/webApp.war/WEB-INF/web.xml
+JasperReportsWebApp/src/WEB-INF/web.xml
+org.adempiere.webservice/WEB-INF/web.xml
+org.adempiere.webservice/deploy/jboss/server/adempiere/deploy/http-invoker.sar/invoker.war/WEB-INF/web.xml
+org.compiere.mobile/WEB-INF/web.xml
+serverApps/src/etc/WEB-INF/web.xml
+serverApps/src/web/WEB-INF/web.xml
+serverRoot/src/web/WEB-INF/web.xml
+webCM/src/web/WEB-INF/web.xml
+webStore/src/web/WEB-INF/web.xml
+zkwebui/WEB-INF/web.xml

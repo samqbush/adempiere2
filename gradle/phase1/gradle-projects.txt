@@ -12,6 +12,7 @@
 :org.adempiere.project
 :org.adempiere.request
 :org.adempiere.test
+:org.adempiere.webservice
 :org.eevolution.cashflow
 :org.eevolution.distribution
 :org.eevolution.freight

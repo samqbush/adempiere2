@@ -12,6 +12,7 @@
 :org.adempiere.project	io.github.adempiere	project
 :org.adempiere.request	io.github.adempiere	request
 :org.adempiere.test	io.github.adempiere	adempiere.test
+:org.adempiere.webservice	io.github.adempiere	webservice
 :org.eevolution.cashflow	io.github.adempiere	cashflow
 :org.eevolution.distribution	io.github.adempiere	distribution
 :org.eevolution.freight	io.github.adempiere	freight

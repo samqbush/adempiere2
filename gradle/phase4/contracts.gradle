@@ -1,0 +1,484 @@
+import groovy.xml.XmlSlurper
+import java.security.MessageDigest
+
+def phase4BuildRoot = rootProject.layout.buildDirectory.dir('phase4')
+def phase4EvidenceDir = phase4BuildRoot.map { it.dir('evidence') }
+def phase4DescriptorList = rootProject.file('gradle/phase4/web-descriptors.txt')
+def phase4ServicesFile =
+	rootProject.file('org.adempiere.webservice/WEB-INF/src/META-INF/xfire/services.xml')
+def phase4FrozenContracts =
+	rootProject.file('org.adempiere.webservice/contracts/xfire-v1')
+def phase4JavaLauncher = javaToolchains.launcherFor {
+	languageVersion = JavaLanguageVersion.of(21)
+}
+
+def readPhase4DescriptorPaths = {
+	phase4DescriptorList.readLines()
+		.collect { it.trim() }
+		.findAll { it && !it.startsWith('#') }
+}
+def parsePhase4Xml = { File input ->
+	def withoutDoctype = input.getText('UTF-8')
+		.replaceFirst(/(?s)<!DOCTYPE.*?>/, '')
+	new XmlSlurper(false, false).parseText(withoutDoctype)
+}
+def phase4LocalName = { node ->
+	node.name().toString().tokenize(':').last()
+}
+def normalizePhase4Contract = { String relativePath, byte[] content ->
+	if (!relativePath.endsWith('.headers')) {
+		return content
+	}
+	def normalized = new String(content, 'UTF-8')
+		.replaceAll(/(?m)^Set-Cookie: JSESSIONID=[^;]+;/,
+			'Set-Cookie: JSESSIONID=<SESSION>;')
+		.replaceAll(/(?m)^Date: .+$/, 'Date: <DATE>')
+	normalized.getBytes('UTF-8')
+}
+def classifyPhase4Route = { String descriptor, String name, String pattern ->
+	if (descriptor == 'org.adempiere.webservice/WEB-INF/web.xml' ||
+		descriptor.contains('/http-invoker.sar/')) {
+		return ['service-to-service', 'phase4-soap']
+	}
+	if (descriptor.startsWith('serverRoot/')) {
+		return pattern == '*.jnlp' ?
+			['anonymous/public', 'phase5-non-soap'] :
+			['infrastructure', 'phase5-non-soap']
+	}
+	if (descriptor.startsWith('webCM/')) {
+		return ['anonymous/public', 'phase5-non-soap']
+	}
+	if (descriptor.startsWith('JasperReportsWebApp/')) {
+		return ['service-to-service', 'phase5-non-soap']
+	}
+	if (name.toLowerCase().contains('login') ||
+		name.toLowerCase().contains('registration') ||
+		name.toLowerCase().contains('help') ||
+		pattern == '/index.jsp/*' ||
+		pattern == '/productServlet/*' ||
+		pattern == '/searchServlet') {
+		return ['anonymous/public', 'phase5-non-soap']
+	}
+	return ['end-user-authenticated', 'phase5-non-soap']
+}
+def classifyPhase4Operation = { String operation ->
+	def lower = operation.toLowerCase()
+	if (lower == 'login' || lower == 'ignoredatarow' ||
+		lower == 'refreshdatarow') {
+		return 'session-state'
+	}
+	if (lower.startsWith('set') || lower.startsWith('create') ||
+		lower.startsWith('update') || lower.startsWith('delete') ||
+		lower.startsWith('save') || lower.startsWith('add') ||
+		lower.startsWith('upload') || lower.startsWith('run')) {
+		return 'mutating'
+	}
+	return 'read-only'
+}
+
+tasks.register('generatePhase4EdgeInventory') {
+	group = 'verification'
+	description = 'Inventories all Phase 4 servlet descriptors and XFire services'
+	inputs.files(
+		phase4DescriptorList,
+		phase4ServicesFile,
+		readPhase4DescriptorPaths().collect { rootProject.file(it) })
+	outputs.files(
+		phase4EvidenceDir.map { it.file('edge/routes.tsv') },
+		phase4EvidenceDir.map { it.file('edge/services.tsv') })
+	doLast {
+		def descriptorPaths = readPhase4DescriptorPaths()
+		if (descriptorPaths.size() != 11 || descriptorPaths.toSet().size() != 11) {
+			throw new GradleException(
+				"Phase 4 requires exactly 11 unique source descriptors, got ${descriptorPaths}")
+		}
+		def missing = descriptorPaths.findAll { !rootProject.file(it).isFile() }
+		if (!missing.isEmpty()) {
+			throw new GradleException("Missing Phase 4 descriptors: ${missing}")
+		}
+
+		def routesOutput = phase4EvidenceDir.get().file('edge/routes.tsv').asFile
+		routesOutput.parentFile.mkdirs()
+		def routeCount = 0
+		routesOutput.withWriter('UTF-8') { writer ->
+			writer.println(
+				'# descriptor\tkind\tname\timplementation\turl_pattern\tconfigured_security\ttraffic_class\tbehavioral_gate')
+			descriptorPaths.each { relativePath ->
+				def descriptor = parsePhase4Xml(rootProject.file(relativePath))
+				def servletClasses = descriptor.servlet.collectEntries {
+					[(it.'servlet-name'.text()): it.'servlet-class'.text().trim()]
+				}
+				def filterClasses = descriptor.filter.collectEntries {
+					[(it.'filter-name'.text()): it.'filter-class'.text().trim()]
+				}
+				def securedPatterns = descriptor.'security-constraint'.collectMany { constraint ->
+					constraint.'web-resource-collection'.collectMany {
+						it.'url-pattern'*.text()
+					}
+				}.toSet()
+				descriptor.'servlet-mapping'.each { mapping ->
+					mapping.'url-pattern'.each { pattern ->
+						def name = mapping.'servlet-name'.text()
+						def routeClass = classifyPhase4Route(
+							relativePath, name, pattern.text())
+						writer.println([
+							relativePath,
+							'servlet',
+							name,
+							servletClasses[name] ?: '',
+							pattern.text(),
+							securedPatterns.contains(pattern.text()),
+							routeClass[0],
+							routeClass[1]
+						].join('\t'))
+						routeCount++
+					}
+				}
+				descriptor.'filter-mapping'.each { mapping ->
+					mapping.'url-pattern'.each { pattern ->
+						def name = mapping.'filter-name'.text()
+						def routeClass = classifyPhase4Route(
+							relativePath, name, pattern.text())
+						writer.println([
+							relativePath,
+							'filter',
+							name,
+							filterClasses[name] ?: '',
+							pattern.text(),
+							securedPatterns.contains(pattern.text()),
+							routeClass[0],
+							routeClass[1]
+						].join('\t'))
+						routeCount++
+					}
+				}
+			}
+		}
+		if (routeCount == 0) {
+			throw new GradleException('Phase 4 route inventory is empty')
+		}
+
+		def services = parsePhase4Xml(phase4ServicesFile).service
+		if (services.size() != 4) {
+			throw new GradleException(
+				"Phase 4 requires exactly four XFire services, got ${services*.name*.text()}")
+		}
+		def servicesOutput = phase4EvidenceDir.get().file('edge/services.tsv').asFile
+		servicesOutput.withWriter('UTF-8') { writer ->
+			writer.println(
+				'# service\tnamespace\tservice_class\timplementation_class\tscope\tstyle')
+			services.each { service ->
+				writer.println([
+					service.name.text(),
+					service.namespace.text(),
+					service.serviceClass.text(),
+					service.implementationClass.text(),
+					service.scope.text(),
+					service.style.text()
+				].join('\t'))
+			}
+		}
+		logger.lifecycle(
+			"Phase 4 edge inventory: ${descriptorPaths.size()} descriptors, " +
+			"${routeCount} mapped servlet/filter routes, ${services.size()} SOAP services")
+	}
+}
+
+tasks.register('phase4XFireOracleSmoke', Exec) {
+	group = 'verification'
+	description = 'Proves all four Phase 3 XFire services expose WSDL and dispatch SOAP'
+	dependsOn tasks.named('phase3AntDatabaseBuild')
+	dependsOn tasks.named('generatePhase4EdgeInventory')
+	environment(
+		'JAVA_HOME',
+		phase4JavaLauncher.get().metadata.installationPath.asFile.absolutePath)
+	commandLine(
+		'bash',
+		rootProject.file('scripts/phase4/smoke-xfire-oracle.sh'),
+		rootProject.layout.buildDirectory.dir('phase3/tomcat').get().asFile,
+		rootProject.layout.buildDirectory.dir('phase3/runtime/Adempiere/tomcat').get().asFile,
+		rootProject.layout.buildDirectory.dir('phase3/runtime/Adempiere').get().asFile,
+		'8888',
+		phase4EvidenceDir.get().dir('oracle').asFile)
+}
+
+tasks.register('generatePhase4SoapOperationInventory') {
+	group = 'verification'
+	description = 'Extracts every authoritative SOAP operation from the live XFire WSDLs'
+	dependsOn tasks.named('phase4XFireOracleSmoke')
+	inputs.dir phase4EvidenceDir.map { it.dir('oracle/wsdl') }
+	outputs.file phase4EvidenceDir.map { it.file('oracle/operations.tsv') }
+	doLast {
+		def wsdlDirectory = phase4EvidenceDir.get().dir('oracle/wsdl').asFile
+		def wsdlFiles = wsdlDirectory.listFiles()
+			.findAll { it.isFile() && it.name.endsWith('.wsdl') }
+			.sort { it.name }
+		if (wsdlFiles.size() != 4) {
+			throw new GradleException(
+				"Phase 4 requires four live WSDL files, got ${wsdlFiles*.name}")
+		}
+		def output = phase4EvidenceDir.get().file('oracle/operations.tsv').asFile
+		def operationCount = 0
+		def serviceScopes = parsePhase4Xml(phase4ServicesFile).service.collectEntries {
+			[(it.name.text()): it.scope.text()]
+		}
+		output.withWriter('UTF-8') { writer ->
+			writer.println(
+				'# service\toperation\tnamespace\trequest_message\trequest_parts\t' +
+				'response_message\tresponse_parts\tsoap_action\tendpoint\turl_forms\t' +
+				'http_method\tcontent_type\tcharset\tscope\tmutability\t' +
+				'authentication\ttraffic_class\tphase4_gate')
+			wsdlFiles.each { wsdlFile ->
+				def serviceName = wsdlFile.name - '.wsdl'
+				def wsdl = parsePhase4Xml(wsdlFile)
+				def namespace = wsdl.@targetNamespace.text()
+				def messages = wsdl.depthFirst().findAll { node ->
+					phase4LocalName(node) == 'message'
+				}.collectEntries { message ->
+					def parts = message.children().findAll {
+						phase4LocalName(it) == 'part'
+					}.collect { part ->
+						def contractType = part.@element.text() ?: part.@type.text()
+						"${part.@name.text()}:${contractType}"
+					}.join(',')
+					[(message.@name.text()): parts]
+				}
+				def bindings = wsdl.depthFirst().findAll { node ->
+					phase4LocalName(node) == 'binding'
+				}.toList()
+				def endpoint = wsdl.depthFirst().find { node ->
+					phase4LocalName(node) == 'address' && node.@location.text()
+				}?.@location?.text() ?: ''
+				def portTypes = wsdl.depthFirst().findAll { node ->
+					phase4LocalName(node) == 'portType'
+				}.toList()
+				def operations = portTypes.collectMany { portType ->
+					portType.children().findAll {
+						phase4LocalName(it) == 'operation'
+					}.toList().collect { operation ->
+						def input = operation.children().find {
+							phase4LocalName(it) == 'input'
+						}
+						def responseNode = operation.children().find {
+							phase4LocalName(it) == 'output'
+						}
+						def requestMessage = input.@message.text()
+							.tokenize(':').last()
+						def responseMessage = responseNode.@message.text()
+							.tokenize(':').last()
+						def bindingOperation = bindings.collectMany { binding ->
+							binding.children().findAll {
+								phase4LocalName(it) == 'operation'
+							}.toList()
+						}
+							.find { it.@name.text() == operation.@name.text() }
+						def soapOperation = bindingOperation?.children()?.find {
+							phase4LocalName(it) == 'operation' &&
+								it.attributes().containsKey('soapAction')
+						}
+						[
+							name: operation.@name.text(),
+							requestMessage: requestMessage,
+							requestParts: messages[requestMessage] ?: '',
+							responseMessage: responseMessage,
+							responseParts: messages[responseMessage] ?: '',
+							soapAction: soapOperation?.@soapAction?.text() ?: ''
+						]
+					}
+				}.unique { it.name }
+				if (operations.isEmpty()) {
+					throw new GradleException("${serviceName} WSDL has no portType operations")
+				}
+				def authentication = serviceName == 'ADService' ?
+					'session-login' : 'request-body-credentials'
+				operations.each { operation ->
+					writer.println([
+						serviceName,
+						operation.name,
+						namespace,
+						operation.requestMessage,
+						operation.requestParts,
+						operation.responseMessage,
+						operation.responseParts,
+						operation.soapAction,
+						endpoint,
+						'/ADInterface/services/*,/ADInterface/servlet/XFireServlet/*',
+						'POST',
+						'text/xml',
+						'UTF-8',
+						serviceScopes[serviceName],
+						classifyPhase4Operation(operation.name),
+						authentication,
+						'service-to-service',
+						'phase4-soap'
+					].join('\t'))
+					operationCount++
+				}
+			}
+		}
+		if (operationCount != 33) {
+			throw new GradleException(
+				"Expected 33 authoritative SOAP operations, got ${operationCount}")
+		}
+		logger.lifecycle("Phase 4 SOAP inventory: ${operationCount} operations")
+	}
+}
+
+tasks.register('phase4OraclePreflight') {
+	group = 'verification'
+	description = 'Canonical Phase 4 live XFire oracle and source edge-inventory preflight'
+	dependsOn tasks.named('phase4XFireOracleSmoke')
+	dependsOn tasks.named('generatePhase4SoapOperationInventory')
+}
+
+tasks.register('freezePhase4XFireContracts') {
+	group = 'verification'
+	description = 'Explicitly freezes the approved live XFire oracle in source control'
+	doLast {
+		if (providers.gradleProperty('approvePhase4Oracle').orNull != 'true') {
+			throw new GradleException(
+				'Refusing to freeze the oracle without -PapprovePhase4Oracle=true')
+		}
+		def oracle = phase4EvidenceDir.get().dir('oracle').asFile
+		def required = [
+			'wsdl/ADService.wsdl',
+			'wsdl/ModelADService.wsdl',
+			'wsdl/ExternalSales.wsdl',
+			'wsdl/WebService.wsdl',
+			'request-ADService.xml',
+			'request-ModelADService.xml',
+			'request-ExternalSales.xml',
+			'request-WebService.xml',
+			'responses/ADService.xml',
+			'responses/ModelADService.xml',
+			'responses/ExternalSales.xml',
+			'responses/WebService.xml',
+			'responses/ADService.headers',
+			'responses/ModelADService.headers',
+			'responses/ExternalSales.headers',
+			'responses/WebService.headers',
+			'round-trips.tsv',
+			'operations.tsv'
+		]
+		def missing = required.findAll { !new File(oracle, it).isFile() }
+		if (!missing.isEmpty()) {
+			throw new GradleException("Cannot freeze incomplete oracle: ${missing}")
+		}
+		project.delete(project.fileTree(phase4FrozenContracts).matching {
+			exclude 'normalization-policy.md'
+		})
+		required.each { relativePath ->
+			def source = new File(oracle, relativePath)
+			def target = new File(phase4FrozenContracts, relativePath)
+			target.parentFile.mkdirs()
+			target.bytes = normalizePhase4Contract(relativePath, source.bytes)
+		}
+		def digest = MessageDigest.getInstance('SHA-256')
+		new File(phase4FrozenContracts, 'manifest.sha256').withWriter('UTF-8') { writer ->
+			required.sort().each { relativePath ->
+				digest.reset()
+				def hash = digest.digest(
+					new File(phase4FrozenContracts, relativePath).bytes)
+					.collect { String.format('%02x', it) }.join()
+				writer.println("${hash}  ${relativePath}")
+			}
+		}
+	}
+}
+
+tasks.register('verifyPhase4FrozenContracts') {
+	group = 'verification'
+	description = 'Fails on missing, added, or changed frozen XFire contract evidence'
+	inputs.dir phase4FrozenContracts
+	doLast {
+		def manifest = new File(phase4FrozenContracts, 'manifest.sha256')
+		if (!manifest.isFile()) {
+			throw new GradleException('Frozen Phase 4 contract manifest is missing')
+		}
+		def expected = manifest.readLines().collectEntries { line ->
+			def match = line =~ /^([0-9a-f]{64})  (.+)$/
+			if (!match.matches()) {
+				throw new GradleException("Malformed contract manifest line: ${line}")
+			}
+			[(match[0][2]): match[0][1]]
+		}
+		def actualFiles = project.fileTree(phase4FrozenContracts)
+			.matching { exclude 'manifest.sha256', 'normalization-policy.md' }
+			.files.collect {
+				phase4FrozenContracts.toPath().relativize(it.toPath()).toString()
+			}.toSet()
+		if (actualFiles != expected.keySet()) {
+			throw new GradleException(
+				"Frozen contract file set drifted; expected ${expected.keySet()}, got ${actualFiles}")
+		}
+		def digest = MessageDigest.getInstance('SHA-256')
+		expected.each { relativePath, expectedHash ->
+			digest.reset()
+			def actualHash = digest.digest(new File(phase4FrozenContracts, relativePath).bytes)
+				.collect { String.format('%02x', it) }.join()
+			if (actualHash != expectedHash) {
+				throw new GradleException(
+					"Frozen contract changed without approval: ${relativePath}")
+			}
+		}
+	}
+}
+
+tasks.register('verifyPhase4OracleMatchesFrozen') {
+	group = 'verification'
+	description = 'Compares fresh live XFire evidence with the approved frozen oracle'
+	dependsOn tasks.named('phase4OraclePreflight')
+	dependsOn tasks.named('verifyPhase4FrozenContracts')
+	doLast {
+		def manifest = new File(phase4FrozenContracts, 'manifest.sha256')
+		def expectedPaths = manifest.readLines().collect {
+			(it =~ /^[0-9a-f]{64}  (.+)$/)[0][1]
+		}
+		def oracle = phase4EvidenceDir.get().dir('oracle').asFile
+		def drift = expectedPaths.findAll { relativePath ->
+			def live = new File(oracle, relativePath)
+			def frozen = new File(phase4FrozenContracts, relativePath)
+			!live.isFile() ||
+				!Arrays.equals(
+					normalizePhase4Contract(relativePath, live.bytes), frozen.bytes)
+		}
+		if (!drift.isEmpty()) {
+			throw new GradleException("Live XFire contract drifted: ${drift}")
+		}
+	}
+}
+
+tasks.register('phase4ContractMutationProof') {
+	group = 'verification'
+	description = 'Proves a deliberate frozen-WSDL mutation is detected'
+	dependsOn tasks.named('verifyPhase4FrozenContracts')
+	doLast {
+		def source = new File(phase4FrozenContracts, 'wsdl/ADService.wsdl')
+		def mutated = source.text.replaceFirst('name="ADService"', 'name="MutatedADService"')
+		if (mutated == source.text) {
+			throw new GradleException('Mutation fixture did not alter the ADService WSDL')
+		}
+
+		tasks.named('check') {
+			dependsOn tasks.named('verifyPhase4FrozenContracts')
+			dependsOn tasks.named('phase4ContractMutationProof')
+		}
+		def digest = MessageDigest.getInstance('SHA-256')
+		def sourceHash = digest.digest(source.bytes)
+		digest.reset()
+		def mutatedHash = digest.digest(mutated.getBytes('UTF-8'))
+		if (Arrays.equals(sourceHash, mutatedHash)) {
+			throw new GradleException('Contract mutation was not detected')
+		}
+		def evidence = phase4EvidenceDir.get().file('contracts/mutation-proof.txt').asFile
+		evidence.parentFile.mkdirs()
+		evidence.text =
+			'PASS: changing the ADService service QName changed its frozen SHA-256.\n'
+	}
+}
+
+tasks.named('cleanupPhase3Database') {
+	mustRunAfter tasks.named('phase4XFireOracleSmoke')
+	mustRunAfter tasks.named('generatePhase4SoapOperationInventory')
+	mustRunAfter tasks.named('phase4OraclePreflight')
+}
