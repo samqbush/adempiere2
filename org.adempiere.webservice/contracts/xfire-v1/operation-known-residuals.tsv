@@ -1,0 +1,2 @@
+# service	operation	fault	owner	closing_action
+ExternalSales	uploadOrders	Not enough message parts were received for the operation.	Phase 4 API migration	Retain the static WSDL and legacy fault in compatibility tests; repair only through a separately versioned contract after consumer review.

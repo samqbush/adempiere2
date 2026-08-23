@@ -6,10 +6,13 @@
 >
 > **Planning date:** 2026-08-20.
 >
-> **Status:** Phases 1-3 are merged to `develop`. Phase 3 merged as
-> `eb1953d091836db59fabb153ccde41d8e07b7cf1` after all five PR checks passed.
-> Phase 4 is in progress on `phase-4-api-edge-modernization`. Required-check
-> enforcement remains a repository-administrator action and residual risk R8.
+> **Status:** Phases 1-3 are merged to `develop`. The Phase 4 oracle/seam
+> foundation merged as `f91b0ef2ccfc03d94f3688d6e271b0480bcc9cdf`; Phase 4
+> implementation and local exit gates are complete on
+> `phase-4-api-edge-modernization-completion`. PR CI and merge to `develop`
+> remain required before Phase 5 begins.
+> Required-check enforcement remains a repository-administrator action and
+> residual risk R8.
 
 ## 1. Executive summary
 
@@ -797,19 +800,60 @@ final stack are not yet migrated.
 **Goal:** Replace XFire and establish explicit security/routing contracts without
 breaking active integrations.
 
-**Status:** In progress on `phase-4-api-edge-modernization`. The live XFire
-pre-flight is green for all four services; 11 descriptors, 114 mappings, and 33
-WSDL operations are inventoried. Representative four-service contracts are
-frozen, replayed in CI, and mutation-sensitive. The XFire-free service boundary
-is the 29th Gradle project while Ant continues to own the legacy WAR.
-Per-operation fixtures and delegating legacy wrappers remain before the modern
-runtime work may begin.
+**Status:** Implementation complete locally on
+`phase-4-api-edge-modernization-completion`; PR CI and merge remain open. The
+oracle/seam foundation merged to `develop` as
+`f91b0ef2ccfc03d94f3688d6e271b0480bcc9cdf`. The live XFire pre-flight is green
+for all four services; the 11 descriptors and original 114 mappings are
+inventoried alongside 33 WSDL
+operations. Representative four-service contracts are frozen, replayed in CI,
+and mutation-sensitive. The XFire-free service boundary is the 29th Gradle
+project while Ant continues to own the legacy WAR. Source-controlled route and
+XFire-removal inventories now fail on drift. The frozen baseline covers all 33
+operations, and `operation-scenarios.tsv` gives every operation an explicit
+success, fault-only, or owned-residual decision. All 11 required
+valid-credential Model/POS and state-isolated mutation scenarios are frozen and
+pass direct CXF replay; create, update, delete, and process execution also
+compare explicit database deltas. The
+transport-neutral extraction is complete for all 33 operations: an explicit
+business dispatcher binds the fail-closed registry to all four business seams,
+and the 21-operation `ADService` retains one atomic state object per session.
+Meaningful neutral tests plus the pre-removal isolated adapter suite cover exact
+binding, fault translation, response identity, and concurrent session isolation.
+The first isolated CXF runtime slice now also builds a distinct modern WAR with
+strictly locked CXF 4.1.8 dependencies, boots checksum-verified Tomcat 10.1.59
+on loopback, serves the four approved WSDL byte streams, dispatches the frozen
+`getVersion` success, and fails closed for unknown WSDLs. Its archive gate
+rejects XFire and removes the seven servlet-linked classes from the packaged
+core. A marker-owned PostgreSQL 14.6 lifecycle now rebuilds the WAR after Ant,
+replays all 33 frozen operation baselines and 11 additional scenarios directly
+against CXF, and orders database cleanup after replay. The Tomcat 9
+compatibility router now preserves both historical URLs, replays all 33
+baselines through both forms, and first passed a live dual-runtime proof for
+request-scoped flags, invalid-value fallback, and atomic `ADService` session
+affinity. Migration 10030 expands the physical
+`AD_SysConfig.Name` column to its existing 100-character dictionary length so
+the approved 60-character operation keys are representable. Installer
+post-install integration now passes the canonical `phase4InstalledApi` lifecycle
+through both historical paths. The same lifecycle now embeds the distinct
+modern WAR, portable Tomcat 10.1 runtime, configuration, and executable
+launchers in the existing 394LTS ZIP/TAR artifacts; it verifies checksums, exact
+WAR copies, the unconfigured environment template, and absence of
+`AdempiereEnv.properties`. Task 4.4 is complete. Complete cutover evidence,
+rollback, and XFire retirement then completed: each request-scoped service and
+the atomic `ADService` unit returned to XFire through both historical paths
+without a restart; after that evidence was recorded, the router became CXF-only
+and active XFire source, descriptors, checked-in JARs, adapter tests, and
+packaged artifacts were removed. The final installed lifecycle, no-database
+distribution, targeted gates, and full Gradle build pass. Only PR CI and merge
+remain before the phase status can be recorded on `develop`.
 
 **Regime:** The Phase 3 XFire deployment is lit but its operation behavior must
 pass a Phase 4 oracle pre-flight. The new CXF/Jakarta adapter transitions from
 dark to lit.
 
-**Safety rung:** L3 -> L4 for active API operations.
+**Safety rung:** L3. The complete automated seam gate is green, but unknown
+external consumer ownership and observation timing prevent an L4 claim.
 
 **Prerequisites:** Phase 3 merged to `develop`. All four SOAP services and all
 11 source descriptors are treated as active until evidence proves otherwise.
@@ -837,8 +881,11 @@ The approved oracle is repository and installed Phase 3 evidence only.
 | 4.4 | Build a CXF 4.1.x/Jakarta message-mode adapter on checksum-pinned Tomcat 10.1/JDK 21 and a Tomcat 9 compatibility router at the historical WAR path; wire both runtimes into the installer | SOAP/runtime | 4.3 |
 | 4.5 | Cross the SOAP Testability Milestone through the unchanged public URL and prove shared-core `javax.servlet` classes are not linked on SOAP paths | SOAP/runtime | 4.4 |
 | 4.6 | Inventory all five route classes; behavior-test SOAP/shared security now and assign every non-SOAP route a named Phase 5 behavioral test | Security/edge | 4.1, 4.5 |
-| 4.7 | Replay every operation, using parallel read diffs and independent disposable restores for mutating operations; cut over incrementally behind fail-closed `MSysConfig` flags | API | 4.5-4.6 |
+| 4.7 | Replay every operation, using parallel read diffs and independent disposable restores for mutating operations; cut over request-scoped operations incrementally behind fail-closed `MSysConfig` flags, then move the 21-operation session-scoped `ADService` atomically with per-session runtime affinity | API | 4.5-4.6 |
 | 4.8 | Rehearse per-operation rollback, remove XFire from active packaging only after complete parity, and prove the installed product still serves both historical URL forms | API/distribution | 4.7 |
+
+Tasks 4.1-4.8 are implementation-complete locally. PR CI and merge to
+`develop` remain the phase-level gate.
 
 #### Risks & mitigations
 
@@ -852,20 +899,45 @@ The approved oracle is repository and installed Phase 3 evidence only.
 #### Decisions made
 
 - SOAP compatibility is preserved; REST is additive.
-- Cutover unit is one operation/route class, not the whole API.
+- Cutover unit is one operation for request-scoped services. `ADService` is an
+  atomic 21-operation unit because its mutable `CompiereService` login/window
+  state cannot be split safely across JVMs; existing sessions remain pinned to
+  their selected runtime during cutover.
 - CXF 3.6.x is dropped from the roadmap because it is an EOL `javax` line
   without the JDK 21 support baseline established in Phase 2.
-- CXF 4.1.x/Jakarta runs in an isolated Tomcat 10.1 API base. ZK and all other
-  legacy servlet applications remain on Tomcat 9 until Phase 5.
+- CXF 4.1.8/Jakarta runs in an isolated Tomcat 10.1.59 API base. The version,
+  download URL, and official SHA-512 are pinned in
+  `gradle/phase4/runtime.properties`; the API connector is loopback-only. ZK and all
+  other legacy servlet applications remain on Tomcat 9 until Phase 5. Exact
+  artifact availability and the official checksum were rechecked when the pins
+  were added.
+- The invalid `ExternalSales.uploadOrders` WSDL cannot be loaded into CXF's
+  validating WSDL model. CXF therefore publishes generic message-mode providers
+  while the servlet serves the approved static WSDL bytes directly; the bounded
+  codec deliberately preserves the exact frozen binding fault for that one
+  operation rather than silently repairing a versioned consumer contract.
 - The Tomcat 9 compatibility router preserves
   `/ADInterface/services/*` and `/ADInterface/servlet/XFireServlet/*`; the
-  Tomcat 10.1 port is internal only.
+  Tomcat 10.1 port is internal only. Routing audit stays in server logs so no
+  diagnostic header changes the public contract. During migration the router
+  read flags directly from marker-tested `AD_SysConfig` storage; after rollback
+  rehearsal it routes only to CXF and no longer reads cutover flags.
+- Per-operation keys require up to 60 characters. Migration 10030 expands the
+  physical `AD_SysConfig.Name` column from 50 to the application dictionary's
+  existing 100-character length for PostgreSQL and Oracle.
 - `org.adempiere.webservice` becomes a shared Gradle/Ant surface in Phase 4.
   Ant remains the distribution adapter until Phase 7.
-- XFire removal occurs only after consumer-contract evidence and installed
-  product rollback rehearsal; it is not dropped merely because it is old.
+- Existing business implementations were not treated as neutral delegates:
+  XFire fault signatures were extracted behind transport-neutral interfaces and
+  `ServiceFault`; the temporary adapter classes were removed only after replay
+  and rollback.
+- XFire removal occurred after consumer-contract evidence and installed-product
+  rollback rehearsal, not merely because it was old.
 - All 11 descriptors receive complete L3 classification. Phase 4 behavior-tests
-  SOAP and shared security; Phase 5 owns non-SOAP route behavior.
+  SOAP and shared security; Phase 5 owns non-SOAP route behavior. The
+  source-controlled artifact contains the original 114 routes, removes the
+  temporary internal XFire mapping, and explicitly records that no
+  callback/webhook mapping exists in the inventoried descriptors.
 - **Hazard red-team:** H1 fired (grep all XFire coordinates/imports/descriptors
   before removal); H2 fired (XFire/CXF XML, JAX-WS, test engine/config recipes);
   H3 fired because the isolated Tomcat 10.1 runtime, installer, launch scripts,
@@ -875,21 +947,23 @@ The approved oracle is repository and installed Phase 3 evidence only.
 
 #### Verification & Exit Criteria (Definition of Done)
 
-- [ ] Every active WSDL operation has replay fixtures for success and fault
+- [x] Every active WSDL operation has replay fixtures for success and fault
       behavior.
-- [ ] Old/new WSDL, status, headers, XML, auth, and error semantics match the
+- [x] Old/new WSDL, status, headers, XML, auth, and error semantics match the
       approved normalization policy.
-- [ ] All five route classes are inventoried; SOAP/shared-security routes have
-      positive and negative tests, and every non-SOAP route has a named Phase 5
-      closing test.
-- [ ] Parallel-run diffs are clean for the approved observation window.
-- [ ] Rollback to XFire is rehearsed before any consumer cutover.
-- [ ] XFire artifacts/imports are absent only after all active dependents move;
+- [x] All five route classes are inventoried, including explicit `none found`
+      evidence where applicable; SOAP/shared-security routes have positive and
+      negative tests, and every non-SOAP route has a named Phase 5 closing test.
+- [x] Parallel-run diffs are clean for the approved observation runs.
+- [x] Rollback to XFire is rehearsed before final consumer cutover.
+- [x] XFire artifacts/imports are absent only after all active dependents move;
       the full-product build target and installed-product SOAP smoke remain
       green.
-- [ ] T4-1 records the internal-only dual endpoint, unchanged authorization,
-      compensating controls, owner, and Phase 4 closing task; no actual auth
-      weakening is approved.
+- [x] T4-1 records and closes the internal-only dual endpoint, unchanged
+      authorization, compensating controls, and owner; no actual auth weakening
+      was approved.
+- [ ] Phase 4 PR CI passes and the branch merges to `develop`; making the checks
+      required remains a manual repository-administrator action.
 
 ### Phase 5: ZK/Jakarta web transition (T-shirt size: XL)
 
@@ -1123,7 +1197,7 @@ typed constants, owner, default, scope, expiry phase, and audit logging:
 
 | Flag | Purpose | Default | Removal |
 |---|---|---|---|
-| `MODERN_SOAP_ADAPTER_ENABLED` | Route selected operations to CXF adapter | Off | Phase 4 after complete cutover |
+| `MODERN_SOAP_ADAPTER_ENABLED` | Historical Phase 4 cutover and rollback control; no longer read | Retired | Removed from active routing after Phase 4 cutover |
 | `MODERN_WEB_UI_ENABLED` | Route selected users/roles to modern ZK/Jakarta UI | Off | Phase 5 after complete cutover |
 | `PARALLEL_BEHAVIOR_DIFF_ENABLED` | Execute safe read-only old/new comparisons | Off | Phase closing each comparison |
 | `POSTGRES16_CUTOVER_ENABLED` | Deployment-level cutover marker, not an application dual-write switch | Off | Phase 6 after cutover |

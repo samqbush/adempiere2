@@ -1,0 +1,34 @@
+# service	operation	baseline_scenario	additional_scenario	status	isolation	owner	reason
+ADService	getVersion	captured-success	none	captured	shared-reference	Phase 4 API migration	Public scalar operation is reachable without login.
+ADService	getLookupSearchData	captured-fault	fault-only-legacy-login-defect	captured	shared-reference	Phase 4 API migration	The legacy session authenticates before login can establish state.
+ADService	getLocation	captured-fault	fault-only-legacy-login-defect	captured	shared-reference	Phase 4 API migration	The legacy session authenticates before login can establish state.
+ADService	runProcess	captured-fault	fault-only-legacy-login-defect	captured	independent-restore	Phase 4 API migration	The legacy session authenticates before login can establish state.
+ADService	getADMenu	captured-fault	fault-only-legacy-login-defect	captured	shared-reference	Phase 4 API migration	The legacy session authenticates before login can establish state.
+ADService	getDataRow	captured-fault	fault-only-legacy-login-defect	captured	shared-reference	Phase 4 API migration	The legacy session authenticates before login can establish state.
+ADService	saveLocation	captured-fault	fault-only-legacy-login-defect	captured	independent-restore	Phase 4 API migration	The legacy session authenticates before login can establish state.
+ADService	login	captured-fault	fault-only-legacy-login-defect	captured	fresh-session	Phase 4 API migration	The login operation itself calls authenticate before establishing login state.
+ADService	getADWindow	captured-fault	fault-only-legacy-login-defect	captured	shared-reference	Phase 4 API migration	The legacy session authenticates before login can establish state.
+ADService	getLookupData	captured-fault	fault-only-legacy-login-defect	captured	shared-reference	Phase 4 API migration	The legacy session authenticates before login can establish state.
+ADService	getDocAction	captured-fault	fault-only-legacy-login-defect	captured	shared-reference	Phase 4 API migration	The legacy session authenticates before login can establish state.
+ADService	setDocAction	captured-fault	fault-only-legacy-login-defect	captured	independent-restore	Phase 4 API migration	The legacy session authenticates before login can establish state.
+ADService	getWindowTabData	captured-fault	fault-only-legacy-login-defect	captured	shared-reference	Phase 4 API migration	The legacy session authenticates before login can establish state.
+ADService	refreshDataRow	captured-fault	fault-only-legacy-login-defect	captured	fresh-session	Phase 4 API migration	The legacy session authenticates before login can establish state.
+ADService	deleteDataRow	captured-fault	fault-only-legacy-login-defect	captured	independent-restore	Phase 4 API migration	The legacy session authenticates before login can establish state.
+ADService	addNewDataRow	captured-fault	fault-only-legacy-login-defect	captured	independent-restore	Phase 4 API migration	The legacy session authenticates before login can establish state.
+ADService	isLoggedIn	captured-success	none	captured	fresh-session	Phase 4 API migration	The unauthenticated false result is the only reachable login-state success.
+ADService	ignoreDataRow	captured-fault	fault-only-legacy-login-defect	captured	fresh-session	Phase 4 API migration	The legacy session authenticates before login can establish state.
+ADService	saveDataRow	captured-fault	fault-only-legacy-login-defect	captured	independent-restore	Phase 4 API migration	The legacy session authenticates before login can establish state.
+ADService	updateDataRow	captured-fault	fault-only-legacy-login-defect	captured	independent-restore	Phase 4 API migration	The legacy session authenticates before login can establish state.
+ADService	getProcessParams	captured-fault	fault-only-legacy-login-defect	captured	shared-reference	Phase 4 API migration	The legacy session authenticates before login can establish state.
+ExternalSales	getProductsPlusCatalog	captured-fault	valid-credential-security-fault	captured	shared-reference	Phase 4 API migration	POS authentication validates the deterministic GardenAdmin fixture hash and returns the frozen security-not-implemented fault.
+ExternalSales	getProductsCatalog	captured-fault	valid-credential-security-fault	captured	shared-reference	Phase 4 API migration	POS authentication validates the deterministic GardenAdmin fixture hash and returns the frozen security-not-implemented fault.
+ExternalSales	uploadOrders	captured-binding-fault	binding-residual	residual-captured	independent-restore	Phase 4 API migration	The frozen WSDL references the nonexistent global ArrayOf_tns1_Order element.
+ModelADService	setDocAction	captured-fault	valid-credential-config-fault	captured	independent-restore	Phase 4 API migration	Valid WebService credentials return the frozen HTTP 200 configuration-error response because no document-action service type is committed.
+ModelADService	createData	captured-fault	authenticated-success	captured	independent-restore	Phase 4 API migration	The committed CreateBPartner service type creates deterministic record 1000000 and the frozen state delta is replayed on an independent restore.
+ModelADService	deleteData	captured-fault	authenticated-success	captured	independent-restore	Phase 4 API migration	A marker-owned fixture service type deletes deterministic record 1000004 and freezes the state delta.
+ModelADService	readData	captured-fault	authenticated-success	captured	shared-reference	Phase 4 API migration	A marker-owned fixture service type returns deterministic record 1000001 with an explicit output allowlist.
+ModelADService	getList	captured-fault	valid-credential-config-fault	captured	shared-reference	Phase 4 API migration	Valid WebService credentials return the frozen HTTP 200 configuration-error response because no compatible list service type is committed.
+ModelADService	runProcess	captured-fault	authenticated-success	captured	independent-restore	Phase 4 API migration	The committed ProcessInvoice service type completes deterministic invoice 103 and freezes its state delta.
+ModelADService	updateData	captured-fault	authenticated-success	captured	independent-restore	Phase 4 API migration	A marker-owned fixture service type updates deterministic record 1000003 and freezes its state delta.
+ModelADService	queryData	captured-fault	authenticated-success	captured	shared-reference	Phase 4 API migration	A marker-owned fixture service type returns exactly the deterministic PHASE4-QUERY record.
+WebService	getCustomers	captured-fault	valid-credential-security-fault	captured	shared-reference	Phase 4 API migration	POS authentication validates the deterministic GardenAdmin fixture hash and returns the frozen security-not-implemented fault.

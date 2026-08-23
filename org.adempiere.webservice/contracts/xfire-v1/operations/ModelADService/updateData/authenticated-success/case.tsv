@@ -1,0 +1,2 @@
+# case	scope	mutability	authentication	expectation
+authenticated-success	request	mutating	valid-request-body-credentials	deterministic-update-and-state-delta

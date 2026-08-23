@@ -1,0 +1,1 @@
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><soap:Body><ns1:getVersionResponse xmlns:ns1="http://3e.pl/ADInterface"><out xmlns="">0.7.0</out></ns1:getVersionResponse></soap:Body></soap:Envelope>

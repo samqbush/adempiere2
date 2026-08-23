@@ -1,0 +1,2 @@
+# case	scope	mutability	authentication	expectation
+baseline	session	mutating	session-login	dispatch-success-or-application-fault

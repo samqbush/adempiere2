@@ -1,31 +1,21 @@
-How to add a new WebService in 3E_WebServices
+How to add a SOAP operation
 
-i.e. 
-we're going to add a webservice to complete documents
-the new webservice will have the following parameters:
-* ADLoginRequest - it's already defined in ADInterface/src/xsd/schema.xsd with the following parameters:
-    user, pass, lang, ClientID, RoleID, OrgID, WarehouseID, stage
-* TableName  String -> M_InOut
-* Record_ID int -> 1000002
-* DocStatus String -> CO
+The approved WSDL files under contracts/xfire-v1/wsdl are the public contract.
+Do not generate or publish a replacement WSDL at runtime.
 
-Note, if you need to define new datatypes you need to define them in ADInterface/src/xsd/schema.xsd
-and generate the pl3xe.jar again with this command:
-  scomp -out ./lib/pl3xE.jar ADInterface/src/xsd/schema.xsd
-scomp will generate the corresponding classes to manipulate the xml objects from the messages
+1. Add the operation and XMLBeans types to the applicable approved WSDL/XSD.
+2. Regenerate generated_xmlbeans.jar and its sources with the module's xmlbean
+   Ant target.
+3. Add an explicit ServiceOperationKey and handler binding to
+   SoapOperationRegistry and BusinessSoapDispatcher.
+4. Implement transport-neutral behavior under src/business/java. Report SOAP
+   faults with ServiceFault; business code must not import CXF or servlet APIs.
+5. Add the CXF provider/codec handling needed to preserve the exact static WSDL
+   wire shape.
+6. Add baseline, authenticated/fault, and applicable state-delta fixtures under
+   contracts/xfire-v1/operations, then regenerate manifest.sha256.
+7. Run the frozen-contract, registry, modern-WAR, and installed public-path
+   gates before publishing the operation.
 
-
-The method will be called modelSetDocAction - the model in name indicates that the web service is going to be based on model classes, current web services are based in UI instead of model.
-
-So, we add this line:
-    public StandardResponseDocument modelSetDocAction(String tableName, int recordID, String newDocStatus, ADLoginRequestDocument reqlogin) throws XFireFault;
-at the interface 3E_WebServices/ADInterface/src/main/com/_3e/ADInterface/ADService.java
-NOTE: In parameters, complex data must be at the end
-
-Now, we need to implement the method, so we open the file
-3E_WebServices/ADInterface/src/main/com/_3e/ADInterface/ADServiceImpl.java
-
-And add the new method and define the corresponding logic within.
-
-
-
+Both historical public URL forms remain owned by SoapCompatibilityRouter. The
+Tomcat 10.1 CXF connector stays loopback-only.

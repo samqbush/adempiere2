@@ -1,0 +1,24 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:svc="http://3e.pl/ADInterface">
+ <soapenv:Body>
+  <svc:updateData>
+   <svc:ModelCRUDRequest>
+    <svc:ModelCRUD>
+     <svc:serviceType>Phase4UpdateBPartner</svc:serviceType>
+     <svc:TableName>C_BPartner</svc:TableName>
+     <svc:RecordID>1000003</svc:RecordID>
+     <svc:Action>Update</svc:Action>
+     <svc:DataRow>
+      <svc:field column="Name"><svc:val>Phase 4 Update After</svc:val></svc:field>
+      <svc:field column="URL"><svc:val>https://phase4.example.invalid/updated</svc:val></svc:field>
+     </svc:DataRow>
+    </svc:ModelCRUD>
+    <svc:ADLoginRequest>
+     <svc:user>WebService</svc:user><svc:pass>WebService</svc:pass>
+     <svc:lang>en_US</svc:lang><svc:ClientID>11</svc:ClientID>
+     <svc:RoleID>50004</svc:RoleID><svc:OrgID>11</svc:OrgID>
+     <svc:WarehouseID>103</svc:WarehouseID><svc:stage>9</svc:stage>
+    </svc:ADLoginRequest>
+   </svc:ModelCRUDRequest>
+  </svc:updateData>
+ </soapenv:Body>
+</soapenv:Envelope>

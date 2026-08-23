@@ -1,13 +1,13 @@
 package org.adempiere.webservice;
 
-import org.apache.xmlbeans.XmlObject;
+import java.util.List;
 
 public interface SoapServiceDispatcher {
 
-	XmlObject invoke(
+	Object invoke(
 			String service,
 			String operation,
-			XmlObject request,
+			List<?> arguments,
 			ServiceRequestContext context)
 			throws ServiceFault;
 }

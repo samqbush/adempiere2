@@ -1,0 +1,2 @@
+# case	scope	mutability	authentication	expectation
+authenticated-success	request	mutating	request-body-credentials	success-with-database-delta

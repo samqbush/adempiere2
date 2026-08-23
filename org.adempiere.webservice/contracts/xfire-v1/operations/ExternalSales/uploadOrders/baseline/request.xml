@@ -1,0 +1,14 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:svc="http://externalSales.ws.erpCommon.openbravo.org">
+ <soapenv:Body>
+  <svc:uploadOrders>
+    <svc:in0>0</svc:in0>
+    <svc:in1>0</svc:in1>
+    <svc:in2>0</svc:in2>
+    <svc:ArrayOf_tns1_Order>
+      <svc:orders/>
+    </svc:ArrayOf_tns1_Order>
+    <svc:in4>phase4-invalid</svc:in4>
+    <svc:in5>phase4-invalid</svc:in5>
+  </svc:uploadOrders>
+ </soapenv:Body>
+</soapenv:Envelope>

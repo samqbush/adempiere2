@@ -15,6 +15,9 @@
 	<!--<property environment="env"/>-->
 	<property file="build.properties"/>
 	<property name="src.dir" value="${basedir}/WEB-INF/src"/>
+	<property name="neutral.src.dir" value="${basedir}/src/neutral/java"/>
+	<property name="business.src.dir" value="${basedir}/src/business/java"/>
+	<property name="router.src.dir" value="${basedir}/src/router/java"/>
 	<property name="classes.dir" value="${basedir}/WEB-INF/classes"/>
 	<property name="dist.dir" value="${basedir}/dist"/>
 	<property name="deploy.dir" value="${basedir}/deploy"/>
@@ -32,6 +35,9 @@
 	<path id="compile.classpath">
 		<pathelement location="${basedir}"/>
 	  	<pathelement location="${basedir}/WEB-INF/src"/>
+		<pathelement location="${neutral.src.dir}"/>
+		<pathelement location="${business.src.dir}"/>
+		<pathelement location="${router.src.dir}"/>
 
 	    <fileset dir="${basedir}/WEB-INF/lib">
 	    	<include name="*.jar"/>
@@ -68,12 +74,16 @@
 
 	<target name="compile" depends="clean" description="Compile Java sources">
 	    <mkdir dir="${classes.dir}"/>
-	    <javac source="21" target="21" encoding="UTF-8" srcdir="WEB-INF/src"
+	    <javac source="21" target="21" encoding="UTF-8"
 	           destdir="${classes.dir}"
 	           debug="${compile.debug}"
 	     	   deprecation="${compile.deprecation}"
 				optimize="${compile.optimize}"
 				includeantruntime="false">
+			<src path="${src.dir}"/>
+			<src path="${neutral.src.dir}"/>
+			<src path="${business.src.dir}"/>
+			<src path="${router.src.dir}"/>
 	        <classpath refid="compile.classpath"/>
 	    </javac>
 		<copy todir="${classes.dir}">
@@ -98,17 +108,24 @@
 				**RUN_build.sh
 				RUN_xmlbean.sh
 				Notes/**,
+				build/**,
 				dist/**,
 				.*,
 				work/**,
 				WEB-INF/src/**,
-		      		**/web.xml,
-		      		testScripts/**,
-		      		migration/**,
-		      		WEB-INF/lib/*-sources.jar,
-		      	deploy/**"
-		      		>
-		      </fileset>
+				**/web.xml,
+				testScripts/**,
+				migration/**,
+				contracts/**,
+				src/**,
+				gradle.lockfile,
+				WEB-INF/lib/*-sources.jar,
+				deploy/**"
+				>
+			</fileset>
+			<zipfileset
+				dir="${basedir}/contracts/xfire-v1/wsdl"
+				prefix="contracts/xfire-v1/wsdl"/>
 		</war>
 		
 		 <copy file="${dist.dir}/${war.name}.war" tofile="${deploy.dir}/lib/${war.name}.war"/>

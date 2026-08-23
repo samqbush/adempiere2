@@ -1,0 +1,26 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:svc="http://3e.pl/ADInterface">
+ <soapenv:Body>
+  <svc:createData>
+   <svc:ModelCRUDRequest>
+    <svc:ModelCRUD>
+     <svc:serviceType>CreateBPartner</svc:serviceType>
+     <svc:TableName>C_BPartner</svc:TableName>
+     <svc:RecordID>0</svc:RecordID>
+     <svc:Action>Create</svc:Action>
+     <svc:DataRow>
+      <svc:field column="Value"><svc:val>PHASE4-CXF-PARITY</svc:val></svc:field>
+      <svc:field column="Name"><svc:val>Phase 4 CXF Parity</svc:val></svc:field>
+      <svc:field column="IsVendor"><svc:val>N</svc:val></svc:field>
+      <svc:field column="IsCustomer"><svc:val>Y</svc:val></svc:field>
+     </svc:DataRow>
+    </svc:ModelCRUD>
+    <svc:ADLoginRequest>
+     <svc:user>WebService</svc:user><svc:pass>WebService</svc:pass>
+     <svc:lang>en_US</svc:lang><svc:ClientID>11</svc:ClientID>
+     <svc:RoleID>50004</svc:RoleID><svc:OrgID>11</svc:OrgID>
+     <svc:WarehouseID>103</svc:WarehouseID><svc:stage>9</svc:stage>
+    </svc:ADLoginRequest>
+   </svc:ModelCRUDRequest>
+  </svc:createData>
+ </soapenv:Body>
+</soapenv:Envelope>

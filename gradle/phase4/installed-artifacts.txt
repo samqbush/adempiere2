@@ -1,0 +1,10 @@
+# Required Phase 4 files relative to the installed ADempiere home.
+lib/ADInterface-1.0.war
+lib/ADInterface-Modern-1.0.war
+config/phase4-runtime.properties
+tomcat10-api/bin/catalina.sh
+tomcat10-api/bin/setenv.sh
+tomcat10-api/conf/server.xml
+tomcat10-api/webapps/ADInterface.war
+utils/RUN_API.sh
+utils/RUN_API_Stop.sh

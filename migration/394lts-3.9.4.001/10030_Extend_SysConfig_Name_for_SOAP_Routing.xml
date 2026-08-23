@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Migrations>
+  <Migration EntityType="D" Name="Extend SysConfig Name for SOAP Routing" ReleaseNo="3.9.4.001" SeqNo="10030">
+    <Step DBType="Postgres" Parse="N" SeqNo="10" StepType="SQL">
+      <SQLStatement>ALTER TABLE AD_SysConfig ALTER COLUMN Name TYPE VARCHAR(100)
+;</SQLStatement>
+      <RollbackStatement>DELETE FROM AD_SysConfig WHERE Name LIKE 'MODERN_SOAP_ADAPTER_ENABLED.%';
+ALTER TABLE AD_SysConfig ALTER COLUMN Name TYPE VARCHAR(50)
+;</RollbackStatement>
+    </Step>
+    <Step DBType="Oracle" Parse="N" SeqNo="20" StepType="SQL">
+      <SQLStatement>ALTER TABLE AD_SysConfig MODIFY Name NVARCHAR2(100) NOT NULL
+;</SQLStatement>
+      <RollbackStatement>DELETE FROM AD_SysConfig WHERE Name LIKE 'MODERN_SOAP_ADAPTER_ENABLED.%';
+ALTER TABLE AD_SysConfig MODIFY Name NVARCHAR2(50) NOT NULL
+;</RollbackStatement>
+    </Step>
+  </Migration>
+</Migrations>
