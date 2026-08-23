@@ -954,9 +954,9 @@ tasks.register('phase4BusinessTest') {
 	dependsOn ':org.adempiere.webservice:businessTest'
 }
 
-tasks.register('phase4FinalVerification') {
+tasks.register('phase4FinalChecks') {
 	group = 'verification'
-	description = 'Runs all database-neutral final Phase 4 contract and XFire-removal gates'
+	description = 'Runs final Phase 4 checks against an existing Phase 3 product build'
 	dependsOn tasks.named('verifyPhase4FrozenContracts')
 	dependsOn tasks.named('verifyPhase4OperationScenarios')
 	dependsOn tasks.named('verifyPhase4RouteClasses')
@@ -966,6 +966,13 @@ tasks.register('phase4FinalVerification') {
 	dependsOn ':org.adempiere.webservice:businessTest'
 	dependsOn ':org.adempiere.webservice:routerTest'
 	dependsOn ':org.adempiere.webservice:verifyModernSoapWar'
+}
+
+tasks.register('phase4FinalVerification') {
+	group = 'verification'
+	description = 'Runs all database-neutral final Phase 4 contract and XFire-removal gates'
+	dependsOn tasks.named('phase3NoDatabaseDistribution')
+	dependsOn tasks.named('phase4FinalChecks')
 }
 
 tasks.register('phase4ModernSoapRuntime') {
@@ -1123,7 +1130,7 @@ tasks.register('phase4InstalledApi', Exec) {
 	group = 'verification'
 	description = 'Canonical installed XFire-free API gate through both historical public paths'
 	dependsOn tasks.named('preparePhase4OperationScenarios')
-	dependsOn tasks.named('phase4FinalVerification')
+	dependsOn tasks.named('phase4FinalChecks')
 	dependsOn tasks.named('verifyPhase4InstalledApi')
 	dependsOn tasks.named('verifyPhase4ReleaseApi')
 	commandLine(
