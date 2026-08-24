@@ -1,9 +1,9 @@
 flow	step	method	path	request_shape	http_status	content_type	charset	location_header	set_cookie_shape	dtid_present	au_command_sequence	body_digest	disposition
-webui	1	GET	/webui/	none	200	text/html	UTF-8	none	JSESSIONID[httponly,path]	yes		2c0fce8a53ee0b1c96d627788473bd2107c15da1dedece807535b9cd90330972	bootstrap
-webui	2	POST	/webui/zkau	onClientInfo(8 pinned values)	200	text/xml	UTF-8	none	none	yes		94b7f6cc06f99d9dad64400e66fdaef3dd7b3646b78ba7974d36155c0e56b81c	clientinfo
-webui	3	POST	/webui/zkau	onChange(userid)	200	text/xml	UTF-8	none	none	yes		9f3f5343bc2c829e637d5f0ce2a8258b967d62633f95df416be4cacb955db1b1	userid
-webui	4	POST	/webui/zkau	onChange(password)	200	text/xml	UTF-8	none	none	yes		7a42290e7ccc601f1b2f231a04efccffd6eaccff019e0e3d3db2c49096035f77	password
+webui	1	GET	/webui/	none	200	text/html	UTF-8	none	JSESSIONID[httponly,path]	yes	none	748c416e498bb9a9db1a1bd555f57a023b8551762ac4ad2bee3975a638642672	bootstrap
+webui	2	POST	/webui/zkau	onClientInfo(8 pinned values)	200	text/xml	UTF-8	none	none	yes	none	94b7f6cc06f99d9dad64400e66fdaef3dd7b3646b78ba7974d36155c0e56b81c	clientinfo
+webui	3	POST	/webui/zkau	onChange(userid)	200	text/xml	UTF-8	none	none	yes	none	9f3f5343bc2c829e637d5f0ce2a8258b967d62633f95df416be4cacb955db1b1	userid
+webui	4	POST	/webui/zkau	onChange(password)	200	text/xml	UTF-8	none	none	yes	none	7a42290e7ccc601f1b2f231a04efccffd6eaccff019e0e3d3db2c49096035f77	password
 webui	5	POST	/webui/zkau	onClick(login-ok)	200	text/xml	UTF-8	none	none	yes	rm,addChd,focus,script,script	0ec935d3ef33921b4898086994a45e05adb9787f85bf198ca1ca68ff0e65fc28	rolescreen
-webui	6	POST	/webui/zkau	onClick(role-ok)	200	text/xml	UTF-8	none	none	yes	rm,addAft,addAft,script,script	a9c8eb73d3b813f125c0fc0fbbcd9ae93b6e2a52d8ca13468cc163c56d7377f7	desktop
+webui	6	POST	/webui/zkau	onClick(role-ok)	200	text/xml	UTF-8	none	none	yes	rm,addAft,addAft,script,script	e014a36fa999463a3b453444a19fdece105e52fe281aa802cc484661c6a4ebc4	desktop
 webui	7	POST	/webui/zkau	onClick(menu-row:Error_Message)	200	text/xml	UTF-8	none	none	yes	addAft,addAft,addAft,scrollIntoView,script,focus,setAttr,setAttr,setAttr	613e60a57c0e077ef63276efcde576421c0fee12dc9c3356972f2593fb78eaca	window
 webui	8	POST	/webui/zkau	onClick(logout)	200	text/xml	UTF-8	none	none	yes	rm,setAttr,redirect	85d4bd5385258d65981283e3af053579fea9fdb8b064cd9ca36bbbb09a43de25	logout

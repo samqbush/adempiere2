@@ -103,6 +103,41 @@ assert_absorbed 'Ant build stamp changed' "$work/m-buildstamp.txt"
 sed -E 's/Release +3\.9\.4/Release 3.9.5/' "$reference" >"$work/m-version.txt"
 assert_detected 'product version changed' "$work/m-version.txt"
 
+# Host runtime coordinates. The product renders the serving JVM and OS into the
+# login page, so a capture taken on a laptop and one taken on a CI runner would
+# otherwise never agree.
+sed -E 's#(<td aligh="left">)OpenJDK[^<]*#\1Some Other VM 99.9#' \
+  "$reference" >"$work/m-jvm.txt"
+assert_absorbed 'serving JVM name and version changed' "$work/m-jvm.txt"
+
+sed -E 's#(<td aligh="left">)(Mac OS X|Linux|Windows)[^<]*#\1Plan 9 4.0 null#' \
+  "$reference" >"$work/m-os.txt"
+assert_absorbed 'serving OS name and version changed' "$work/m-os.txt"
+
+# The install path, base64-encoded into the user-token call.
+sed -E "s#(findUserToken\('[^']*', ')[^']*#\1L3NvbWUvb3RoZXIvcGF0aA==#" \
+  "$reference" >"$work/m-home.txt"
+assert_absorbed 'ADEMPIERE_HOME install path changed' "$work/m-home.txt"
+
+# ...but the component the call targets is still part of the contract.
+sed -E "s#findUserToken\('zk_comp_7'#findUserToken('zk_comp_9997'#" \
+  "$reference" >"$work/m-home-target.txt"
+assert_detected 'user-token call retargeted to another component' \
+  "$work/m-home-target.txt"
+
+# Stylesheet include order is structural, but the set is not: reversing the
+# block must be absorbed while dropping one of its members must fail.
+awk '/^<link rel="stylesheet" /{block[n++]=$0; next}
+     {for(i=n-1;i>=0;i--) print block[i]; n=0; print}
+     END{for(i=n-1;i>=0;i--) print block[i]}' \
+  "$reference" >"$work/m-css-order.txt"
+assert_absorbed 'stylesheet include order changed' "$work/m-css-order.txt"
+
+awk '/^<link rel="stylesheet" /{seen++; if (seen == 2) next} {print}' \
+  "$reference" >"$work/m-css-dropped.txt"
+assert_detected 'stylesheet dropped from the include set' \
+  "$work/m-css-dropped.txt"
+
 # The desktop id is value-driven, so rewriting every occurrence of the real
 # desktop id must be absorbed.
 desktop_id=$(grep -oE 'z\.dtid="[^"]*"' "$reference" | head -1 \

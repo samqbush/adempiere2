@@ -90,6 +90,10 @@ and this policy must be revised in the same change.
 | Ant build stamp in the rendered release line (`Release 3.9.4 20260824-1143`) | `normalized` | → `<BUILD-STAMP>`. `Adempiere.DATE_VERSION` records when the build ran, so two builds of identical source differ here. Anchored to the release line and the `YYYYMMDD-HHMM` shape: the **product version itself stays stable and is still part of the contract**, so a version change fails. Without this rule the oracle could only replay against the one build that produced it, which would make rollback verification impossible. |
 | Server-push / poll traffic | excluded | The capture disables or drains it; see "Server push" below. |
 | Localized labels and status text | `stable` | Captured under a pinned locale; a changed label is a real regression. |
+| Serving JVM name/version rendered in the login version box | `normalized` | → `<JVM>`. The product prints the VM of whichever host runs Tomcat. It is a host coordinate, recorded in `capture-environment.tsv`, not product behaviour: without this rule the oracle can only replay on the machine that froze it. The surrounding row markup stays `stable`, so a removed or renamed row still fails. |
+| Serving OS name/version rendered in the login version box | `normalized` | → `<OS>`. Same reason as the JVM row. |
+| `ADEMPIERE_HOME` base64 argument of `adempiere.findUserToken(...)` | `normalized` | → `<ADEMPIERE-HOME>`. Records where the product was unpacked. The component uuid argument stays `stable`, so a retargeted call still fails. |
+| Stylesheet include ordering within one contiguous `<link rel="stylesheet">` block | `structural` | Compared as a sorted set. ZK emits one link per language addon in classloader discovery order, which follows the host's filesystem enumeration and therefore differs between macOS and Linux. The **set** of stylesheets stays contractual: a dropped, added, or rewritten stylesheet fails. |
 | Selected role, client, org, warehouse ids | `stable` | The seeded oracle fixture pins these; a change is a real regression. |
 
 ### Database-derived values appearing in responses
@@ -138,8 +142,20 @@ insufficient.
 
 ## Normalization of the capture environment
 
-Normalization assumes a pinned environment. Locale, timezone, and the emulated
-client information sent in the `onClientInfo` event are fixed constants recorded
-in `capture-environment.tsv`. Comparing a capture taken under different
-coordinates is not a supported operation and is refused by
-`verifyPhase5OracleEnvironment`.
+Normalization assumes a pinned *emulated client* and a pinned product build.
+Locale, timezone, and the emulated client information sent in the
+`onClientInfo` event are fixed constants recorded in `capture-environment.tsv`,
+and comparing a capture taken under different **client** coordinates is not a
+supported operation.
+
+The *host* coordinates are a different matter. The oracle exists to survive a
+rollback rehearsal and to run in CI, so it must replay on a machine other than
+the one that froze it. Host coordinates that the product renders into a
+response — the serving JVM, the serving OS, and the install path — are
+therefore `normalized` rather than assumed identical, and their real values stay
+recorded in `capture-environment.tsv`. Anything a capture inherits from the host
+*shell* rather than the product is a defect in the capture driver, not something
+to normalize: the driver joins its own multi-valued fields instead of relying on
+`paste`, whose empty-input behaviour differs between BSD and GNU coreutils and
+once made the same response record a different `au_command_sequence` on macOS
+and on Linux.

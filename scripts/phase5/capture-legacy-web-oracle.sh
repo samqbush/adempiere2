@@ -145,6 +145,19 @@ digest() {
   shasum -a 256 "$1" | awk '{print $1}'
 }
 
+# Join stdin lines with commas, or emit `none` when there are no lines.
+#
+# `paste -sd, -` is not portable for the empty case: BSD paste emits nothing
+# while GNU paste emits a bare newline, so `sed 's/^$/none/'` produced an empty
+# cell on macOS and `none` on Linux for the very same response. That made the
+# frozen oracle disagree with itself across platforms. Joining here keeps the
+# emitted value a property of the response instead of the host's coreutils.
+join_or_none() {
+  local joined
+  joined=$(tr '\n' ',' | sed 's/,*$//')
+  printf '%s' "${joined:-none}"
+}
+
 # record_step <flow> <step> <method> <path> <request-shape> <headers> <body> <disposition>
 record_step() {
   local flow=$1 step=$2 method=$3 path=$4 shape=$5 headers=$6 body=$7 disposition=$8
@@ -163,7 +176,7 @@ record_step() {
     "$status" "$(content_type_only "$ctype")" "$(charset_only "$ctype")" \
     "$(normalize_location "${location:-none}")" "$(set_cookie_shape "$cookie")" \
     "$([[ -n "$ZKAU_DTID" ]] && echo yes || echo no)" \
-    "$(zkau_commands "$body" | paste -sd, - | sed 's/^$/none/')" \
+    "$(zkau_commands "$body" | join_or_none)" \
     "$(digest "$normalized")" \
     "$disposition" >>"$flows_tsv"
 }

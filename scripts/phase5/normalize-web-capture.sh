@@ -139,10 +139,54 @@ RULES = (
     (r'(?im)^(ETag):.*$', r'\1: <ETAG>'),
     (r'(?im)^(Content-Length): *0 *$', r'\1: <EMPTY>'),
     (r'(?im)^(Content-Length): *[0-9]+ *$', r'\1: <NONEMPTY>'),
+    # Host runtime coordinates rendered into the login page's version box. The
+    # product prints the VM name/version and the OS name/version of whichever
+    # machine runs Tomcat, so a developer laptop and a CI runner disagree on a
+    # value that is not product behaviour and is already pinned in
+    # capture-environment.tsv. The surrounding row markup stays stable, so a
+    # version box that loses, renames, or reorders a row still fails.
+    (r'(<td align="right">JVM</td>\s*<td>:</td>\s*<td aligh="left">)[^<]*(</td>)',
+     r'\1<JVM>\2'),
+    (r'(<td align="right">OS</td>\s*<td>:</td>\s*<td aligh="left">)[^<]*(</td>)',
+     r'\1<OS>\2'),
+    # ADEMPIERE_HOME, base64-encoded into the login page's user-token call. It
+    # records where the product was unpacked, not how it behaves. The component
+    # uuid argument stays stable, so a moved or renamed call still fails.
+    (r"(adempiere\.findUserToken\('[^']*', ')[^']*(')",
+     r"\1<ADEMPIERE-HOME>\2"),
+    (r"(adempiere\.removeUserToken\(')[^']*(')",
+     r"\1<ADEMPIERE-HOME>\2"),
 )
 
 for pattern, replacement in RULES:
     body = re.sub(pattern, replacement, body)
+
+# ZK 3.6 emits one <link rel="stylesheet"> per language addon it discovered on
+# the classpath, and it emits them in classloader discovery order. That order is
+# a property of how the host filesystem enumerates WEB-INF/lib, so the same
+# product serves the same stylesheets in a different sequence on macOS and on
+# Linux. The set of stylesheets is behaviour and stays stable; the sequence
+# within one contiguous block is not, so the block is compared as a sorted set.
+# A dropped, added, or rewritten stylesheet still fails.
+STYLESHEET_LINE = re.compile(r'^<link rel="stylesheet" ')
+
+
+def canonicalize_stylesheet_blocks(text):
+    lines = text.split("\n")
+    out, block = [], []
+    for line in lines:
+        if STYLESHEET_LINE.match(line):
+            block.append(line)
+            continue
+        if block:
+            out.extend(sorted(block))
+            block = []
+        out.append(line)
+    out.extend(sorted(block))
+    return "\n".join(out)
+
+
+body = canonicalize_stylesheet_blocks(body)
 
 sys.stdout.write(body if body.endswith("\n") else body + "\n")
 PY

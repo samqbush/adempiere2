@@ -1950,6 +1950,6 @@ Select to expand all folders of the tree. Descelect to collapse all the folders.
 <d>zk.invoke('zkmax.ui.cmsp',function(){zkCmsp.start('<DTID>');},'<DTID>');</d>
 </r>
 <r><c>script</c>
-<d><![CDATA[adempiere.removeUserToken('L1VzZXJzL3NhbXF1YWtlbmJ1c2gvQ29kZS9hZGVtcGllcmUvYnVpbGQvcGhhc2UzL3J1bnRpbWUvQWRlbXBpZXJl');]]></d>
+<d><![CDATA[adempiere.removeUserToken('<ADEMPIERE-HOME>');]]></d>
 </r>
 </rs>

@@ -17,10 +17,10 @@
 
 
 
-<link rel="stylesheet" type="text/css" href="/webui/zkau/web/<ZKVER>/zul/css/normsaf.css.dsp;jsessionid=<SESSION>"/>
 <link rel="stylesheet" type="text/css" href="/webui/zkau/web/<ZKVER>/js/ext/timeplot/api/styles/timeplot-bundle.css;jsessionid=<SESSION>"/>
 <link rel="stylesheet" type="text/css" href="/webui/zkau/web/<ZKVER>/zkex/zul/css/zkexsaf.css.dsp;jsessionid=<SESSION>"/>
 <link rel="stylesheet" type="text/css" href="/webui/zkau/web/<ZKVER>/zkmax/zul/css/zkmaxsaf.css.dsp;jsessionid=<SESSION>"/>
+<link rel="stylesheet" type="text/css" href="/webui/zkau/web/<ZKVER>/zul/css/normsaf.css.dsp;jsessionid=<SESSION>"/>
 
 
 <script type="text/javascript" src="/webui/zkau/web/<ZKVER>/js/zk/zk.js.dsp" charset="UTF-8">
@@ -209,12 +209,12 @@ var zkTimeoutText = "The page or component you request is no longer available. T
 		<tr>
 			<td align="right">JVM</td>
 			<td>:</td>
-			<td aligh="left">OpenJDK 64-Bit Server VM 21.0.2+13-58</td>
+			<td aligh="left"><JVM></td>
 		</tr>
 		<tr>
 			<td align="right">OS</td>
 			<td>:</td>
-			<td aligh="left">Mac OS X 26.6.2 null</td>
+			<td aligh="left"><OS></td>
 		</tr>
 		<tr>
 			<td align="right">Host</td>
@@ -256,7 +256,7 @@ var zkTimeoutText = "The page or component you request is no longer available. T
 <script type="text/javascript">
 zk.addInit(function(){
 zk.process('focus',"zk_comp_6");
-zk.process('script',"adempiere.findUserToken('zk_comp_7', 'L1VzZXJzL3NhbXF1YWtlbmJ1c2gvQ29kZS9hZGVtcGllcmUvYnVpbGQvcGhhc2UzL3J1bnRpbWUvQWRlbXBpZXJl');");
+zk.process('script',"adempiere.findUserToken('zk_comp_7', '<ADEMPIERE-HOME>');");
 zk.process('clientInfo',"<DTID>");
 });
 </script>
