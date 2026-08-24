@@ -3,8 +3,10 @@
 ARCHITECTURE.md	retain-evidence	Keep the historical architecture and migration decision explicit.
 docs/modernization/phase-4-evidence.md	retain-evidence	Retain the approved legacy oracle, rollback, and removal evidence.
 docs/modernization/phase-4-transitional-state.md	retain-evidence	Record the now-closed T4-1 dual-runtime state and controls.
+docs/modernization/phase-5a-evidence.md	retain-evidence	Retain evidence that Phase 5 route ownership handoff preserves the completed XFire removal gate.
 gradle/phase4/contracts.gradle	migrate	Retain frozen-oracle tasks as historical evidence and enforce active XFire absence.
 gradle/phase4/route-classes.tsv	migrate	Preserve the historical public XFireServlet URL as a CXF-only router alias.
+gradle/phase5/route-contracts.tsv	migrate	Preserve the historical public XFireServlet URL as a Phase 4-owned CXF-only router alias during the Phase 5 route handoff.
 gradle/phase2/jdk-internals.tsv	retain-evidence	Retain the classified legacy oracle module flag as historical evidence.
 MODERNIZATION_PLAN.md	retain-evidence	Keep the completed XFire-to-CXF roadmap decisions and status.
 org.adempiere.webservice/build.gradle	retain-evidence	Keep XFire as a forbidden transport-neutral dependency.

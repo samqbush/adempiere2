@@ -63,6 +63,17 @@ archive hashes. The JBoss facet is the only explicit
 Phase 3 quarantine because its checked-in library implements the JDK-removed
 `java.security.acl.Group`; Tomcat 9 is the acceptance bridge.
 
+Phase 5a adds a database-neutral inventory and target-stack gate:
+
+```bash
+./gradlew phase5aFinalVerification --dependency-verification=strict
+```
+
+It byte-compares the reviewed ZK source/runtime, web-asset, namespace, and route
+inventories; verifies the public ZK CE 10.3.0.1-jakarta target; and preserves
+the frozen Phase 4 SOAP assertions while Phase 5 takes ownership of non-SOAP
+routes.
+
 The Tomcat smoke requires HTTP 2xx/3xx from each deployed context except
 `ADInterface`, whose unrouted base path is explicitly expected to return 404;
 SOAP behavior remains a Phase 4 contract gate.
@@ -83,9 +94,10 @@ installed product and the existing `Adempiere_394LTS.zip` and
 `Adempiere_394LTS.tar.gz` artifacts, then replays the complete corpus through
 the historical paths. The archive gate preserves the unconfigured environment
 template, validates checksums and executable launchers, and rejects a configured
-environment file and any retired XFire runtime/publication. Local Phase 4 exit
-gates pass; PR CI and merge to `develop` remain required before Phase 5 starts.
-The non-SOAP ZK and servlet Jakarta migration remains Phase 5.
+environment file and any retired XFire runtime/publication. Phase 4 merged to
+`develop` as `8c0ca4c1d6b35a5f366d6dd2150ed3bb27bc2a89`. Phase 5a now owns
+the ZK/Jakarta inventory, supported-target ADR, and reviewed hand-off of all
+non-SOAP routes; Phase 4 retains the frozen SOAP assertions.
 
 The DB-backed metadata gate fails on new or stale process, validator, workflow,
 entity-package, or generated-model findings. Sixteen pre-existing active process

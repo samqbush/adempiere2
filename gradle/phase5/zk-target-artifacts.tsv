@@ -1,0 +1,5 @@
+# artifact	url	sha512
+zk	https://mavensync.zkoss.org/maven2/org/zkoss/zk/zk/10.3.0.1-jakarta/zk-10.3.0.1-jakarta.jar	f3e00f920e4335113444253bbab6878148173d8223602a5fd67f062a6623cb894d3ab4824dfaacf5e9c7f8b170e5166d70913d967f11acf8d17f2f44246e3b6e
+zul	https://mavensync.zkoss.org/maven2/org/zkoss/zk/zul/10.3.0.1-jakarta/zul-10.3.0.1-jakarta.jar	f36e5afbfa87f11cbe2da8d25f48be9c7994cc01efa7efab80e1f438aa17888ba327738e67f72afd781f7db16e02fb11e5f082d30d3926199fc09ca1ea8b3598
+zkplus	https://mavensync.zkoss.org/maven2/org/zkoss/zk/zkplus/10.3.0.1-jakarta/zkplus-10.3.0.1-jakarta.jar	4763fae94a2c5bf3b18452176c8f00458466e0b471072c1b7e637896d12b7283c7eb7b79cdd9f5cfca0fb2b5c71c3970092ff904437260017fbc888add475dee
+zhtml	https://mavensync.zkoss.org/maven2/org/zkoss/zk/zhtml/10.3.0.1-jakarta/zhtml-10.3.0.1-jakarta.jar	bed2c41cdf330586513df167d66ac6d33a2a235ef1c72b052b61cde29783b2f4bf2f5cfbd1c4f6ba0f3a698cb64b01e10595e9c977f5e271d2a0ef36da7ed72b
