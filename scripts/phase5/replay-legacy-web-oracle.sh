@@ -47,8 +47,30 @@ run_fixture() {
   "$fixture" "$db_host" "$db_port" "$db_name" "$db_user" "$db_password" "$db_marker" "$@"
 }
 
+# The frozen oracle was captured against a database where the oracle user had
+# already logged in once. First login is not idempotent: it creates the user's
+# AD_Preference rows and AD_Tree_Favorite node, and logs both. Running the
+# determinism experiment straight onto a freshly restored seed would therefore
+# compare a first login against a repeat login and blame the difference on the
+# normalizer. Prime the database instead of assuming its state.
+if [[ "$(run_fixture state)" == cold ]]; then
+  echo "== priming a cold database (first login is not idempotent) =="
+  run_fixture snapshot "$work/prime.tsv"
+  "$capture" "$port" "$work/prime" "$oracle_user" >"$work/capture-prime.log" 2>&1 \
+    || { echo "Priming capture failed; see $work/capture-prime.log" >&2; tail -20 "$work/capture-prime.log" >&2; exit 1; }
+  run_fixture reset "$work/prime.tsv"
+  rm -rf "$work/prime"
+fi
+
 echo "== fixture snapshot =="
 run_fixture snapshot "$work/fixture.tsv"
+
+# Reset before capture A as well as between A and B. Capture A is not entitled
+# to inherit whatever UI state the priming capture or a previous run left
+# behind; both captures must start from the same fixture or the experiment is
+# not controlled.
+echo "== fixture reset (establish the capture precondition) =="
+run_fixture reset "$work/fixture.tsv"
 
 echo "== capture A =="
 "$capture" "$port" "$work/A" "$oracle_user" >"$work/capture-a.log" 2>&1 \

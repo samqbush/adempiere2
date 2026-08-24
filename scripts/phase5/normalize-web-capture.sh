@@ -87,7 +87,18 @@ if not desktop_id:
     desktop_id = match.group(1) if match else ""
 
 if desktop_id:
-    body = body.replace(desktop_id, "<DTID>")
+    # A plain string replace is wrong here and fails intermittently. ZK desktop
+    # ids are short, lowercase and alphanumeric (e.g. "gth"), so an unanchored
+    # replace rewrites any word that happens to contain them: a real capture
+    # turned `maxlength="40"` into `maxlen<DTID>="40"`. Whether that corruption
+    # happens depends on the random id, which makes the oracle flaky rather than
+    # merely wrong. The id is therefore replaced only where it appears as a whole
+    # token -- bounded by characters that cannot occur inside a ZK id.
+    body = re.sub(
+        r'(?<![0-9A-Za-z_])' + re.escape(desktop_id) + r'(?![0-9A-Za-z_])',
+        "<DTID>",
+        body,
+    )
 
 # Each rule below corresponds to a `normalized` field in the policy. Rules are
 # narrow on purpose: a broad rule would absorb a real regression.
@@ -114,6 +125,14 @@ RULES = (
     # this rule the shallow oracle is not reproducible.
     (r'[A-Z][a-z]{2} [A-Z][a-z]{2} [0-9]{1,2} [0-9]{2}:[0-9]{2}:[0-9]{2} [A-Z]{2,5} [0-9]{4}', '<TIMESTAMP>'),
     (r'[A-Z][a-z]{2}\+[A-Z][a-z]{2}\+[0-9]{1,2}\+[0-9]{2}%3A[0-9]{2}%3A[0-9]{2}\+[A-Z]{2,5}\+[0-9]{4}', '<TIMESTAMP>'),
+    # Ant stamps the build time into Adempiere.DATE_VERSION, which the login
+    # page renders as "Release 3.9.4 20260824-1143". It is a build coordinate,
+    # not behaviour: two builds of identical source differ here, so without this
+    # rule the oracle can only ever replay against the exact build that produced
+    # it and rollback verification is impossible. The rule is anchored to the
+    # release line and to the YYYYMMDD-HHMM shape so it cannot absorb a changed
+    # product version, which stays part of the contract.
+    (r'(Release +[0-9][^ <]*) +[0-9]{8}-[0-9]{4}', r'\1 <BUILD-STAMP>'),
     # Response headers. Content-Length is reduced to a presence class rather
     # than dropped, so an empty-vs-nonempty body change still fails.
     (r'(?im)^(Date|Expires|Last-Modified):.*$', r'\1: <HTTP-DATE>'),

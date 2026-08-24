@@ -734,7 +734,11 @@ tasks.register('verifyPhase5OracleEnvironment') {
 			capture_script_sha512: 'scripts/phase5/capture-legacy-web-oracle.sh',
 			normalizer_script_sha512: 'scripts/phase5/normalize-web-capture.sh',
 			client_library_sha512: 'scripts/phase5/zk-au-client.sh',
-			static_asset_script_sha512: 'scripts/phase5/generate-static-asset-contract.sh'
+			static_asset_script_sha512: 'scripts/phase5/generate-static-asset-contract.sh',
+			// The fixture script defines the database precondition the oracle was
+			// captured under, so a change to it invalidates the oracle just as
+			// surely as a change to the normalizer.
+			fixture_script_sha512: 'scripts/phase5/reset-oracle-fixture.sh'
 		]
 		scriptDigests.each { key, path ->
 			def script = rootProject.file(path)
@@ -846,6 +850,23 @@ def phase5bDbProperty = { String name, String fallback ->
 	rootProject.findProperty(name)?.toString() ?: fallback
 }
 
+// The oracle must talk to the database the installed product was actually
+// configured against. Hardcoding a port here is how a gate ends up silently
+// testing a different server than the one under test, so the installed
+// environment file wins over any built-in default.
+def phase5bInstalledEnv = { String key, String fallback ->
+	def env = new File(rootProject.buildDir, 'phase3/runtime/Adempiere/AdempiereEnv.properties')
+	if (env.isFile()) {
+		def props = new Properties()
+		env.withInputStream { props.load(it) }
+		def value = props.getProperty(key)
+		if (value?.trim()) {
+			return value.trim()
+		}
+	}
+	fallback
+}
+
 tasks.register('capturePhase5LegacyWebOracle', Exec) {
 	group = 'verification'
 	description =
@@ -870,9 +891,9 @@ tasks.register('phase5bLegacyWebOracleSmoke', Exec) {
 		phase5bDbProperty('phase5bHttpPort', '8888'),
 		phase5bDbProperty('phase5bOracleUser', 'GardenAdmin'),
 		phase5bDbProperty('phase3DbHost', '127.0.0.1'),
-		phase5bDbProperty('phase3DbPort', '5433'),
-		phase5bDbProperty('phase3DbName', 'adempiere_phase3_ci'),
-		phase5bDbProperty('phase3DbUser', 'adempiere_phase3_ci'),
+		phase5bDbProperty('phase3DbPort', phase5bInstalledEnv('ADEMPIERE_DB_PORT', '5432')),
+		phase5bDbProperty('phase3DbName', phase5bInstalledEnv('ADEMPIERE_DB_NAME', 'adempiere_phase3_ci')),
+		phase5bDbProperty('phase3DbUser', phase5bInstalledEnv('ADEMPIERE_DB_USER', 'adempiere_phase3_ci')),
 		phase5bDbProperty('phase3DbPassword', 'adempiere_phase3_ci'),
 		'ADempiere Phase 3 disposable database'
 }

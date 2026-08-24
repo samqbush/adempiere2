@@ -1052,7 +1052,19 @@ legacy web artifacts. Scoping decisions:
 Normalization is **field-parsed, not token-regex**, and is protected in both
 directions: the capture A/B self-diff detects under-normalization, and
 `verifyPhase5NormalizerMutationProof` detects over-normalization against a
-committed raw fixture, so the gate stays database-neutral.
+committed raw fixture, so the gate stays database-neutral. It runs 11 cases.
+
+The rollback rehearsal, not inspection, produced the substantive findings.
+Rebuilding from the pinned commit against a **freshly restored seed** proved
+that first login is not idempotent: it creates `AD_Preference`, `AD_Tree_Favorite`
+and `AD_ChangeLog` rows, and every opened window records an `AD_RecentItem` that
+the desktop menu then renders. The replay therefore primes a cold database and
+resets the fixture before capture A as well as between A and B. The same
+rehearsal exposed two normalizer defects that would have produced a green but
+worthless oracle: the Ant build stamp rendered into the login page (which would
+have pinned the oracle to one build and made rollback verification impossible),
+and an unanchored desktop-id replacement that intermittently corrupted unrelated
+text such as `maxlength`. Both are fixed and pinned by regression cases.
 
 Reproducibility residuals, each pinned per entry rather than waved away:
 `not-reproducible-code-signed` (4 entries; JCE signatures),

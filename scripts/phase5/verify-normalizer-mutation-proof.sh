@@ -93,6 +93,16 @@ assert_absorbed 'session id changed' "$work/m-session.txt"
 sed -E 's#/zkau/web/[0-9]+/#/zkau/web/9999999/#g' "$reference" >"$work/m-zkver.txt"
 assert_absorbed 'ZK version cache-buster changed' "$work/m-zkver.txt"
 
+# The Ant build stamp is absorbed, but the product version beside it must not be.
+# These two cases sit together on purpose: a rule wide enough to swallow the
+# stamp would swallow the version too, and only the paired assertion catches it.
+sed -E 's/(Release +[0-9][^ <]*) +[0-9]{8}-[0-9]{4}/\1 20991231-2359/' \
+  "$reference" >"$work/m-buildstamp.txt"
+assert_absorbed 'Ant build stamp changed' "$work/m-buildstamp.txt"
+
+sed -E 's/Release +3\.9\.4/Release 3.9.5/' "$reference" >"$work/m-version.txt"
+assert_detected 'product version changed' "$work/m-version.txt"
+
 # The desktop id is value-driven, so rewriting every occurrence of the real
 # desktop id must be absorbed.
 desktop_id=$(grep -oE 'z\.dtid="[^"]*"' "$reference" | head -1 \
@@ -102,6 +112,24 @@ if [[ -n "$desktop_id" ]]; then
   assert_absorbed 'desktop id changed' "$work/m-dtid.txt"
 else
   echo "skip [absorbed]  desktop id changed (no desktop id in reference)"
+fi
+
+# ---------------------------------------------------------------------------
+# Anchoring: the value-driven desktop id must not corrupt unrelated text.
+# ---------------------------------------------------------------------------
+# ZK desktop ids are short and lowercase, so an unanchored value replace
+# rewrites any word containing them. This was observed in a real capture, where
+# a desktop id of "gth" turned maxlength="40" into maxlen<DTID>="40". The bug is
+# invisible until the random id happens to collide, which is exactly why it
+# needs a deterministic test rather than trust in the next capture.
+printf 'maxlength="40" z.dtid="gth" /zkau/view/gth/i.png gth\n' >"$work/m-anchor.txt"
+anchored=$("$normalize" --dtid gth "$work/m-anchor.txt")
+if [[ "$anchored" != 'maxlength="40" z.dtid="<DTID>" /zkau/view/<DTID>/i.png <DTID>' ]]; then
+  echo "FAIL [anchored]  desktop id replacement corrupted unrelated text" >&2
+  echo "                 got: $anchored" >&2
+  failures=$((failures + 1))
+else
+  echo "ok   [anchored]  desktop id replaced only as a whole token"
 fi
 
 echo

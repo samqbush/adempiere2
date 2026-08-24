@@ -152,6 +152,11 @@ emit() { printf '%s\t%s\t%s\n' "$1" "$2" "$3"; }
   emit static_asset_script_sha512 \
     "$(shasum -a 512 "$repo_root/scripts/phase5/generate-static-asset-contract.sh" | awk '{print $1}')" \
     'shasum of scripts/phase5/generate-static-asset-contract.sh'
+  # The fixture script defines the database precondition the oracle was captured
+  # under, so it is pinned alongside the capture and normalization scripts.
+  emit fixture_script_sha512 \
+    "$(shasum -a 512 "$repo_root/scripts/phase5/reset-oracle-fixture.sh" | awk '{print $1}')" \
+    'shasum of scripts/phase5/reset-oracle-fixture.sh'
 
   # The pinned client-information vector. Screen and timezone values reach the
   # server and can alter rendering, so they are frozen alongside everything else.

@@ -87,6 +87,7 @@ and this policy must be revised in the same change.
 | AU command target uuid | `stable` | Follows the component-uuid disposition; identity relationships must be preserved. |
 | AU sequence / request counter | `normalized` | → `<SEQ>`. Transport-level bookkeeping. |
 | ZK version token and cache-buster in resource URLs | `normalized` | → `<ZKVER>`. Changes on any ZK build. |
+| Ant build stamp in the rendered release line (`Release 3.9.4 20260824-1143`) | `normalized` | → `<BUILD-STAMP>`. `Adempiere.DATE_VERSION` records when the build ran, so two builds of identical source differ here. Anchored to the release line and the `YYYYMMDD-HHMM` shape: the **product version itself stays stable and is still part of the contract**, so a version change fails. Without this rule the oracle could only replay against the one build that produced it, which would make rollback verification impossible. |
 | Server-push / poll traffic | excluded | The capture disables or drains it; see "Server push" below. |
 | Localized labels and status text | `stable` | Captured under a pinned locale; a changed label is a real regression. |
 | Selected role, client, org, warehouse ids | `stable` | The seeded oracle fixture pins these; a change is a real regression. |

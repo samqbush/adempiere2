@@ -1,0 +1,31 @@
+Phase 5b rollback rehearsal
+pinned_source	the phase-5b-legacy-web-oracle branch tip
+branch	phase-5b-legacy-web-oracle
+note	The rehearsal was first run at 56de13c9c and re-run to completion after the
+    	fixes it forced were applied, so the results below describe the final branch
+    	content rather than the first attempt.
+
+Procedure and result:
+1 deleted build/phase3, build/phase5/oracle and install/build
+2 phase3NoDatabaseDistribution rebuilt the full product from the pinned source	PASS
+3 verifyPhase5LegacyWebArtifactPins compared the rebuilt WARs against the frozen recursive digests	PASS
+4 phase3AntDatabaseBuild restored the seed into marker-owned PostgreSQL	PASS
+5 replay primed the cold database, reset the fixture, captured A and B, self-diffed, and compared to contracts/legacy-web-v1/	PASS
+6 phase5bFinalVerification ran the five database-neutral gates plus phase5aFinalVerification	PASS
+
+Database effect assertions observed on the final run:
+ok   AD_Preference at the pinned digest for user 101 (idempotent write)
+ok   AD_ChangeLog unchanged (repeat capture rewrote identical values)
+ok   AD_Session grew by 1 row(s) (reviewed allowed delta)
+ok   AD_Preference at the pinned digest for user 101 (idempotent write)
+ok   AD_ChangeLog unchanged (repeat capture rewrote identical values)
+ok   AD_Session grew by 1 row(s) (reviewed allowed delta)
+
+Frozen-tree comparison:
+  capture matches the frozen oracle
+
+Findings forced by this rehearsal (all fixed and gated):
+- AD_ChangeLog, AD_Tree_Favorite and AD_RecentItem were undeclared database effects
+- first login is not idempotent, so a cold database must be primed
+- the Ant build stamp leaked into the rendered page
+- the desktop-id replacement was unanchored and intermittently corrupted unrelated text

@@ -88,6 +88,16 @@ clean builds from deleted outputs**. The enforced comparison is the reproducible
 subset *plus* the requirement that the non-reproducible entry set itself is
 unchanged, so a newly unreproducible entry can never appear unnoticed.
 
+### Reviewed after the rollback rehearsal
+
+The rehearsal against a freshly restored seed changed what this review had to
+cover. First login is not idempotent — it creates the user's preference rows,
+their favourites node and the matching change-log entries — and every opened
+window records a recent item that the desktop menu renders. None of that is a
+defect; it is ordinary application behaviour that the *oracle* had been quietly
+depending on. It is now declared in `database-effects.tsv`, established by the
+fixture before each capture, and asserted rather than assumed.
+
 ## Coverage honesty
 
 84 deployed routes, 82 request vectors, 20 owned exclusions. Four vectors are
