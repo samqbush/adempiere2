@@ -11,8 +11,8 @@ component is testable. The plan-wide reproducible-CI Milestone is Phase 1, when
 the existing Ant unit-test baseline is recorded and Gradle must become
 reproducible and execute meaningful tests instead of `NO-SOURCE`.
 
-Phases 1-3 are merged to `develop`; the Phase 4 oracle/seam foundation is also
-merged, and the Phase 4 completion branch has passed its local exit gates. All 33 XFire
+Phases 1-4 are merged to `develop`; Phase 4 completed as
+`8c0ca4c1d6b35a5f366d6dd2150ed3bb27bc2a89`. All 33 XFire
 operation baselines and 11 additional scenarios now pass on the isolated CXF
 4.1.8/Jakarta EE 10 runtime on Tomcat 10.1.59/JDK 21. A Tomcat 9 compatibility
 router preserves both historical endpoint paths and the installed-product gate
@@ -20,8 +20,14 @@ passes, including embedding and verifying the unconfigured modern runtime in
 both existing 394LTS release archives. Rollback was rehearsed for each
 request-scoped service and the atomic 21-operation `ADService` unit before the
 router became CXF-only. Active XFire source, publication, and runtime binaries
-are removed. Phase 4 PR CI and merge to `develop` remain mandatory before ZK
-and non-SOAP servlet migration begins in Phase 5.
+are removed. Phase 5 is an umbrella milestone delivered through sequential
+`phase-5a-*` through `phase-5h-*` PRs. Phase 5a owns the ZK/Jakarta inventory,
+the supported-target ADR, and the Phase 4-to-5 non-SOAP route hand-off.
+
+The accepted target is ZK CE `10.3.0.1-jakarta` from the public ZK repository.
+Do not introduce evaluation artifacts or commercial repository credentials.
+Freeze the installed ZK 3.6/Tomcat 9 web product before migrating source; later
+rollback uses checksum-pinned artifacts, not a dual framework source tree.
 
 ## Commands
 
@@ -37,6 +43,7 @@ by a phase become canonical only after that phase's exit criteria prove them.
 | Phase 4 final contracts | `./gradlew phase4FinalVerification --dependency-verification=strict` | Database-neutral final gate for frozen contracts, route classification, active XFire absence, retained evidence, business/router tests, and modern-WAR linkage |
 | Phase 4 compatibility router smoke | `./gradlew phase4CompatibilityRouterSmoke -Pphase3DbSystemPassword='<password>' -Pphase3DbPort=5433 --dependency-verification=strict` | Starts Tomcat 9 and 10.1 together against marker-owned PostgreSQL 14.6 and proves both historical paths route the complete corpus only to CXF |
 | Phase 4 installed API | `./gradlew phase4InstalledApi -Pphase3DbSystemPassword='<password>' -Pphase3DbPort=5433 --dependency-verification=strict` | Canonical XFire-free installed-product SOAP gate: verifies source/package absence, stages the isolated runtime beside Tomcat 9 and in both unconfigured 394LTS release archives, replays all 33 baselines through both historical paths and all 11 additional scenarios through the primary path, then performs marker-guarded cleanup |
+| Phase 5a inventories and target | `./gradlew phase5aFinalVerification --dependency-verification=strict` | Database-neutral gate for reviewed ZK source/runtime, web-asset, namespace, descriptor deployment, and route inventories; verifies the pinned public ZK CE Jakarta target and preserves Phase 4 SOAP assertions |
 | Full product build, no DB restore | `ant build -Dnodbrestore=true` | Authoritative underlying Ant reactor; prefer the guarded Phase 3 lifecycle for CI |
 | Full product build with DB restore/migrations | `ant build -Dnodbrestore=false` | Database-affecting underlying reactor; run only against an approved disposable environment |
 | Gradle module build | `./gradlew build --dependency-verification=strict` | Reproducible Phase 2 gate on JDK 21 with Java 21 bytecode; omits quarantined Ant-only deployables |

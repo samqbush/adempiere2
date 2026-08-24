@@ -5,6 +5,8 @@ def phase4BuildRoot = rootProject.layout.buildDirectory.dir('phase4')
 def phase4EvidenceDir = phase4BuildRoot.map { it.dir('evidence') }
 def phase4DescriptorList = rootProject.file('gradle/phase4/web-descriptors.txt')
 def phase4RouteClasses = rootProject.file('gradle/phase4/route-classes.tsv')
+def phase5DescriptorList = rootProject.file('gradle/phase5/web-descriptors.txt')
+def phase5RouteContracts = rootProject.file('gradle/phase5/route-contracts.tsv')
 def phase4XFireRemoval = rootProject.file('gradle/phase4/xfire-removal.tsv')
 def phase4OperationBaselineExceptions =
 	rootProject.file('gradle/phase4/operation-baseline-exceptions.tsv')
@@ -27,7 +29,9 @@ def phase4DbSystemPassword =
 def phase4DatabaseMarker = 'ADempiere Phase 3 disposable database'
 
 def readPhase4DescriptorPaths = {
-	phase4DescriptorList.readLines()
+	def activeDescriptorList =
+		phase5DescriptorList.isFile() ? phase5DescriptorList : phase4DescriptorList
+	activeDescriptorList.readLines()
 		.collect { it.trim() }
 		.findAll { it && !it.startsWith('#') }
 }
@@ -143,9 +147,10 @@ tasks.register('generatePhase4EdgeInventory') {
 		phase4EvidenceDir.map { it.file('edge/services.tsv') })
 	doLast {
 		def descriptorPaths = readPhase4DescriptorPaths()
-		if (descriptorPaths.size() != 11 || descriptorPaths.toSet().size() != 11) {
+		if (descriptorPaths.isEmpty() ||
+			descriptorPaths.size() != descriptorPaths.toSet().size()) {
 			throw new GradleException(
-				"Phase 4 requires exactly 11 unique source descriptors, got ${descriptorPaths}")
+				"Web descriptor inventory must be non-empty and unique, got ${descriptorPaths}")
 		}
 		def missing = descriptorPaths.findAll { !rootProject.file(it).isFile() }
 		if (!missing.isEmpty()) {
@@ -248,28 +253,40 @@ tasks.register('generatePhase4EdgeInventory') {
 
 tasks.register('verifyPhase4RouteClasses') {
 	group = 'verification'
-	description = 'Fails when the reviewed Phase 4 route classification differs from source descriptors'
+	description = 'Preserves Phase 4 SOAP assertions while Phase 5 owns reviewed route contracts'
 	dependsOn tasks.named('generatePhase4EdgeInventory')
-	inputs.file phase4RouteClasses
+	inputs.files phase4RouteClasses, phase5RouteContracts
 	doLast {
 		def generated = phase4EvidenceDir.get().file('edge/routes.tsv').asFile
-		if (!phase4RouteClasses.isFile()) {
-			throw new GradleException('Reviewed Phase 4 route classification is missing')
+		if (!phase5RouteContracts.isFile()) {
+			throw new GradleException('Reviewed Phase 5 route contract is missing')
 		}
-		def reviewedRows = phase4RouteClasses.readLines()
-			.findAll { !it.startsWith('# callback/webhook\t') }
-			.join(System.lineSeparator()) + System.lineSeparator()
-		if (reviewedRows.getBytes('UTF-8') != generated.bytes) {
-			throw new GradleException(
-				'Phase 4 route classification drifted; regenerate and review gradle/phase4/route-classes.tsv')
-		}
-		def rows = phase4RouteClasses.readLines()
+		def contractLines = phase5RouteContracts.readLines()
+		def contractRows = contractLines
 			.findAll { it && !it.startsWith('#') }
-		if (rows.size() != 114) {
+			.collect { it.split('\t', -1) }
+		if (contractRows.isEmpty() || contractRows.any { it.length != 15 }) {
 			throw new GradleException(
-				"Expected 114 reviewed Phase 4 route mappings, got ${rows.size()}")
+				'Phase 5 route contract is empty or malformed')
 		}
-		def fields = rows.collect { it.split('\t', -1) }
+		def projected = new StringBuilder()
+		projected.append(
+			'# descriptor\tkind\tname\timplementation\turl_pattern\tconfigured_security\ttraffic_class\tbehavioral_gate\towner')
+			.append(System.lineSeparator())
+		contractRows.each {
+			projected.append(it.take(9).join('\t')).append(System.lineSeparator())
+		}
+		if (projected.toString().getBytes('UTF-8') != generated.bytes) {
+			throw new GradleException(
+				'Web route classification drifted; regenerate and review gradle/phase5/route-contracts.tsv')
+		}
+		def generatedRows = generated.readLines()
+			.findAll { it && !it.startsWith('#') }
+		if (generatedRows.size() != contractRows.size()) {
+			throw new GradleException(
+				"Generated ${generatedRows.size()} routes but reviewed ${contractRows.size()}")
+		}
+		def fields = contractRows.collect { it.take(9) as String[] }
 		def malformed = fields.findAll { it.length != 9 || !it[6] || !it[7] || !it[8] }
 		if (!malformed.isEmpty()) {
 			throw new GradleException("Unowned or malformed Phase 4 route rows: ${malformed}")
@@ -284,10 +301,17 @@ tasks.register('verifyPhase4RouteClasses') {
 		if (!invalidClasses.isEmpty()) {
 			throw new GradleException("Invalid Phase 4 route classes: ${invalidClasses}")
 		}
-		if (!phase4RouteClasses.text.contains(
+		def soapRows = fields.findAll { it[7] == 'phase4-soap' }
+		if (soapRows.size() != 2 || soapRows.any {
+			it[6] != 'service-to-service' || it[8] != 'phase4'
+		}) {
+			throw new GradleException(
+				"Phase 4 SOAP route ownership changed: ${soapRows}")
+		}
+		if (!phase5RouteContracts.text.contains(
 			'# callback/webhook\tnone found; adding one requires an explicit route rule and behavioral gate')) {
 			throw new GradleException(
-				'Phase 4 route classification must explicitly record the absent callback/webhook class')
+				'Route contract must explicitly record the absent callback/webhook class')
 		}
 	}
 }

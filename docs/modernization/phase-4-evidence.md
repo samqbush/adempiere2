@@ -1,7 +1,7 @@
 # Phase 4 evidence
 
-Phase 4 implementation and local exit gates are complete; PR CI and merge to
-`develop` remain required before Phase 5 begins. This record covers the complete
+Phase 4 implementation and exit gates are complete and merged to `develop` as
+`8c0ca4c1d6b35a5f366d6dd2150ed3bb27bc2a89`. This record covers the complete
 legacy operation baseline, fail-closed inventories, transport-neutral
 33-operation business dispatcher, isolated CXF/Jakarta runtime, rollback
 rehearsal, CXF-only compatibility router, and XFire removal. The database-backed
@@ -9,8 +9,9 @@ corpus includes all required valid-credential `ModelADService` scenarios and
 explicit mutation-state deltas.
 
 The foundation merged to `develop` as
-`f91b0ef2ccfc03d94f3688d6e271b0480bcc9cdf`. Completion continues on
-`phase-4-api-edge-modernization-completion`; Phase 5 remains blocked.
+`f91b0ef2ccfc03d94f3688d6e271b0480bcc9cdf`; the completion merge is
+`8c0ca4c1d6b35a5f366d6dd2150ed3bb27bc2a89`. Phase 5a now owns the reviewed
+non-SOAP route contract.
 
 ## Oracle and inventory
 
@@ -347,7 +348,6 @@ Cleanup again proved the database and role absent.
 
 The final targeted Phase 4 gate passed in 7 seconds, the guarded
 `phase3NoDatabaseDistribution` passed in 3 minutes 13 seconds, and the full
-29-project Gradle build passed 167 tasks in 2 minutes 21 seconds. PR CI remains
-the authoritative branch gate, and required-check enforcement remains the
-manual repository-administrator action. Phase 5 must not begin until this branch
-passes PR CI and merges to `develop`.
+29-project Gradle build passed 167 tasks in 2 minutes 21 seconds. PR CI passed
+before the completion branch merged to `develop`. Required-check enforcement
+remains the manual repository-administrator action.

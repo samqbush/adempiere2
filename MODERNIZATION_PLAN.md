@@ -6,11 +6,10 @@
 >
 > **Planning date:** 2026-08-20.
 >
-> **Status:** Phases 1-3 are merged to `develop`. The Phase 4 oracle/seam
-> foundation merged as `f91b0ef2ccfc03d94f3688d6e271b0480bcc9cdf`; Phase 4
-> implementation and local exit gates are complete on
-> `phase-4-api-edge-modernization-completion`. PR CI and merge to `develop`
-> remain required before Phase 5 begins.
+> **Status:** Phases 1-4 are merged to `develop`. Phase 4 completed as
+> `8c0ca4c1d6b35a5f366d6dd2150ed3bb27bc2a89`. Phase 5a is in progress on
+> `phase-5a-web-inventory-and-target`; it owns the ZK/Jakarta inventory,
+> Phase 4-to-5 route-contract hand-off, and target-stack ADR.
 > Required-check enforcement remains a repository-administrator action and
 > residual risk R8.
 
@@ -186,7 +185,7 @@ necessarily block merges.
 | R1 | Core | Phase 2 smoke and Phase 3 DB-backed metadata validation protect selected runtime and dictionary seams; broader business behavior remains | Phase 5 | Expand representative document, accounting, and UI behavior coverage. |
 | R2 | Swing/POS | Closed for the Phase 2 Garden World login/role/menu/process slice; broader operator workflows remain outside this phase | Closed in Phase 2; broader coverage Phase 5 | The semantic Xvfb smoke is now gated; expand coverage during the ZK/client modernization. |
 | R3 | Background jobs | Exact-once scheduler execution and context/transaction cleanup are proven; production discovery breadth and observability remain | Phase 6 | Expand processor discovery and add operational metrics/alerts. |
-| R4 | Web UI | First modern slice may be self-frozen without a trustworthy external oracle | Phase 5 | Human/domain review blesses the first snapshot; later changes diff against it. |
+| R4 | Web UI | The installed Tomcat 9 product is the approved local oracle, but production-specific customizations remain unknown | Phase 5 | Phase 5b freezes checksum-pinned installed artifacts and fixtures; production owners must separately validate custom overlays. |
 | R5 | SOAP/servlets | Unknown consumers and undocumented route classes may break | Phase 4 | Inventory consumers, freeze WSDL/HTTP fixtures, and run parallel replay. |
 | R6 | Database | Production size, custom schema, supported engines, and rollback windows are unknown | Phase 6 | Approve customer-specific migration runbook and rehearse on a sanitized copy. |
 | R7 | Extension metadata | The fail-closed validator names 16 pre-existing active `AD_Process` bindings with absent or incompatible classes | Phase 7 | Obtain usage evidence, then correct or retire every row in `gradle/phase3/metadata-quarantine.tsv`; additions and stale quarantine rows fail CI. |
@@ -221,7 +220,7 @@ snapshot.
 | Tests | JUnit 5/JUnit Platform, Testcontainers or equivalent disposable PostgreSQL, approval/golden tests at external seams | Converts false-green `NO-SOURCE` tasks into executable gates and keeps behavior contracts stack-independent. |
 | Runtime bridge | Tomcat 9 on JDK 21 for the first fully running baseline | Separates the JVM move from the `javax.*` to `jakarta.*` migration. |
 | Final servlet runtime | Tomcat 10.1 and Jakarta Servlet APIs | Removes the long-term Java EE/`javax` container constraint. The exact supported patch is pinned in the phase branch. |
-| Web UI | Upgrade ZK in place through supported intermediate releases to a Jakarta-compatible ZK 10.x line **[UNVERIFIED upstream/licensing]** | Reuses hundreds of existing controllers and ZUL assets. A full SPA rewrite would duplicate the metadata-driven UI and is not justified before usage evidence. |
+| Web UI | Upgrade in place to ZK CE 10.3.0.1-jakarta from the public ZK repository | Reuses hundreds of existing controllers and ZUL assets without commercial repository credentials. CE namespace replacements cover direct layout/download usage; polling and an ADempiere-owned portal adapter replace the old EE-only runtime behavior. |
 | SOAP | Apache CXF 4.1.x/Jakarta EE 10 on an isolated Tomcat 10.1 API runtime in Phase 4, preserving current WSDL and wire behavior through a Tomcat 9 compatibility router | CXF 3.6.x is an EOL `javax` line without the JDK 21 support baseline required by Phase 2. The isolated API boundary avoids moving ZK or other legacy servlet applications before Phase 5. REST/OpenAPI is additive only after SOAP parity. |
 | Database | PostgreSQL 16 reference platform; retain Oracle compatibility where contractually required | PostgreSQL 14.6 is the current CI pin and is near the end of a prudent modernization horizon. PostgreSQL 16 gives a supported target without choosing the newest major. |
 | Logging | SLF4J 2 facade with a single maintained backend; bridge JUL during transition | Allows incremental migration from mixed JUL/Log4j generations without changing every call site at once. |
@@ -283,8 +282,8 @@ snapshot.
   |---|---:|---|
   | `javax.servlet` | 599 | Phase 5 namespace transformation/source migration |
   | `javax.xml` | 166 | Phase 4-5, scoped to APIs actually moved by JAX-WS/Jakarta |
-  | `javax.mail` | 25 | Phase 5 after usage/API compatibility review |
-  | `javax.jms` | 23 | Phase 5 after broker/client ownership review |
+  | `javax.mail` | 25 | Deferred beyond Phase 5 unless an independently gated web-runtime need is proven |
+  | `javax.jms` | 23 | Deferred beyond Phase 5 unless an independently gated web-runtime need is proven |
   | `javax.swing` | 1,719 | **Never Jakarta-codemod; Java SE API** |
   | `javax.print` | 58 | **Never Jakarta-codemod; Java SE API** |
   | `javax.naming` | 42 | **Never blanket-codemod; Java SE naming API** |
@@ -800,8 +799,8 @@ final stack are not yet migrated.
 **Goal:** Replace XFire and establish explicit security/routing contracts without
 breaking active integrations.
 
-**Status:** Implementation complete locally on
-`phase-4-api-edge-modernization-completion`; PR CI and merge remain open. The
+**Status:** Complete and merged to `develop` as
+`8c0ca4c1d6b35a5f366d6dd2150ed3bb27bc2a89`. The
 oracle/seam foundation merged to `develop` as
 `f91b0ef2ccfc03d94f3688d6e271b0480bcc9cdf`. The live XFire pre-flight is green
 for all four services; the 11 descriptors and original 114 mappings are
@@ -845,8 +844,7 @@ the atomic `ADService` unit returned to XFire through both historical paths
 without a restart; after that evidence was recorded, the router became CXF-only
 and active XFire source, descriptors, checked-in JARs, adapter tests, and
 packaged artifacts were removed. The final installed lifecycle, no-database
-distribution, targeted gates, and full Gradle build pass. Only PR CI and merge
-remain before the phase status can be recorded on `develop`.
+distribution, targeted gates, and full Gradle build passed before merge.
 
 **Regime:** The Phase 3 XFire deployment is lit but its operation behavior must
 pass a Phase 4 oracle pre-flight. The new CXF/Jakarta adapter transitions from
@@ -884,8 +882,7 @@ The approved oracle is repository and installed Phase 3 evidence only.
 | 4.7 | Replay every operation, using parallel read diffs and independent disposable restores for mutating operations; cut over request-scoped operations incrementally behind fail-closed `MSysConfig` flags, then move the 21-operation session-scoped `ADService` atomically with per-session runtime affinity | API | 4.5-4.6 |
 | 4.8 | Rehearse per-operation rollback, remove XFire from active packaging only after complete parity, and prove the installed product still serves both historical URL forms | API/distribution | 4.7 |
 
-Tasks 4.1-4.8 are implementation-complete locally. PR CI and merge to
-`develop` remain the phase-level gate.
+Tasks 4.1-4.8 are complete and merged to `develop`.
 
 #### Risks & mitigations
 
@@ -962,7 +959,7 @@ Tasks 4.1-4.8 are implementation-complete locally. PR CI and merge to
 - [x] T4-1 records and closes the internal-only dual endpoint, unchanged
       authorization, compensating controls, and owner; no actual auth weakening
       was approved.
-- [ ] Phase 4 PR CI passes and the branch merges to `develop`; making the checks
+- [x] Phase 4 PR CI passes and the branch merges to `develop`; making the checks
       required remains a manual repository-administrator action.
 
 ### Phase 5: ZK/Jakarta web transition (T-shirt size: XL)
@@ -970,13 +967,16 @@ Tasks 4.1-4.8 are implementation-complete locally. PR CI and merge to
 **Goal:** Move the primary browser UI and servlet runtime to a supported
 Jakarta-compatible stack through vertical slices.
 
+**Status:** Phase 5 is an umbrella milestone delivered through sequential
+`phase-5a-*` through `phase-5h-*` branches. Each increment merges to `develop`
+before the next begins. Phase 5a is in progress.
+
 **Regime:** Legacy ZK/Tomcat 9 remains lit; modern ZK/Tomcat 10.1 slice moves
 from dark to lit, then expands.
 
 **Safety rung:** L3, progressing toward L4.
 
-**Prerequisites:** Phase 4 merged to `develop`; ZK support/licensing decision
-approved.
+**Prerequisites:** Phase 4 merged to `develop`.
 
 **Duration estimate:** 8-16 sprints.
 
@@ -984,16 +984,14 @@ approved.
 
 | ID | Task | Component | Blocked by |
 |---|---|---|---|
-| 5.1 | Inventory all 298 `org.zkoss`-referencing Java files (279 through imports), ZUL assets, custom components, listeners, filters, servlet descriptors, and shared `base`/`serverRoot` web coupling | Web UI | Phase 4 |
-| 5.2 | Select supported intermediate ZK upgrade steps and run vendor/automated migration recipes where available | Web UI | 5.1 |
-| 5.3 | Create a per-module/package `javax` ownership table. Explicitly exclude Java SE `javax.swing`, `javax.print`, `javax.sql`, `javax.imageio`, `javax.crypto`, and `javax.naming` from blanket Jakarta recipes; assign servlet/XML/mail/JMS/EJB/annotation/activation ownership | Web/runtime | 5.1 |
-| 5.4 | During coexistence, use a pinned packaging-time namespace transformer to produce the Jakarta WAR from the `javax` application while retaining the legacy WAR; add bytecode/archive verification | Web/runtime | 5.2-5.3 |
-| 5.5 | Reuse the Phase 4 CXF 4.1.x API runtime and rerun all SOAP contracts while the transformed ZK/Jakarta deployment is introduced | SOAP/runtime | 5.4 |
-| 5.6 | Build login -> role -> menu -> read-only dynamic window walking skeleton on Tomcat 10.1/JDK 21 | Web UI | 5.4-5.5 |
-| 5.7 | Add concurrent session/tenant/language cleanup tests and semantic UI snapshots | Security/UI | 5.6 |
-| 5.8 | Expand by vertical slice: read/write window, process dialog, report, upload/download, then POS/domain custom screens | Web UI | 5.7 |
-| 5.9 | Parallel-run behind `MSysConfig`; route users/roles selectively; diff behavior and performance | Runtime | 5.8 |
-| 5.10 | Retire Tomcat 9 web deployment after parity/rollback; then migrate owned source packages to Jakarta with scoped OpenRewrite recipes and remove the packaging transformer | Runtime/source | 5.9 |
+| 5a | Reconcile Phase 4 status; inventory ZK source/runtime/assets, namespace ownership, descriptor deployment, and inherited routes; accept the ZK target ADR | Contracts/docs | Phase 4 |
+| 5b | Freeze the installed Tomcat 9 route/UI oracle and publish checksum-pinned legacy web artifacts before the source crossing | Oracle | 5a |
+| 5c | Add the reproducible Jakarta packaging beachhead, verified browser tooling, and binding ingress/session-affinity ADR | Build/runtime | 5b |
+| 5d | Migrate the complete ZK compile closure and cross the Testability Milestone at login -> role -> menu -> read-only window | Web UI | 5c |
+| 5e | Prove concurrent client/org/role/user/language/session cleanup and add fail-closed cohort routing | Security/session | 5d |
+| 5f | Migrate non-ZK servlets, JSP/Jakarta Tags/TLD assets, and inherited routes by independently reversible context | Web routes | 5e |
+| 5g | Complete read/write UI, process, report, upload/download, POS, dashboard, server-push, and extension parity | Web UI/extensions | 5f |
+| 5h | Finish source-native Jakarta, preserve both historical SOAP paths on final ingress, then remove the router, Tomcat 9, transformer, and ZK 3.6 | Runtime/source | 5g |
 
 #### Risks & mitigations
 
@@ -1008,13 +1006,23 @@ approved.
 #### Decisions made
 
 - No SPA rewrite in this roadmap.
+- ZK CE `10.3.0.1-jakarta` is the target. Direct `zkex` layout and `zkmax`
+  download APIs move to CE namespaces; Comet server push moves to polling;
+  portal layout receives an ADempiere-owned CE adapter.
 - Login/menu/read-only window is the walking skeleton.
+- The installed Tomcat 9 web product is frozen before current source moves away
+  from ZK 3.6. Later rollback uses checksum-pinned artifacts, not a second
+  framework source tree.
 - Old and new web deployments coexist through role/user flags; no blanket
   cutover.
+- Phase 5c resolves public ingress, ROOT context, cookie scope, runtime affinity,
+  and server-push transport before routing users.
 - Tomcat 9 retirement occurs in this phase, not during the JDK 21 phase.
 - Packaging-time transformation is the chosen coexistence mechanism. It is
   removed after the source-level Jakarta migration; dual namespace source trees
   are not maintained.
+- Phase 5 owns non-SOAP descriptor/route classification after Phase 5a; Phase 4
+  retains exact SOAP route/operation assertions.
 - **Hazard red-team:** H1 fired (full ZK dependency/import/asset set); H2 fired
   (ZK APIs, `javax` -> `jakarta`, descriptors, tests/config); H3 fired (Tomcat
   runtime and all deployment pins); H4 fired for browser/public/infra routes; H5

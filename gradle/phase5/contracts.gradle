@@ -1,0 +1,118 @@
+def phase5ReviewedDir = rootProject.file('gradle/phase5')
+def phase5GeneratedDir = rootProject.layout.buildDirectory.dir('phase5/generated')
+def phase5InventoryNames = [
+	'namespace-ownership.tsv',
+	'route-contracts.tsv',
+	'web-assets.tsv',
+	'zk-runtime-jars.tsv',
+	'zk-sources.tsv'
+]
+
+tasks.register('generatePhase5Inventories', Exec) {
+	group = 'verification'
+	description = 'Generates the Phase 5 ZK, namespace, asset, runtime, and route inventories'
+	inputs.files(
+		rootProject.file('scripts/phase5/generate-inventories.sh'),
+		rootProject.file('gradle/phase4/route-classes.tsv'))
+	inputs.files rootProject.fileTree(rootProject.projectDir) {
+		include '**/*.java'
+		include '**/*.jsp'
+		include '**/*.tag'
+		include '**/*.tld'
+		include '**/*.zul'
+		include '**/*.zhtml'
+		include '**/*.dsp'
+		include '**/web.xml'
+		include 'zkwebui/WEB-INF/lib/*.jar'
+		exclude 'build/**'
+		exclude '**/build/**'
+		exclude '**/WEB-INF/classes/**'
+		exclude '**/dist/**'
+	}
+	outputs.files phase5InventoryNames.collect {
+		phase5GeneratedDir.map { directory -> directory.file(it) }
+	}
+	commandLine 'bash', 'scripts/phase5/generate-inventories.sh',
+		phase5GeneratedDir.get().asFile.absolutePath
+}
+
+tasks.register('verifyPhase5Inventories') {
+	group = 'verification'
+	description = 'Fails when a reviewed Phase 5 inventory differs from the checkout'
+	dependsOn tasks.named('generatePhase5Inventories')
+	inputs.files phase5InventoryNames.collect { new File(phase5ReviewedDir, it) }
+	doLast {
+		phase5InventoryNames.each { name ->
+			def reviewed = new File(phase5ReviewedDir, name)
+			def generated = phase5GeneratedDir.get().file(name).asFile
+			if (!reviewed.isFile()) {
+				throw new GradleException("Missing reviewed Phase 5 inventory: ${reviewed}")
+			}
+			if (reviewed.bytes != generated.bytes) {
+				throw new GradleException(
+					"Phase 5 inventory drifted: ${name}; regenerate and review it")
+			}
+		}
+
+		def sourceRows = new File(phase5ReviewedDir, 'zk-sources.tsv').readLines()
+			.findAll { it && !it.startsWith('#') }
+		if (sourceRows.size() != 298) {
+			throw new GradleException(
+				"Expected 298 reviewed ZK source files, got ${sourceRows.size()}")
+		}
+
+		def routeRows = new File(phase5ReviewedDir, 'route-contracts.tsv').readLines()
+			.findAll { it && !it.startsWith('#') }
+			.collect { it.split('\t', -1) }
+		if (routeRows.isEmpty() || routeRows.any { it.length != 15 }) {
+			throw new GradleException('Phase 5 route contracts are empty or malformed')
+		}
+		def unownedRoutes = routeRows.findAll {
+			!it[8] || !it[9] || !it[12] || !it[13] || !it[14]
+		}
+		if (!unownedRoutes.isEmpty()) {
+			throw new GradleException(
+				"Phase 5 routes lack ownership or disposition: ${unownedRoutes.take(10)}")
+		}
+
+		def namespaceRows =
+			new File(phase5ReviewedDir, 'namespace-ownership.tsv').readLines()
+				.findAll { it && !it.startsWith('#') }
+				.collect { it.split('\t', -1) }
+		if (namespaceRows.isEmpty() || namespaceRows.any { it.length != 6 }) {
+			throw new GradleException(
+				'Phase 5 namespace ownership is empty or malformed')
+		}
+		def invalidJavaSe = namespaceRows.findAll {
+			it[2] == 'java-se' && (it[4] != 'retain' || it[5] != 'never')
+		}
+		if (!invalidJavaSe.isEmpty()) {
+			throw new GradleException(
+				"Java SE javax namespaces must remain retained: ${invalidJavaSe.take(10)}")
+		}
+	}
+}
+
+tasks.register('verifyPhase5ZkTarget', Exec) {
+	group = 'verification'
+	description = 'Verifies the pinned public ZK CE Jakarta target and replacement APIs'
+	inputs.files(
+		rootProject.file('gradle/phase5/zk-target.properties'),
+		rootProject.file('gradle/phase5/zk-target-artifacts.tsv'),
+		rootProject.file('scripts/phase5/verify-zk-target.sh'))
+	outputs.dir rootProject.layout.buildDirectory.dir('phase5/zk-target')
+	commandLine 'bash', 'scripts/phase5/verify-zk-target.sh',
+		rootProject.layout.buildDirectory.dir('phase5/zk-target').get().asFile.absolutePath
+}
+
+tasks.named('phase4FinalVerification') {
+	dependsOn tasks.named('verifyPhase5Inventories')
+}
+
+tasks.register('phase5aFinalVerification') {
+	group = 'verification'
+	description = 'Runs the complete database-neutral Phase 5a inventory, target, and hand-off gate'
+	dependsOn(
+		tasks.named('verifyPhase5ZkTarget'),
+		tasks.named('phase4FinalVerification'))
+}
