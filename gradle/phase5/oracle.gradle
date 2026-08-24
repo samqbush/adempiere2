@@ -1,0 +1,931 @@
+import java.security.MessageDigest
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
+
+// Phase 5b: legacy Tomcat 9 web/UI oracle and checksum-pinned legacy web artifacts.
+//
+// Pure file/hash work lives here in Groovy, matching the precedent set by
+// generatePhase3ArtifactManifest in gradle/phase3/distribution.gradle. Runtime
+// orchestration that must boot Tomcat or drive HTTP lives in scripts/phase5.
+
+def phase5bReviewedDir = rootProject.file('contracts/legacy-web-v1')
+
+// Evidence that does not name the commit it came from cannot be used to
+// rehearse a rollback, so the source commit is resolved rather than assumed.
+def phase5bGitCommit = {
+	def out = new ByteArrayOutputStream()
+	rootProject.exec {
+		commandLine 'git', 'rev-parse', 'HEAD'
+		standardOutput = out
+		workingDir = rootProject.projectDir
+	}
+	out.toString().trim()
+}
+def phase5bBuildRoot = rootProject.layout.buildDirectory.dir('phase5b')
+def phase5bGeneratedDir = phase5bBuildRoot.map { it.dir('generated') }
+def phase3AdempiereHome =
+	rootProject.layout.buildDirectory.dir('phase3/runtime/Adempiere')
+def phase3Webapps = phase3AdempiereHome.map { it.dir('tomcat/webapps') }
+
+// ADInterface.war is deliberately absent: Phase 4 owns the SOAP surface and
+// asserts it separately. See contracts/legacy-web-v1/oracle-exclusions.tsv.
+def phase5bPinnedWars = [
+	'ROOT.war',
+	'adempiere.war',
+	'admin.war',
+	'mobile.war',
+	'webui.war',
+	'wstore.war'
+]
+
+def phase5bNestedArchiveSuffixes = ['.jar', '.war', '.ear', '.zip', '.rar']
+
+def phase5bSha512 = { byte[] content ->
+	MessageDigest.getInstance('SHA-512').digest(content).encodeHex().toString()
+}
+
+def phase5bIsNestedArchive = { String entryName ->
+	def lower = entryName.toLowerCase(Locale.ROOT)
+	phase5bNestedArchiveSuffixes.any { lower.endsWith(it) }
+}
+
+def phase5bReadFully = { InputStream input ->
+	def buffer = new ByteArrayOutputStream()
+	byte[] chunk = new byte[65536]
+	for (int read = input.read(chunk); read != -1; read = input.read(chunk)) {
+		buffer.write(chunk, 0, read)
+	}
+	buffer.toByteArray()
+}
+
+// Canonical logical digest.
+//
+// The archive envelope is deliberately NOT hashed. Ant stamps WAR and JAR
+// central directories with build timestamps, so an envelope checksum is not
+// reproducible and is therefore not a usable rollback pin. Instead this walks
+// entry *content* in sorted path order and recurses into nested archives, so
+// only documented ZIP metadata (timestamps, compression method, extra fields,
+// entry ordering) is ignored. Directory entries carry no content and are
+// skipped; their existence is implied by their children.
+// Documented content normalization, applied before hashing.
+//
+// Ant stamps `Implementation-Version` in every generated MANIFEST.MF with a
+// YYYYMMDD-HHMM build minute (see the `version` property threaded through the
+// module build files). That is archive *content*, not ZIP envelope metadata, so
+// recursive content hashing alone is NOT reproducible: two clean builds agree
+// only when they happen to land in the same minute.
+//
+// Rather than pretend the pin is stable or quietly drop MANIFEST.MF from the
+// digest, the single offending token is replaced by a placeholder and the
+// residual is registered in contracts/legacy-web-v1/oracle-exclusions.tsv. Every
+// other manifest attribute - Class-Path, Created-By, titles, versions - still
+// participates, so a real packaging change is still detected.
+def phase5bIsManifest = { String entryName ->
+	entryName == 'META-INF/MANIFEST.MF' || entryName.endsWith('/META-INF/MANIFEST.MF')
+}
+
+def phase5bNormalizeContent = { String entryName, byte[] content ->
+	if (!phase5bIsManifest(entryName)) {
+		return content
+	}
+	// Manifest lines wrap at 72 bytes with a leading space, so the stamp can be
+	// split across a continuation. Unfold first, then substitute.
+	def text = new String(content, 'UTF-8')
+	def unfolded = text.replaceAll(/\r?\n /, '')
+	def normalized = unfolded.replaceAll(/(?m)^(Implementation-Version:.*?)\d{8}-\d{4}\s*$/) { full, prefix ->
+		"${prefix}<BUILD-STAMP>"
+	}
+	normalized.getBytes('UTF-8')
+}
+
+// Reproducibility classification.
+//
+// Two entry classes cannot be reproduced from source and must not be presented
+// as rollback pins:
+//
+//   code-signed archives    admin.war ships the signed desktop client
+//                           (META-INF/ADEMPIER.RSA/.SF). A JCE signature is
+//                           nondeterministic, so the archive differs on every
+//                           build even with byte-identical inputs.
+//   installation-configured admin.war's .jnlp files embed the *encrypted*
+//                           database connection string produced by the
+//                           installer, so their content depends on the target
+//                           environment rather than on the source tree.
+//
+// Both are recorded per entry and excluded from the enforced entry-set digest.
+// See contracts/legacy-web-v1/oracle-exclusions.tsv.
+// Non-reproducibility is contagious: AdempiereClient.zip is not itself signed
+// but bundles the signed client jars, so an archive must be judged by what it
+// transitively contains, not only by its own META-INF.
+def phase5bArchiveNonReproducibleReason
+phase5bArchiveNonReproducibleReason = { byte[] archiveBytes ->
+	def reason = null
+	new ZipInputStream(new ByteArrayInputStream(archiveBytes)).withCloseable { zip ->
+		for (ZipEntry entry = zip.nextEntry; entry != null && reason == null;
+			entry = zip.nextEntry) {
+			if (entry.isDirectory()) {
+				continue
+			}
+			def upper = entry.name.toUpperCase(Locale.ROOT)
+			if (upper.startsWith('META-INF/') &&
+				(upper.endsWith('.RSA') || upper.endsWith('.DSA') ||
+					upper.endsWith('.EC') || upper.endsWith('.SF'))) {
+				reason = 'not-reproducible-code-signed'
+				continue
+			}
+			if (upper.endsWith('.JNLP')) {
+				reason = 'not-reproducible-installation-configured'
+				continue
+			}
+			if (phase5bIsNestedArchive(entry.name)) {
+				reason = phase5bArchiveNonReproducibleReason(phase5bReadFully(zip))
+			}
+		}
+	}
+	reason
+}
+
+def phase5bReproducibility = { String entryName, byte[] content, boolean nested ->
+	if (entryName.toLowerCase(Locale.ROOT).endsWith('.jnlp')) {
+		return 'not-reproducible-installation-configured'
+	}
+	if (nested) {
+		def reason = phase5bArchiveNonReproducibleReason(content)
+		if (reason) {
+			return reason
+		}
+	}
+	'reproducible'
+}
+
+def phase5bLogicalDigest
+phase5bLogicalDigest = { byte[] archiveBytes ->
+	def lines = []
+	new ZipInputStream(new ByteArrayInputStream(archiveBytes)).withCloseable { zip ->
+		for (ZipEntry entry = zip.nextEntry; entry != null; entry = zip.nextEntry) {
+			if (entry.isDirectory()) {
+				continue
+			}
+			byte[] content = phase5bReadFully(zip)
+			// The normalized bytes define both the digest and the recorded
+			// length. Using the raw length would reintroduce the build stamp
+			// through the size field and defeat the normalization.
+			byte[] canonical = phase5bIsNestedArchive(entry.name) ?
+				content : phase5bNormalizeContent(entry.name, content)
+			def digest = phase5bIsNestedArchive(entry.name) ?
+				phase5bLogicalDigest(content) :
+				phase5bSha512(canonical)
+			lines << "${entry.name}\t${canonical.length}\t${digest}"
+		}
+	}
+	phase5bSha512(lines.sort().join('\n').getBytes('UTF-8'))
+}
+
+// Flattens one top-level archive into reviewable per-entry rows. Nested archives
+// contribute a single row carrying their recursive logical digest, so a changed
+// class inside a nested jar still changes the row.
+def phase5bEntryRows = { File archive ->
+	def rows = []
+	new ZipFile(archive).withCloseable { zip ->
+		zip.entries().each { ZipEntry entry ->
+			if (entry.isDirectory()) {
+				return
+			}
+			byte[] content = zip.getInputStream(entry).withCloseable {
+				phase5bReadFully(it)
+			}
+			def nested = phase5bIsNestedArchive(entry.name)
+			def manifest = phase5bIsManifest(entry.name)
+			byte[] canonical = nested ? content :
+				phase5bNormalizeContent(entry.name, content)
+			rows << [
+				path: entry.name,
+				size: canonical.length,
+				digest: nested ? phase5bLogicalDigest(content) : phase5bSha512(canonical),
+				kind: nested ? 'nested-archive' : (manifest ? 'file-build-stamp-normalized' : 'file'),
+				reproducibility: phase5bReproducibility(entry.name, content, nested)
+			]
+		}
+	}
+	rows.sort { it.path }
+}
+
+// Four-way classification required by the Phase 5b asset contract. Only
+// http-addressable-static entries are fetched and frozen; every other class is
+// recorded so that coverage is provable rather than asserted.
+def phase5bStaticExtensions = [
+	'css', 'js', 'png', 'gif', 'jpg', 'jpeg', 'ico', 'svg', 'bmp', 'cur',
+	'htc', 'woff', 'woff2', 'ttf', 'eot', 'otf', 'txt', 'html', 'htm', 'pdf',
+	'swf', 'json', 'map', 'jnlp', 'xsl', 'csv'
+] as Set
+
+def phase5bTemplateExtensions = [
+	'zul', 'zhtml', 'dsp', 'jsp', 'jspx', 'jspf', 'tag', 'tagx', 'zs', 'xml',
+	'tld', 'properties', 'zhtml'
+] as Set
+
+def phase5bClassifyEntry = { String path ->
+	def normalized = path.replace('\\', '/')
+	def protectedPath =
+		normalized.startsWith('WEB-INF/') || normalized.startsWith('META-INF/')
+	def extension = normalized.contains('.') ?
+		normalized.substring(normalized.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT) :
+		''
+	if (normalized.endsWith('.class') ||
+		normalized.startsWith('WEB-INF/lib/') ||
+		normalized.startsWith('WEB-INF/classes/')) {
+		return 'class-or-library'
+	}
+	if (protectedPath) {
+		return 'protected-not-addressable'
+	}
+	if (phase5bTemplateExtensions.contains(extension)) {
+		return 'server-side-template'
+	}
+	if (phase5bStaticExtensions.contains(extension)) {
+		return 'http-addressable-static'
+	}
+	// Anything left is still outside WEB-INF and therefore still reachable over
+	// HTTP; it simply has an extension this inventory does not recognise. It is
+	// recorded as addressable-with-an-unrecognised-extension rather than
+	// `unclassified`, because calling a reachable file "unclassified" would let
+	// it fall out of the coverage argument entirely. The Phase 5b review of
+	// these entries found shipped build and source artefacts (.java, .bat,
+	// .bak, .pdn) inside the WARs; that finding is registered in
+	// contracts/legacy-web-v1/oracle-exclusions.tsv for Phase 5e rather than
+	// being fixed here, since Phase 5b changes no packaging.
+	return 'http-addressable-unrecognized-extension'
+}
+
+def phase5bContextForWar = { String warName ->
+	warName == 'ROOT.war' ? '' : '/' + warName.substring(0, warName.length() - 4)
+}
+
+def phase5bWriteTsv = { File target, String header, List<String> rows ->
+	target.parentFile.mkdirs()
+	target.withWriter('UTF-8') { writer ->
+		writer.println(header)
+		rows.each { writer.println(it) }
+	}
+}
+
+def phase5bResolveWars = {
+	def webapps = phase3Webapps.get().asFile
+	if (!webapps.isDirectory()) {
+		throw new GradleException(
+			"Phase 5b requires the installed Phase 3 product at ${webapps}. " +
+				'Run phase3AntNoDatabaseBuild or phase3InstalledProduct first.')
+	}
+	phase5bPinnedWars.collect { name ->
+		def war = new File(webapps, name)
+		if (!war.isFile()) {
+			throw new GradleException("Missing installed legacy WAR: ${war}")
+		}
+		war
+	}
+}
+
+tasks.register('generatePhase5LegacyWebArtifactPins') {
+	group = 'verification'
+	description =
+		'Computes canonical recursive content digests for the six legacy web WARs'
+	outputs.file phase5bGeneratedDir.map { it.file('legacy-web-artifacts.tsv') }
+	doLast {
+		def rows = []
+		phase5bResolveWars().each { War ->
+			def war = War
+			def entries = phase5bEntryRows(war)
+			if (entries.isEmpty()) {
+				throw new GradleException("Legacy WAR has no entries: ${war}")
+			}
+			// The enforced digest covers only entries that can actually be
+			// reproduced from source. Including signed or installer-configured
+			// entries would guarantee a false failure on every rebuild and would
+			// train reviewers to ignore the gate.
+			def reproducible = entries.findAll { it.reproducibility == 'reproducible' }
+			def excluded = entries.size() - reproducible.size()
+			def entrySetDigest = phase5bSha512(
+				reproducible.collect { "${it.path}\t${it.size}\t${it.digest}" }
+					.join('\n').getBytes('UTF-8'))
+			def fullSetDigest = phase5bSha512(
+				entries.collect { "${it.path}\t${it.size}\t${it.digest}" }
+					.join('\n').getBytes('UTF-8'))
+			byte[] warBytes = war.bytes
+			def envelopeDigest = phase5bSha512(warBytes)
+			rows << [
+				war.name, '@archive', reproducible.size(), entrySetDigest,
+				'entry-set-digest', 'reproducible'
+			].join('\t')
+			// Recorded so the excluded set is visible and countable rather than
+			// silently absent from the contract.
+			rows << [
+				war.name, '@archive-including-nonreproducible', entries.size(),
+				fullSetDigest, 'entry-set-digest',
+				excluded == 0 ? 'reproducible' : 'not-reproducible-informational'
+			].join('\t')
+			// Recorded for traceability only. Ant stamps the ZIP central
+			// directory, so this value is NOT reproducible and must never be
+			// used as a rollback pin.
+			rows << [
+				war.name, '@envelope', warBytes.length, envelopeDigest,
+				'envelope-digest', 'not-reproducible-informational'
+			].join('\t')
+			entries.each { entry ->
+				rows << [
+					war.name, entry.path, entry.size, entry.digest, entry.kind,
+					entry.reproducibility
+				].join('\t')
+			}
+		}
+		phase5bWriteTsv(
+			phase5bGeneratedDir.get().file('legacy-web-artifacts.tsv').asFile,
+			'# war\tentry_path\tuncompressed_size\tsha512\tkind\treproducibility',
+			rows)
+		logger.lifecycle("Pinned ${rows.size()} legacy web artifact rows")
+	}
+}
+
+tasks.register('generatePhase5InstalledWebAssets') {
+	group = 'verification'
+	description =
+		'Classifies every installed legacy WAR entry into the four Phase 5b asset classes'
+	outputs.file phase5bGeneratedDir.map { it.file('installed-web-assets.tsv') }
+	doLast {
+		def rows = []
+		def counts = [:].withDefault { 0 }
+		phase5bResolveWars().each { war ->
+			def context = phase5bContextForWar(war.name)
+			phase5bEntryRows(war).each { entry ->
+				def classification = phase5bClassifyEntry(entry.path)
+				counts[classification] = counts[classification] + 1
+				def url = classification == 'http-addressable-static' ?
+					"${context}/${entry.path}" : ''
+				rows << [
+					war.name, entry.path, classification, url, entry.size, entry.digest,
+					entry.reproducibility
+				].join('\t')
+			}
+		}
+		phase5bWriteTsv(
+			phase5bGeneratedDir.get().file('installed-web-assets.tsv').asFile,
+			'# war\tentry_path\tclassification\tserved_url\tuncompressed_size\tsha512\treproducibility',
+			rows)
+		logger.lifecycle("Classified ${rows.size()} installed web assets: ${counts}")
+	}
+}
+
+tasks.register('generatePhase5LegacyZkRuntime') {
+	group = 'verification'
+	description =
+		'Pins the packaged ZK runtime and reconciles it against the Phase 5a source inventory'
+	outputs.file phase5bGeneratedDir.map { it.file('legacy-zk-runtime.tsv') }
+	doLast {
+		def sourceInventory = [:]
+		rootProject.file('gradle/phase5/zk-runtime-jars.tsv').readLines()
+			.findAll { it && !it.startsWith('#') }
+			.each { line ->
+				def fields = line.split('\t', -1)
+				sourceInventory[fields[0].substring(fields[0].lastIndexOf('/') + 1)] =
+					[specification: fields[1], sha512: fields[2]]
+			}
+
+		def webui = new File(phase3Webapps.get().asFile, 'webui.war')
+		def packaged = phase5bEntryRows(webui)
+			.findAll { it.path.startsWith('WEB-INF/lib/') && it.path.endsWith('.jar') }
+
+		def rows = []
+		def packagedNames = [] as Set
+		packaged.each { entry ->
+			def name = entry.path.substring(entry.path.lastIndexOf('/') + 1)
+			packagedNames << name
+			def source = sourceInventory[name]
+			rows << [
+				entry.path, name, source?.specification ?: 'unknown', entry.size,
+				entry.digest, 'packaged', 'restore-on-rollback', '5d'
+			].join('\t')
+		}
+
+		// RD-4 reconciliation. zkwebui/build.xml:85-99 excludes *-sources.jar
+		// from the WAR while gradle/phase5/zk-runtime-jars.tsv lists them, so
+		// the source inventory is strictly larger than the packaged set. Those
+		// rows are pinned as source-build inputs, never as runtime artifacts.
+		sourceInventory.keySet().findAll { !packagedNames.contains(it) }.sort().each {
+			def source = sourceInventory[it]
+			rows << [
+				"zkwebui/WEB-INF/lib/${it}", it, source.specification, '',
+				source.sha512, 'source-build-input-not-packaged',
+				'excluded-by-zkwebui-build-xml', '5d'
+			].join('\t')
+		}
+
+		phase5bWriteTsv(
+			phase5bGeneratedDir.get().file('legacy-zk-runtime.tsv').asFile,
+			'# path\tjar\tspecification_version\tuncompressed_size\tsha512\tpackaging\tdisposition\tclosing_gate',
+			rows)
+		logger.lifecycle(
+			"Pinned ${packaged.size()} packaged ZK jars and " +
+				"${rows.size() - packaged.size()} source-only jars")
+	}
+}
+
+tasks.register('generatePhase5SessionStaticConfig') {
+	group = 'verification'
+	description =
+		'Records descriptor-sourced session facts that no HTTP smoke can observe'
+	inputs.file rootProject.file('zkwebui/WEB-INF/web.xml')
+	outputs.file phase5bGeneratedDir.map { it.file('session-static-config.tsv') }
+	doLast {
+		def descriptor = new groovy.xml.XmlSlurper(false, false)
+			.parse(rootProject.file('zkwebui/WEB-INF/web.xml'))
+		def timeout = descriptor.'session-config'.'session-timeout'.text().trim()
+		if (!timeout) {
+			throw new GradleException('zkwebui web.xml declares no session-timeout')
+		}
+		def listeners = descriptor.listener.'listener-class'*.text()*.trim().sort()
+		def filters = descriptor.filter.'filter-class'*.text()*.trim().sort()
+
+		def rows = []
+		rows << [
+			'webui', 'session-timeout-minutes', timeout, 'source-inspected',
+			'zkwebui/WEB-INF/web.xml', 'A smoke cannot wait out a 60 minute idle timeout.'
+		].join('\t')
+		listeners.each {
+			rows << [
+				'webui', 'listener-class', it, 'source-inspected',
+				'zkwebui/WEB-INF/web.xml',
+				'Registration is descriptor-visible; cache cleanup is not HTTP-observable.'
+			].join('\t')
+		}
+		filters.each {
+			rows << [
+				'webui', 'filter-class', it, 'source-inspected',
+				'zkwebui/WEB-INF/web.xml',
+				'Filter participation is proven indirectly through representative routes.'
+			].join('\t')
+		}
+		phase5bWriteTsv(
+			phase5bGeneratedDir.get().file('session-static-config.tsv').asFile,
+			'# context\tfact\tvalue\tprovenance\tsource\tnote',
+			rows)
+		logger.lifecycle("Recorded ${rows.size()} static session-config facts")
+	}
+}
+
+def phase5bFrozenComparisons = [
+	'legacy-web-artifacts.tsv': 'generatePhase5LegacyWebArtifactPins',
+	'installed-web-assets.tsv': 'generatePhase5InstalledWebAssets',
+	'legacy-zk-runtime.tsv': 'generatePhase5LegacyZkRuntime',
+	'session-static-config.tsv': 'generatePhase5SessionStaticConfig'
+]
+
+tasks.register('verifyPhase5LegacyWebArtifactPins') {
+	group = 'verification'
+	description =
+		'Rebuilds the installed WAR digests and fails when they differ from the frozen pins'
+	dependsOn phase5bFrozenComparisons.values().toList().unique()
+	doLast {
+		phase5bFrozenComparisons.each { name, _producer ->
+			def reviewed = new File(phase5bReviewedDir, name)
+			def generated = phase5bGeneratedDir.get().file(name).asFile
+			if (!reviewed.isFile()) {
+				throw new GradleException("Missing frozen Phase 5b contract: ${reviewed}")
+			}
+			if (!(name in ['legacy-web-artifacts.tsv', 'installed-web-assets.tsv'])) {
+				if (reviewed.bytes != generated.bytes) {
+					throw new GradleException(
+						"Phase 5b contract drifted: ${name}; regenerate and review it")
+				}
+				return
+			}
+
+			// legacy-web-artifacts.tsv and installed-web-assets.tsv are the two
+			// contracts that cannot be compared byte-for-byte. Code-signed and installer-configured
+			// entries change on every rebuild by construction, so demanding
+			// whole-file equality would make the gate fail for a reason that has
+			// nothing to do with the product. The enforced comparison is
+			// therefore: every reproducible row must match exactly, and the
+			// non-reproducible entry *set* must be unchanged, so a new
+			// unreproducible entry can never appear unnoticed.
+			def parse = { File file ->
+				file.readLines().findAll { it && !it.startsWith('#') }
+					.collect { it.split('\t', -1) }
+			}
+			def reviewedRows = parse(reviewed)
+			def generatedRows = parse(generated)
+
+			def reproIndex = name == 'legacy-web-artifacts.tsv' ? 5 : 6
+			def keyOf = { row -> "${row[0]}\t${row[1]}" }
+			def reproducibleOf = { rows ->
+				rows.findAll { it[reproIndex] == 'reproducible' }
+					.collectEntries { [(keyOf(it)): it.join('\t')] }
+			}
+			def reviewedRepro = reproducibleOf(reviewedRows)
+			def generatedRepro = reproducibleOf(generatedRows)
+
+			def missing = (reviewedRepro.keySet() - generatedRepro.keySet()).sort()
+			def added = (generatedRepro.keySet() - reviewedRepro.keySet()).sort()
+			def changed = reviewedRepro.keySet().intersect(generatedRepro.keySet())
+				.findAll { reviewedRepro[it] != generatedRepro[it] }.sort()
+			if (missing || added || changed) {
+				throw new GradleException(
+					"Legacy web artifact pins drifted. missing=${missing.take(5)}, " +
+						"added=${added.take(5)}, changed=${changed.take(5)}")
+			}
+
+			def nonReproducibleSet = { rows ->
+				rows.findAll { it[reproIndex] != 'reproducible' }
+					.collect { "${keyOf(it)}\t${it[reproIndex]}" }.toSet()
+			}
+			def reviewedNon = nonReproducibleSet(reviewedRows)
+			def generatedNon = nonReproducibleSet(generatedRows)
+			if (reviewedNon != generatedNon) {
+				throw new GradleException(
+					"Non-reproducible artifact set drifted. " +
+						"appeared=${(generatedNon - reviewedNon).sort()}, " +
+						"disappeared=${(reviewedNon - generatedNon).sort()}")
+			}
+			logger.lifecycle(
+				"${name}: ${reviewedRepro.size()} reproducible rows " +
+					"matched, ${reviewedNon.size()} non-reproducible entries accounted for")
+		}
+
+		def artifactRows = new File(phase5bReviewedDir, 'legacy-web-artifacts.tsv')
+			.readLines().findAll { it && !it.startsWith('#') }
+			.collect { it.split('\t', -1) }
+		def pinnedWars = artifactRows.collect { it[0] }.unique().sort()
+		if (pinnedWars != phase5bPinnedWars.sort()) {
+			throw new GradleException(
+				"Pinned WAR set drifted. Expected ${phase5bPinnedWars.sort()}, got ${pinnedWars}")
+		}
+		if (artifactRows.any { it[5] == 'reproducible' && !it[3] }) {
+			throw new GradleException('A reproducible Phase 5b pin has no digest')
+		}
+		// An envelope digest must never be presented as a rollback pin.
+		def mislabelled = artifactRows.findAll {
+			it[1] == '@envelope' && it[5] != 'not-reproducible-informational'
+		}
+		if (!mislabelled.isEmpty()) {
+			throw new GradleException(
+				"WAR envelope digests must stay informational: ${mislabelled.take(5)}")
+		}
+	}
+}
+
+tasks.register('verifyPhase5OracleCoverage') {
+	group = 'verification'
+	description =
+		'Fails when a deployed non-SOAP route is neither covered with a stated proof strength nor excluded with an owner and closing gate'
+	doLast {
+		def routeFile = rootProject.file('gradle/phase5/route-contracts.tsv')
+		def vectorFile = new File(phase5bReviewedDir, 'context-request-vectors.tsv')
+		def exclusionFile = new File(phase5bReviewedDir, 'oracle-exclusions.tsv')
+		def flowFile = new File(phase5bReviewedDir, 'zk-au-flows.tsv')
+		[routeFile, vectorFile, exclusionFile, flowFile].each {
+			if (!it.isFile()) {
+				throw new GradleException("Phase 5b coverage input missing: ${it}")
+			}
+		}
+
+		// Column positions are resolved from each file's own header rather than
+		// hardcoded, so a schema change fails loudly instead of silently
+		// comparing the wrong fields and reporting false coverage.
+		def load = { File file ->
+			def lines = file.readLines().findAll { it.trim() }
+			def headerLine = lines.find { true }
+			def header = headerLine.replaceFirst('^#\\s*', '').split('\t', -1)*.trim()
+			def rows = lines.drop(1).findAll { !it.startsWith('#') }
+				.collect { it.split('\t', -1) }
+			def index = { String column ->
+				def at = header.findIndexOf { it == column }
+				if (at < 0) {
+					throw new GradleException(
+						"${file.name} has no '${column}' column; header=${header}")
+				}
+				at
+			}
+			[rows: rows, index: index]
+		}
+
+		def routes = load(routeFile)
+		def vectors = load(vectorFile)
+		def exclusions = load(exclusionFile)
+
+		def exOwner = exclusions.index('owner')
+		def exGate = exclusions.index('closing_gate')
+		def exItem = exclusions.index('item')
+		def exCategory = exclusions.index('category')
+		exclusions.rows.each { row ->
+			// An exclusion without an accountable owner and a named closing gate
+			// is an unowned gap wearing a waiver's clothes.
+			if (row.size() <= exGate || !row[exOwner]?.trim() || !row[exGate]?.trim()) {
+				throw new GradleException(
+					"Exclusion '${row[exItem]}' has no owner or closing gate")
+			}
+		}
+		def excludedItems = exclusions.rows.collect { it[exItem] } as Set
+
+		def rContext = routes.index('context')
+		def rName = routes.index('name')
+		def rPattern = routes.index('url_pattern')
+		def rStatus = routes.index('deployment_status')
+		// Some descriptor <servlet-name> values carry surrounding whitespace, so
+		// identities are compared trimmed. Otherwise a route would look uncovered
+		// purely because of formatting in the source descriptor.
+		def routeIdentity = { row ->
+			// toString() is required: a GString never compares equal to a String,
+			// so a Set<String> lookup would silently miss every identity.
+			"${row[rContext].trim()}::${row[rName].trim()}::${row[rPattern].trim()}".toString()
+		}
+
+		def deployed = routes.rows.findAll { it[rStatus] == 'deployed' }
+		def vRoute = vectors.index('route_id')
+		def vStrength = vectors.index('proof_strength')
+		def covered = vectors.rows.collect { it[vRoute] } as Set
+		def webuiCovered = flowFile.readLines().findAll { it && !it.startsWith('#') }.size() > 0
+
+		def uncovered = deployed.findAll { route ->
+			def identity = routeIdentity(route)
+			if (covered.contains(identity) || excludedItems.contains(identity)) {
+				return false
+			}
+			// The deep webui oracle covers /webui as a driven protocol flow
+			// rather than as independent request vectors.
+			return !(route[rContext] == '/webui' && webuiCovered)
+		}
+		if (!uncovered.isEmpty()) {
+			throw new GradleException(
+				"${uncovered.size()} deployed route(s) neither covered nor excluded: " +
+					uncovered.take(5).collect { routeIdentity(it) })
+		}
+
+		// Coverage that does not say how strongly it proves anything is coverage
+		// theatre. Every vector declares its proof strength, and the weaker class
+		// must be collectively owned by an exclusion row.
+		def allowedStrengths = ['exact-servlet-dispatch', 'context-reachability-only'] as Set
+		def weak = []
+		vectors.rows.each { row ->
+			def strength = row[vStrength]
+			if (!allowedStrengths.contains(strength)) {
+				throw new GradleException(
+					"Vector '${row[vRoute]}' has unknown proof_strength '${strength}'")
+			}
+			if (strength == 'context-reachability-only') {
+				weak << row[vRoute]
+			}
+		}
+		if (!weak.isEmpty() && !excludedItems.contains('context-reachability-only-vectors')) {
+			throw new GradleException(
+				"${weak.size()} context-reachability-only vector(s) require an owned " +
+					"'context-reachability-only-vectors' exclusion row: ${weak.take(5)}")
+		}
+
+		// A waiver that no longer describes anything real is worse than no
+		// waiver: it implies review that has silently stopped applying.
+		def allIdentities = routes.rows.collect { routeIdentity(it) } as Set
+		def stale = exclusions.rows.findAll {
+			it[exCategory] == 'route-excluded' && it[exItem].contains('::') &&
+				!allIdentities.contains(it[exItem])
+		}
+		if (!stale.isEmpty()) {
+			throw new GradleException(
+				"Stale route exclusion(s) no longer present in route-contracts.tsv: " +
+					stale.collect { it[exItem] })
+		}
+
+		logger.lifecycle(
+			"Coverage: ${deployed.size()} deployed routes, ${vectors.rows.size()} " +
+				"request vectors, ${exclusions.rows.size()} owned exclusions, " +
+				"${weak.size()} context-reachability-only")
+	}
+}
+
+tasks.register('verifyPhase5OracleEnvironment') {
+	group = 'verification'
+	description =
+		'Fails when the frozen oracle capture environment lacks a required runtime coordinate'
+	doLast {
+		def envFile = new File(phase5bReviewedDir, 'capture-environment.tsv')
+		if (!envFile.isFile()) {
+			throw new GradleException("Missing ${envFile}")
+		}
+		def recorded = [:]
+		envFile.readLines().findAll { it && !it.startsWith('#') }.each { line ->
+			def fields = line.split('\t', -1)
+			recorded[fields[0]] = fields.size() > 1 ? fields[1] : ''
+		}
+		// The oracle is only meaningful against one runtime combination, so the
+		// combination itself is pinned. H3 fires on every runtime change.
+		def required = [
+			'source_commit', 'tomcat_version', 'tomcat_sha512', 'jdk_vendor',
+			'jdk_version', 'postgresql_version', 'migration_release',
+			'seed_sha512', 'os_name', 'locale', 'timezone',
+			'zk_packaged_jar_digest', 'capture_script_sha512',
+			'normalizer_script_sha512', 'client_library_sha512'
+		]
+		def missing = required.findAll { !recorded.containsKey(it) || !recorded[it]?.trim() }
+		if (!missing.isEmpty()) {
+			throw new GradleException(
+				"capture-environment.tsv is missing required coordinate(s): ${missing}")
+		}
+		// The capture scripts are part of the environment: a changed driver can
+		// change the oracle without any product change.
+		def scriptDigests = [
+			capture_script_sha512: 'scripts/phase5/capture-legacy-web-oracle.sh',
+			normalizer_script_sha512: 'scripts/phase5/normalize-web-capture.sh',
+			client_library_sha512: 'scripts/phase5/zk-au-client.sh',
+			static_asset_script_sha512: 'scripts/phase5/generate-static-asset-contract.sh'
+		]
+		scriptDigests.each { key, path ->
+			def script = rootProject.file(path)
+			if (!script.isFile()) {
+				throw new GradleException("Pinned capture script missing: ${path}")
+			}
+			def actual = phase5bSha512(script.bytes)
+			if (actual != recorded[key]) {
+				throw new GradleException(
+					"${path} changed since the oracle was frozen. Re-capture and " +
+						"re-review the oracle, or revert the script.")
+			}
+		}
+		logger.lifecycle("Verified ${recorded.size()} frozen oracle environment coordinates")
+	}
+}
+
+tasks.register('verifyPhase5OracleManifest') {
+	group = 'verification'
+	description =
+		'Fails when the frozen oracle tree has a missing, unexpected, or altered file'
+	doLast {
+		def manifest = new File(phase5bReviewedDir, 'manifest.sha256')
+		if (!manifest.isFile()) {
+			throw new GradleException("Missing ${manifest}")
+		}
+		def expected = [:]
+		manifest.readLines().findAll { it && !it.startsWith('#') }.each { line ->
+			def fields = line.split('\t', -1)
+			expected[fields[1]] = fields[0]
+		}
+		def sha256 = { byte[] content ->
+			MessageDigest.getInstance('SHA-256').digest(content).encodeHex().toString()
+		}
+		def actual = [:]
+		phase5bReviewedDir.eachFileRecurse { file ->
+			if (!file.isFile()) {
+				return
+			}
+			def relative = phase5bReviewedDir.toPath().relativize(file.toPath()).toString()
+			// The manifest cannot contain its own digest; it is excluded by
+			// construction and its integrity comes from review, not self-hashing.
+			if (relative == 'manifest.sha256') {
+				return
+			}
+			actual[relative] = sha256(file.bytes)
+		}
+		def missing = (expected.keySet() - actual.keySet()).sort()
+		def unexpected = (actual.keySet() - expected.keySet()).sort()
+		def altered = expected.keySet().intersect(actual.keySet())
+			.findAll { expected[it] != actual[it] }.sort()
+		def problems = []
+		if (missing) {
+			problems << "missing: ${missing.take(10)}"
+		}
+		// An unexpected file is a real failure: an unreviewed fixture must never
+		// be able to silently join the oracle.
+		if (unexpected) {
+			problems << "unexpected: ${unexpected.take(10)}"
+		}
+		if (altered) {
+			problems << "altered: ${altered.take(10)}"
+		}
+		if (!problems.isEmpty()) {
+			throw new GradleException(
+				"Frozen oracle tree does not match manifest.sha256 (${problems.join('; ')})")
+		}
+		logger.lifecycle("Verified ${expected.size()} frozen oracle files against manifest.sha256")
+	}
+}
+
+tasks.register('generatePhase5OracleManifest') {
+	group = 'verification'
+	description =
+		'Regenerates contracts/legacy-web-v1/manifest.sha256 over every frozen file except itself'
+	doLast {
+		def manifest = new File(phase5bReviewedDir, 'manifest.sha256')
+		def sha256 = { byte[] content ->
+			MessageDigest.getInstance('SHA-256').digest(content).encodeHex().toString()
+		}
+		def rows = []
+		phase5bReviewedDir.eachFileRecurse { file ->
+			if (!file.isFile()) {
+				return
+			}
+			def relative = phase5bReviewedDir.toPath().relativize(file.toPath()).toString()
+			if (relative == 'manifest.sha256') {
+				return
+			}
+			rows << "${sha256(file.bytes)}\t${relative}"
+		}
+		rows.sort()
+		manifest.withWriter('UTF-8') { writer ->
+			writer.println('# Phase 5b frozen legacy web oracle manifest')
+			writer.println('# SHA-256 over every file in contracts/legacy-web-v1/ except this file.')
+			writer.println('# sha256\tpath')
+			rows.each { writer.println(it) }
+		}
+		logger.lifecycle("Wrote manifest.sha256 covering ${rows.size()} frozen files")
+	}
+}
+
+// Runtime orchestration. These tasks boot the guarded Phase 3 installed product
+// and drive HTTP, so they depend on the Phase 3 build rather than merely
+// ordering after it: ordering alone would never create the runtime.
+def phase5bScript = { String name -> rootProject.file("scripts/phase5/${name}").absolutePath }
+
+def phase5bDbProperty = { String name, String fallback ->
+	rootProject.findProperty(name)?.toString() ?: fallback
+}
+
+tasks.register('capturePhase5LegacyWebOracle', Exec) {
+	group = 'verification'
+	description =
+		'Boots the installed Tomcat 9 lane and captures the legacy web oracle into build/phase5b'
+	dependsOn tasks.named('phase3AntDatabaseBuild')
+	commandLine 'bash', phase5bScript('run-legacy-web-oracle-lane.sh'),
+		phase5bDbProperty('phase5bHttpPort', '8888'),
+		'bash', phase5bScript('capture-legacy-web-oracle.sh'),
+		phase5bDbProperty('phase5bHttpPort', '8888'),
+		rootProject.layout.buildDirectory.dir('phase5b/capture').get().asFile.absolutePath,
+		phase5bDbProperty('phase5bOracleUser', 'GardenAdmin')
+}
+
+tasks.register('phase5bLegacyWebOracleSmoke', Exec) {
+	group = 'verification'
+	description =
+		'Captures the legacy web oracle twice with a fixture reset between and replays both against the frozen tree'
+	dependsOn tasks.named('phase3AntDatabaseBuild')
+	commandLine 'bash', phase5bScript('run-legacy-web-oracle-lane.sh'),
+		phase5bDbProperty('phase5bHttpPort', '8888'),
+		'bash', phase5bScript('replay-legacy-web-oracle.sh'),
+		phase5bDbProperty('phase5bHttpPort', '8888'),
+		phase5bDbProperty('phase5bOracleUser', 'GardenAdmin'),
+		phase5bDbProperty('phase3DbHost', '127.0.0.1'),
+		phase5bDbProperty('phase3DbPort', '5433'),
+		phase5bDbProperty('phase3DbName', 'adempiere_phase3_ci'),
+		phase5bDbProperty('phase3DbUser', 'adempiere_phase3_ci'),
+		phase5bDbProperty('phase3DbPassword', 'adempiere_phase3_ci'),
+		'ADempiere Phase 3 disposable database'
+}
+
+// The Phase 3 cleanup finalizer drops the disposable database. It is attached to
+// phase3AntDatabaseBuild, so without explicit ordering it can run before any
+// Phase 5b task that needs the database still standing.
+tasks.matching { it.name == 'cleanupPhase3Database' }.configureEach { cleanup ->
+	cleanup.mustRunAfter(
+		tasks.named('capturePhase5LegacyWebOracle'),
+		tasks.named('phase5bLegacyWebOracleSmoke'))
+}
+
+tasks.register('verifyPhase5NormalizerMutationProof', Exec) {
+	group = 'verification'
+	description =
+		'Proves the normalizer still fails on real differences and absorbs only approved ones'
+	// A committed raw capture keeps this gate database-neutral: proving the
+	// normalizer is not over-normalizing must not require booting Tomcat.
+	commandLine 'bash', phase5bScript('verify-normalizer-mutation-proof.sh'),
+		new File(phase5bReviewedDir, 'mutation-proof-fixture.txt').absolutePath
+}
+
+tasks.register('phase5bFinalVerification') {
+	group = 'verification'
+	description =
+		'Runs the complete database-neutral Phase 5b oracle, pin, and coverage gate'
+	dependsOn(
+		tasks.named('verifyPhase5LegacyWebArtifactPins'),
+		tasks.named('verifyPhase5OracleCoverage'),
+		tasks.named('verifyPhase5NormalizerMutationProof'),
+		tasks.named('verifyPhase5OracleEnvironment'),
+		tasks.named('verifyPhase5OracleManifest'),
+		tasks.named('phase5aFinalVerification'))
+	doLast {
+		// CI uploads this as the phase evidence artifact, so the gate must leave
+		// a durable record of what it actually asserted rather than only a
+		// transient console line.
+		def evidence = new File(rootProject.buildDir, 'phase5/evidence')
+		evidence.mkdirs()
+		def frozen = phase5bReviewedDir.listFiles()
+			.findAll { it.isFile() }
+			.sort { it.name }
+		new File(evidence, 'phase5b-final-verification.txt').withWriter { out ->
+			out.writeLine("phase5bFinalVerification")
+			out.writeLine("source_commit\t" + phase5bGitCommit())
+			out.writeLine("frozen_tree\t" + rootProject.relativePath(phase5bReviewedDir))
+			out.writeLine("gates\tverifyPhase5LegacyWebArtifactPins," +
+				"verifyPhase5OracleCoverage,verifyPhase5NormalizerMutationProof," +
+				"verifyPhase5OracleEnvironment,verifyPhase5OracleManifest," +
+				"phase5aFinalVerification")
+			frozen.each { out.writeLine("frozen_file\t${it.name}\t${it.length()}") }
+		}
+		logger.lifecycle("Phase 5b evidence written to ${evidence}")
+	}
+}

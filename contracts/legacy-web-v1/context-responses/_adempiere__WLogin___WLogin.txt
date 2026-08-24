@@ -1,0 +1,232 @@
+<html xmlns="http://www.w3.org/1999/xhtml">
+	<head>
+		<title>
+			Login
+		</title>
+		<link href="/adempiere/css/standard.css" type="text/css" rel="stylesheet"/>
+		<script type="text/javascript" src="/adempiere/js/standard.js" language="JavaScript1.2"></script>
+		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+		<meta name="description" content="ADempiere HTML UI"/>
+		<script type="text/javascript" src="/adempiere/js/window.js" language="JavaScript1.2"></script>
+		<script type="text/javascript" src="/adempiere/js/calendar.js" language="JavaScript1.2"></script>
+		<script type="text/javascript" src="/adempiere/js/table.js" language="JavaScript1.2"></script>
+		<script type="text/javascript" src="/adempiere/lang/calendar-en.js" language="JavaScript1.2"></script>
+		<link href="/adempiere/css/window.css" type="text/css" rel="stylesheet"/>
+		<link href="/adempiere/css/calendar-blue.css" type="text/css" rel="stylesheet"/>
+		<link href="/adempiere/css/table.css" type="text/css" rel="stylesheet"/>
+	</head>
+	<body title="Login">
+		<a name="top"></a>
+		<table cellspacing="0" width="100%" class="windowTable" border="0" cellpadding="0">
+			<tr>
+				<td class="windowHeader">
+					<h1>
+						Login
+					</h1>
+				</td>
+				<td align="right" class="windowHeader">
+					<h1>
+						Login
+					</h1>
+				</td>
+			</tr>
+			<tr>
+				<td align="center" class="windowCenter" valign="middle" colspan="2" nowrap="nowrap">
+					<img name="logo" src="/adempiere/images/Logo.gif"/>
+					<p></p>
+					<p></p>
+					<form method="post" name="Login1" action="/adempiere/WLogin" enctype="application/x-www-form-urlencoded">
+						<table width="25%" align="center">
+							<tr>
+								<td align="right">
+									<label id="UserL" for="UserF">
+										User
+									</label>
+								</td>
+								<td align="left">
+									<input size="20" id="UserF" value="" name="User" maxlength="30" type="text"/>
+								</td>
+							</tr>
+							<tr>
+								<td align="right">
+									<label id="PasswordL" for="PasswordF">
+										Password
+									</label>
+								</td>
+								<td align="left">
+									<input size="20" id="PasswordF" value="" name="Password" maxlength="30" type="password"/>
+								</td>
+							</tr>
+							<tr>
+								<td align="right">
+									<label id="#AD_LanguageL" for="#AD_LanguageF">
+										Language
+									</label>
+								</td>
+								<td>
+									<select id="#AD_LanguageF" name="#AD_Language">
+										<option value="en_US">
+											English
+										</option>
+										<option value="ar_TN">
+											&#65172;&#65268;&#65169;&#65198;&#65228;&#65247;&#65165; (AR)
+										</option>
+										<option value="bg_BG">
+											&#1041;&#1098;&#1083;&#1075;&#1072;&#1088;&#1089;&#1082;&#1080; (BG)
+										</option>
+										<option value="ca_ES">
+											Català
+										</option>
+										<option value="de_DE">
+											Deutsch
+										</option>
+										<option value="da_DK">
+											Dansk
+										</option>
+										<option value="en_AU">
+											English (AU)
+										</option>
+										<option value="en_GB">
+											English (UK)
+										</option>
+										<option value="en_CA">
+											English (CA)
+										</option>
+										<option value="es_ES">
+											Español
+										</option>
+										<option value="es_SV">
+											Español (SV)
+										</option>
+										<option value="es_MX">
+											Español (MX)
+										</option>
+										<option value="es_CL">
+											Español (CL)
+										</option>
+										<option value="es_CO">
+											Español (CO)
+										</option>
+										<option value="es_VE">
+											Español (VE)
+										</option>
+										<option value="es_PA">
+											Español (PA)
+										</option>
+										<option value="es_ES">
+											Español (EC)
+										</option>
+										<option value="es_DO">
+											Español (DO)
+										</option>
+										<option value="el_GR">
+											&#917;&#955;&#955;&#951;&#957;&#953;&#954;&#940; (GR)
+										</option>
+										<option value="fa_IR">
+											Farsi
+										</option>
+										<option value="fi_FI">
+											Finnish
+										</option>
+										<option value="fr_FR">
+											Français
+										</option>
+										<option value="fr_CA">
+											Français (CA)
+										</option>
+										<option value="hr_HR">
+											Hrvatski
+										</option>
+										<option value="in_ID">
+											Indonesia Bahasa
+										</option>
+										<option value="it_IT">
+											Italiano
+										</option>
+										<option value="ja_JP">
+											&#26085;&#26412;&#35486; (JP)
+										</option>
+										<option value="ms_MY">
+											Malaysian
+										</option>
+										<option value="hu_HU">
+											Magyar (HU)
+										</option>
+										<option value="nl_NL">
+											Nederlands
+										</option>
+										<option value="no_NO">
+											Norsk
+										</option>
+										<option value="pl_PL">
+											Polski
+										</option>
+										<option value="pt_BR">
+											Portuguese (BR)
+										</option>
+										<option value="ro_RO">
+											Român&#259;
+										</option>
+										<option value="ru_RU">
+											&#1056;&#1091;&#1089;&#1089;&#1082;&#1080;&#1081; (Russian)
+										</option>
+										<option value="sl_SI">
+											Slovenski
+										</option>
+										<option value="sr_RS">
+											&#1057;&#1088;&#1087;&#1089;&#1082;&#1080; (RS)
+										</option>
+										<option value="sv_SE">
+											Svenska
+										</option>
+										<option value="th_TH">
+											&#3652;&#3607;&#3618; (TH)
+										</option>
+										<option value="vi_VN">
+											Vi&#7879;t Nam
+										</option>
+										<option value="zh_CN">
+											&#31616;&#20307;&#20013;&#25991; (CN)
+										</option>
+										<option value="zh_TW">
+											&#32321;&#39636;&#20013;&#25991; (TW)
+										</option>
+									</select>
+								</td>
+							</tr>
+							<tr>
+								<td></td>
+								<td align="left">
+									<input id="SaveCookieF" value="Y" name="SaveCookie" type="checkbox"/>
+										Save Info in Cookie
+								</td>
+							</tr>
+							<table width="25%" align="center">
+								<tr align="center">
+									<td width="50%">
+										<input value="  Cancel" class="cancelbtn" name="Reset" type="reset"/>
+									</td>
+									<td width="50%" align="center">
+										<input value="  OK" class="loginbtn" name="Submit" type="submit"/>
+									</td>
+								</tr>
+							</table>
+						</table>
+					</form>
+					<p></p>
+					<p></p>
+				</td>
+			</tr>
+		</table>
+		<script type="text/javascript" language="JavaScript1.2">
+			// <!-- clear frame
+var d = parent.WMenu.document;
+d.open();
+d.write('<link href="/adempiere/css/standard.css" type="text/css" rel="stylesheet">');
+d.write('<link href="/adempiere/css/window.css" type="text/css" rel="stylesheet">');
+d.write('<br><br><br><br><br><br><br>');d.write('<div style="text-align: center;"><img class="CenterImage" style="vertical-align: middle; filter:alpha(opacity=50); -moz-opacity:0.5;" src="Logo.gif" /></div>');
+d.close();
+// -- clear frame -->
+		</script>
+	</body>
+</html>

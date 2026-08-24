@@ -1,0 +1,18 @@
+# Phase 5b reviewed database-effect contract for the legacy web oracle.
+#
+# The oracle flow is not read-only: login creates or retrieves an MSession
+# (zkwebui/WEB-INF/src/org/adempiere/webui/AdempiereWebUI.java:194-205) and role
+# completion writes user preferences
+# (zkwebui/WEB-INF/src/org/adempiere/webui/panel/RolePanel.java:500-507), which
+# are then read back as defaults when the role/client/org/warehouse controls are
+# rebuilt (RolePanel.java:304-419). Capture A could therefore change what capture
+# B observes, so the allowed delta set is reviewed and asserted rather than
+# assumed.
+#
+# `allowed_delta` is enforced by scripts/phase5/reset-oracle-fixture.sh verify.
+# Any effect outside this table fails the gate; it is not silently absorbed.
+#
+# table	effect	allowed_delta	rationale	verified_by
+AD_Session	insert	exactly:1	Each capture logs in once, so exactly one session row is created. A different count means the flow changed shape (an extra or missing login) and the oracle would be rebased against a different session identity.	session_count
+AD_Preference	update-in-place	digest-unchanged	The oracle user's role, client, org and warehouse preferences already exist in the seed and are rewritten with identical values, so the write is idempotent. A digest change means the capture selected different defaults, which silently rebases the oracle and must fail.	preference_digest
+AD_Window/AD_Tab/AD_Field	none	exactly:0	The deep flow opens the "Error Message" window read-only and performs no record save, so no dictionary or transactional row is written. Measured across paired captures.	not-observed

@@ -1,0 +1,175 @@
+<html xmlns="http://www.w3.org/1999/xhtml">
+	<head>
+		<title>
+			Login
+		</title>
+		<link href="iui/iui.css" type="text/css" rel="stylesheet"/>
+		<script type="text/javascript" src="/mobile/iui/iui.js" language="JavaScript1.2"></script>
+		<script type="text/javascript" src="js/window.js" language="JavaScript1.2"></script>
+		<script type="text/javascript" src="js/calendar.js" language="JavaScript1.2"></script>
+		<script type="text/javascript" src="lang/calendar-en.js" language="JavaScript1.2"></script>
+		<link href="css/calendar-blue.css" type="text/css" rel="stylesheet"/>
+		<link href="images/AdempiereButton.png" type="image/png" rel="apple-touch-icon-precomposed"/>
+		<link href="images/AdempiereButton.png" type="image/png" rel="shortcut icon"/>
+		<meta name="viewport" content="width=device-width; initial-scale=1.0; minimum-scale=1.0; maximum-scale=1.0; user-scalable=0;"/>
+		<script type="text/javascript" src="/mobile/js/login.js" language="JavaScript1.2"></script>
+	</head>
+	<body title="Login">
+		<form title="Login" action="/mobile/WLogin" class="panel" autocomplete="off" id="Login" name="Login1" method="post" enctype="application/x-www-form-urlencoded" selected="true">
+			<fieldset>
+				<div class="row">
+					<label id="UserL" for="UserF">
+						User
+					</label>
+					<input size="20" id="UserF" value="" name="User" maxlength="30" type="text"/>
+				</div>
+				<div class="row">
+					<label id="PasswordL" for="PasswordF">
+						Password
+					</label>
+					<input size="20" id="PasswordF" value="" name="Password" maxlength="30" type="password"/>
+				</div>
+				<div class="row">
+					<label id="#AD_LanguageL" for="#AD_LanguageF">
+						Language
+					</label>
+					<select id="#AD_LanguageF" name="#AD_Language">
+						<option selected="selected" value="en_US">
+							English
+						</option>
+						<option value="ar_TN">
+							&#65172;&#65268;&#65169;&#65198;&#65228;&#65247;&#65165; (AR)
+						</option>
+						<option value="bg_BG">
+							&#1041;&#1098;&#1083;&#1075;&#1072;&#1088;&#1089;&#1082;&#1080; (BG)
+						</option>
+						<option value="ca_ES">
+							Català
+						</option>
+						<option value="de_DE">
+							Deutsch
+						</option>
+						<option value="da_DK">
+							Dansk
+						</option>
+						<option value="en_AU">
+							English (AU)
+						</option>
+						<option value="en_GB">
+							English (UK)
+						</option>
+						<option value="en_CA">
+							English (CA)
+						</option>
+						<option value="es_ES">
+							Español
+						</option>
+						<option value="es_SV">
+							Español (SV)
+						</option>
+						<option value="es_MX">
+							Español (MX)
+						</option>
+						<option value="es_CL">
+							Español (CL)
+						</option>
+						<option value="es_CO">
+							Español (CO)
+						</option>
+						<option value="es_VE">
+							Español (VE)
+						</option>
+						<option value="es_PA">
+							Español (PA)
+						</option>
+						<option value="es_ES">
+							Español (EC)
+						</option>
+						<option value="es_DO">
+							Español (DO)
+						</option>
+						<option value="el_GR">
+							&#917;&#955;&#955;&#951;&#957;&#953;&#954;&#940; (GR)
+						</option>
+						<option value="fa_IR">
+							Farsi
+						</option>
+						<option value="fi_FI">
+							Finnish
+						</option>
+						<option value="fr_FR">
+							Français
+						</option>
+						<option value="fr_CA">
+							Français (CA)
+						</option>
+						<option value="hr_HR">
+							Hrvatski
+						</option>
+						<option value="in_ID">
+							Indonesia Bahasa
+						</option>
+						<option value="it_IT">
+							Italiano
+						</option>
+						<option value="ja_JP">
+							&#26085;&#26412;&#35486; (JP)
+						</option>
+						<option value="ms_MY">
+							Malaysian
+						</option>
+						<option value="hu_HU">
+							Magyar (HU)
+						</option>
+						<option value="nl_NL">
+							Nederlands
+						</option>
+						<option value="no_NO">
+							Norsk
+						</option>
+						<option value="pl_PL">
+							Polski
+						</option>
+						<option value="pt_BR">
+							Portuguese (BR)
+						</option>
+						<option value="ro_RO">
+							Român&#259;
+						</option>
+						<option value="ru_RU">
+							&#1056;&#1091;&#1089;&#1089;&#1082;&#1080;&#1081; (Russian)
+						</option>
+						<option value="sl_SI">
+							Slovenski
+						</option>
+						<option value="sr_RS">
+							&#1057;&#1088;&#1087;&#1089;&#1082;&#1080; (RS)
+						</option>
+						<option value="sv_SE">
+							Svenska
+						</option>
+						<option value="th_TH">
+							&#3652;&#3607;&#3618; (TH)
+						</option>
+						<option value="vi_VN">
+							Vi&#7879;t Nam
+						</option>
+						<option value="zh_CN">
+							&#31616;&#20307;&#20013;&#25991; (CN)
+						</option>
+						<option value="zh_TW">
+							&#32321;&#39636;&#20013;&#25991; (TW)
+						</option>
+					</select>
+				</div>
+			</fieldset>
+			<a href="#" type="submit" class="whiteButton">
+				Login
+			</a>
+		</form>
+		<div class="toolbar">
+			<h1 id="pageTitle"></h1>
+			<a id="backButton" class="button"></a>
+		</div>
+	</body>
+</html>

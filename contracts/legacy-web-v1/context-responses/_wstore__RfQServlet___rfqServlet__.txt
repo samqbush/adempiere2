@@ -1,0 +1,1125 @@
+
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+
+
+<html>
+
+
+<head>
+    
+<link href=".css" rel="stylesheet" type="text/css"/>
+<!--[if IE 6]>
+<link href="-ie6.css" rel="stylesheet" type="text/css"/>
+<![endif]-->
+<!--[if gte IE 7]>
+<link href="-ie7.css" rel="stylesheet" type="text/css"/>
+<![endif]-->
+<link href="-print.css" rel="stylesheet" type="text/css" media="print"/>
+
+<script src="/adempiere/standard.js" language="JavaScript" type="text/JavaScript"></script>
+<script src="/adempiere/wstore.js" language="JavaScript" type="text/JavaScript"></script>
+
+<meta http-equiv="pragma" content="no-cache"/>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="description" content="ADempiere Web Store"/>
+
+    <title> - Login</title>
+    <script type="text/javascript">
+        function doNewUserClicked()
+        {
+            document.getElementById("LoginOrNewBtns").style.display = "none";
+            document.getElementById("NewUserFields").style.display = "block";
+            //document.Login.Mode.value='LoginNew';
+            document.Login.Mode.value='Submit';
+            document.getElementById("LoginOrNewLegend").innerHTML = "Create New User";
+        }
+        function doCancelClicked()
+        {
+            document.getElementById("LoginOrNewBtns").style.display = "block";
+            document.getElementById("NewUserFields").style.display = "none";
+            document.Login.Mode.value='Login';
+            document.getElementById("LoginOrNewLegend").innerHTML = "Login Existing User";
+        }
+        function validateForm()
+        {
+            if(document.Login.Mode.value == 'Login')
+            {
+                return checkForm(document.Login, new Array ('EMail','Password'));
+            }
+
+            if(document.Login.Mode.value == 'SendEMail')
+            {
+                return true;
+            }
+
+            if(document.Login.Password.value != document.Login.PasswordNew.value)
+            {
+                alert("Password and Confirm Password do not match.");
+                return false;
+            }
+
+            return checkForm(document.Login, new Array ('EMail','Password','PasswordNew','Name','Address', 'City', 'Postal', 'C_Country_ID'));
+        }
+    </script>
+</head>
+
+<body><div id="page">
+    
+<div id="header">
+	<div id="headerIcon">
+	  <a href="http://127.0.0.1:8888/wstore">
+	  <img src="AdempiereERP.gif" alt="ADempiere - 1999-2007" /></a>
+	</div>
+	<div id="headerMenu">
+	  <a class="menuMain" href="help.jsp">
+	  <img src="help.gif" alt="Help" width="16" height="16" border="0"/>Help</a>
+      <br/><span id="status"></span>
+    </div>
+	<div id="headerContent">
+	    
+	<input value="Login" name="Login" onclick="window.top.location.replace('./loginServlet');" type="button"/>
+	 
+	   
+      
+	</div>
+</div>
+
+    <div id="main">
+        <div id="menu">
+	<a class="menuMain" href="index.jsp">Web Store</a><br />
+	
+	
+	<hr width="90%" align="left" />
+	<a class="menuMain" href="request.jsp?ForwardTo=http://127.0.0.1:8888/wstore">Contact us</a>
+	Parameter3
+</div>
+
+        <div id="vendorUse">
+	<br />
+</div>
+
+        <div id="content">
+            <h1>User Information</h1>
+
+            <form action="loginServlet" method="post" enctype="application/x-www-form-urlencoded"
+                  name="Login" target="_top" onSubmit="return validateForm()">
+
+                <fieldset>
+                    <legend id="LoginOrNewLegend">Login Existing User</legend>
+
+            <input name="AD_Client_ID" type="hidden" value='0'/>
+            <input name="Source" type="hidden" value=""/>
+            <input name="Info" type="hidden" value=""/>
+            <input name="Mode" type="hidden" value=""/>
+            <script language="Javascript">
+                document.Login.Source.value = document.referrer;
+                document.Login.Info.value = document.lastModified;
+                document.Login.Mode.value='Login';
+            </script>
+
+            <label id="LBL_EMail" for="EMail" title="Must be a valid EMail Address!!">EMail</label>
+            <input class="mandatory" size="40" id="ID_EMail" value='' name="EMail" maxlength="60" type="text"/>
+
+            <label id="LBL_Password" for="Password">Password</label>
+            <input class="mandatory" size="20" type="password" id="ID_Password" value="" name="Password" maxlength="40"/>
+            
+            <br/>
+
+            <div class="buttons" id="LoginOrNewBtns">
+                <input type="submit" name="Login" id="Login" value="Login existing">
+                <input type="button" name="LoginNew" id="LoginNew" value="New user" onClick="doNewUserClicked();">
+                
+            </div>
+            <br/>
+
+            <div style="display:none" id="NewUserFields">
+            
+
+                <label id="LBL_PasswordNew" for="PasswordNew">Confirm Password</label>
+                <input class="mandatory" size="20" id="ID_PasswordNew" value="" name="PasswordNew" maxlength="40" type="password"/>
+                <br/>
+
+                <label id="LBL_Name" for="Name">Name</label>
+                <input class="mandatory" size="40" id="ID_Name" value="" name="Name" maxlength="60" type="text"/>
+                <br/>
+
+                <label id="LBL_Company" for="Company">Company</label>
+                <input size="40" id="ID_Company" value="" name="Company" maxlength="60" type="text"/>
+                <br/>
+
+                <label id="LBL_Title" for="Title">Title</label>
+                <input size="40" id="ID_Title" value='' name="Title" maxlength="60" type="text"/>
+                <br/>
+
+                <label id="LBL_Address" for="Address">Address</label>
+                <input class="mandatory" size="40" id="ID_Address" value="" name="Address" maxlength="60" type="text"/>
+                <br/>
+
+                <label id="LBL_Address2" for="Address2">Address2</label>
+                <input size="40" id="ID_Address2" value='' name="Address2" maxlength="60" type="text"/>
+                <br/>
+
+                  
+	<label id="LBL_City" for="City">
+		City
+	</label>
+	<input class="mandatory" id="ID_City" name="City" maxlength="60" value="" size="40" type="text"/>
+	<br/>
+	<label id="LBL_Postal" for="Postal">
+		ZIP
+	</label>
+	<input class="mandatory" id="ID_Postal" name="Postal" maxlength="10" value="" size="10" type="text"/>
+	<br/>
+	<label id="LBL_C_Region_ID" for="C_Region_ID">
+		State
+	</label>
+	<select id="ID_C_Region_ID" name="C_Region_ID">
+		<option value="0">
+			 
+		</option>
+		<option value="118">
+			AK
+		</option>
+		<option value="114">
+			AL
+		</option>
+		<option value="144">
+			AR
+		</option>
+		<option value="145">
+			AZ
+		</option>
+		<option value="103">
+			CA
+		</option>
+		<option value="149">
+			CO
+		</option>
+		<option value="102">
+			CT
+		</option>
+		<option value="286">
+			DC
+		</option>
+		<option value="115">
+			DE
+		</option>
+		<option value="113">
+			FL
+		</option>
+		<option value="120">
+			GA
+		</option>
+		<option value="150">
+			HI
+		</option>
+		<option value="124">
+			IA
+		</option>
+		<option value="147">
+			ID
+		</option>
+		<option value="127">
+			IL
+		</option>
+		<option value="125">
+			IN
+		</option>
+		<option value="138">
+			KS
+		</option>
+		<option value="130">
+			KY
+		</option>
+		<option value="131">
+			LA
+		</option>
+		<option value="104">
+			MA
+		</option>
+		<option value="154">
+			MD
+		</option>
+		<option value="105">
+			ME
+		</option>
+		<option value="152">
+			MI
+		</option>
+		<option value="123">
+			MN
+		</option>
+		<option value="137">
+			MO
+		</option>
+		<option value="135">
+			MS
+		</option>
+		<option value="136">
+			MT
+		</option>
+		<option value="129">
+			NC
+		</option>
+		<option value="121">
+			ND
+		</option>
+		<option value="139">
+			NE
+		</option>
+		<option value="106">
+			NH
+		</option>
+		<option value="109">
+			NJ
+		</option>
+		<option value="141">
+			NM
+		</option>
+		<option value="148">
+			NV
+		</option>
+		<option value="108">
+			NY
+		</option>
+		<option value="126">
+			OH
+		</option>
+		<option value="133">
+			OK
+		</option>
+		<option selected="selected" value="142">
+			OR
+		</option>
+		<option value="110">
+			PA
+		</option>
+		<option value="107">
+			RI
+		</option>
+		<option value="128">
+			SC
+		</option>
+		<option value="122">
+			SD
+		</option>
+		<option value="119">
+			TN
+		</option>
+		<option value="132">
+			TX
+		</option>
+		<option value="146">
+			UT
+		</option>
+		<option value="111">
+			VA
+		</option>
+		<option value="155">
+			VT
+		</option>
+		<option value="116">
+			WA
+		</option>
+		<option value="153">
+			WI
+		</option>
+		<option value="112">
+			WV
+		</option>
+		<option value="140">
+			WY
+		</option>
+	</select>
+	<span>
+		 - 
+	</span>
+	<input size="40" id="ID_RegionName" value="" name="RegionName" maxlength="60" type="text"/>
+	<br/>
+	<label id="LBL_C_Country_ID" for="C_Country_ID">
+		Country
+	</label>
+	<select onchange="changeCountry('ID_C_Country_ID');" id="ID_C_Country_ID" class="mandatory" name="C_Country_ID">
+		<option value="110">
+			Afghanistan
+		</option>
+		<option value="111">
+			Albania
+		</option>
+		<option value="112">
+			Algeria
+		</option>
+		<option value="113">
+			American Samoa
+		</option>
+		<option value="114">
+			Andorra
+		</option>
+		<option value="115">
+			Angola
+		</option>
+		<option value="116">
+			Anguilla
+		</option>
+		<option value="117">
+			Antarctica
+		</option>
+		<option value="118">
+			Antigua And Barbuda
+		</option>
+		<option value="119">
+			Argentina
+		</option>
+		<option value="120">
+			Armenia
+		</option>
+		<option value="121">
+			Aruba
+		</option>
+		<option value="122">
+			Australia
+		</option>
+		<option value="108">
+			Austria
+		</option>
+		<option value="124">
+			Azerbaijan
+		</option>
+		<option value="125">
+			Bahamas
+		</option>
+		<option value="126">
+			Bahrain
+		</option>
+		<option value="127">
+			Bangladesh
+		</option>
+		<option value="128">
+			Barbados
+		</option>
+		<option value="129">
+			Belarus
+		</option>
+		<option value="103">
+			Belgium
+		</option>
+		<option value="131">
+			Belize
+		</option>
+		<option value="132">
+			Benin
+		</option>
+		<option value="133">
+			Bermuda
+		</option>
+		<option value="134">
+			Bhutan
+		</option>
+		<option value="135">
+			Bolivia
+		</option>
+		<option value="136">
+			Bosnia And Herzegovina
+		</option>
+		<option value="137">
+			Botswana
+		</option>
+		<option value="138">
+			Bouvet Island
+		</option>
+		<option value="139">
+			Brazil
+		</option>
+		<option value="140">
+			British Indian Ocean Territory
+		</option>
+		<option value="141">
+			Brunei Darussalam
+		</option>
+		<option value="142">
+			Bulgaria
+		</option>
+		<option value="143">
+			Burkina Faso
+		</option>
+		<option value="144">
+			Burundi
+		</option>
+		<option value="145">
+			Cambodia
+		</option>
+		<option value="146">
+			Cameroon
+		</option>
+		<option value="109">
+			Canada
+		</option>
+		<option value="148">
+			Cape Verde
+		</option>
+		<option value="149">
+			Cayman Islands
+		</option>
+		<option value="150">
+			Central African Republic
+		</option>
+		<option value="151">
+			Chad
+		</option>
+		<option value="152">
+			Chile
+		</option>
+		<option value="153">
+			China
+		</option>
+		<option value="154">
+			Christmas Island
+		</option>
+		<option value="155">
+			Cocos (keeling) Islands
+		</option>
+		<option value="156">
+			Colombia
+		</option>
+		<option value="157">
+			Comoros
+		</option>
+		<option value="158">
+			Congo
+		</option>
+		<option value="159">
+			Congo The Democratic Republic Of The
+		</option>
+		<option value="160">
+			Cook Islands
+		</option>
+		<option value="161">
+			Costa Rica
+		</option>
+		<option value="162">
+			Cote D&#039;ivoire
+		</option>
+		<option value="163">
+			Croatia
+		</option>
+		<option value="164">
+			Cuba
+		</option>
+		<option value="165">
+			Cyprus
+		</option>
+		<option value="166">
+			Czech Republic
+		</option>
+		<option value="167">
+			Denmark
+		</option>
+		<option value="168">
+			Djibouti
+		</option>
+		<option value="169">
+			Dominica
+		</option>
+		<option value="170">
+			Dominican Republic
+		</option>
+		<option value="171">
+			Ecuador
+		</option>
+		<option value="172">
+			Egypt
+		</option>
+		<option value="173">
+			El Salvador
+		</option>
+		<option value="174">
+			Equatorial Guinea
+		</option>
+		<option value="175">
+			Eritrea
+		</option>
+		<option value="176">
+			Estonia
+		</option>
+		<option value="177">
+			Ethiopia
+		</option>
+		<option value="178">
+			Falkland Islands (malvinas)
+		</option>
+		<option value="179">
+			Faroe Islands
+		</option>
+		<option value="180">
+			Fiji
+		</option>
+		<option value="181">
+			Finland
+		</option>
+		<option value="102">
+			France
+		</option>
+		<option value="183">
+			French Guiana
+		</option>
+		<option value="184">
+			French Polynesia
+		</option>
+		<option value="185">
+			French Southern Territories
+		</option>
+		<option value="186">
+			Gabon
+		</option>
+		<option value="187">
+			Gambia
+		</option>
+		<option value="188">
+			Georgia
+		</option>
+		<option value="101">
+			Germany - Deutschland
+		</option>
+		<option value="190">
+			Ghana
+		</option>
+		<option value="191">
+			Gibraltar
+		</option>
+		<option value="192">
+			Greece
+		</option>
+		<option value="193">
+			Greenland
+		</option>
+		<option value="194">
+			Grenada
+		</option>
+		<option value="195">
+			Guadeloupe
+		</option>
+		<option value="196">
+			Guam
+		</option>
+		<option value="197">
+			Guatemala
+		</option>
+		<option value="50002">
+			Guernsey
+		</option>
+		<option value="198">
+			Guinea
+		</option>
+		<option value="199">
+			Guinea-bissau
+		</option>
+		<option value="200">
+			Guyana
+		</option>
+		<option value="201">
+			Haiti
+		</option>
+		<option value="202">
+			Heard Island And Mcdonald Islands
+		</option>
+		<option value="203">
+			Holy See (vatican City State)
+		</option>
+		<option value="204">
+			Honduras
+		</option>
+		<option value="205">
+			Hong Kong
+		</option>
+		<option value="206">
+			Hungary
+		</option>
+		<option value="207">
+			Iceland
+		</option>
+		<option value="208">
+			India
+		</option>
+		<option value="209">
+			Indonesia
+		</option>
+		<option value="210">
+			Iran Islamic Republic Of
+		</option>
+		<option value="211">
+			Iraq
+		</option>
+		<option value="212">
+			Ireland
+		</option>
+		<option value="50003">
+			Isle of Man
+		</option>
+		<option value="213">
+			Israel
+		</option>
+		<option value="214">
+			Italy
+		</option>
+		<option value="215">
+			Jamaica
+		</option>
+		<option value="216">
+			Japan
+		</option>
+		<option value="50004">
+			Jersey
+		</option>
+		<option value="217">
+			Jordan
+		</option>
+		<option value="218">
+			Kazakhstan
+		</option>
+		<option value="219">
+			Kenya
+		</option>
+		<option value="220">
+			Kiribati
+		</option>
+		<option value="221">
+			Korea Democratic People&#039;s Republic Of
+		</option>
+		<option value="222">
+			Korea Republic Of
+		</option>
+		<option value="223">
+			Kuwait
+		</option>
+		<option value="224">
+			Kyrgyzstan
+		</option>
+		<option value="225">
+			Lao People&#039;s Democratic Republic
+		</option>
+		<option value="226">
+			Latvia
+		</option>
+		<option value="227">
+			Lebanon
+		</option>
+		<option value="228">
+			Lesotho
+		</option>
+		<option value="229">
+			Liberia
+		</option>
+		<option value="230">
+			Libyan Arab Jamahiriya
+		</option>
+		<option value="231">
+			Liechtenstein
+		</option>
+		<option value="232">
+			Lithuania
+		</option>
+		<option value="233">
+			Luxembourg
+		</option>
+		<option value="234">
+			Macao
+		</option>
+		<option value="235">
+			Macedonia Former Yugoslav Republic Of
+		</option>
+		<option value="236">
+			Madagascar
+		</option>
+		<option value="237">
+			Malawi
+		</option>
+		<option value="238">
+			Malaysia
+		</option>
+		<option value="239">
+			Maldives
+		</option>
+		<option value="240">
+			Mali
+		</option>
+		<option value="241">
+			Malta
+		</option>
+		<option value="242">
+			Marshall Islands
+		</option>
+		<option value="243">
+			Martinique
+		</option>
+		<option value="244">
+			Mauritania
+		</option>
+		<option value="245">
+			Mauritius
+		</option>
+		<option value="246">
+			Mayotte
+		</option>
+		<option value="247">
+			Mexico
+		</option>
+		<option value="248">
+			Micronesia Federated States Of
+		</option>
+		<option value="249">
+			Moldova Republic Of
+		</option>
+		<option value="250">
+			Monaco
+		</option>
+		<option value="251">
+			Mongolia
+		</option>
+		<option value="350">
+			Montenegro
+		</option>
+		<option value="252">
+			Montserrat
+		</option>
+		<option value="253">
+			Morocco
+		</option>
+		<option value="254">
+			Mozambique
+		</option>
+		<option value="255">
+			Myanmar
+		</option>
+		<option value="256">
+			Namibia
+		</option>
+		<option value="257">
+			Nauru
+		</option>
+		<option value="105">
+			Nederland
+		</option>
+		<option value="258">
+			Nepal
+		</option>
+		<option value="260">
+			Netherlands Antilles
+		</option>
+		<option value="261">
+			New Caledonia
+		</option>
+		<option value="262">
+			New Zealand
+		</option>
+		<option value="263">
+			Nicaragua
+		</option>
+		<option value="264">
+			Niger
+		</option>
+		<option value="265">
+			Nigeria
+		</option>
+		<option value="266">
+			Niue
+		</option>
+		<option value="267">
+			Norfolk Island
+		</option>
+		<option value="268">
+			Northern Mariana Islands
+		</option>
+		<option value="269">
+			Norway
+		</option>
+		<option value="270">
+			Oman
+		</option>
+		<option value="271">
+			Pakistan
+		</option>
+		<option value="272">
+			Palau
+		</option>
+		<option value="273">
+			Palestinian Territory Occupied
+		</option>
+		<option value="274">
+			Panama
+		</option>
+		<option value="275">
+			Papua New Guinea
+		</option>
+		<option value="276">
+			Paraguay
+		</option>
+		<option value="277">
+			Peru
+		</option>
+		<option value="278">
+			Philippines
+		</option>
+		<option value="279">
+			Pitcairn
+		</option>
+		<option value="280">
+			Poland
+		</option>
+		<option value="281">
+			Portugal
+		</option>
+		<option value="282">
+			Puerto Rico
+		</option>
+		<option value="283">
+			Qatar
+		</option>
+		<option value="284">
+			Reunion
+		</option>
+		<option value="285">
+			Romania
+		</option>
+		<option value="286">
+			Russian Federation
+		</option>
+		<option value="287">
+			Rwanda
+		</option>
+		<option value="50001">
+			Saint Barthélemy
+		</option>
+		<option value="288">
+			Saint Helena
+		</option>
+		<option value="289">
+			Saint Kitts And Nevis
+		</option>
+		<option value="290">
+			Saint Lucia
+		</option>
+		<option value="50005">
+			Saint Martin
+		</option>
+		<option value="291">
+			Saint Pierre And Miquelon
+		</option>
+		<option value="292">
+			Saint Vincent And The Grenadines
+		</option>
+		<option value="293">
+			Samoa
+		</option>
+		<option value="294">
+			San Marino
+		</option>
+		<option value="295">
+			Sao Tome And Principe
+		</option>
+		<option value="296">
+			Saudi Arabia
+		</option>
+		<option value="297">
+			Senegal
+		</option>
+		<option value="349">
+			Serbia
+		</option>
+		<option value="298">
+			Seychelles
+		</option>
+		<option value="299">
+			Sierra Leone
+		</option>
+		<option value="300">
+			Singapore
+		</option>
+		<option value="301">
+			Slovakia
+		</option>
+		<option value="302">
+			Slovenia
+		</option>
+		<option value="303">
+			Solomon Islands
+		</option>
+		<option value="304">
+			Somalia
+		</option>
+		<option value="305">
+			South Africa
+		</option>
+		<option value="306">
+			South Georgia And The South Sandwich Islands
+		</option>
+		<option value="106">
+			Spain
+		</option>
+		<option value="308">
+			Sri Lanka
+		</option>
+		<option value="309">
+			Sudan
+		</option>
+		<option value="310">
+			Suriname
+		</option>
+		<option value="311">
+			Svalbard And Jan Mayen
+		</option>
+		<option value="312">
+			Swaziland
+		</option>
+		<option value="313">
+			Sweden
+		</option>
+		<option value="107">
+			Switzerland
+		</option>
+		<option value="315">
+			Syrian Arab Republic
+		</option>
+		<option value="316">
+			Taiwan
+		</option>
+		<option value="317">
+			Tajikistan
+		</option>
+		<option value="318">
+			Tanzania United Republic Of
+		</option>
+		<option value="319">
+			Thailand
+		</option>
+		<option value="320">
+			Timor-leste
+		</option>
+		<option value="321">
+			Togo
+		</option>
+		<option value="322">
+			Tokelau
+		</option>
+		<option value="323">
+			Tonga
+		</option>
+		<option value="324">
+			Trinidad And Tobago
+		</option>
+		<option value="325">
+			Tunisia
+		</option>
+		<option value="326">
+			Turkey
+		</option>
+		<option value="327">
+			Turkmenistan
+		</option>
+		<option value="328">
+			Turks And Caicos Islands
+		</option>
+		<option value="329">
+			Tuvalu
+		</option>
+		<option value="330">
+			Uganda
+		</option>
+		<option value="331">
+			Ukraine
+		</option>
+		<option value="332">
+			United Arab Emirates
+		</option>
+		<option value="333">
+			United Kingdom
+		</option>
+		<option selected="selected" value="100">
+			United States
+		</option>
+		<option value="335">
+			United States Minor Outlying Islands
+		</option>
+		<option value="336">
+			Uruguay
+		</option>
+		<option value="337">
+			Uzbekistan
+		</option>
+		<option value="338">
+			Vanuatu
+		</option>
+		<option value="339">
+			Venezuela
+		</option>
+		<option value="340">
+			Viet Nam
+		</option>
+		<option value="341">
+			Virgin Islands British
+		</option>
+		<option value="342">
+			Virgin Islands U.s.
+		</option>
+		<option value="343">
+			Wallis And Futuna
+		</option>
+		<option value="344">
+			Western Sahara
+		</option>
+		<option value="345">
+			Yemen
+		</option>
+		<option value="347">
+			Zambia
+		</option>
+		<option value="348">
+			Zimbabwe
+		</option>
+		<option value="50000">
+			Åland Islands
+		</option>
+	</select>
+	<br/>
+
+                <label id="LBL_Phone" for="Phone">Phone</label>
+                <input size="20" id="ID_Phone" value='' name="Phone" maxlength="20" type="text"/>
+                <br/>
+
+                <label id="LBL_Fax" for="Fax">Fax</label>
+                <input size="20" id="ID_Fax" value='' name="Fax" maxlength="20" type="text"/>
+                <br/>
+
+
+                <div class="buttons">
+                    <input type="submit" name="Submit" id="Submit" value="Create New User">
+                    <input type="reset" name="Reset" value="Reset">
+                    <input name="AddressConfirm" type="hidden" id="AddressConfirm" value="N">
+                    <input type="button" name="Cancel" value="Cancel User Creation" onClick="doCancelClicked()"/>
+                </div>
+
+            
+            </div>
+
+            
+            <div id="processingDiv" style="display:none"><strong>Processing ...</strong></div>
+            <br/>
+
+            <div align="center">Enter all <b class="mandatory">mandatory</b> data. </div>
+
+                </fieldset>
+            </form>
+            <p>&nbsp;</p>
+        </div>
+    </div>
+    
+<div id="footer">
+	<div id="footerParam4">Parameter4&nbsp;</div>
+	<div id="footerParam5">Parameter5&nbsp;</div>
+	<div id="footerParam6">Parameter6&nbsp;</div>
+</div>
+
+</div></body>
+</html>

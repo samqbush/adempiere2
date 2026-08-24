@@ -1,0 +1,1 @@
+<H1>This servlet only handles service requests!</H1>

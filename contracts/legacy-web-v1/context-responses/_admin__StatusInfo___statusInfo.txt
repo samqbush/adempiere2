@@ -1,0 +1,12 @@
+<html>
+<head><title>Status Info</title></head>
+<body>
+<p><b>javax.naming.NameNotFoundException: Name [adempiere/Status] is not bound in this Context. Unable to find [adempiere].</b></p>
+<p><b>javax.naming.NameNotFoundException: Name [adempiere/Server] is not bound in this Context. Unable to find [adempiere].</b></p>
+<h2>-- /</h2>
+<h2>-- java</h2>
+<br>   comp: org.apache.naming.NamingContext
+<br>   module: org.apache.naming.NamingContext
+<h2>-- ejb</h2>
+<p><b>javax.naming.NameNotFoundException: Name [ejb] is not bound in this Context. Unable to find [ejb].</b></p>
+</body></html>

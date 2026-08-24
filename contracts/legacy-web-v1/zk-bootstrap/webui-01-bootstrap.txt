@@ -1,0 +1,266 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<title>ADempiere</title>
+
+
+
+
+
+
+<meta http-equiv="X-UA-Compatible" content="IE=8"/>
+
+
+
+
+<link rel="stylesheet" type="text/css" href="/webui/zkau/web/<ZKVER>/zul/css/normsaf.css.dsp;jsessionid=<SESSION>"/>
+<link rel="stylesheet" type="text/css" href="/webui/zkau/web/<ZKVER>/js/ext/timeplot/api/styles/timeplot-bundle.css;jsessionid=<SESSION>"/>
+<link rel="stylesheet" type="text/css" href="/webui/zkau/web/<ZKVER>/zkex/zul/css/zkexsaf.css.dsp;jsessionid=<SESSION>"/>
+<link rel="stylesheet" type="text/css" href="/webui/zkau/web/<ZKVER>/zkmax/zul/css/zkmaxsaf.css.dsp;jsessionid=<SESSION>"/>
+
+
+<script type="text/javascript" src="/webui/zkau/web/<ZKVER>/js/zk/zk.js.dsp" charset="UTF-8">
+</script>
+<script type="text/javascript" src="/webui/zkau/web/<ZKVER>/js/zk/lang.js.dsp" charset="UTF-8">
+</script>
+<script type="text/javascript" src="/webui/js/calc.js" charset="UTF-8">
+</script>
+<script type="text/javascript" src="/webui/js/layout.js" charset="UTF-8">
+</script>
+<script type="text/javascript" src="/webui/js/report.js" charset="UTF-8">
+</script>
+<script type="text/javascript" src="/webui/js/persist-min.js" charset="UTF-8">
+</script>
+<script type="text/javascript" src="/webui/js/token.js" charset="UTF-8">
+</script>
+<script type="text/javascript" src="/webui/js/text_action.js" charset="UTF-8">
+</script>
+<script type="text/javascript">
+zk_ver='3.6.3';
+zk.build='09110309';
+zk_procto=900;
+zk_tipto=800;
+zk_resndto=9000;
+zk_clkflto=0;
+zk_tmout=3780;
+zk.eru={};zk.erusp={};
+
+zk.mods["timeplotz.timeplot"]="1.0_3";
+zk.mods["fckez.fckez"]="2.6.1_2";
+zk.mods["timelinez.timeline"]="1.2_1";
+zk.mods["gmapsz.gmaps"]="2.0_12";
+</script>
+
+
+
+<link rel="icon" type="image/png" href="/webui/theme/default/images/icon.png;jsessionid=<SESSION>"/>
+<link rel="stylesheet" type="text/css" href="/webui/theme/default/css/theme.css.dsp;jsessionid=<SESSION>"/>
+<link rel="stylesheet" type="text/css" href="/webui/theme/default/css/themesaf.css.dsp;jsessionid=<SESSION>"/>
+<link rel="stylesheet" type="text/css" href="css/PAPanel.css;jsessionid=<SESSION>"/>
+<link rel="stylesheet" type="text/css" href="theme/default/css/color.css.dsp;jsessionid=<SESSION>"/>
+<link rel="stylesheet" type="text/css" href="theme/default/css/img.css.dsp;jsessionid=<SESSION>"/>
+<script type="text/javascript" defer="defer" src="js/jquery-3.2.1.min.js;jsessionid=<SESSION>">
+</script>
+
+
+</head>
+<body>
+
+<div class="zk" id="<PAGEUUID>" z.dtid="<DTID>" style="height:100%" z.zidsp="<PAGEUUID>" z.au="/webui/zkau;jsessionid=<SESSION>">
+
+<script id="zk_comp_1" type="text/javascript">
+var zkTimeoutText = "The page or component you request is no longer available. This is normally caused by timeout or rebooting the server.";
+		adempiere.store.set("zkTimeoutText", zkTimeoutText);
+</script>
+	<div id="zk_comp_2" z.type="zul.wnd2.Wnd2" z.autoz="true" class="z-window-embedded" style="display:none;" z.zcls="z-window-embedded" z.onCancel="true" z.minheight="100" z.minwidth="200"><div id="zk_comp_2!cave" class=" z-window-embedded-cnt-noborder"></div></div><div id="zk_comp_3" class="login-window z-border-layout" z.zcls="z-border-layout" z.type="zkex.zul.borderlayout.BorderLayout2"><div id="zk_comp_4" z.type="zkex.zul.borderlayout.LayoutRegion2"><div id="zk_comp_4!real" class="z-center z-center-noborder" style="border: none; background-color: transparent;" z.zcls="z-center" z.cid="zk_comp_5" z.pos="center" z.flex="true" z.mars="0,0,0,0" z.cmars="5,5,5,5" z.colps="false" z.open="true" z.splt="false" z.maxs="2000" z.mins="0" z.autoscl="true"><div id="zk_comp_4!cave" class="z-center-body"><table id="zk_comp_5" z.type="zul.box.Box" class="z-vbox" style="width:100%;height:100%;background-color: transparent;" z.zcls="z-vbox" z.vert="true" cellpadding="0" cellspacing="0">
+<tr id="zk_comp_8!chdextr" z.coexist="true" valign="middle">
+<td align="center"><div id="zk_comp_8" z.type="zul.wnd2.Wnd2" z.autoz="true" class="z-window-embedded" style="background-color: transparent;" z.zcls="z-window-embedded" z.onOK="true" z.shadow="false" z.minheight="100" z.minwidth="200"><div id="zk_comp_8!cave" class=" z-window-embedded-cnt-noborder"><div id="zk_comp_7" z.type="zul.wnd2.Wnd2" z.autoz="true" class="z-window-embedded" z.zcls="z-window-embedded" z.shadow="false" z.minheight="100" z.minwidth="200"><div id="zk_comp_7!cave" class=" z-window-embedded-cnt-noborder"><div id="zk_comp_9" class="login-box-header"><span id="zk_comp_10" class="login-box-header-txt z-label" z.zcls="z-label" class="z-label">Login</span></div><table id="grdLogin" cellpadding="0" cellspacing="5" class="login-box-body"><tr id="zk_comp_11"><td id="zk_comp_12" class="login-box-header-logo" colspan="2"><img id="zk_comp_13" z.type="zul.widget.Img" src="/webui/theme/default/images/login-logo.png;jsessionid=<SESSION>"/></td></tr><tr id="rowUser"><td id="zk_comp_14" class="login-label"><span id="zk_comp_15" class="z-label" z.zcls="z-label" class="z-label">User ID</span></td><td id="zk_comp_16" class="login-field"><input id="zk_comp_6" z.type="zul.vd.Txbox" class="z-textbox" style="width:220px;" z.zcls="z-textbox" z.onChange="true" z.onFocus="true" z.onBlur="true" size="25" maxlength="40" type="text"/></td></tr><tr id="rowPassword"><td id="zk_comp_17" class="login-label"><span id="zk_comp_18" class="z-label" z.zcls="z-label" class="z-label">Password</span></td><td id="zk_comp_19" class="login-field"><input id="zk_comp_20" z.type="zul.vd.Txbox" class="z-textbox" style="width:220px;" z.zcls="z-textbox" z.onFocus="true" z.onBlur="true" size="25" type="password"/></td></tr><tr id="rowLanguage"><td id="zk_comp_21" class="login-label"><span id="zk_comp_22" class="z-label" z.zcls="z-label" class="z-label">Language</span></td><td id="zk_comp_23" class="login-field"><span id="zk_comp_24" class="z-combobox" style="width:220px;" z.zcls="z-combobox" z.onSelect="true" z.aco="true" z.adr="true" z.type="zul.cb.Cmbox" z.combo="true"><table border='0' cellspacing='0' cellpadding='0' width='220px' style='display:inline-block'><tr style='white-space:nowrap; border:none220px'><td style='width: 100%; border:none'><input id="zk_comp_24!real" autocomplete="off" class="z-combobox-inp" value="English" type="text" style='width: 100%'/></td><td style='width: 17px'><span id="zk_comp_24!btn" class="z-combobox-btn" style="margin-left:2px"><img class="z-combobox-img" onmousedown="return false;" src="/webui/zkau/web/<ZKVER>/img/spacer.gif;jsessionid=<SESSION>""/></span></td></tr></table><div id="zk_comp_24!pp" class="z-combobox-pp" style="display:none" tabindex="-1"><table id="zk_comp_24!cave" cellpadding="0" cellspacing="0"><tr id="zk_comp_25" z.type="Cmit" class="z-combo-item " z.zcls="z-combo-item" z.label="English">
+<td class="z-combo-item-img"></td>
+<td class="z-combo-item-text">English</td></tr>
+<tr id="zk_comp_26" z.type="Cmit" class="z-combo-item " z.zcls="z-combo-item" z.label="Español (MX)">
+<td class="z-combo-item-img"></td>
+<td class="z-combo-item-text">Español&nbsp;(MX)</td></tr>
+</table></div></span></td></tr><tr id="rowRememberMe"><td id="zk_comp_27" class="login-label"><span id="zk_comp_28" class="z-label" z.zcls="z-label" class="z-label"></span></td><td id="zk_comp_29" class="login-field"><span id="zk_comp_30" z.type="zul.btn.Ckbox" class="z-checkbox" z.zcls="z-checkbox"><input type="checkbox" id="zk_comp_30!real"/><label for="zk_comp_30!real" class="z-checkbox-cnt">Remember Me</label></span></td></tr><tr id="rowPasswordReset"><td id="zk_comp_31" class="login-label"><span id="zk_comp_32" class="z-label" z.zcls="z-label" class="z-label"></span></td><td id="zk_comp_33" colspan="2" class="login-label" style="text-align:left"><a id="zk_comp_34" z.type="zul.btn.Tbtn" class="z-toolbar-button " z.zcls="z-toolbar-button" href="javascript:;">Forgot Password?</a></td></tr></table><div id="zk_comp_35" class="login-box-footer"><table id="zk_comp_36" z.type="zul.box.Box" class="login-box-footer-pnl z-hbox" z.zcls="z-hbox" cellpadding="0" cellspacing="0">
+<tr id="zk_comp_36!cave"
+ valign="top"><td id="zk_comp_37!chdextr" z.coexist="true" align="left"><table id="zk_comp_37" z.type="zul.box.Box" class="z-hbox" style="width:100%;text-align:left;" z.zcls="z-hbox" cellpadding="0" cellspacing="0">
+<tr id="zk_comp_37!cave"
+ valign="top"><td id="zk_comp_38!chdextr" z.coexist="true" align="left"><div id="zk_comp_38" align="left"></div></td>
+</tr></table></td>
+<td id="zk_comp_37!chdextr2" class="z-hbox-sep"></td>
+<td id="zk_comp_39!chdextr" z.coexist="true" align="left"><div id="zk_comp_39" align="center"></div></td>
+<td id="zk_comp_39!chdextr2" class="z-hbox-sep"></td>
+<td id="zk_comp_40!chdextr" z.coexist="true" align="left"><table id="zk_comp_40" z.type="zul.box.Box" class="z-hbox" style="width:100%;text-align:right;" z.zcls="z-hbox" cellpadding="0" cellspacing="0">
+<tr id="zk_comp_40!cave"
+ valign="top"><td id="zk_comp_41!chdextr" z.coexist="true" align="left"><div id="zk_comp_41" align="right"><span z.type="zul.btn.Button" id="Ok42" class="z-button"  title="OK" z.zcls="z-button"><table id="Ok42!box" cellspacing="0" cellpadding="0" border="0" class="login-btn z-button ">
+<tr><td class="z-button-tl"><button id="Ok42!real" class="z-button"></button></td><td class="z-button-tm"></td><td class="z-button-tr"></td></tr>
+<tr><td class="z-button-cl"></td><td class="z-button-cm"><img src="/webui/images/Ok16.png;jsessionid=<SESSION>" align="absmiddle" id="Ok42!hvig"/></td>
+<td class="z-button-cr"><div></div></td></tr>
+<tr><td class="z-button-bl"></td><td class="z-button-bm"></td><td class="z-button-br"></td></tr>
+</table></span></div></td>
+</tr></table></td>
+</tr></table></div></div></div></div></div></td></tr>
+</table></div></div></div><div id="zk_comp_43" z.type="zkex.zul.borderlayout.LayoutRegion2"><div id="zk_comp_43!real" class="login-east-panel z-east " z.zcls="z-east" z.cid="zk_comp_44" z.pos="east" z.flex="false" z.mars="0,0,0,0" z.cmars="0,5,5,0" z.colps="false" z.open="true" z.splt="false" z.maxs="2000" z.mins="0" z.autoscl="false"><div id="zk_comp_43!cave" class="z-east-body"><div id="zk_comp_44"></div></div></div><div id="zk_comp_43!split" class="z-east-splt""></div></div><div id="zk_comp_45" z.type="zkex.zul.borderlayout.LayoutRegion2"><div id="zk_comp_45!real" class="login-west-panel z-west " z.zcls="z-west" z.cid="zk_comp_46" z.pos="west" z.flex="false" z.mars="0,0,0,0" z.cmars="0,5,5,0" z.colps="false" z.open="true" z.splt="false" z.maxs="2000" z.mins="0" z.autoscl="false"><div id="zk_comp_45!cave" class="z-west-body"><div id="zk_comp_46">
+<div id="zk_comp_47" style="height: 90px;">
+	<span id="zk_comp_48" class="z-separator-ver" z.zcls="z-separator-ver">&nbsp;</span></div>
+	<span id="zk_comp_49"><span id="zk_comp_50"><style>
+	.section-head {
+		margin-top: 20px;
+		font-size: 9pt;
+	}
+
+	.loginInfoBox {
+		background-color: #9CBDFF;
+		margin: 5px;
+		padding: 3px;
+		margin-top: 20px;
+		-moz-border-radius: 5px;
+		-webkit-border-radius: 5px;
+	}
+</style>
+<div class="loginInfoBox">
+<span class="section-head">Initially you can log into the system with the following users:
+</span>
+
+<table border="thin" cellpadding="5" cellspacing="0" style="margin-top: 10px; font-size: 8pt; background-color: transparent; border: 1px solid lightgray; border-collapse: collapse;">
+
+<tbody><tr valign="top">
+<th ><i><b>Usage</b></i>
+</th><th><i><b>User</b></i>
+</th><th><i><b>Password</b></i>
+</th></tr>
+
+
+
+<tr valign="top">
+<td>System Management
+</td><td>System
+</td><td>System
+</td></tr>
+
+
+
+<tr valign="top">
+<td>System Management or any role/company
+</td><td>SuperUser
+</td><td>System
+</td></tr>
+
+
+
+<tr valign="top">
+
+<td>Sample Client Administration
+</td><td>GardenAdmin
+</td><td>GardenAdmin
+</td></tr>
+
+
+
+<tr valign="top">
+<td>Sample Client User
+</td><td>GardenUser
+</td><td>GardenUser
+</td></tr>
+</tbody>
+</table>
+</div></span></span>
+<span id="zk_comp_51"><style>
+	.versionInfoBox {
+		background-color: #9CBDFF;
+		margin: 5px;
+		padding: 3px;
+		margin-top: 20px;
+		-moz-border-radius: 5px;
+		-webkit-border-radius: 5px;
+		font-size: 8pt;
+	}
+</style>
+<div class="versionInfoBox">
+	<table border="0">
+		<tr>
+			<td align="right">Main Version</td>
+			<td>:</td>
+			<td aligh="left">Release 3.9.4</td>
+		</tr>
+		<tr>
+			<td align="right">Date Version</td>
+			<td>:</td>
+			<td aligh="left">2023-01-24</td>
+		</tr>
+		<tr>
+			<td align="right">Database Version</td>
+			<td>:</td>
+			<td aligh="left">2023-01-24</td>
+		</tr>
+		<tr>
+			<td align="right">Vendor</td>
+			<td>:</td>
+			<td aligh="left">${ADEMPIERE_VENDOR}</td>
+		</tr>
+		<tr>
+			<td align="right">Vendor Version</td>
+			<td>:</td>
+			<td aligh="left">ADempiere Foundation Release 3.9.4 20260824-1143</td>
+		</tr>
+		<tr>
+			<td align="right">JVM</td>
+			<td>:</td>
+			<td aligh="left">OpenJDK 64-Bit Server VM 21.0.2+13-58</td>
+		</tr>
+		<tr>
+			<td align="right">OS</td>
+			<td>:</td>
+			<td aligh="left">Mac OS X 26.6.2 null</td>
+		</tr>
+		<tr>
+			<td align="right">Host</td>
+			<td>:</td>
+			<td aligh="left">localhost</td>
+		</tr>
+	</table>
+</div></span>
+<style type="text/css" id="zk_comp_52">
+.loginLinksBox {
+		padding: 0;
+		margin: 0;
+		padding-left: 3px;
+		font-size: 8pt;
+		background-color: transparent;
+	}
+</style>
+
+<div id="zk_comp_53" class="loginLinksBox" style="position: absolute; bottom: 5px;">
+
+	<a id="zk_comp_54" z.type="zul.btn.Tbtn" class="z-toolbar-button " title="Powered by Zk" z.zcls="z-toolbar-button" href="http://www.zkoss.org" target="_blank"><img src="http://www.zkoss.org/img/zkpowered_s.png" align="absmiddle" id="zk_comp_54!hvig"/></a>
+	<span z.type="zul.btn.Button" id="zk_comp_55" class="z-button"  z.zcls="z-button" z.href="http://www.mozilla.com/?from=sfx&amp;uid=0&amp;t=306" z.target="_blank"><table id="zk_comp_55!box" cellspacing="0" cellpadding="0" border="0" class="z-button ">
+<tr><td class="z-button-tl"><button id="zk_comp_55!real" class="z-button"></button></td><td class="z-button-tm"></td><td class="z-button-tr"></td></tr>
+<tr><td class="z-button-cl"></td><td class="z-button-cm"><img src="http://sfx-images.mozilla.org/affiliates/Buttons/firefox3/110x32_get_ffx.png" align="absmiddle" id="zk_comp_55!hvig"/></td>
+<td class="z-button-cr"><div></div></td></tr>
+<tr><td class="z-button-bl"></td><td class="z-button-bm"></td><td class="z-button-br"></td></tr>
+</table></span>
+	<span z.type="zul.btn.Button" id="zk_comp_56" class="z-button"   title="ADempiere Community" z.zcls="z-button" z.href="http://www.adempiere.org" z.target="_blank"><table id="zk_comp_56!box" cellspacing="0" cellpadding="0" border="0" class="z-button " style="height:32px; width:32px;">
+<tr><td class="z-button-tl"><button id="zk_comp_56!real" class="z-button"></button></td><td class="z-button-tm"></td><td class="z-button-tr"></td></tr>
+<tr><td class="z-button-cl"></td><td class="z-button-cm"><img src="/webui/images/AD32.png;jsessionid=<SESSION>" align="absmiddle" id="zk_comp_56!hvig"/></td>
+<td class="z-button-cr"><div></div></td></tr>
+<tr><td class="z-button-bl"></td><td class="z-button-bm"></td><td class="z-button-br"></td></tr>
+</table></span></div></div></div></div><div id="zk_comp_45!split" class="z-west-splt""></div></div><div id="zk_comp_57" z.type="zkex.zul.borderlayout.LayoutRegion2"><div id="zk_comp_57!real" class="login-north-panel z-north " z.zcls="z-north" z.cid="zk_comp_58" z.pos="north" z.flex="false" z.mars="0,0,0,0" z.cmars="5,5,5,5" z.colps="false" z.open="true" z.splt="false" z.maxs="2000" z.mins="0" z.autoscl="false"><div id="zk_comp_57!cave" class="z-north-body"><div id="zk_comp_58"></div></div></div><div id="zk_comp_57!split" class="z-north-splt""></div></div></div>
+</div>
+
+<noscript><div class="noscript"><p>Sorry, JavaScript must be enabled.<br/>Change your browser options, then <a href="">try again</a>.</p></div></noscript>
+
+
+<script type="text/javascript">
+zk.addInit(function(){
+zk.process('focus',"zk_comp_6");
+zk.process('script',"adempiere.findUserToken('zk_comp_7', 'L1VzZXJzL3NhbXF1YWtlbmJ1c2gvQ29kZS9hZGVtcGllcmUvYnVpbGQvcGhhc2UzL3J1bnRpbWUvQWRlbXBpZXJl');");
+zk.process('clientInfo',"<DTID>");
+});
+</script>
+
+
+</body>
+</html>
