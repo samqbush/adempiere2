@@ -208,5 +208,4 @@ jobs:
           name: phase5b-web-oracle-evidence
           if-no-files-found: error
           path: |
-            build/phase5/oracle/
-            build/phase5/evidence/
+            build/phase5b/replay/
