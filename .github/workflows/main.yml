@@ -89,8 +89,31 @@ jobs:
             base/build/test-results/
             base/build/reports/tests/
 
-  phase-4-xfire-oracle:
-    name: Phase 4 frozen XFire contract
+  phase-4-contracts:
+    name: Phase 4 final contract and removal gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Verify frozen contracts and XFire removal
+        uses: ./.github/actions/adempiere-build
+        with:
+          task: phase4FinalVerification
+      - name: Upload Phase 4 contract evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase4-final-contract-evidence
+          if-no-files-found: error
+          path: |
+            build/phase4/evidence/
+
+  phase-4-installed-api:
+    name: Phase 4 installed XFire-free API
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -113,15 +136,15 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: gradle
-      - name: Replay and compare the frozen XFire oracle
+      - name: Verify the installed XFire-free SOAP API
         uses: ./.github/actions/adempiere-build
         with:
-          task: verifyPhase4OracleMatchesFrozen
-      - name: Upload Phase 4 contract evidence
+          task: phase4InstalledApi
+      - name: Upload installed Phase 4 API evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: phase4-xfire-oracle-evidence
+          name: phase4-installed-api-evidence
           if-no-files-found: error
           path: |
             build/phase4/evidence/

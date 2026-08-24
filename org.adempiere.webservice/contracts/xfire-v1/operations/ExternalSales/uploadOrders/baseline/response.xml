@@ -1,0 +1,1 @@
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><soap:Body><soap:Fault><faultcode>soap:Client</faultcode><faultstring>Not enough message parts were received for the operation.</faultstring></soap:Fault></soap:Body></soap:Envelope>

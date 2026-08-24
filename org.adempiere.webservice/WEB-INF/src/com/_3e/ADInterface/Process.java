@@ -1,6 +1,5 @@
 package com._3e.ADInterface;
 
-import org.codehaus.xfire.fault.XFireFault;
 import org.compiere.model.GridField;
 import org.compiere.model.GridTab;
 import org.compiere.model.Lookup;
@@ -74,7 +73,7 @@ public class Process {
 	
 	private static CLogger	log = CLogger.getCLogger(Process.class);
 
-	public static ProcessParamsDocument getProcessParams(CompiereService compiereService, GetProcessParamsDocument getProcessParamsDocument) throws XFireFault {
+	public static ProcessParamsDocument getProcessParams(CompiereService compiereService, GetProcessParamsDocument getProcessParamsDocument) {
 		ProcessParamsDocument processParamsDocument = ProcessParamsDocument.Factory.newInstance();
 		ProcessParams processParams = processParamsDocument.addNewProcessParams();
 		ProcessParamList processParamList = processParams.addNewParams();

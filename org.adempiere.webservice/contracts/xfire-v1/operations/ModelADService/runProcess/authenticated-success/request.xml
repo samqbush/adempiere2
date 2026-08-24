@@ -1,0 +1,18 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:svc="http://3e.pl/ADInterface">
+ <soapenv:Body>
+  <svc:runProcess>
+   <svc:ModelRunProcessRequest>
+    <svc:ModelRunProcess AD_Process_ID="111" AD_Menu_ID="0" AD_Record_ID="103" DocAction="CO">
+     <svc:serviceType>ProcessInvoice</svc:serviceType>
+     <svc:ParamValues/>
+    </svc:ModelRunProcess>
+    <svc:ADLoginRequest>
+     <svc:user>WebService</svc:user><svc:pass>WebService</svc:pass>
+     <svc:lang>en_US</svc:lang><svc:ClientID>11</svc:ClientID>
+     <svc:RoleID>50004</svc:RoleID><svc:OrgID>11</svc:OrgID>
+     <svc:WarehouseID>103</svc:WarehouseID><svc:stage>9</svc:stage>
+    </svc:ADLoginRequest>
+   </svc:ModelRunProcessRequest>
+  </svc:runProcess>
+ </soapenv:Body>
+</soapenv:Envelope>

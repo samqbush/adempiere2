@@ -1,0 +1,7 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:svc="http://3e.pl/ADInterface">
+ <soapenv:Body>
+  <svc:runProcess>
+    <svc:ModelRunProcessRequest/>
+  </svc:runProcess>
+ </soapenv:Body>
+</soapenv:Envelope>

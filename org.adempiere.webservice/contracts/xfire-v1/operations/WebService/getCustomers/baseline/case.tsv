@@ -1,0 +1,2 @@
+# case	scope	mutability	authentication	expectation
+baseline	request	read-only	request-body-credentials	dispatch-success-or-application-fault

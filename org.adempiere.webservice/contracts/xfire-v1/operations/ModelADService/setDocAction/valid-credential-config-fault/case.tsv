@@ -1,0 +1,2 @@
+# case	scope	mutability	authentication	expectation
+valid-credential-config-fault	request	mutating	request-body-credentials	configuration-error-response

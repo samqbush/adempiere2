@@ -1,0 +1,2 @@
+# case	scope	mutability	authentication	expectation
+authenticated-success	request	read-only	valid-request-body-credentials	deterministic-single-record

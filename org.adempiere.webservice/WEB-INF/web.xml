@@ -7,21 +7,36 @@
 <web-app>
 
   <servlet>
-    <servlet-name>XFireServlet</servlet-name>
-    <display-name>XFire Servlet</display-name>
+    <servlet-name>SoapCompatibilityRouter</servlet-name>
     <servlet-class>
-        org.codehaus.xfire.transport.http.XFireConfigurableServlet
+        org.adempiere.webservice.router.SoapCompatibilityRouter
     </servlet-class>
+    <init-param>
+      <param-name>modernBaseUrl</param-name>
+      <param-value>http://127.0.0.1:8890/ADInterface/services</param-value>
+    </init-param>
+    <init-param>
+      <param-name>maxRequestBytes</param-name>
+      <param-value>1048576</param-value>
+    </init-param>
+    <init-param>
+      <param-name>connectTimeoutMillis</param-name>
+      <param-value>5000</param-value>
+    </init-param>
+    <init-param>
+      <param-name>readTimeoutMillis</param-name>
+      <param-value>30000</param-value>
+    </init-param>
   </servlet>
 
   <servlet-mapping>
-    <servlet-name>XFireServlet</servlet-name>
-    <url-pattern>/servlet/XFireServlet/*</url-pattern>
+    <servlet-name>SoapCompatibilityRouter</servlet-name>
+    <url-pattern>/services/*</url-pattern>
   </servlet-mapping>
 
   <servlet-mapping>
-    <servlet-name>XFireServlet</servlet-name>
-    <url-pattern>/services/*</url-pattern>
+    <servlet-name>SoapCompatibilityRouter</servlet-name>
+    <url-pattern>/servlet/XFireServlet/*</url-pattern>
   </servlet-mapping>
 
   <session-config>

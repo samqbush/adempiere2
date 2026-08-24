@@ -11,6 +11,13 @@ presence, cookie attributes, and all other headers remain exact. Tomcat logs are
 excluded. WSDL endpoint addresses remain exactly as captured and are compared
 separately from the two required public compatibility URL forms.
 
+`operation-known-residuals.tsv` is not successful dispatch evidence.
+`ExternalSales.uploadOrders` has a pre-existing RPC binding defect caused by
+its WSDL message referencing a nonexistent global `ArrayOf_tns1_Order` element.
+The exact legacy fault is frozen so the compatibility layer cannot silently
+change it; any contract repair requires a separately versioned interface after
+consumer review.
+
 Updating the oracle requires a successful `phase4OraclePreflight`, explicit
 human review of the generated evidence, and
 `freezePhase4XFireContracts -PapprovePhase4Oracle=true`. Unapproved additions,

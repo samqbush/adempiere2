@@ -79,8 +79,6 @@ org.adempiere.webservice/WEB-INF/lib/wstx-asl-2.9.3.jar	quarantined	Tracked lega
 org.adempiere.webservice/WEB-INF/lib/xbean-spring-2.8.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
 org.adempiere.webservice/WEB-INF/lib/xbean.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
 org.adempiere.webservice/WEB-INF/lib/xercesImpl-2.4.0.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
-org.adempiere.webservice/WEB-INF/lib/xfire-all-1.2.6-sources.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
-org.adempiere.webservice/WEB-INF/lib/xfire-all-1.2.6.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
 org.adempiere.webservice/WEB-INF/lib/xml-apis-1.3.02.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
 org.adempiere.webservice/WEB-INF/lib/xml-resolver-1.1.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity
 org.adempiere.webservice/WEB-INF/lib/xmlParserAPIs-2.6.2.jar	quarantined	Tracked legacy binary retained pending Phase 3 packaging parity

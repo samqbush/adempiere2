@@ -11,12 +11,17 @@ component is testable. The plan-wide reproducible-CI Milestone is Phase 1, when
 the existing Ant unit-test baseline is recorded and Gradle must become
 reproducible and execute meaningful tests instead of `NO-SOURCE`.
 
-Phases 1-3 are merged to `develop`. Phase 4 is the active roadmap phase. It must
-prove the four XFire services as a live oracle before migration, preserve static
-WSDL/wire behavior, and move SOAP directly to CXF 4.1.x/Jakarta EE 10 on an
-isolated Tomcat 10.1/JDK 21 API runtime. A Tomcat 9 compatibility router
-preserves both historical endpoint paths; ZK and non-SOAP servlet migration
-remain Phase 5.
+Phases 1-3 are merged to `develop`; the Phase 4 oracle/seam foundation is also
+merged, and the Phase 4 completion branch has passed its local exit gates. All 33 XFire
+operation baselines and 11 additional scenarios now pass on the isolated CXF
+4.1.8/Jakarta EE 10 runtime on Tomcat 10.1.59/JDK 21. A Tomcat 9 compatibility
+router preserves both historical endpoint paths and the installed-product gate
+passes, including embedding and verifying the unconfigured modern runtime in
+both existing 394LTS release archives. Rollback was rehearsed for each
+request-scoped service and the atomic 21-operation `ADService` unit before the
+router became CXF-only. Active XFire source, publication, and runtime binaries
+are removed. Phase 4 PR CI and merge to `develop` remain mandatory before ZK
+and non-SOAP servlet migration begins in Phase 5.
 
 ## Commands
 
@@ -27,6 +32,11 @@ by a phase become canonical only after that phase's exit criteria prove them.
 |---|---|---|
 | Phase 3 full product, no DB restore | `./gradlew phase3NoDatabaseDistribution --dependency-verification=strict` | Guarded JDK 21 Ant build, install, silent setup, topology check, and normalized artifact manifest |
 | Phase 3 installed product | `xvfb-run -a ./gradlew phase3InstalledProduct -Pphase2DbSystemPassword='<password>' -Pphase3DbSystemPassword='<password>' --dependency-verification=strict` | Requires disposable local PostgreSQL 14.6; runs DB-backed smoke, full install, metadata validation, evidence capture, installed Tomcat 9 smoke, and marker-guarded database/role cleanup |
+| Phase 4 modern SOAP boot | `./gradlew phase4ModernSoapRuntimeSmoke --dependency-verification=strict` | Builds the XFire-free CXF/Jakarta WAR, verifies its archive, and boots checksum-pinned loopback-only Tomcat 10.1.59 |
+| Phase 4 modern SOAP database smoke | `./gradlew phase4ModernSoapDatabaseSmoke -Pphase3DbSystemPassword='<password>' -Pphase3DbPort=5433 --dependency-verification=strict` | Marker-owned PostgreSQL 14.6 gate for all 33 frozen operation baselines, 11 valid-credential/security scenarios, and four mutation-state deltas; cleanup runs after the smoke |
+| Phase 4 final contracts | `./gradlew phase4FinalVerification --dependency-verification=strict` | Database-neutral final gate for frozen contracts, route classification, active XFire absence, retained evidence, business/router tests, and modern-WAR linkage |
+| Phase 4 compatibility router smoke | `./gradlew phase4CompatibilityRouterSmoke -Pphase3DbSystemPassword='<password>' -Pphase3DbPort=5433 --dependency-verification=strict` | Starts Tomcat 9 and 10.1 together against marker-owned PostgreSQL 14.6 and proves both historical paths route the complete corpus only to CXF |
+| Phase 4 installed API | `./gradlew phase4InstalledApi -Pphase3DbSystemPassword='<password>' -Pphase3DbPort=5433 --dependency-verification=strict` | Canonical XFire-free installed-product SOAP gate: verifies source/package absence, stages the isolated runtime beside Tomcat 9 and in both unconfigured 394LTS release archives, replays all 33 baselines through both historical paths and all 11 additional scenarios through the primary path, then performs marker-guarded cleanup |
 | Full product build, no DB restore | `ant build -Dnodbrestore=true` | Authoritative underlying Ant reactor; prefer the guarded Phase 3 lifecycle for CI |
 | Full product build with DB restore/migrations | `ant build -Dnodbrestore=false` | Database-affecting underlying reactor; run only against an approved disposable environment |
 | Gradle module build | `./gradlew build --dependency-verification=strict` | Reproducible Phase 2 gate on JDK 21 with Java 21 bytecode; omits quarantined Ant-only deployables |

@@ -1,0 +1,7 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:svc="http://3e.pl/ADInterface">
+ <soapenv:Body>
+  <svc:updateData>
+    <svc:ModelCRUDRequest/>
+  </svc:updateData>
+ </soapenv:Body>
+</soapenv:Envelope>

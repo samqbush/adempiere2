@@ -4,7 +4,6 @@
     <libelement value="jar://$MODULE_DIR$/WEB-INF/lib/generated_xmlbeans.jar!/" />
     <libelement value="jar://$MODULE_DIR$/WEB-INF/lib/xbean-spring-2.8.jar!/" />
     <libelement value="jar://$MODULE_DIR$/WEB-INF/lib/xbean.jar!/" />
-    <libelement value="jar://$MODULE_DIR$/WEB-INF/lib/xfire-all-1.2.6.jar!/" />
     <src_description expected_position="0">
       <src_folder value="file://$MODULE_DIR$/WEB-INF/src" expected_position="0" />
     </src_description>
@@ -44,17 +43,6 @@
         <JAVADOC />
         <SOURCES>
           <root url="jar://$MODULE_DIR$/WEB-INF/lib/xmlbeans-2.4.0-sources.jar!/" />
-        </SOURCES>
-      </library>
-    </orderEntry>
-    <orderEntry type="module-library">
-      <library name="xfire-all-1.2.6.jar">
-        <CLASSES>
-          <root url="jar://$MODULE_DIR$/WEB-INF/lib/xfire-all-1.2.6.jar!/" />
-        </CLASSES>
-        <JAVADOC />
-        <SOURCES>
-          <root url="jar://$MODULE_DIR$/WEB-INF/lib/xfire-all-1.2.6-sources.jar!/" />
         </SOURCES>
       </library>
     </orderEntry>

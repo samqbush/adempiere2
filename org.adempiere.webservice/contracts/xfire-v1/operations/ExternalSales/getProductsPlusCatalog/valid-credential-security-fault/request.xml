@@ -1,0 +1,11 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:svc="http://externalSales.ws.erpCommon.openbravo.org">
+ <soapenv:Body>
+  <svc:getProductsPlusCatalog>
+    <svc:in0>0</svc:in0>
+    <svc:in1>0</svc:in1>
+    <svc:in2>0</svc:in2>
+    <svc:in3>GardenAdmin</svc:in3>
+    <svc:in4>IUqx46p9C74htLlUd0iN8MoUqCc=</svc:in4>
+  </svc:getProductsPlusCatalog>
+ </soapenv:Body>
+</soapenv:Envelope>

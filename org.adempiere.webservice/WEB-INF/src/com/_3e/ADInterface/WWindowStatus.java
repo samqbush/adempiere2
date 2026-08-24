@@ -102,6 +102,18 @@ public class WWindowStatus
 	protected GridWindow       mWindow;
 	/** The current GridTab            */
 	protected GridTab          curTab;
+
+	public GridWindow getWindow() {
+		return mWindow;
+	}
+
+	public GridTab getCurrentTab() {
+		return curTab;
+	}
+
+	public void setCurrentTab(GridTab tab) {
+		curTab = tab;
+	}
 	
 
 	/** Window Context 				*/

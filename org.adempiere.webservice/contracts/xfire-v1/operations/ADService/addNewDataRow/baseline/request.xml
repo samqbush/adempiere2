@@ -1,0 +1,8 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:svc="http://3e.pl/ADInterface">
+ <soapenv:Body>
+  <svc:addNewDataRow>
+    <svc:in0>0</svc:in0>
+    <svc:in1>0</svc:in1>
+  </svc:addNewDataRow>
+ </soapenv:Body>
+</soapenv:Envelope>

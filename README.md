@@ -69,9 +69,22 @@ SOAP behavior remains a Phase 4 contract gate.
 
 Phase 3 is merged to `develop` as
 `eb1953d091836db59fabb153ccde41d8e07b7cf1` with all five PR checks green.
-Phase 4 first proves all four live XFire services, then replaces XFire with a
-CXF 4.1.x/Jakarta API runtime on isolated Tomcat 10.1 while the existing Tomcat
-9 deployment preserves historical SOAP URLs through a compatibility router.
+The Phase 4 continuation freezes all 33 SOAP-operation baselines, proved legacy
+XFire through the transport-neutral registry, and now boots a distinct,
+XFire-free CXF 4.1.8/Jakarta API WAR on checksum-pinned, loopback-only Tomcat
+10.1.59. Direct replay passes all 33 operation baselines plus 11
+valid-credential/security scenarios, including explicit create, update, delete,
+and process state deltas. After a recorded per-service and atomic `ADService`
+rollback rehearsal, the Tomcat 9 compatibility router now preserves both
+historical URLs while routing SOAP only to CXF. XFire source, publication,
+checked-in binaries, and packaged runtime artifacts are removed. The canonical
+`phase4InstalledApi` gate now stages and verifies the isolated runtime in the
+installed product and the existing `Adempiere_394LTS.zip` and
+`Adempiere_394LTS.tar.gz` artifacts, then replays the complete corpus through
+the historical paths. The archive gate preserves the unconfigured environment
+template, validates checksums and executable launchers, and rejects a configured
+environment file and any retired XFire runtime/publication. Local Phase 4 exit
+gates pass; PR CI and merge to `develop` remain required before Phase 5 starts.
 The non-SOAP ZK and servlet Jakarta migration remains Phase 5.
 
 The DB-backed metadata gate fails on new or stale process, validator, workflow,

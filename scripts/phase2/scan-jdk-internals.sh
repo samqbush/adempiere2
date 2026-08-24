@@ -37,7 +37,7 @@ git grep -nI -E \
       scripts/phase3/*)
         owner='Phase 3: installed runtime verification tooling' ;;
       scripts/phase4/*)
-        owner='Phase 4: XFire oracle runtime verification tooling' ;;
+        owner='Phase 4: SOAP contract and runtime verification tooling' ;;
       base/src/org/compiere/util/CLogMgt.java)
         owner='Phase 2: stack-trace text only' ;;
       base/src/org/compiere/util/EMail.java)

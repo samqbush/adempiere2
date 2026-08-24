@@ -4,13 +4,27 @@ import java.security.MessageDigest
 def phase4BuildRoot = rootProject.layout.buildDirectory.dir('phase4')
 def phase4EvidenceDir = phase4BuildRoot.map { it.dir('evidence') }
 def phase4DescriptorList = rootProject.file('gradle/phase4/web-descriptors.txt')
-def phase4ServicesFile =
-	rootProject.file('org.adempiere.webservice/WEB-INF/src/META-INF/xfire/services.xml')
+def phase4RouteClasses = rootProject.file('gradle/phase4/route-classes.tsv')
+def phase4XFireRemoval = rootProject.file('gradle/phase4/xfire-removal.tsv')
+def phase4OperationBaselineExceptions =
+	rootProject.file('gradle/phase4/operation-baseline-exceptions.tsv')
 def phase4FrozenContracts =
 	rootProject.file('org.adempiere.webservice/contracts/xfire-v1')
 def phase4JavaLauncher = javaToolchains.launcherFor {
 	languageVersion = JavaLanguageVersion.of(21)
 }
+def phase4DbHost = providers.gradleProperty('phase3DbHost').orElse('127.0.0.1')
+def phase4DbPort = providers.gradleProperty('phase3DbPort').orElse('5432')
+def phase4DbName = providers.gradleProperty('phase3DbName')
+	.orElse('adempiere_phase3_ci')
+def phase4DbUser = providers.gradleProperty('phase3DbUser')
+	.orElse('adempiere_phase3_ci')
+def phase4DbPassword = providers.gradleProperty('phase3DbPassword')
+	.orElse('adempiere_phase3_ci')
+def phase4DbSystemPassword =
+	providers.gradleProperty('phase3DbSystemPassword')
+		.orElse(providers.environmentVariable('ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD'))
+def phase4DatabaseMarker = 'ADempiere Phase 3 disposable database'
 
 def readPhase4DescriptorPaths = {
 	phase4DescriptorList.readLines()
@@ -26,7 +40,8 @@ def phase4LocalName = { node ->
 	node.name().toString().tokenize(':').last()
 }
 def normalizePhase4Contract = { String relativePath, byte[] content ->
-	if (!relativePath.endsWith('.headers')) {
+	if (!relativePath.endsWith('.headers') &&
+		!relativePath.endsWith('/headers')) {
 		return content
 	}
 	def normalized = new String(content, 'UTF-8')
@@ -36,9 +51,11 @@ def normalizePhase4Contract = { String relativePath, byte[] content ->
 	normalized.getBytes('UTF-8')
 }
 def classifyPhase4Route = { String descriptor, String name, String pattern ->
-	if (descriptor == 'org.adempiere.webservice/WEB-INF/web.xml' ||
-		descriptor.contains('/http-invoker.sar/')) {
+	if (descriptor == 'org.adempiere.webservice/WEB-INF/web.xml') {
 		return ['service-to-service', 'phase4-soap']
+	}
+	if (descriptor.contains('/http-invoker.sar/')) {
+		return ['service-to-service', 'phase5-non-soap']
 	}
 	if (descriptor.startsWith('serverRoot/')) {
 		return pattern == '*.jnlp' ?
@@ -75,13 +92,51 @@ def classifyPhase4Operation = { String operation ->
 	}
 	return 'read-only'
 }
+def readPhase4Operations = {
+	def operationsFile = new File(phase4FrozenContracts, 'operations.tsv')
+	operationsFile.readLines()
+		.findAll { it && !it.startsWith('#') }
+		.collect { line ->
+			def fields = line.split('\t', -1)
+			if (fields.length != 18) {
+				throw new GradleException("Malformed Phase 4 operation row: ${line}")
+			}
+			[
+				service: fields[0],
+				operation: fields[1],
+				namespace: fields[2],
+				requestParts: fields[4],
+				scope: fields[13],
+				mutability: fields[14],
+				authentication: fields[15]
+			]
+		}
+}
+def phase4XmlValue = { String type ->
+	switch (type) {
+		case 'xsd:boolean':
+			return 'false'
+		case 'xsd:int':
+		case 'xsd:long':
+		case 'xsd:short':
+		case 'xsd:decimal':
+			return '0'
+		case 'xsd:string':
+			return 'phase4-invalid'
+		case 'tns:ArrayOf_tns1_Order':
+			// XFire does not bind an empty element as the required RPC array part.
+			return '\n      <svc:orders/>\n    '
+		default:
+			return ''
+	}
+}
 
 tasks.register('generatePhase4EdgeInventory') {
 	group = 'verification'
-	description = 'Inventories all Phase 4 servlet descriptors and XFire services'
+	description = 'Inventories all servlet descriptors and static CXF services'
 	inputs.files(
 		phase4DescriptorList,
-		phase4ServicesFile,
+		new File(phase4FrozenContracts, 'operations.tsv'),
 		readPhase4DescriptorPaths().collect { rootProject.file(it) })
 	outputs.files(
 		phase4EvidenceDir.map { it.file('edge/routes.tsv') },
@@ -102,7 +157,7 @@ tasks.register('generatePhase4EdgeInventory') {
 		def routeCount = 0
 		routesOutput.withWriter('UTF-8') { writer ->
 			writer.println(
-				'# descriptor\tkind\tname\timplementation\turl_pattern\tconfigured_security\ttraffic_class\tbehavioral_gate')
+				'# descriptor\tkind\tname\timplementation\turl_pattern\tconfigured_security\ttraffic_class\tbehavioral_gate\towner')
 			descriptorPaths.each { relativePath ->
 				def descriptor = parsePhase4Xml(rootProject.file(relativePath))
 				def servletClasses = descriptor.servlet.collectEntries {
@@ -129,7 +184,8 @@ tasks.register('generatePhase4EdgeInventory') {
 							pattern.text(),
 							securedPatterns.contains(pattern.text()),
 							routeClass[0],
-							routeClass[1]
+							routeClass[1],
+							routeClass[1] == 'phase4-soap' ? 'phase4' : 'phase5'
 						].join('\t'))
 						routeCount++
 					}
@@ -147,7 +203,8 @@ tasks.register('generatePhase4EdgeInventory') {
 							pattern.text(),
 							securedPatterns.contains(pattern.text()),
 							routeClass[0],
-							routeClass[1]
+							routeClass[1],
+							routeClass[1] == 'phase4-soap' ? 'phase4' : 'phase5'
 						].join('\t'))
 						routeCount++
 					}
@@ -158,29 +215,285 @@ tasks.register('generatePhase4EdgeInventory') {
 			throw new GradleException('Phase 4 route inventory is empty')
 		}
 
-		def services = parsePhase4Xml(phase4ServicesFile).service
+		def services = readPhase4Operations().groupBy { it.service }
 		if (services.size() != 4) {
 			throw new GradleException(
-				"Phase 4 requires exactly four XFire services, got ${services*.name*.text()}")
+				"Phase 4 requires exactly four CXF services, got ${services.keySet()}")
 		}
 		def servicesOutput = phase4EvidenceDir.get().file('edge/services.tsv').asFile
 		servicesOutput.withWriter('UTF-8') { writer ->
 			writer.println(
-				'# service\tnamespace\tservice_class\timplementation_class\tscope\tstyle')
-			services.each { service ->
+				'# service\tnamespace\tprovider\tscope\tstyle')
+			services.sort().each { serviceName, operations ->
+				def namespaces = operations*.namespace.toSet()
+				def scopes = operations*.scope.toSet()
+				if (namespaces.size() != 1 || scopes.size() != 1) {
+					throw new GradleException(
+						"Inconsistent CXF service metadata for ${serviceName}")
+				}
 				writer.println([
-					service.name.text(),
-					service.namespace.text(),
-					service.serviceClass.text(),
-					service.implementationClass.text(),
-					service.scope.text(),
-					service.style.text()
+					serviceName,
+					namespaces.first(),
+					"org.adempiere.webservice.cxf.${serviceName}Provider",
+					scopes.first(),
+					'message'
 				].join('\t'))
 			}
 		}
 		logger.lifecycle(
 			"Phase 4 edge inventory: ${descriptorPaths.size()} descriptors, " +
-			"${routeCount} mapped servlet/filter routes, ${services.size()} SOAP services")
+			"${routeCount} mapped servlet/filter routes, ${services.size()} CXF services")
+	}
+}
+
+tasks.register('verifyPhase4RouteClasses') {
+	group = 'verification'
+	description = 'Fails when the reviewed Phase 4 route classification differs from source descriptors'
+	dependsOn tasks.named('generatePhase4EdgeInventory')
+	inputs.file phase4RouteClasses
+	doLast {
+		def generated = phase4EvidenceDir.get().file('edge/routes.tsv').asFile
+		if (!phase4RouteClasses.isFile()) {
+			throw new GradleException('Reviewed Phase 4 route classification is missing')
+		}
+		def reviewedRows = phase4RouteClasses.readLines()
+			.findAll { !it.startsWith('# callback/webhook\t') }
+			.join(System.lineSeparator()) + System.lineSeparator()
+		if (reviewedRows.getBytes('UTF-8') != generated.bytes) {
+			throw new GradleException(
+				'Phase 4 route classification drifted; regenerate and review gradle/phase4/route-classes.tsv')
+		}
+		def rows = phase4RouteClasses.readLines()
+			.findAll { it && !it.startsWith('#') }
+		if (rows.size() != 114) {
+			throw new GradleException(
+				"Expected 114 reviewed Phase 4 route mappings, got ${rows.size()}")
+		}
+		def fields = rows.collect { it.split('\t', -1) }
+		def malformed = fields.findAll { it.length != 9 || !it[6] || !it[7] || !it[8] }
+		if (!malformed.isEmpty()) {
+			throw new GradleException("Unowned or malformed Phase 4 route rows: ${malformed}")
+		}
+		def validClasses = [
+			'anonymous/public',
+			'end-user-authenticated',
+			'service-to-service',
+			'infrastructure'
+		]
+		def invalidClasses = fields.findAll { !validClasses.contains(it[6]) }
+		if (!invalidClasses.isEmpty()) {
+			throw new GradleException("Invalid Phase 4 route classes: ${invalidClasses}")
+		}
+		if (!phase4RouteClasses.text.contains(
+			'# callback/webhook\tnone found; adding one requires an explicit route rule and behavioral gate')) {
+			throw new GradleException(
+				'Phase 4 route classification must explicitly record the absent callback/webhook class')
+		}
+	}
+}
+
+tasks.register('verifyPhase4XFireRemovalInventory') {
+	group = 'verification'
+	description = 'Fails when an XFire reference is missing from the reviewed removal inventory'
+	inputs.file phase4XFireRemoval
+	doLast {
+		if (!phase4XFireRemoval.isFile()) {
+			throw new GradleException('Phase 4 XFire removal inventory is missing')
+		}
+
+		def rows = phase4XFireRemoval.readLines()
+			.collect { it.trim() }
+			.findAll { it && !it.startsWith('#') }
+			.collect { line ->
+				def fields = line.split('\t', -1)
+				if (fields.length != 3) {
+					throw new GradleException("Malformed XFire inventory row: ${line}")
+				}
+				[path: fields[0], disposition: fields[1], rationale: fields[2]]
+			}
+		def duplicatePaths = rows.groupBy { it.path }.findAll { _, entries -> entries.size() != 1 }
+		if (!duplicatePaths.isEmpty()) {
+			throw new GradleException("Duplicate XFire inventory paths: ${duplicatePaths.keySet()}")
+		}
+		def validDispositions = ['remove', 'retain-evidence', 'migrate']
+		def invalid = rows.findAll {
+			!validDispositions.contains(it.disposition) || !it.rationale
+		}
+		if (!invalid.isEmpty()) {
+			throw new GradleException("Invalid XFire inventory rows: ${invalid}")
+		}
+
+		def textExtensions = [
+			'classpath', 'gradle', 'iml', 'java', 'md', 'sh', 'tsv', 'txt', 'xml'
+		]
+		def discovered = rootProject.fileTree(rootProject.projectDir)
+			.matching {
+				exclude '.git/**'
+				exclude '.gradle/**'
+				exclude 'build/**'
+				exclude '**/.gradle/**'
+				exclude '**/build/**'
+				exclude '**/WEB-INF/classes/**'
+				exclude '**/dist/**'
+			}
+			.files
+			.findAll { it.isFile() }
+			.collect { rootProject.projectDir.toPath().relativize(it.toPath()).toString()
+				.replace(File.separatorChar, '/' as char) }
+			.findAll { relativePath ->
+				relativePath != 'gradle/phase4/xfire-removal.tsv'
+			}
+			.findAll { relativePath ->
+				def file = rootProject.file(relativePath)
+				def extension = relativePath.contains('.') ?
+					relativePath.substring(relativePath.lastIndexOf('.') + 1) : ''
+				def namedArtifact = file.name.toLowerCase().contains('xfire')
+				namedArtifact || (textExtensions.contains(extension) &&
+					file.getText('UTF-8').toLowerCase().contains('xfire'))
+			}
+			.toSet()
+		def expected = rows*.path.toSet()
+		def untracked = discovered - expected
+		def stale = expected - discovered
+		if (!untracked.isEmpty() || !stale.isEmpty()) {
+			throw new GradleException(
+				"XFire inventory drifted; untracked=${untracked.sort()}, stale=${stale.sort()}")
+		}
+	}
+}
+
+tasks.register('verifyPhase4XFireAbsent') {
+	group = 'verification'
+	description = 'Fails when active source, descriptors, or binaries retain XFire'
+	def activeRoots = [
+		rootProject.file('.classpath'),
+		rootProject.file('adempiere.iml'),
+		rootProject.file('org.adempiere.webservice/.classpath'),
+		rootProject.file('org.adempiere.webservice/EclipseMultiProject.classpath'),
+		rootProject.file('org.adempiere.webservice/org.adempiere.webservice.iml'),
+		rootProject.file('org.adempiere.webservice/WEB-INF/lib'),
+		rootProject.file('org.adempiere.webservice/WEB-INF/src'),
+		rootProject.file('org.adempiere.webservice/WEB-INF/web.xml'),
+		rootProject.file('org.adempiere.webservice/src/business'),
+		rootProject.file('org.adempiere.webservice/src/businessTest'),
+		rootProject.file('org.adempiere.webservice/src/cxf'),
+		rootProject.file('org.adempiere.webservice/src/router')
+	]
+	inputs.files activeRoots
+	doLast {
+		def files = activeRoots.collectMany { root ->
+			root.isDirectory() ? rootProject.fileTree(root).files : [root]
+		}.findAll { it.isFile() }
+		def violations = files.findAll { file ->
+			def lowerName = file.name.toLowerCase()
+			if (lowerName.contains('xfire')) {
+				return true
+			}
+			def extension = lowerName.contains('.') ?
+				lowerName.substring(lowerName.lastIndexOf('.') + 1) : ''
+			if (!['classpath', 'gradle', 'iml', 'java', 'xml'].contains(extension)) {
+				return false
+			}
+			def text = file.getText('UTF-8').toLowerCase()
+			return text.contains('org.codehaus.xfire')
+					|| text.contains('xfireconfigurableservlet')
+					|| text.contains('meta-inf/xfire')
+		}
+		if (!violations.isEmpty()) {
+			throw new GradleException(
+				"Retired XFire remains active: ${violations.sort()}")
+		}
+	}
+}
+
+tasks.register('generatePhase4OperationBaselineRequests') {
+	group = 'verification'
+	description = 'Generates one deterministic unauthenticated dispatch request for every SOAP operation'
+	inputs.file new File(phase4FrozenContracts, 'operations.tsv')
+	outputs.dir phase4EvidenceDir.map { it.dir('oracle/operations') }
+	doLast {
+		def outputRoot = phase4EvidenceDir.get().dir('oracle/operations').asFile
+		project.delete(outputRoot)
+		def operations = readPhase4Operations()
+		operations.each { operation ->
+			def caseDir = new File(
+				outputRoot, "${operation.service}/${operation.operation}/baseline")
+			caseDir.mkdirs()
+			def parts = operation.requestParts ?
+				operation.requestParts.split(',').collect { encoded ->
+					def separator = encoded.indexOf(':')
+					if (separator <= 0) {
+						throw new GradleException(
+							"Malformed request part ${encoded} for ${operation.service}.${operation.operation}")
+					}
+					def name = encoded.substring(0, separator)
+					def type = encoded.substring(separator + 1)
+					def value = phase4XmlValue(type)
+					value ?
+						"    <svc:${name}>${value}</svc:${name}>" :
+						"    <svc:${name}/>"
+				} : []
+			def operationBody = parts.isEmpty() ?
+				"  <svc:${operation.operation}/>" :
+				(["  <svc:${operation.operation}>"] + parts +
+					["  </svc:${operation.operation}>"]).join('\n')
+			new File(caseDir, 'request.xml').text = """\
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:svc="${operation.namespace}">
+ <soapenv:Body>
+${operationBody}
+ </soapenv:Body>
+</soapenv:Envelope>
+"""
+			new File(caseDir, 'case.tsv').text =
+				'# case\tscope\tmutability\tauthentication\texpectation\n' +
+				[
+					'baseline',
+					operation.scope,
+					operation.mutability,
+					operation.authentication,
+					'dispatch-success-or-application-fault'
+				].join('\t') + '\n'
+		}
+		if (operations.size() != 33) {
+			throw new GradleException(
+				"Expected 33 generated operation baselines, got ${operations.size()}")
+		}
+	}
+}
+
+tasks.register('verifyPhase4OperationBaselineExceptions') {
+	group = 'verification'
+	description = 'Fails when an approved legacy operation baseline exception is stale or malformed'
+	inputs.files(
+		new File(phase4FrozenContracts, 'operations.tsv'),
+		phase4OperationBaselineExceptions)
+	doLast {
+		def operationKeys = readPhase4Operations().collect {
+			"${it.service}.${it.operation}"
+		}.toSet()
+		def rows = phase4OperationBaselineExceptions.readLines()
+			.findAll { it && !it.startsWith('#') }
+			.collect { line ->
+				def fields = line.split('\t', -1)
+				if (fields.length != 5 || fields.any { !it }) {
+					throw new GradleException(
+						"Malformed Phase 4 operation baseline exception: ${line}")
+				}
+				[
+					key: "${fields[0]}.${fields[1]}",
+					fault: fields[2],
+					owner: fields[3],
+					closingAction: fields[4]
+				]
+			}
+		def duplicates = rows.groupBy { it.key }
+			.findAll { _, entries -> entries.size() != 1 }
+		def stale = rows.findAll { !operationKeys.contains(it.key) }
+		if (!duplicates.isEmpty() || !stale.isEmpty()) {
+			throw new GradleException(
+				"Invalid Phase 4 operation baseline exceptions; "
+					+ "duplicates=${duplicates.keySet()}, stale=${stale*.key}")
+		}
 	}
 }
 
@@ -189,6 +502,8 @@ tasks.register('phase4XFireOracleSmoke', Exec) {
 	description = 'Proves all four Phase 3 XFire services expose WSDL and dispatch SOAP'
 	dependsOn tasks.named('phase3AntDatabaseBuild')
 	dependsOn tasks.named('generatePhase4EdgeInventory')
+	dependsOn tasks.named('generatePhase4OperationBaselineRequests')
+	dependsOn tasks.named('verifyPhase4OperationBaselineExceptions')
 	environment(
 		'JAVA_HOME',
 		phase4JavaLauncher.get().metadata.installationPath.asFile.absolutePath)
@@ -199,7 +514,9 @@ tasks.register('phase4XFireOracleSmoke', Exec) {
 		rootProject.layout.buildDirectory.dir('phase3/runtime/Adempiere/tomcat').get().asFile,
 		rootProject.layout.buildDirectory.dir('phase3/runtime/Adempiere').get().asFile,
 		'8888',
-		phase4EvidenceDir.get().dir('oracle').asFile)
+		phase4EvidenceDir.get().dir('oracle').asFile,
+		new File(phase4FrozenContracts, 'operations.tsv'),
+		phase4OperationBaselineExceptions)
 }
 
 tasks.register('generatePhase4SoapOperationInventory') {
@@ -219,9 +536,10 @@ tasks.register('generatePhase4SoapOperationInventory') {
 		}
 		def output = phase4EvidenceDir.get().file('oracle/operations.tsv').asFile
 		def operationCount = 0
-		def serviceScopes = parsePhase4Xml(phase4ServicesFile).service.collectEntries {
-			[(it.name.text()): it.scope.text()]
-		}
+		def serviceScopes = readPhase4Operations().groupBy { it.service }
+			.collectEntries { service, operations ->
+				[(service): operations.first().scope]
+			}
 		output.withWriter('UTF-8') { writer ->
 			writer.println(
 				'# service\toperation\tnamespace\trequest_message\trequest_parts\t' +
@@ -329,6 +647,9 @@ tasks.register('phase4OraclePreflight') {
 	description = 'Canonical Phase 4 live XFire oracle and source edge-inventory preflight'
 	dependsOn tasks.named('phase4XFireOracleSmoke')
 	dependsOn tasks.named('generatePhase4SoapOperationInventory')
+	dependsOn tasks.named('verifyPhase4RouteClasses')
+	dependsOn tasks.named('verifyPhase4XFireRemovalInventory')
+	dependsOn tasks.named('verifyPhase4OperationBaselineExceptions')
 }
 
 tasks.register('freezePhase4XFireContracts') {
@@ -358,24 +679,52 @@ tasks.register('freezePhase4XFireContracts') {
 			'responses/ExternalSales.headers',
 			'responses/WebService.headers',
 			'round-trips.tsv',
-			'operations.tsv'
+			'operations.tsv',
+			'operation-round-trips.tsv',
+			'operation-known-residuals.tsv',
+			'operation-contract-mismatches.tsv'
 		]
+		def operationEvidenceRoot = new File(oracle, 'operations')
+		def operationEvidence = project.fileTree(operationEvidenceRoot)
+			.matching {
+				include '**/request.xml'
+				include '**/response.xml'
+				include '**/headers'
+				include '**/case.tsv'
+			}
+			.files.collect {
+				'operations/' + operationEvidenceRoot.toPath()
+					.relativize(it.toPath()).toString()
+					.replace(File.separatorChar, '/' as char)
+			}
+			.sort()
+		if (operationEvidence.size() != 132) {
+			throw new GradleException(
+				"Expected four evidence files for each of 33 operations, got "
+					+ operationEvidence.size())
+		}
+		required.addAll(operationEvidence)
 		def missing = required.findAll { !new File(oracle, it).isFile() }
 		if (!missing.isEmpty()) {
 			throw new GradleException("Cannot freeze incomplete oracle: ${missing}")
 		}
-		project.delete(project.fileTree(phase4FrozenContracts).matching {
-			exclude 'normalization-policy.md'
-		})
 		required.each { relativePath ->
 			def source = new File(oracle, relativePath)
 			def target = new File(phase4FrozenContracts, relativePath)
 			target.parentFile.mkdirs()
 			target.bytes = normalizePhase4Contract(relativePath, source.bytes)
 		}
+		def frozenPaths = project.fileTree(phase4FrozenContracts)
+			.matching {
+				exclude 'manifest.sha256', 'normalization-policy.md'
+			}
+			.files.collect {
+				phase4FrozenContracts.toPath().relativize(it.toPath()).toString()
+			}
+			.sort()
 		def digest = MessageDigest.getInstance('SHA-256')
 		new File(phase4FrozenContracts, 'manifest.sha256').withWriter('UTF-8') { writer ->
-			required.sort().each { relativePath ->
+			frozenPaths.each { relativePath ->
 				digest.reset()
 				def hash = digest.digest(
 					new File(phase4FrozenContracts, relativePath).bytes)
@@ -395,6 +744,7 @@ tasks.register('verifyPhase4FrozenContracts') {
 		if (!manifest.isFile()) {
 			throw new GradleException('Frozen Phase 4 contract manifest is missing')
 		}
+
 		def expected = manifest.readLines().collectEntries { line ->
 			def match = line =~ /^([0-9a-f]{64})  (.+)$/
 			if (!match.matches()) {
@@ -424,6 +774,89 @@ tasks.register('verifyPhase4FrozenContracts') {
 	}
 }
 
+tasks.register('verifyPhase4OperationScenarios') {
+	group = 'verification'
+	description = 'Fails unless every SOAP operation has one owned scenario decision'
+	def operationsFile = file(
+		'org.adempiere.webservice/contracts/xfire-v1/operations.tsv')
+	def scenariosFile = file('gradle/phase4/operation-scenarios.tsv')
+	inputs.files operationsFile, scenariosFile
+	doLast {
+		def operationKeys = operationsFile.readLines()
+			.findAll { it && !it.startsWith('#') }
+			.collect { line ->
+				def fields = line.split('\t', -1)
+				"${fields[0]}.${fields[1]}"
+			} as Set
+		def rows = scenariosFile.readLines()
+			.findAll { it && !it.startsWith('#') }
+		def scenarioKeys = [] as Set
+		def allowedScenarios = [
+			'none',
+			'fault-only-legacy-login-defect',
+			'valid-credential-security-fault',
+			'binding-residual',
+			'valid-credential-config-fault',
+			'authenticated-success'
+		] as Set
+		def allowedStatuses = [
+			'captured',
+			'pending',
+			'residual-captured'
+		] as Set
+		rows.eachWithIndex { line, index ->
+			def fields = line.split('\t', -1)
+			if (fields.length != 8) {
+				throw new GradleException(
+					"Scenario row ${index + 2} must have 8 fields")
+			}
+			def key = "${fields[0]}.${fields[1]}"
+			if (!scenarioKeys.add(key)) {
+				throw new GradleException("Duplicate scenario row ${key}")
+			}
+			if (!allowedScenarios.contains(fields[3])) {
+				throw new GradleException(
+					"Unknown additional scenario ${fields[3]} for ${key}")
+			}
+			if (!allowedStatuses.contains(fields[4])) {
+				throw new GradleException(
+					"Unknown scenario status ${fields[4]} for ${key}")
+			}
+			if (fields[2].isEmpty() || fields[5].isEmpty()
+					|| fields[6].isEmpty() || fields[7].isEmpty()) {
+				throw new GradleException(
+					"Scenario ownership is incomplete for ${key}")
+			}
+			if (fields[4] == 'captured'
+					&& fields[3] in [
+						'valid-credential-security-fault',
+						'valid-credential-config-fault',
+						'authenticated-success'
+					]) {
+				def scenarioDirectory = new File(
+					phase4FrozenContracts,
+					"operations/${fields[0]}/${fields[1]}/${fields[3]}")
+				def missing = [
+					'request.xml',
+					'response.xml',
+					'headers',
+					'case.tsv'
+				].findAll { !new File(scenarioDirectory, it).isFile() }
+				if (!missing.isEmpty()) {
+					throw new GradleException(
+						"Captured scenario evidence is incomplete for ${key}: ${missing}")
+				}
+			}
+		}
+		if (scenarioKeys != operationKeys) {
+			throw new GradleException(
+				"Scenario keys differ from operation inventory: "
+					+ "missing=${operationKeys - scenarioKeys}, "
+					+ "added=${scenarioKeys - operationKeys}")
+		}
+	}
+}
+
 tasks.register('verifyPhase4OracleMatchesFrozen') {
 	group = 'verification'
 	description = 'Compares fresh live XFire evidence with the approved frozen oracle'
@@ -433,6 +866,9 @@ tasks.register('verifyPhase4OracleMatchesFrozen') {
 		def manifest = new File(phase4FrozenContracts, 'manifest.sha256')
 		def expectedPaths = manifest.readLines().collect {
 			(it =~ /^[0-9a-f]{64}  (.+)$/)[0][1]
+		}.findAll {
+			!it.contains('/valid-credential-')
+				&& !it.contains('/authenticated-success/')
 		}
 		def oracle = phase4EvidenceDir.get().dir('oracle').asFile
 		def drift = expectedPaths.findAll { relativePath ->
@@ -450,30 +886,285 @@ tasks.register('verifyPhase4OracleMatchesFrozen') {
 
 tasks.register('phase4ContractMutationProof') {
 	group = 'verification'
-	description = 'Proves a deliberate frozen-WSDL mutation is detected'
+	description = 'Proves WSDL, operation, response, and fault mutations are detected'
 	dependsOn tasks.named('verifyPhase4FrozenContracts')
 	doLast {
-		def source = new File(phase4FrozenContracts, 'wsdl/ADService.wsdl')
-		def mutated = source.text.replaceFirst('name="ADService"', 'name="MutatedADService"')
-		if (mutated == source.text) {
-			throw new GradleException('Mutation fixture did not alter the ADService WSDL')
-		}
-
-		tasks.named('check') {
-			dependsOn tasks.named('verifyPhase4FrozenContracts')
-			dependsOn tasks.named('phase4ContractMutationProof')
-		}
+		def manifest = new File(phase4FrozenContracts, 'manifest.sha256')
+			.readLines().collectEntries { line ->
+				def match = line =~ /^([0-9a-f]{64})  (.+)$/
+				[(match[0][2]): match[0][1]]
+			}
+		def mutations = [
+			[
+				path: 'wsdl/ADService.wsdl',
+				before: 'name="ADService"',
+				after: 'name="MutatedADService"'
+			],
+			[
+				path: 'operations.tsv',
+				before: 'ADService\tgetVersion\t',
+				after: 'ADService\tgetVersionMutated\t'
+			],
+			[
+				path: 'operations/ADService/getVersion/baseline/response.xml',
+				before: '>0.7.0</out>',
+				after: '>mutated</out>'
+			],
+			[
+				path: 'operations/ExternalSales/getProductsCatalog/baseline/response.xml',
+				before: '<faultstring>Invalid user/password</faultstring>',
+				after: '<faultstring>Mutated fault</faultstring>'
+			]
+		]
 		def digest = MessageDigest.getInstance('SHA-256')
-		def sourceHash = digest.digest(source.bytes)
-		digest.reset()
-		def mutatedHash = digest.digest(mutated.getBytes('UTF-8'))
-		if (Arrays.equals(sourceHash, mutatedHash)) {
-			throw new GradleException('Contract mutation was not detected')
+		def evidenceLines = []
+		mutations.each { mutation ->
+			def source = new File(phase4FrozenContracts, mutation.path)
+			def mutated = source.text.replace(mutation.before, mutation.after)
+			if (mutated == source.text) {
+				throw new GradleException(
+					"Mutation fixture did not alter ${mutation.path}")
+			}
+			digest.reset()
+			def mutatedHash = digest.digest(mutated.getBytes('UTF-8'))
+				.collect { String.format('%02x', it) }.join()
+			if (mutatedHash == manifest[mutation.path]) {
+				throw new GradleException(
+					"Contract mutation was not detected for ${mutation.path}")
+			}
+			evidenceLines.add(
+				"PASS: mutation changed frozen SHA-256 for ${mutation.path}.")
 		}
 		def evidence = phase4EvidenceDir.get().file('contracts/mutation-proof.txt').asFile
 		evidence.parentFile.mkdirs()
-		evidence.text =
-			'PASS: changing the ADService service QName changed its frozen SHA-256.\n'
+		evidence.text = evidenceLines.join('\n') + '\n'
+	}
+}
+
+tasks.named('check') {
+	dependsOn tasks.named('verifyPhase4FrozenContracts')
+	dependsOn tasks.named('verifyPhase4OperationScenarios')
+	dependsOn tasks.named('phase4ContractMutationProof')
+}
+
+tasks.register('phase4BusinessTest') {
+	group = 'verification'
+	description = 'Builds the Ant-owned business seam and runs isolated neutral tests'
+	dependsOn tasks.named('phase3AntNoDatabaseBuild')
+	dependsOn ':org.adempiere.webservice:businessTest'
+}
+
+tasks.register('phase4FinalChecks') {
+	group = 'verification'
+	description = 'Runs final Phase 4 checks against an existing Phase 3 product build'
+	dependsOn tasks.named('verifyPhase4FrozenContracts')
+	dependsOn tasks.named('verifyPhase4OperationScenarios')
+	dependsOn tasks.named('verifyPhase4RouteClasses')
+	dependsOn tasks.named('verifyPhase4XFireRemovalInventory')
+	dependsOn tasks.named('verifyPhase4XFireAbsent')
+	dependsOn ':org.adempiere.webservice:check'
+	dependsOn ':org.adempiere.webservice:businessTest'
+	dependsOn ':org.adempiere.webservice:routerTest'
+	dependsOn ':org.adempiere.webservice:verifyModernSoapWar'
+}
+
+tasks.register('phase4FinalVerification') {
+	group = 'verification'
+	description = 'Runs all database-neutral final Phase 4 contract and XFire-removal gates'
+	dependsOn tasks.named('phase3NoDatabaseDistribution')
+	dependsOn tasks.named('phase4FinalChecks')
+}
+
+tasks.register('phase4ModernSoapRuntime') {
+	group = 'verification'
+	description = 'Builds the isolated CXF/Jakarta SOAP runtime after the Phase 3 distribution'
+	dependsOn tasks.named('phase3NoDatabaseDistribution')
+	dependsOn ':org.adempiere.webservice:verifyModernSoapWar'
+}
+
+tasks.register('phase4ModernSoapRuntimeSmoke', Exec) {
+	group = 'verification'
+	description = 'Boots pinned Tomcat 10.1 and verifies the internal CXF API'
+	dependsOn tasks.named('phase4ModernSoapRuntime')
+	commandLine file('scripts/phase4/smoke-cxf-runtime.sh')
+}
+
+tasks.register('preparePhase4OperationScenarios', Exec) {
+	group = 'verification'
+	description = 'Prepares deterministic fixtures in the marker-owned Phase 4 database'
+	dependsOn tasks.named('phase3AntDatabaseBuild')
+	commandLine(
+		file('scripts/phase4/prepare-operation-scenarios.sh'),
+		phase4DbHost.get(),
+		phase4DbPort.get(),
+		phase4DbName.get(),
+		phase4DbUser.get(),
+		phase4DbPassword.get(),
+		phase4DatabaseMarker)
+}
+
+tasks.register('phase4ModernSoapDatabaseSmoke', Exec) {
+	group = 'verification'
+	description = 'Replays database-backed frozen contracts on the isolated CXF API'
+	dependsOn tasks.named('preparePhase4OperationScenarios')
+	dependsOn ':org.adempiere.webservice:verifyModernSoapWar'
+	commandLine file('scripts/phase4/smoke-cxf-runtime.sh'), 'full'
+}
+
+tasks.register('stagePhase4InstalledApi') {
+	group = 'verification'
+	description = 'Stages the modern SOAP WAR and pinned runtime metadata in the installed product'
+	dependsOn ':org.adempiere.webservice:verifyModernSoapWar'
+	doLast {
+		copy {
+			from rootProject.file(
+				'org.adempiere.webservice/build/libs/ADInterface-Modern-1.0.war')
+			into rootProject.file('build/phase3/runtime/Adempiere/lib')
+		}
+		copy {
+			from rootProject.file('gradle/phase4/runtime.properties')
+			into rootProject.file('build/phase3/runtime/Adempiere/config')
+			rename { 'phase4-runtime.properties' }
+		}
+	}
+}
+
+tasks.register('preparePhase4InstalledApi', Exec) {
+	group = 'verification'
+	description = 'Installs checksum-pinned Tomcat 10.1 and the modern SOAP WAR alongside Tomcat 9'
+	dependsOn tasks.named('stagePhase4InstalledApi')
+	commandLine(
+		file('scripts/phase4/prepare-tomcat10.sh'),
+		rootProject.file('build/phase3/runtime/Adempiere/tomcat10-api'),
+		rootProject.file('build/phase3/runtime/Adempiere/lib/ADInterface-Modern-1.0.war'),
+		rootProject.file('build/phase3/runtime/Adempiere'))
+}
+
+tasks.register('verifyPhase4InstalledApi', Exec) {
+	group = 'verification'
+	description = 'Fails when the installed CXF API topology is incomplete or publicly bound'
+	dependsOn tasks.named('preparePhase4InstalledApi')
+	commandLine(
+		file('scripts/phase4/verify-installed-api.sh'),
+		projectDir,
+		rootProject.file('build/phase3/runtime/Adempiere'),
+		rootProject.file('org.adempiere.webservice/build/libs/ADInterface-Modern-1.0.war'),
+		file('gradle/phase4/installed-artifacts.txt'))
+}
+
+tasks.register('stagePhase4ReleaseApi') {
+	group = 'verification'
+	description = 'Stages the modern SOAP WAR and runtime metadata in the release distribution tree'
+	dependsOn ':org.adempiere.webservice:verifyModernSoapWar'
+	doLast {
+		def distributionHome = rootProject.file('install/build/Adempiere')
+		if (!distributionHome.isDirectory()) {
+			throw new GradleException(
+				"Phase 4 release staging home is missing: ${distributionHome}")
+		}
+		copy {
+			from rootProject.file(
+				'org.adempiere.webservice/build/libs/ADInterface-Modern-1.0.war')
+			into new File(distributionHome, 'lib')
+		}
+		copy {
+			from rootProject.file('gradle/phase4/runtime.properties')
+			into new File(distributionHome, 'config')
+			rename { 'phase4-runtime.properties' }
+		}
+	}
+}
+
+tasks.register('preparePhase4ReleaseApi', Exec) {
+	group = 'verification'
+	description = 'Stages checksum-pinned Tomcat 10.1 in the unconfigured release tree'
+	dependsOn tasks.named('stagePhase4ReleaseApi')
+	commandLine(
+		file('scripts/phase4/prepare-tomcat10.sh'),
+		rootProject.file('install/build/Adempiere/tomcat10-api'),
+		rootProject.file('install/build/Adempiere/lib/ADInterface-Modern-1.0.war'),
+		rootProject.file('install/build/Adempiere'))
+}
+
+tasks.register('packagePhase4ReleaseApi', Exec) {
+	group = 'verification'
+	description = 'Rebuilds the existing 394LTS ZIP and TAR names with the isolated API runtime'
+	dependsOn tasks.named('preparePhase4ReleaseApi')
+	commandLine(
+		file('scripts/phase4/package-installed-api.sh'),
+		projectDir,
+		rootProject.file('install/build/Adempiere'),
+		'394LTS')
+}
+
+tasks.register('verifyPhase4ReleaseApi', Exec) {
+	group = 'verification'
+	description = 'Verifies both release archives contain the unconfigured CXF API topology'
+	dependsOn tasks.named('packagePhase4ReleaseApi')
+	commandLine(
+		file('scripts/phase4/verify-release-api.sh'),
+		rootProject.file('install/build/Adempiere_394LTS.zip'),
+		rootProject.file('install/build/Adempiere_394LTS.tar.gz'),
+		file('gradle/phase4/installed-artifacts.txt'))
+}
+
+tasks.register('phase4CompatibilityRouterSmoke', Exec) {
+	group = 'verification'
+	description = 'Proves both historical public paths route the complete corpus only to CXF'
+	dependsOn tasks.named('preparePhase4OperationScenarios')
+	dependsOn ':org.adempiere.webservice:routerTest'
+	dependsOn ':org.adempiere.webservice:verifyModernSoapWar'
+	commandLine(
+		'bash',
+		file('scripts/phase4/smoke-compatibility-router.sh'),
+		phase4DbHost.get(),
+		phase4DbPort.get(),
+		phase4DbName.get(),
+		phase4DbUser.get(),
+		phase4DbPassword.get(),
+		phase4DbSystemPassword.getOrElse(''),
+		phase4DatabaseMarker)
+}
+
+tasks.register('phase4InstalledApi', Exec) {
+	group = 'verification'
+	description = 'Canonical installed XFire-free API gate through both historical public paths'
+	dependsOn tasks.named('preparePhase4OperationScenarios')
+	dependsOn tasks.named('phase4FinalChecks')
+	dependsOn tasks.named('verifyPhase4InstalledApi')
+	dependsOn tasks.named('verifyPhase4ReleaseApi')
+	commandLine(
+		'bash',
+		file('scripts/phase4/smoke-compatibility-router.sh'),
+		phase4DbHost.get(),
+		phase4DbPort.get(),
+		phase4DbName.get(),
+		phase4DbUser.get(),
+		phase4DbPassword.get(),
+		phase4DbSystemPassword.getOrElse(''),
+		phase4DatabaseMarker,
+		rootProject.file('build/phase3/runtime/Adempiere'),
+		rootProject.file('build/phase3/runtime/Adempiere/tomcat10-api'),
+		rootProject.file('build/phase3/runtime/Adempiere/lib/ADInterface-Modern-1.0.war'))
+}
+
+gradle.projectsEvaluated {
+	project(':org.adempiere.webservice')
+		.tasks.named('compileLegacyWebService') {
+			mustRunAfter tasks.named('phase3AntNoDatabaseBuild')
+		}
+	[
+		'compileCxfJava',
+		'modernAdempiereCoreJar',
+		'modernAdempierePackagesJar',
+		'modernLegacyRuntimeJar',
+		'modernSoapWar',
+		'verifyModernSoapWar'
+	].each { taskName ->
+		project(':org.adempiere.webservice').tasks.named(taskName) {
+			mustRunAfter tasks.named('phase3NoDatabaseDistribution')
+			mustRunAfter tasks.named('phase3AntDatabaseBuild')
+		}
 	}
 }
 
@@ -481,4 +1172,7 @@ tasks.named('cleanupPhase3Database') {
 	mustRunAfter tasks.named('phase4XFireOracleSmoke')
 	mustRunAfter tasks.named('generatePhase4SoapOperationInventory')
 	mustRunAfter tasks.named('phase4OraclePreflight')
+	mustRunAfter tasks.named('phase4ModernSoapDatabaseSmoke')
+	mustRunAfter tasks.named('phase4CompatibilityRouterSmoke')
+	mustRunAfter tasks.named('phase4InstalledApi')
 }

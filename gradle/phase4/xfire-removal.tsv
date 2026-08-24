@@ -1,0 +1,23 @@
+# path	disposition	rationale
+.github/copilot-instructions.md	retain-evidence	Keep the completed XFire-to-CXF compatibility history synchronized.
+ARCHITECTURE.md	retain-evidence	Keep the historical architecture and migration decision explicit.
+docs/modernization/phase-4-evidence.md	retain-evidence	Retain the approved legacy oracle, rollback, and removal evidence.
+docs/modernization/phase-4-transitional-state.md	retain-evidence	Record the now-closed T4-1 dual-runtime state and controls.
+gradle/phase4/contracts.gradle	migrate	Retain frozen-oracle tasks as historical evidence and enforce active XFire absence.
+gradle/phase4/route-classes.tsv	migrate	Preserve the historical public XFireServlet URL as a CXF-only router alias.
+gradle/phase2/jdk-internals.tsv	retain-evidence	Retain the classified legacy oracle module flag as historical evidence.
+MODERNIZATION_PLAN.md	retain-evidence	Keep the completed XFire-to-CXF roadmap decisions and status.
+org.adempiere.webservice/build.gradle	retain-evidence	Keep XFire as a forbidden transport-neutral dependency.
+org.adempiere.webservice/contracts/xfire-v1/normalization-policy.md	retain-evidence	Retain the approved XFire oracle normalization policy.
+org.adempiere.webservice/contracts/xfire-v1/operations.tsv	retain-evidence	Retain the authoritative operation inventory and legacy endpoint evidence.
+org.adempiere.webservice/Notes/HowToAddNewWebService.txt	retain-evidence	Reference the frozen XFire-versioned contract corpus from current CXF authoring guidance.
+org.adempiere.webservice/build.xml	migrate	Package only the frozen XFire-versioned static WSDL resources in the CXF-only compatibility WAR.
+org.adempiere.webservice/src/router/java/org/adempiere/webservice/router/SoapCompatibilityRouter.java	migrate	Retain the historical public alias and reject any retired XFire target audit.
+org.adempiere.webservice/WEB-INF/web.xml	migrate	Preserve the public XFireServlet URL alias while routing only to CXF.
+README.md	retain-evidence	Keep the modernization history while documenting the active CXF runtime.
+scripts/phase4/smoke-xfire-oracle.sh	retain-evidence	Retain the approved rollback-oracle harness without active packaging.
+scripts/phase4/smoke-cxf-api.sh	retain-evidence	Retain XFire-free replay assertions and frozen-oracle paths.
+scripts/phase4/smoke-compatibility-router.sh	migrate	Verify CXF-only routing through both historical public paths.
+scripts/phase4/verify-installed-api.sh	migrate	Reject XFire artifacts and publication from the installed compatibility WAR.
+scripts/phase4/verify-modern-soap-war.sh	retain-evidence	Retain the XFire absence gate for the modern deployable.
+scripts/phase4/verify-release-api.sh	migrate	Reject XFire artifacts and publication from both release archives.

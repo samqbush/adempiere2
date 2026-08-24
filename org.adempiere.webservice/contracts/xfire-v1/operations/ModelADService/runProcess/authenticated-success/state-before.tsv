@@ -1,0 +1,2 @@
+table	record_id	document_no	doc_status	doc_action	processed
+C_Invoice	103	200002	CO	--	Y
