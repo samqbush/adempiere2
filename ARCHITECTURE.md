@@ -80,9 +80,11 @@ developer-oriented experimental path with machine-specific assumptions.
 | `./gradlew phase5aFinalVerification --dependency-verification=strict` | Database-neutral Phase 5a gate: regenerates and byte-compares ZK source/runtime, web-asset, namespace, and route inventories; verifies the public ZK CE 10.3.0.1-jakarta target; and preserves Phase 4 SOAP assertions during the non-SOAP route hand-off. | `gradle/phase5/contracts.gradle`, `scripts/phase5/generate-inventories.sh`, `scripts/phase5/verify-zk-target.sh`, `docs/modernization/phase-5a-evidence.md`. |
 | `./gradlew phase5bFinalVerification --dependency-verification=strict` | Database-neutral Phase 5b gate: verifies the frozen legacy web oracle in `contracts/legacy-web-v1/` against recursive WAR/nested-JAR logical digests, asserts every deployed non-SOAP route is covered with a stated proof strength or excluded with an owner and closing gate, proves the normalizer is not over-normalizing, and pins 24 runtime coordinates. Chains `phase5aFinalVerification`. | `gradle/phase5/oracle.gradle`, `scripts/phase5/`, `contracts/legacy-web-v1/`. |
 | `./gradlew phase5bLegacyWebOracleSmoke -Pphase3DbSystemPassword='<password>' --dependency-verification=strict` | Database-backed Phase 5b gate: boots the installed Tomcat 9 product against marker-owned PostgreSQL, drives the ZK 3.6 AU protocol through login, role selection, menu and logout, captures twice with a fixture reset between runs, and replays both against the frozen oracle. | `scripts/phase5/run-legacy-web-oracle-lane.sh`, `scripts/phase5/capture-legacy-web-oracle.sh`, `scripts/phase5/replay-legacy-web-oracle.sh`. |
+| `./gradlew phase5cFinalVerification --dependency-verification=strict` | Database-neutral Phase 5c gate: verifies the packaging-only ZK Jakarta WAR and 503 marker, deterministic transformer fixtures and report-only legacy scan, additive installed/release overlay, Phase 4 API preservation, binding ADR, and artifact rollback. | `gradle/phase5/beachhead.gradle`, `zkwebui/build.gradle`, `scripts/phase5/`, `docs/modernization/phase-5c-evidence.md`. |
+| `./gradlew phase5cRollbackRehearsal -Pphase3DbSystemPassword='<password>' --dependency-verification=strict` | Database-backed Phase 5c gate: chains the Phase 5b wire replay, two fixture-isolated Playwright semantic captures, browser mutation proof, and removal of the additive overlay while preserving Phase 4. | `contracts/legacy-web-browser-v1/`, `zkwebui/src/browserTest/`, `scripts/phase5/verify-web-overlay-rollback.sh`. |
 | `ant build -Dnodbrestore=true` | Underlying authoritative Ant product build without database restore. The Phase 3 Gradle task supplies guarded installation paths and JDK 21. | `build.xml`, `gradle/phase3/distribution.gradle`. |
 | `ant build -Dnodbrestore=false` | Underlying database-enabled Ant build. Run only through an approved disposable environment with explicit release scoping. | `build.xml`, `gradle/phase3/distribution.gradle`. |
-| `./gradlew build --dependency-verification=strict` | Reproducible JDK 21 module gate across 29 included projects. It executes the core unit gate and publishes Java 21 bytecode. It does **not** build every Ant deployable. | `.github/workflows/build_with_gradle.yml`, `settings.gradle`, `docs/modernization/phase-1-evidence.md`. |
+| `./gradlew build --dependency-verification=strict` | Reproducible JDK 21 module gate across 30 included projects. It executes the core unit gate and publishes Java 21 bytecode. It does **not** build every Ant deployable; `:zkwebui` is a Phase 5c packaging beachhead, not the legacy source build. | `.github/workflows/build_with_gradle.yml`, `settings.gradle`, `gradle/phase3/topology.tsv`. |
 | `./gradlew publish --dependency-verification=strict` | Publishes Gradle artifacts to Maven Central staging during a published release using JDK 21. Release publication rejects previously used versions and declares JDK 21 as the minimum. | `.github/workflows/publish_with_gradle.yml`, `.github/workflows/build_with_gradle.yml`, `gradle/phase2/release-contract.properties`. |
 | `./utils/RUN_Adempiere.sh` | Starts the desktop Swing client. | `utils/RUN_Adempiere.sh#L20-L42`. |
 | `./utils/RUN_Server2.sh` | Starts the selected external WildFly, Tomcat, or Jetty server. | `utils/RUN_Server2.sh#L20-L85`. |
@@ -138,9 +140,8 @@ not merge blocking (`README.md#L1-L10`).
 
 The Ant `jar` reactor enumerates 32 build directories, including deployable web
 applications and database components; the separate `build` target also invokes
-the installer (`utils_dev/build.xml#L20-L58`). Gradle has 29 include
-declarations but only 28 unique projects because `org.spin.authentication`
-appears twice (`settings.gradle#L3-L31`).
+the installer (`utils_dev/build.xml#L20-L58`). Gradle now has 30 unique projects,
+including the packaging-only Phase 5c `:zkwebui` project.
 
 **[Resolved contradiction] Ant and Gradle do not mean the same thing by
 "build."** Gradle omits important Ant deployables, including `zkwebui`,
@@ -150,7 +151,7 @@ path; `ant build` is the product distribution path.
 
 Phase 3 makes that asymmetry executable rather than implicit:
 `gradle/phase3/topology.tsv` classifies all 32 Ant reactor entries, the separate
-installer and embedded surfaces, all 29 Gradle projects, and the JBoss facet
+installer and embedded surfaces, all 30 Gradle projects, and the JBoss facet
 quarantine. The installed Tomcat 9 bridge deploys seven WARs. DB-backed metadata
 validation checks active process, validator, workflow/reference, entity, and
 generated-model bindings; 16 pre-existing active process bindings are an
@@ -165,6 +166,7 @@ explicit fail-on-drift quarantine in `gradle/phase3/metadata-quarantine.tsv`.
 | CI database | PostgreSQL 14.6 | Service container in Ant and release workflows (`.github/workflows/main.yml#L22-L38`, `.github/workflows/release.yml#L18-L31`). |
 | CI application server | Tomcat 9.0.121 | Checksum-verified and exercised with the installed seven-WAR product (`gradle/phase2/runtime.properties`, `scripts/phase3/prepare-tomcat9.sh`, `scripts/phase3/smoke-tomcat9.sh`). |
 | Phase 4 API server (XFire retired) | Isolated Tomcat 10.1.59 on JDK 21 with CXF 4.1.8/Jakarta EE 10 behind Tomcat 9 | The distinct modern WAR boots on loopback, serves the four approved static WSDLs, and passes all 33 direct baselines plus 11 valid-credential/security scenarios and four mutation-state comparisons. After per-service and atomic `ADService` rollback rehearsal, the Tomcat 9 router became CXF-only while retaining both historical paths. Source, descriptors, checked-in binaries, installed WARs, and both 394LTS archives reject active XFire; the archives retain executable launchers and omit `AdempiereEnv.properties`. Phase 4 merged to `develop` as `8c0ca4c1d6b35a5f366d6dd2150ed3bb27bc2a89`; Phase 5 now owns the reviewed non-SOAP route contract while Phase 4 retains exact SOAP assertions (`gradle/phase4/runtime.properties`, `gradle/phase5/route-contracts.tsv`, `scripts/phase4/verify-release-api.sh`, `scripts/phase4/smoke-compatibility-router.sh`). |
+| Phase 5c web beachhead | ZK CE 10.3.0.1-jakarta packaging WAR on the existing loopback Tomcat 10.1.59 process | The additive `webui-modern.war` contains no legacy application source and exposes only a fail-closed 503 marker. Tomcat 9 remains sole browser ingress; future cohort affinity and modern session mapping are binding design only. The same checksummed overlay is staged in the installed tree and both 394LTS archives without changing the Phase 4 API WAR (`docs/modernization/phase-5c-ingress-session-adr.md`, `gradle/phase5/beachhead.gradle`). |
 | Installed application server | External Tomcat by default, under `/opt/tomcat`; WildFly and Jetty are selectable | `install/Adempiere/AdempiereEnvTemplate.properties#L28-L38`, `utils/RUN_Server2.sh#L20-L85`. No runtime version is pinned by the environment template. |
 | Experimental sbt servers | Tomcat/webapp-runner 9.0.41.0 and Jetty 10.0.12 | `build.sbt#L99-L178`. |
 | Product version | 3.9.4 / `394LTS`; environment template release `3.9.4` | `utils_dev/build.properties#L5-L6`, `install/Adempiere/AdempiereEnvTemplate.properties#L74-L76`. |

@@ -1,0 +1,47 @@
+# This is a Gradle generated file for dependency locking.
+# Manual edits can break the build and are not advised.
+# This file is expected to be part of source control.
+biz.aQute.bnd:biz.aQute.bnd.transform:7.0.0=phase5Transformer
+com.google.code.gson:gson:2.14.0=browserTestCompileClasspath,browserTestRuntimeClasspath
+com.google.errorprone:error_prone_annotations:2.36.0=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+com.google.errorprone:error_prone_annotations:2.48.0=browserTestCompileClasspath,browserTestRuntimeClasspath
+com.google.guava:failureaccess:1.0.3=browserTestCompileClasspath,browserTestRuntimeClasspath,compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+com.google.guava:guava:33.4.8-jre=browserTestCompileClasspath,browserTestRuntimeClasspath,compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava=browserTestCompileClasspath,browserTestRuntimeClasspath,compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+com.google.j2objc:j2objc-annotations:3.0.0=browserTestCompileClasspath,browserTestRuntimeClasspath,compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+com.microsoft.playwright:driver-bundle:1.62.0=browserTestCompileClasspath,browserTestRuntimeClasspath
+com.microsoft.playwright:driver:1.62.0=browserTestCompileClasspath,browserTestRuntimeClasspath
+com.microsoft.playwright:playwright:1.62.0=browserTestCompileClasspath,browserTestRuntimeClasspath
+commons-cli:commons-cli:1.9.0=phase5Transformer
+commons-io:commons-io:2.19.0=browserTestCompileClasspath,browserTestRuntimeClasspath,compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+jakarta.servlet:jakarta.servlet-api:6.0.0=compileClasspath
+org.apache-extras.beanshell:bsh:2.0b6=browserTestCompileClasspath,browserTestRuntimeClasspath,compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+org.apache.commons:commons-fileupload2-core:2.0.0-M4=browserTestCompileClasspath,browserTestRuntimeClasspath,compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+org.apache.commons:commons-fileupload2-jakarta-servlet5:2.0.0-M4=browserTestCompileClasspath,browserTestRuntimeClasspath,compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+org.apache.httpcomponents.core5:httpcore5:5.2.4=browserTestCompileClasspath,browserTestRuntimeClasspath,compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+org.apiguardian:apiguardian-api:1.1.0=browserTestCompileClasspath,browserTestRuntimeClasspath
+org.eclipse.transformer:org.eclipse.transformer.cli:1.0.0=phase5Transformer
+org.eclipse.transformer:org.eclipse.transformer.jakarta:1.0.0=phase5Transformer
+org.eclipse.transformer:org.eclipse.transformer:1.0.0=phase5Transformer
+org.javassist:javassist:3.29.2-GA=browserTestCompileClasspath,browserTestRuntimeClasspath,compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+org.jspecify:jspecify:1.0.0=browserTestCompileClasspath,browserTestRuntimeClasspath,compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+org.junit.jupiter:junit-jupiter-api:5.7.0=browserTestCompileClasspath,browserTestRuntimeClasspath
+org.junit.jupiter:junit-jupiter-engine:5.7.0=browserTestRuntimeClasspath
+org.junit.platform:junit-platform-commons:1.7.0=browserTestCompileClasspath,browserTestRuntimeClasspath
+org.junit.platform:junit-platform-engine:1.7.0=browserTestRuntimeClasspath
+org.junit:junit-bom:5.7.0=browserTestCompileClasspath,browserTestRuntimeClasspath
+org.opentest4j:opentest4j:1.3.0=browserTestCompileClasspath,browserTestRuntimeClasspath
+org.owasp.encoder:encoder:1.3.1=browserTestCompileClasspath,browserTestRuntimeClasspath,compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+org.slf4j:slf4j-api:1.7.36=phase5Transformer
+org.slf4j:slf4j-api:2.0.7=browserTestCompileClasspath,browserTestRuntimeClasspath,compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+org.slf4j:slf4j-simple:1.7.36=phase5Transformer
+org.zkoss.common:zcommon:10.3.0.1-jakarta=browserTestCompileClasspath,browserTestRuntimeClasspath,compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+org.zkoss.common:zel:10.3.0.1-jakarta=browserTestCompileClasspath,browserTestRuntimeClasspath,compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+org.zkoss.common:zweb:10.3.0.1-jakarta=browserTestCompileClasspath,browserTestRuntimeClasspath,compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+org.zkoss.zk:zhtml:10.3.0.1-jakarta=browserTestCompileClasspath,browserTestRuntimeClasspath,compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+org.zkoss.zk:zk:10.3.0.1-jakarta=browserTestCompileClasspath,browserTestRuntimeClasspath,compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+org.zkoss.zk:zkplus:10.3.0.1-jakarta=browserTestCompileClasspath,browserTestRuntimeClasspath,compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+org.zkoss.zk:zkwebfragment:10.3.0.1-jakarta=browserTestCompileClasspath,browserTestRuntimeClasspath,compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+org.zkoss.zk:zul:10.3.0.1-jakarta=browserTestCompileClasspath,browserTestRuntimeClasspath,compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+org.zkoss:zsoup:1.8.2.5=browserTestCompileClasspath,browserTestRuntimeClasspath,compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+empty=annotationProcessor,browserTestAnnotationProcessor,providedCompile,providedRuntime,testAnnotationProcessor

@@ -28,3 +28,4 @@
 :org.spin.store
 :serverRoot
 :tools
+:zkwebui

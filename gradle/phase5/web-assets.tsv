@@ -2,7 +2,7 @@
 JasperReportsWebApp/build.xml	xml	JasperReportsWebApp	javax.servlet	migrate-or-review	5d
 base/build.xml	xml	base	javax.servlet	migrate-or-review	5d
 base/xdoclet-build.xml	xml	base	javax.servlet	migrate-or-review	5d
-gradle/verification-metadata.xml	xml	gradle	javax.servlet,javax.mail,javax.annotation,javax.activation	migrate-or-review	5d
+gradle/verification-metadata.xml	xml	gradle	zk,javax.servlet,javax.mail,javax.annotation,javax.activation	migrate-or-review	5d
 install/Adempiere/build.xml	xml	install	javax.mail	migrate-or-review	5d
 org.adempiere.pos/.idea/libraries/SBT__javax_servlet_servlet_api_2_4_jar.xml	xml	org.adempiere.pos	javax.servlet	migrate-or-review	5d
 org.compiere.mobile/build.xml	xml	org.compiere.mobile	javax.servlet	migrate-or-review	5d

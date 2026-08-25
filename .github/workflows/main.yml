@@ -209,3 +209,71 @@ jobs:
           if-no-files-found: error
           path: |
             build/phase5b/replay/
+
+  phase-5c-packaging:
+    name: Phase 5c Jakarta web packaging beachhead
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Verify packaging, transformer, overlay and loopback runtime
+        uses: ./.github/actions/adempiere-build
+        with:
+          task: phase5cFinalVerification
+      - name: Upload Phase 5c packaging evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase5c-packaging-evidence
+          if-no-files-found: error
+          path: |
+            build/phase5c/
+            zkwebui/build/phase5c/transformer/
+            zkwebui/build/libs/webui-modern.war
+
+  phase-5c-browser-oracle:
+    name: Phase 5c semantic browser oracle replay
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:14.6
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      ADEMPIERE_PHASE2_DB_SYSTEM_PASSWORD: postgres
+      ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Replay browser oracles and rehearse Phase 5c rollback
+        uses: ./.github/actions/adempiere-build
+        with:
+          task: phase5cRollbackRehearsal
+      - name: Upload Phase 5c browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase5c-browser-oracle-evidence
+          if-no-files-found: error
+          path: |
+            zkwebui/build/phase5c/browser/
+            zkwebui/build/test-results/browserTest/
+            zkwebui/build/reports/tests/browserTest/
+            build/phase3/runtime/Adempiere/tomcat/logs/
+            build/phase5b/replay/
+            build/phase5c/rollback/rollback-evidence.txt

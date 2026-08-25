@@ -106,6 +106,7 @@ tasks.register('verifyPhase3Topology') {
 			'ant-only',
 			'ant-embedded',
 			'gradle-only',
+			'phase5-packaging-beachhead',
 			'phase3-quarantined'
 		]
 		def invalid = rows.findAll { !validClassifications.contains(it.classification) }

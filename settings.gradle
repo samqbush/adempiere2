@@ -9,6 +9,17 @@ dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         mavenCentral()
+        exclusiveContent {
+            forRepository {
+                maven {
+                    name = 'zkPublic'
+                    url = uri('https://mavensync.zkoss.org/maven2')
+                }
+            }
+            filter {
+                includeGroupByRegex 'org\\.zkoss(\\..*)?'
+            }
+        }
     }
 }
 
@@ -43,3 +54,4 @@ include ':org.spin.notifier.discord'
 include ':org.spin.notifier.telegram'
 include ':JasperReports'
 include ':serverRoot'
+include ':zkwebui'
