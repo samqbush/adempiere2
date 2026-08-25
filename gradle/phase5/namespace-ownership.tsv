@@ -170,6 +170,7 @@ zkwebui/WEB-INF/src/org/adempiere/webui/session/SessionManagerListener.java	java
 zkwebui/WEB-INF/src/org/adempiere/webui/session/SessionTimeoutFilter.java	javax.servlet	jakarta-web	zkwebui	migrate	5f
 zkwebui/WEB-INF/src/org/adempiere/webui/session/WebUIServlet.java	javax.servlet	jakarta-web	zkwebui	migrate	5f
 zkwebui/build.xml	javax.servlet	jakarta-web	zkwebui	migrate	5f
+zkwebui/src/transformerFixture/java/org/adempiere/webui/phase5c/LegacyFilterFixture.java	javax.servlet	jakarta-web	zkwebui	migrate	5f
 base/src/org/compiere/model/MClient.java	javax.mail	non-web-jakarta	base	defer	post-phase5
 base/src/org/compiere/model/MUser.java	javax.mail	non-web-jakarta	base	defer	post-phase5
 base/src/org/compiere/util/EMail.java	javax.mail	non-web-jakarta	base	defer	post-phase5

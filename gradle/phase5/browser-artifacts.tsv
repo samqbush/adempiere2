@@ -1,0 +1,5 @@
+# platform	component	revision	version	url	sha256	bytes	install_directory
+mac-arm64	chromium-headless-shell	1234	151.0.7922.34	https://cdn.playwright.dev/builds/cft/151.0.7922.34/mac-arm64/chrome-headless-shell-mac-arm64.zip	cb46a336dbe3d6f1339c5039c3083e4e5dd8e4379710790e34f8f4a865e2452d	99275008	chromium_headless_shell-1234
+mac-arm64	ffmpeg	1011	1011	https://cdn.playwright.dev/dbazure/download/playwright/builds/ffmpeg/1011/ffmpeg-mac-arm64.zip	7d77eb0d44b59acc4065faa2476c0df1a242cc904c346f820626818c953c5277	1097141	ffmpeg-1011
+linux-x64	chromium-headless-shell	1234	151.0.7922.34	https://cdn.playwright.dev/builds/cft/151.0.7922.34/linux64/chrome-headless-shell-linux64.zip	3cfc2bd00d1bafcf8a68dc74c9c92bb7150ddc8d26ade948a776316e1cec4f14	120231126	chromium_headless_shell-1234
+linux-x64	ffmpeg	1011	1011	https://cdn.playwright.dev/dbazure/download/playwright/builds/ffmpeg/1011/ffmpeg-linux.zip	ebc74fc5b94830176a3c2914ae96bd8bc7f6a91f4f33890230f84a172ee61ccc	2376500	ffmpeg-1011

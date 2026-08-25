@@ -86,15 +86,19 @@
       <fileset dir="${basedir}"
                excludes="
                     .settings/**,
-			      	bin/**,
-			      	dist/**,
-			      	.*,
-			      	work/**,
-			      	WEB-INF/src/**,
-					**/web.xml,
-					**/test/**,
-					WEB-INF/lib/*-sources.jar,
-					**/test.zul">
+                    bin/**,
+                    build/**,
+                    dist/**,
+                    .*,
+                    work/**,
+                    build.gradle,
+                    gradle.lockfile,
+                    src/**,
+                    WEB-INF/src/**,
+                    **/web.xml,
+                    **/test/**,
+                    WEB-INF/lib/*-sources.jar,
+                    **/test.zul">
       </fileset>
     </war>
 

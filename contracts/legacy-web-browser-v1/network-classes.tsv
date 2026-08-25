@@ -1,0 +1,12 @@
+# class	method	target
+context	GET	/adempiere/
+context	GET	/mobile/
+context	GET	/webui/
+context	GET	/wstore/
+external	GET	fonts.googleapis.com
+external	GET	sfx-images.mozilla.org
+external	GET	www.adempiere.com
+external	GET	www.google.com
+external	GET	www.zkoss.org
+zkau	GET
+zkau	POST

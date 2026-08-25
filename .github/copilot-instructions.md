@@ -11,7 +11,7 @@ component is testable. The plan-wide reproducible-CI Milestone is Phase 1, when
 the existing Ant unit-test baseline is recorded and Gradle must become
 reproducible and execute meaningful tests instead of `NO-SOURCE`.
 
-Phases 1-4 are merged to `develop`; Phase 4 completed as
+Phases 1-4, Phase 5a, and Phase 5b are merged to `develop`; Phase 4 completed as
 `8c0ca4c1d6b35a5f366d6dd2150ed3bb27bc2a89`. All 33 XFire
 operation baselines and 11 additional scenarios now pass on the isolated CXF
 4.1.8/Jakarta EE 10 runtime on Tomcat 10.1.59/JDK 21. A Tomcat 9 compatibility
@@ -22,7 +22,10 @@ request-scoped service and the atomic 21-operation `ADService` unit before the
 router became CXF-only. Active XFire source, publication, and runtime binaries
 are removed. Phase 5 is an umbrella milestone delivered through sequential
 `phase-5a-*` through `phase-5h-*` PRs. Phase 5a owns the ZK/Jakarta inventory,
-the supported-target ADR, and the Phase 4-to-5 non-SOAP route hand-off.
+the supported-target ADR, and the Phase 4-to-5 non-SOAP route hand-off. Phase
+5b froze the Tomcat 9 oracle. Phase 5c adds a dark/L1 Jakarta packaging
+beachhead and verified semantic browser oracle; Phase 5d remains the first
+modern UI Testability Milestone.
 
 The accepted target is ZK CE `10.3.0.1-jakarta` from the public ZK repository.
 Do not introduce evaluation artifacts or commercial repository credentials.
@@ -46,6 +49,8 @@ by a phase become canonical only after that phase's exit criteria prove them.
 | Phase 5a inventories and target | `./gradlew phase5aFinalVerification --dependency-verification=strict` | Database-neutral gate for reviewed ZK source/runtime, web-asset, namespace, descriptor deployment, and route inventories; verifies the pinned public ZK CE Jakarta target and preserves Phase 4 SOAP assertions |
 | Phase 5b frozen web oracle | `./gradlew phase5bFinalVerification --dependency-verification=strict` | Database-neutral gate for the frozen `contracts/legacy-web-v1/` tree: recursive WAR/nested-JAR artifact pins, route coverage with per-vector proof strength, owned exclusions, normalizer mutation proof, 24 runtime coordinates, and the file manifest; chains `phase5aFinalVerification` |
 | Phase 5b legacy web oracle replay | `./gradlew phase5bLegacyWebOracleSmoke -Pphase3DbSystemPassword='<password>' --dependency-verification=strict` | Marker-owned PostgreSQL gate that boots the installed Tomcat 9 product, drives the ZK 3.6 AU flow twice with a fixture reset between captures, proves the self-diff, and replays both captures against the frozen oracle |
+| Phase 5c packaging beachhead | `./gradlew phase5cFinalVerification --dependency-verification=strict` | Database-neutral gate for the packaging-only ZK Jakarta WAR, transformer fixtures and corpus report, loopback 503 marker, installed/release overlay, Phase 4 preservation, binding ADR, and artifact rollback |
+| Phase 5c browser and rollback | `./gradlew phase5cRollbackRehearsal -Pphase3DbSystemPassword='<password>' --dependency-verification=strict` | Marker-owned PostgreSQL gate for the Phase 5b replay plus two fixture-isolated semantic Playwright captures using only checksum-verified browser artifacts |
 | Full product build, no DB restore | `ant build -Dnodbrestore=true` | Authoritative underlying Ant reactor; prefer the guarded Phase 3 lifecycle for CI |
 | Full product build with DB restore/migrations | `ant build -Dnodbrestore=false` | Database-affecting underlying reactor; run only against an approved disposable environment |
 | Gradle module build | `./gradlew build --dependency-verification=strict` | Reproducible Phase 2 gate on JDK 21 with Java 21 bytecode; omits quarantined Ant-only deployables |

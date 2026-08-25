@@ -12,7 +12,7 @@ serverApps	jar	-	ant-only
 webStore	jar	-	ant-only
 webCM	jar	-	ant-only
 sqlj	jar	-	ant-only
-zkwebui	jar	-	ant-only
+zkwebui	jar	:zkwebui	phase5-packaging-beachhead
 org.compiere.mobile	jar	-	ant-only
 migration	jar	:migration	shared
 org.eevolution.cashflow	jar	:org.eevolution.cashflow	shared

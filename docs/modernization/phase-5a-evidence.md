@@ -19,7 +19,7 @@ The branch is `phase-5a-web-inventory-and-target`, cut from `develop` at
 | `gradle/phase5/zk-sources.tsv` | 298 ZK-referencing Java files with module owner, API family, compile gate, behavior gate, and disposition |
 | `gradle/phase5/zk-runtime-jars.tsv` | 39 checked-in `zkwebui` runtime JARs with manifest version, SHA-512, disposition, and closing gate |
 | `gradle/phase5/web-assets.tsv` | 50 tracked JSP/tag/TLD/ZUL/ZHTML/DSP/XML assets with ZK or migration-owned `javax` references |
-| `gradle/phase5/namespace-ownership.tsv` | 691 file/namespace ownership rows: 486 Java SE rows retained, 171 Jakarta web rows assigned to Phase 5f, and 34 non-web Jakarta rows explicitly deferred |
+| `gradle/phase5/namespace-ownership.tsv` | 692 file/namespace ownership rows: 486 Java SE rows retained, 172 Jakarta web rows assigned to Phase 5f, and 34 non-web Jakarta rows explicitly deferred |
 | `gradle/phase5/route-contracts.tsv` | 114 routes: 2 frozen Phase 4 SOAP routes and 112 Phase 5 non-SOAP routes |
 
 The route contract adds deployment evidence to the Phase 4 classification.

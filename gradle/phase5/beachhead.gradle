@@ -1,0 +1,232 @@
+def phase5cModernWar = rootProject.layout.projectDirectory.file(
+	'zkwebui/build/libs/webui-modern.war')
+def phase5cInstalledHome =
+	rootProject.layout.buildDirectory.dir('phase3/runtime/Adempiere')
+def phase5cReleaseHome =
+	rootProject.layout.projectDirectory.dir('install/build/Adempiere')
+
+tasks.register('stagePhase5cInstalledWeb') {
+	group = 'verification'
+	description = 'Stages the Phase 5c web overlay on the installed loopback runtime'
+	dependsOn(
+		tasks.named('preparePhase4InstalledApi'),
+		':zkwebui:verifyPhase5cModernWebWar')
+	inputs.file phase5cModernWar
+	outputs.files(
+		phase5cInstalledHome.map {
+			it.file('tomcat10-api/webapps/webui-modern.war')
+		},
+		phase5cInstalledHome.map {
+			it.file('config/phase5c-web-overlay.sha256')
+		})
+	doLast {
+		def home = phase5cInstalledHome.get().asFile
+		def target = new File(home, 'tomcat10-api/webapps/webui-modern.war')
+		copy {
+			from phase5cModernWar
+			into target.parentFile
+		}
+		def digest = java.security.MessageDigest.getInstance('SHA-256')
+			.digest(target.bytes).encodeHex().toString()
+		def manifest = new File(home, 'config/phase5c-web-overlay.sha256')
+		manifest.parentFile.mkdirs()
+		manifest.text = "${digest}  tomcat10-api/webapps/webui-modern.war\n"
+	}
+}
+
+tasks.register('stagePhase5cReleaseWeb') {
+	group = 'verification'
+	description = 'Stages the Phase 5c web overlay in the unconfigured release tree'
+	dependsOn(
+		tasks.named('preparePhase4ReleaseApi'),
+		':zkwebui:verifyPhase5cModernWebWar')
+	inputs.file phase5cModernWar
+	outputs.files(
+		new File(phase5cReleaseHome.asFile,
+			'tomcat10-api/webapps/webui-modern.war'),
+		new File(phase5cReleaseHome.asFile,
+			'config/phase5c-web-overlay.sha256'))
+	doLast {
+		def target = new File(phase5cReleaseHome.asFile,
+			'tomcat10-api/webapps/webui-modern.war')
+		copy {
+			from phase5cModernWar
+			into target.parentFile
+		}
+		def digest = java.security.MessageDigest.getInstance('SHA-256')
+			.digest(target.bytes).encodeHex().toString()
+		def manifest = new File(phase5cReleaseHome.asFile,
+			'config/phase5c-web-overlay.sha256')
+		manifest.parentFile.mkdirs()
+		manifest.text = "${digest}  tomcat10-api/webapps/webui-modern.war\n"
+	}
+}
+
+tasks.register('packagePhase5cReleaseWeb', Exec) {
+	group = 'verification'
+	description = 'Rebuilds the existing release archives with the Phase 5c overlay'
+	dependsOn tasks.named('stagePhase5cReleaseWeb')
+	commandLine(
+		'bash',
+		rootProject.file('scripts/phase4/package-installed-api.sh'),
+		rootProject.projectDir,
+		phase5cReleaseHome.asFile,
+		'394LTS')
+}
+
+tasks.register('verifyPhase5cWebOverlay', Exec) {
+	group = 'verification'
+	description = 'Verifies installed and release Phase 5c overlays without changing Phase 4'
+	dependsOn(
+		tasks.named('stagePhase5cInstalledWeb'),
+		tasks.named('packagePhase5cReleaseWeb'),
+		tasks.named('verifyPhase4InstalledApi'))
+	commandLine(
+		'bash',
+		rootProject.file('scripts/phase5/verify-web-overlay.sh'),
+		phase5cInstalledHome.get().asFile,
+		phase5cReleaseHome.asFile,
+		rootProject.file('install/build/Adempiere_394LTS.zip'),
+		rootProject.file('install/build/Adempiere_394LTS.tar.gz'),
+		rootProject.file(
+			'org.adempiere.webservice/build/libs/ADInterface-Modern-1.0.war'))
+}
+
+tasks.register('phase5cModernWebPackagingSmoke', Exec) {
+	group = 'verification'
+	description = 'Boots the loopback modern container with CXF and the 503 web marker'
+	dependsOn(
+		tasks.named('phase4ModernSoapRuntime'),
+		':zkwebui:verifyPhase5cModernWebWar')
+	commandLine(
+		'bash',
+		rootProject.file('scripts/phase5/smoke-modern-web-packaging.sh'),
+		phase5cModernWar.asFile)
+}
+
+tasks.register('installPhase5cBrowser', Exec) {
+	group = 'verification'
+	description = 'Installs only checksum-verified Phase 5c browser artifacts'
+	inputs.files(
+		rootProject.file('gradle/phase5/browser-artifacts.tsv'),
+		rootProject.file('scripts/phase5/install-verified-browser.sh'))
+	outputs.file rootProject.layout.buildDirectory.file(
+		'phase5c/playwright-browsers/verified-artifacts.tsv')
+	commandLine(
+		'bash',
+		rootProject.file('scripts/phase5/install-verified-browser.sh'),
+		rootProject.layout.buildDirectory.dir(
+			'phase5c/playwright-browsers').get().asFile)
+}
+
+tasks.register('startPhase5cLegacyBrowserLane', Exec) {
+	group = 'verification'
+	description = 'Starts the installed Tomcat 9 product for the browser oracle'
+	dependsOn tasks.named('phase3AntDatabaseBuild')
+	commandLine(
+		'bash',
+		rootProject.file('scripts/phase5/start-legacy-browser-lane.sh'),
+		'8888')
+}
+
+tasks.register('stopPhase5cLegacyBrowserLane', Exec) {
+	group = 'verification'
+	description = 'Stops the Phase 5c installed Tomcat 9 browser lane'
+	commandLine(
+		'bash',
+		rootProject.file('scripts/phase5/stop-legacy-browser-lane.sh'),
+		'8888')
+}
+
+tasks.register('phase5cLegacyBrowserOracleSmoke') {
+	group = 'verification'
+	description = 'Replays the semantic browser oracle against the installed Tomcat 9 product'
+	dependsOn ':zkwebui:browserTest'
+}
+
+tasks.register('verifyPhase5cRollbackArtifacts', Exec) {
+	group = 'verification'
+	description = 'Rehearses removal of the additive Phase 5c overlay from installed artifacts'
+	dependsOn tasks.named('verifyPhase5cWebOverlay')
+	commandLine(
+		'bash',
+		rootProject.file('scripts/phase5/verify-web-overlay-rollback.sh'),
+		phase5cInstalledHome.get().asFile,
+		rootProject.file('install/build/Adempiere_394LTS.zip'),
+		rootProject.file('install/build/Adempiere_394LTS.tar.gz'),
+		rootProject.file(
+			'org.adempiere.webservice/build/libs/ADInterface-Modern-1.0.war'),
+		rootProject.layout.buildDirectory.dir(
+			'phase5c/rollback').get().asFile)
+}
+
+tasks.register('phase5cRollbackRehearsal') {
+	group = 'verification'
+	description = 'Proves overlay removal while preserving Phase 4 and the Phase 5b oracle'
+	dependsOn(
+		tasks.named('verifyPhase5cRollbackArtifacts'),
+		tasks.named('phase5bLegacyWebOracleSmoke'),
+		tasks.named('phase5cLegacyBrowserOracleSmoke'))
+}
+
+tasks.register('verifyPhase5cDecisions') {
+	group = 'verification'
+	description = 'Verifies the binding Phase 5c ADR and transitional-state register'
+	inputs.files(
+		rootProject.file('docs/modernization/phase-5c-ingress-session-adr.md'),
+		rootProject.file('docs/modernization/phase-5c-transitional-state.md'),
+		rootProject.file('gradle/phase5/browser-artifacts.tsv'),
+		rootProject.file('gradle/phase5/transformer-rules.tsv'))
+	doLast {
+		def adr = rootProject.file(
+			'docs/modernization/phase-5c-ingress-session-adr.md').text
+		def required = [
+			'Tomcat 9 remains the only browser-facing listener',
+			'10.1.59 remains bound to `127.0.0.1`',
+			'Missing, invalid, duplicate, or unreadable values select the legacy runtime',
+			'not forwarded as a second browser cookie',
+			'never serialize, copy, or reconstruct mutable ZK desktop state',
+			'Phase 5c creates no flag'
+		]
+		def missing = required.findAll { !adr.contains(it) }
+		if (!missing.empty) {
+			throw new GradleException("Phase 5c ADR is incomplete: ${missing}")
+		}
+	}
+}
+
+tasks.register('phase5cFinalVerification') {
+	group = 'verification'
+	description = 'Runs the database-neutral Phase 5c packaging and decision gates'
+	dependsOn(
+		tasks.named('phase5bFinalVerification'),
+		tasks.named('verifyPhase5cDecisions'),
+		tasks.named('verifyPhase5cWebOverlay'),
+		tasks.named('phase5cModernWebPackagingSmoke'),
+		':zkwebui:phase5cTransformerCorpusReport',
+		tasks.named('verifyPhase5cRollbackArtifacts'),
+		':zkwebui:check')
+}
+
+gradle.projectsEvaluated {
+	def browserTest = project(':zkwebui').tasks.named('browserTest')
+	def compileBrowserTest =
+		project(':zkwebui').tasks.named('compileBrowserTestJava')
+	def startBrowserLane = tasks.named('startPhase5cLegacyBrowserLane')
+	def stopBrowserLane = tasks.named('stopPhase5cLegacyBrowserLane')
+	browserTest.configure {
+		dependsOn(
+			tasks.named('installPhase5cBrowser'),
+			startBrowserLane)
+		finalizedBy stopBrowserLane
+	}
+	startBrowserLane.configure { finalizedBy stopBrowserLane }
+	stopBrowserLane.configure {
+		mustRunAfter compileBrowserTest, browserTest
+	}
+	tasks.named('cleanupPhase3Database') {
+		mustRunAfter(
+			tasks.named('phase5cLegacyBrowserOracleSmoke'),
+			stopBrowserLane)
+	}
+}

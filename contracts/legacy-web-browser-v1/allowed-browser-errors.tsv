@@ -1,0 +1,8 @@
+# type	status/page	url/error
+http	404	/adempiere/standard.js
+http	404	/webui/theme/default/css/themesaf.css.dsp
+http	404	/webui/theme/default/css/themesaf.css.dsp;jsessionid=<SESSION>
+http	404	/wstore/ADempiere120x60.gif
+page	/adempiere/	SyntaxError: Unexpected token '<'
+page	/mobile/	SyntaxError: Unexpected token '<'
+page	/wstore/	SyntaxError: Unexpected token '<'

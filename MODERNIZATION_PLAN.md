@@ -6,13 +6,13 @@
 >
 > **Planning date:** 2026-08-20.
 >
-> **Status:** Phases 1-4 and Phase 5a are merged to `develop`. Phase 4 completed
+> **Status:** Phases 1-4, Phase 5a, and Phase 5b are merged to `develop`. Phase 4 completed
 > as `8c0ca4c1d6b35a5f366d6dd2150ed3bb27bc2a89`; Phase 5a completed as
 > `dc7e84f68` (PR #6) and owns the ZK/Jakarta inventory, the Phase 4-to-5
-> route-contract hand-off, and the target-stack ADR. Phase 5b is in progress on
-> `phase-5b-legacy-web-oracle`; it freezes the installed Tomcat 9 web/UI oracle
-> in `contracts/legacy-web-v1/` and pins the legacy web artifacts before any ZK
-> source crosses to Jakarta.
+> route-contract hand-off, and the target-stack ADR. Phase 5b completed as
+> `cac0efdcaa13464e069291992214880cd0239ec5` (PR #7). Phase 5c is in progress
+> on `phase-5c-jakarta-web-beachhead`; it adds the dark Jakarta packaging
+> beachhead, verified semantic browser oracle, and binding ingress/session ADR.
 > Required-check enforcement remains a repository-administrator action and
 > residual risk R8.
 
@@ -159,7 +159,7 @@ Observed:
 | Background server and scheduler | Phase 2 executes an isolated scheduler fixture exactly once and proves transaction/context cleanup on JDK 21 | **A - Freeze-then-lift** with processor discovery/scheduler characterization | **L3** | **Phase 2 milestone crossed locally**; PR CI remains the authoritative merge gate | **L3** |
 | Full Ant distribution and installer | The complete reactor is configured to build `tools` before `base`, but no local product archive or setup run was completed | **B - Beachhead-then-expand.** Make a minimal installable distribution first, then expand reactor coverage. | **L1** | **Phase 3**: installer builds, silent setup completes, product starts, and at least one DB-backed test passes in CI | **L3** |
 | Database seed and XML migrations | Phase 2 restores the committed seed to disposable PostgreSQL 14.6, applies only `394lts`, and verifies `AD_System` release/version | **A - Freeze-then-lift** using seed checksum, schema inventory, and release-scoped migration contracts | **L3** | **Phase 2 milestone crossed locally**; Phase 3 expands this into the full distribution/installer gate | **L3** |
-| ZK web UI/session boundary | Phase 5b drives the real ZK 3.6 AU protocol through login, role selection, menu and logout on the installed Tomcat 9 product, and replays it as a frozen oracle; 298 Java files reference `org.zkoss` (279 through imports) | **B - Beachhead-then-expand** via a login/menu/read-only window walking skeleton, then incremental screen migration | **L3** for the legacy oracle (Phase 5b); **L1** for the unbuilt modern slice | **Phase 5**: modern ZK/Jakarta slice boots on the target runtime and passes session/tenant isolation tests | **L3**, then L4 as route/e2e coverage expands |
+| ZK web UI/session boundary | Phase 5c drives the real ZK 3.6 product through a checksum-verified Chromium semantic oracle, while the packaging-only ZK 10.3.0.1-jakarta WAR boots only a loopback 503 marker; 298 Java files reference `org.zkoss` (279 through imports) | **B - Beachhead-then-expand** via a login/menu/read-only window walking skeleton, then incremental screen migration | **L3** for the legacy oracle; **L1** for the packaging-only modern slice | **Phase 5d**: modern ZK/Jakarta slice boots on the target runtime and passes login, role, menu, and read-only-window tests | **L3**, then L4 as route/e2e coverage expands |
 | SOAP and legacy servlet applications | XFire and servlet descriptors are present; no endpoint booted; 11 route descriptors | **B - Beachhead-then-expand** using a contract-preserving adapter and per-route cutover | **L1** | **Phase 4**: one real SOAP operation and one route class pass replay/contract tests on the target stack | **L3** |
 | Domain extension modules | Most Gradle modules compile transitively, but tests and metadata bindings are not exercised | Mixed: **A** for compilable modules, **B** for Ant-only UI/deployment pieces | **L1** | **Phase 3** for Gradle/Ant buildability; feature-specific testability follows Phases 4-6 | **L3** |
 
@@ -188,7 +188,7 @@ necessarily block merges.
 | R1 | Core | Phase 2 smoke and Phase 3 DB-backed metadata validation protect selected runtime and dictionary seams; broader business behavior remains | Phase 5 | Expand representative document, accounting, and UI behavior coverage. |
 | R2 | Swing/POS | Closed for the Phase 2 Garden World login/role/menu/process slice; broader operator workflows remain outside this phase | Closed in Phase 2; broader coverage Phase 5 | The semantic Xvfb smoke is now gated; expand coverage during the ZK/client modernization. |
 | R3 | Background jobs | Exact-once scheduler execution and context/transaction cleanup are proven; production discovery breadth and observability remain | Phase 6 | Expand processor discovery and add operational metrics/alerts. |
-| R4 | Web UI | Phase 5b froze the installed Tomcat 9 oracle in `contracts/legacy-web-v1/` and pinned the legacy web artifacts, so the local rollback baseline now exists and is gated. Three residuals remain: production-specific customizations are still unknown and unvalidated; rollback depends on reproducible regeneration rather than retained binaries, with 13 pinned non-reproducible entries owned by Phase 7 and Phase 5e; and 4 of 82 request vectors are `context-reachability-only` because `/*` filters have no independently addressable URL | Phase 5e for session and packaging findings; Phase 5c for per-filter browser proof; Phase 7 for full artifact reproducibility | Production owners must separately validate custom overlays. Phase 5c adds browser-level semantic snapshots; Phase 5e closes the session, route-defect and packaging exclusions; Phase 7 closes the reproducibility residuals. |
+| R4 | Web UI | Phase 5c adds two isolated Playwright captures with fixture reset, semantic/network/error contracts, additive installed/release overlays, and rollback rehearsal. Production customizations remain unknown; 13 legacy entries remain non-reproducible; four `/*` filter vectors remain honestly `context-reachability-only`; inherited 404/page errors are allowlisted; Servlet 2.4 descriptor migration remains manual because Eclipse Transformer does not perform it | Phase 5d for source/descriptors and first modern boot; Phase 5e for session defects; Phase 5f for inherited route defects; Phase 7 for full artifact reproducibility | Production owners validate custom overlays. Do not treat the 503 marker as modern UI testability or the browser context requests as direct filter-effect proof. |
 | R5 | SOAP/servlets | Unknown consumers and undocumented route classes may break | Phase 4 | Inventory consumers, freeze WSDL/HTTP fixtures, and run parallel replay. |
 | R6 | Database | Production size, custom schema, supported engines, and rollback windows are unknown | Phase 6 | Approve customer-specific migration runbook and rehearse on a sanitized copy. |
 | R7 | Extension metadata | The fail-closed validator names 16 pre-existing active `AD_Process` bindings with absent or incompatible classes | Phase 7 | Obtain usage evidence, then correct or retire every row in `gradle/phase3/metadata-quarantine.tsv`; additions and stale quarantine rows fail CI. |
@@ -972,8 +972,9 @@ Jakarta-compatible stack through vertical slices.
 
 **Status:** Phase 5 is an umbrella milestone delivered through sequential
 `phase-5a-*` through `phase-5h-*` branches. Each increment merges to `develop`
-before the next begins. Phase 5a merged as `dc7e84f68`. Phase 5b is in progress
-on `phase-5b-legacy-web-oracle`.
+before the next begins. Phase 5a merged as `dc7e84f68`; Phase 5b merged as
+`cac0efdcaa13464e069291992214880cd0239ec5`. Phase 5c is in progress on
+`phase-5c-jakarta-web-beachhead`.
 
 **Regime:** Legacy ZK/Tomcat 9 remains lit; modern ZK/Tomcat 10.1 slice moves
 from dark to lit, then expands.
@@ -1092,6 +1093,63 @@ constraint — the capture uses ordinary credentials through the ordinary login
 flow and adds nothing to the T-register; H7 cleared by an empty
 `git log origin/develop..HEAD` at branch creation; H8 fired and is closed by
 these in-PR documentation updates.
+
+#### Phase 5c decisions and findings
+
+Phase 5c keeps the modern web slice dark/L1. The new `:zkwebui` Gradle project
+packages only ZK CE `10.3.0.1-jakarta`, reviewed dependencies/notices, Jakarta
+Servlet 6 metadata, and a loopback marker that returns HTTP 503. It compiles no
+legacy UI source and creates no public business route. Tomcat 9 remains the
+only browser-facing ingress through Phase 5h; Tomcat 10.1.59 remains
+loopback-only beside the Phase 4 CXF WAR. The binding ADR stores any future
+modern session identifier server-side under the Tomcat 9 session, never exposes
+a second browser cookie, and forbids copying mutable ZK desktop state.
+
+The semantic browser contract lives separately in
+`contracts/legacy-web-browser-v1/`. Playwright Java 1.62.0 launches only the
+checksum-verified Chromium Headless Shell/FFmpeg pair selected from
+`gradle/phase5/browser-artifacts.tsv`; Playwright auto-download is disabled.
+The explicit installer may fetch only those manifest-pinned archives and
+rejects them before extraction unless their size and SHA-256 match. The gate
+blocks all non-loopback requests, captures twice with a marker-guarded database
+reset between runs, compares semantic facts, stable request classes, and stable
+HTTP errors, and runs mutation cases for changed names, routes, error classes,
+and approved whitespace volatility. The four `/*` filter mappings remain
+`context-reachability-only`: browser traffic proves real context requests, not
+an independently observable filter effect.
+
+Eclipse Transformer 1.0.0 is packaging-time tooling only. Fixture tests cover
+bytecode, service resources, signature stripping, and deterministic output. A
+report-only scan accepted all 19,328 resources in the real legacy WAR, changing
+206 and failing none after excluding one malformed JRuby Rake test fixture.
+The transformer does not migrate the Servlet 2.4 descriptor schema; Phase
+5d/5f therefore own reviewed manual descriptor migration. No transformed
+production output is installed or shipped.
+
+The modern WAR is a separately checksummed additive overlay in the installed
+tree and both 394LTS archives. Rollback rehearsal removes only that overlay and
+manifest from isolated installed/release copies, preserves the Phase 4 API WAR
+and loopback listener, and chains the frozen Phase 5b oracle. Phase 5c adds
+fixed `ubuntu-24.04` packaging and DB-backed browser CI jobs. Required-check
+enforcement remains manual residual R8.
+
+Canonical Phase 5c gates:
+
+```bash
+./gradlew phase5cFinalVerification --dependency-verification=strict
+./gradlew phase5cRollbackRehearsal -Pphase3DbSystemPassword='<password>' \
+  --dependency-verification=strict
+```
+
+**Hazard red-team (5c):** H1 fired and is mitigated by target/legacy dependency,
+overlay, and transformer ledgers; H2 fired and exposed the descriptor work that
+remains manual; H3 fired and is mitigated by installed plus both-release overlay
+verification without changing Phase 4 pins; H4 fired and retains four honest
+context-only dispositions; H5 cleared because PostgreSQL remains 14.6 and the
+fixture reset is marker-guarded; H6 fired as a constraint and no public route,
+security bypass, second cookie, or unverified download exists; H7 cleared at
+branch creation from merged Phase 5b; H8 is closed by these synchronized docs,
+commands, topology, and CI changes.
 
 #### Verification & Exit Criteria (Definition of Done)
 

@@ -1,0 +1,329 @@
+plugins {
+	id 'war'
+}
+
+def phase5Target = new Properties()
+rootProject.file('gradle/phase5/zk-target.properties').withInputStream {
+	phase5Target.load(it)
+}
+def zkVersion = phase5Target.getProperty('zk.version')
+def playwrightVersion = '1.62.0'
+def transformerVersion = '1.0.0'
+
+sourceSets {
+	main {
+		java {
+			srcDirs = ['src/phase5c/java']
+		}
+		resources {
+			srcDirs = []
+		}
+	}
+	browserTest {
+		java {
+			srcDirs = ['src/browserTest/java']
+		}
+		resources {
+			srcDirs = [
+				'src/browserTest/resources',
+				rootProject.file('contracts/legacy-web-browser-v1')
+			]
+		}
+	}
+	transformerFixture {
+		java {
+			srcDirs = ['src/transformerFixture/java']
+		}
+		resources {
+			srcDirs = ['src/transformerFixture/resources']
+		}
+	}
+}
+
+configurations {
+	phase5Transformer
+	browserTestImplementation.extendsFrom testImplementation
+	browserTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+dependencies {
+	implementation "org.zkoss.zk:zk:${zkVersion}"
+	implementation "org.zkoss.zk:zul:${zkVersion}"
+	implementation "org.zkoss.zk:zkplus:${zkVersion}"
+	implementation "org.zkoss.zk:zhtml:${zkVersion}"
+	compileOnly 'jakarta.servlet:jakarta.servlet-api:6.0.0'
+	phase5Transformer "org.eclipse.transformer:org.eclipse.transformer.cli:${transformerVersion}"
+	browserTestImplementation "com.microsoft.playwright:playwright:${playwrightVersion}"
+	browserTestImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+	browserTestRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+	transformerFixtureCompileOnly 'javax.servlet:javax.servlet-api:4.0.1'
+}
+
+tasks.named('war') {
+	archiveFileName = 'webui-modern.war'
+	webAppDirectory = file('src/phase5c/webapp')
+	reproducibleFileOrder = true
+	preserveFileTimestamps = false
+	duplicatesStrategy = DuplicatesStrategy.FAIL
+}
+
+tasks.register('verifyPhase5cModernWebWar') {
+	group = 'verification'
+	description = 'Verifies the dark Phase 5c Jakarta packaging beachhead'
+	dependsOn tasks.named('war')
+	inputs.file tasks.named('war').flatMap { it.archiveFile }
+	doLast {
+		def archive = tasks.named('war').get().archiveFile.get().asFile
+		def names = []
+		zipTree(archive).visit { details ->
+			if (!details.directory) {
+				names << details.relativePath.pathString
+			}
+		}
+		def required = [
+			'WEB-INF/web.xml',
+			'WEB-INF/classes/org/adempiere/webui/phase5c/PackagingMarkerServlet.class',
+			'META-INF/NOTICE'
+		]
+		def missing = required.findAll { !names.contains(it) }
+		if (!missing.empty) {
+			throw new GradleException("Modern web WAR is missing ${missing}")
+		}
+		def forbiddenNames = names.findAll { name ->
+			def lower = name.toLowerCase(Locale.ROOT)
+			lower.contains('zkex') ||
+				lower.contains('zkmax') ||
+				lower.contains('webui/adempierewebui') ||
+				lower.endsWith('/webui.class')
+		}
+		if (!forbiddenNames.empty) {
+			throw new GradleException(
+				"Legacy or commercial UI artifacts entered the modern WAR: ${forbiddenNames}")
+		}
+		def servlet = zipTree(archive).matching {
+			include 'WEB-INF/classes/org/adempiere/webui/phase5c/PackagingMarkerServlet.class'
+		}.singleFile
+		if (new String(servlet.bytes, 'ISO-8859-1').contains('javax/servlet')) {
+			throw new GradleException('Packaging marker contains a legacy servlet namespace')
+		}
+	}
+}
+
+tasks.register('browserTest', Test) {
+	group = 'verification'
+	description = 'Runs the Phase 5c semantic browser oracle with a verified browser'
+	testClassesDirs = sourceSets.browserTest.output.classesDirs
+	classpath = sourceSets.browserTest.runtimeClasspath
+	useJUnitPlatform()
+	def baseUrl = providers.gradleProperty('phase5cBrowserBaseUrl')
+		.orElse('http://127.0.0.1:8888')
+	systemProperty 'phase5c.browser.baseUrl', baseUrl.getOrElse('')
+	systemProperty 'phase5c.browser.user',
+		providers.gradleProperty('phase5cBrowserUser').getOrElse('GardenAdmin')
+	systemProperty 'phase5c.browser.password',
+		providers.gradleProperty('phase5cBrowserPassword').getOrElse('GardenAdmin')
+	systemProperty 'phase5c.browser.evidenceDir',
+		layout.buildDirectory.dir('phase5c/browser').get().asFile.absolutePath
+	systemProperty 'phase5c.browser.fixtureScript',
+		rootProject.file('scripts/phase5/reset-oracle-fixture.sh').absolutePath
+	systemProperty 'phase5c.browser.dbHost',
+		rootProject.providers.gradleProperty('phase3DbHost').getOrElse('127.0.0.1')
+	systemProperty 'phase5c.browser.dbPort',
+		rootProject.providers.gradleProperty('phase3DbPort').getOrElse('5432')
+	systemProperty 'phase5c.browser.dbName',
+		rootProject.providers.gradleProperty('phase3DbName')
+			.getOrElse('adempiere_phase3_ci')
+	systemProperty 'phase5c.browser.dbUser',
+		rootProject.providers.gradleProperty('phase3DbUser')
+			.getOrElse('adempiere_phase3_ci')
+	systemProperty 'phase5c.browser.dbPassword',
+		rootProject.providers.gradleProperty('phase3DbPassword')
+			.getOrElse('adempiere_phase3_ci')
+	systemProperty 'phase5c.browser.dbMarker',
+		'ADempiere Phase 3 disposable database'
+	environment 'PLAYWRIGHT_BROWSERS_PATH',
+		rootProject.layout.buildDirectory.dir('phase5c/playwright-browsers')
+			.get().asFile.absolutePath
+	environment 'PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD', '1'
+	doFirst {
+		if (!rootProject.layout.buildDirectory
+				.file('phase5c/playwright-browsers/verified-artifacts.tsv')
+				.get().asFile.isFile()) {
+			throw new GradleException(
+				'The verified Phase 5c browser installation is missing')
+		}
+	}
+}
+
+tasks.register('phase5cPlaywrightCli', JavaExec) {
+	group = 'verification'
+	description = 'Runs the pinned Playwright CLI for explicit browser provisioning'
+	classpath = sourceSets.browserTest.runtimeClasspath
+	mainClass = 'com.microsoft.playwright.CLI'
+}
+
+tasks.register('phase5cTransformerCli', JavaExec) {
+	group = 'verification'
+	description = 'Runs the pinned Eclipse Transformer CLI'
+	classpath = configurations.phase5Transformer
+	mainClass = 'org.eclipse.transformer.cli.JakartaTransformerCLI'
+}
+
+tasks.register('phase5cTransformerFixtureJar', Jar) {
+	dependsOn tasks.named('transformerFixtureClasses')
+	archiveFileName = 'phase5c-transformer-fixture.jar'
+	destinationDirectory = layout.buildDirectory.dir('phase5c/transformer')
+	from sourceSets.transformerFixture.output
+	reproducibleFileOrder = true
+	preserveFileTimestamps = false
+}
+
+def transformerFixtureOutput = layout.buildDirectory.file(
+		'phase5c/transformer/phase5c-transformer-fixture-jakarta.jar')
+def transformerFixtureOutputSecond = layout.buildDirectory.file(
+		'phase5c/transformer/phase5c-transformer-fixture-jakarta-second.jar')
+
+tasks.register('transformPhase5cFixture', JavaExec) {
+	dependsOn tasks.named('phase5cTransformerFixtureJar')
+	classpath = configurations.phase5Transformer
+	mainClass = 'org.eclipse.transformer.cli.JakartaTransformerCLI'
+	doFirst {
+		delete transformerFixtureOutput
+		args(
+			tasks.named('phase5cTransformerFixtureJar').get()
+				.archiveFile.get().asFile.absolutePath,
+			transformerFixtureOutput.get().asFile.absolutePath,
+			'--stripSignatures')
+	}
+}
+
+tasks.register('transformPhase5cFixtureSecond', JavaExec) {
+	dependsOn tasks.named('phase5cTransformerFixtureJar')
+	classpath = configurations.phase5Transformer
+	mainClass = 'org.eclipse.transformer.cli.JakartaTransformerCLI'
+	doFirst {
+		delete transformerFixtureOutputSecond
+		args(
+			tasks.named('phase5cTransformerFixtureJar').get()
+				.archiveFile.get().asFile.absolutePath,
+			transformerFixtureOutputSecond.get().asFile.absolutePath,
+			'--stripSignatures')
+	}
+}
+
+def canonicalArchiveDigest = { File archive ->
+	def digest = java.security.MessageDigest.getInstance('SHA-256')
+	def rows = []
+	new java.util.zip.ZipFile(archive).withCloseable { zip ->
+		zip.entries().findAll { !it.directory }.each { entry ->
+			def content = zip.getInputStream(entry).withCloseable { it.readAllBytes() }
+			def entryDigest = java.security.MessageDigest.getInstance('SHA-256')
+				.digest(content).encodeHex().toString()
+			rows << "${entry.name}\t${entryDigest}"
+		}
+	}
+	digest.digest(rows.sort().join('\n').getBytes('UTF-8'))
+		.encodeHex().toString()
+}
+
+tasks.register('verifyPhase5cTransformer') {
+	group = 'verification'
+	description = 'Proves deterministic Jakarta transformation on a representative fixture'
+	dependsOn(
+		tasks.named('transformPhase5cFixture'),
+		tasks.named('transformPhase5cFixtureSecond'))
+	inputs.files transformerFixtureOutput, transformerFixtureOutputSecond
+	doLast {
+		def first = transformerFixtureOutput.get().asFile
+		def second = transformerFixtureOutputSecond.get().asFile
+		if (canonicalArchiveDigest(first) != canonicalArchiveDigest(second)) {
+			throw new GradleException('Transformer fixture output is not deterministic')
+		}
+		def names = []
+		def content = new ByteArrayOutputStream()
+		new java.util.zip.ZipFile(first).withCloseable { zip ->
+			zip.entries().findAll { !it.directory }.each { entry ->
+				names << entry.name
+				content.write(zip.getInputStream(entry).withCloseable {
+					it.readAllBytes()
+				})
+			}
+		}
+		def text = content.toString('ISO-8859-1')
+		if (!text.contains('jakarta/servlet/Filter') ||
+				text.contains('javax/servlet/Filter')) {
+			throw new GradleException(
+				'Transformer did not replace the servlet namespace in bytecode')
+		}
+		if (!names.contains('META-INF/services/jakarta.servlet.Filter') ||
+				names.contains('META-INF/services/javax.servlet.Filter')) {
+			throw new GradleException(
+				'Transformer did not rewrite the service resource path')
+		}
+		if (!text.contains('http://java.sun.com/xml/ns/j2ee')) {
+			throw new GradleException(
+				'Transformer unexpectedly rewrote the descriptor fixture; ' +
+				'descriptors are owned by the Phase 5d/5f manual migration')
+		}
+		def rules = rootProject.file('gradle/phase5/transformer-rules.tsv')
+		if (!rules.text.contains('servlet-descriptors\tmanual-migration') ||
+				!rules.text.contains('service-resource-paths\ttransform')) {
+			throw new GradleException(
+				'Phase 5 transformer allowlist/denylist is incomplete')
+		}
+	}
+}
+
+def transformerCorpusReport = layout.buildDirectory.file(
+	'phase5c/transformer/legacy-corpus-report.txt')
+def transformerCorpusDryRunOutput = layout.buildDirectory.file(
+	'phase5c/transformer/legacy-corpus-dry-run.war')
+
+tasks.register('phase5cTransformerCorpusReport', JavaExec) {
+	group = 'verification'
+	description = 'Runs a non-shipping transformer dry run over the legacy web WAR'
+	dependsOn rootProject.tasks.named('phase3NoDatabaseDistribution')
+	classpath = configurations.phase5Transformer
+	mainClass = 'org.eclipse.transformer.cli.JakartaTransformerCLI'
+	inputs.file rootProject.file('lib/webui.war')
+	outputs.file transformerCorpusReport
+	def reportStream = [value: null]
+	doFirst {
+		def report = transformerCorpusReport.get().asFile
+		report.parentFile.mkdirs()
+		delete transformerCorpusDryRunOutput
+		reportStream.value = new FileOutputStream(report)
+		standardOutput = reportStream.value
+		errorOutput = reportStream.value
+		args(
+			rootProject.file('lib/webui.war').absolutePath,
+			transformerCorpusDryRunOutput.get().asFile.absolutePath,
+			'--dryrun',
+			'--verbose',
+			'--stripSignatures',
+			'--selection',
+			rootProject.file('gradle/phase5/transformer-selection.properties')
+				.toURI().toString())
+	}
+	doLast {
+		reportStream.value.close()
+		def report = transformerCorpusReport.get().asFile.text
+		if (!report.contains('Return Code [ 0 ] [ Success ]')) {
+			throw new GradleException(
+				'Legacy corpus transformer dry run did not complete successfully')
+		}
+		def dryRunOutput = transformerCorpusDryRunOutput.get().asFile
+		if (dryRunOutput.exists()) {
+			delete dryRunOutput
+		}
+		if (dryRunOutput.exists()) {
+			throw new GradleException(
+				'Transformer corpus output could not be removed from build storage')
+		}
+	}
+}
+
+tasks.named('check') {
+	dependsOn tasks.named('verifyPhase5cModernWebWar')
+	dependsOn tasks.named('verifyPhase5cTransformer')
+}

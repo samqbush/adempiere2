@@ -1,0 +1,11 @@
+# surface	disposition	owner	closing_gate	reason
+java-bytecode-packages	transform	phase-5d	phase5d-compile-gate	Eclipse Transformer rewrites constant-pool package references and the fixture proves javax.servlet.Filter becomes jakarta.servlet.Filter.
+service-resource-paths	transform	phase-5d	phase5d-compile-gate	The fixture proves META-INF/services/javax.servlet.Filter moves to the Jakarta service name.
+servlet-descriptors	manual-migration	phase-5d-and-5f	phase5f-route-gate	Eclipse Transformer 1.0.0 leaves the Servlet 2.4 namespace, schema URL and version unchanged; treating the archive as fully Jakarta would be false.
+zk-descriptors	manual-migration	phase-5d	phase5d-runtime-gate	ZK major-version configuration changes require semantic review beyond package renames.
+jsp-tag-tld-assets	manual-migration	phase-5f	phase5f-route-gate	Jakarta Tags and descriptor versions require per-context review.
+signed-archives	strip-signatures-after-provenance	phase-5d	phase5d-packaging-gate	Transformed signatures are invalid; only reviewed inputs may have signatures stripped.
+reflective-class-name-strings	review-before-transform	phase-5d	phase5d-compile-gate	String references may be configuration or data rather than package names.
+multi-release-jars	reject-unless-reviewed	phase-5d	phase5d-packaging-gate	Every release-specific class must receive the same namespace treatment.
+jruby-rake-sample-manifest	exclude-invalid-nonmanifest	phase-5c	phase5c-transformer-corpus-gate	jruby.jar contains a Rake test fixture named sample.mf that is not a valid Java manifest and has no javax package reference; selecting it aborts the complete archive transform.
+java-se-javax-packages	retain	phase-5	never	javax.swing, javax.sql, javax.naming, javax.print, javax.imageio and other Java SE packages are not Jakarta namespaces.

@@ -1,0 +1,9 @@
+# fact	expected
+role-labels-visible	true
+desktop-user	GardenAdmin@GardenWorld.*
+menu-user-browser	true
+logout-login-visible	true
+filter-adempiere	200 context-reachability-only
+filter-mobile	200 context-reachability-only
+filter-webui	200 context-reachability-only
+filter-wstore	200 context-reachability-only

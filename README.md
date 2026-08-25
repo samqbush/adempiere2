@@ -100,6 +100,22 @@ metadata) are pinned individually and owned by later phases.
 `contracts/legacy-web-v1/domain-review.md` records the review that had to happen
 before a self-frozen baseline could become a gate.
 
+Phase 5c adds the packaging-only Jakarta beachhead and semantic browser gate:
+
+```bash
+./gradlew phase5cFinalVerification --dependency-verification=strict
+./gradlew phase5cRollbackRehearsal -Pphase3DbSystemPassword='<password>' \
+  --dependency-verification=strict
+```
+
+The first command verifies the ZK CE `10.3.0.1-jakarta` WAR, Eclipse
+Transformer fixtures and report-only legacy-WAR scan, additive installed/release
+overlay, loopback Tomcat 10.1.59 marker, Phase 4 API preservation, and rollback
+artifacts. The second also replays the Phase 5b wire oracle and two isolated
+Playwright Java semantic captures against Tomcat 9 using only checksum-verified
+Chromium artifacts. The modern marker returns 503 by design; Phase 5d owns the
+first modern login and remains the Testability Milestone.
+
 The Tomcat smoke requires HTTP 2xx/3xx from each deployed context except
 `ADInterface`, whose unrouted base path is explicitly expected to return 404;
 SOAP behavior remains a Phase 4 contract gate.

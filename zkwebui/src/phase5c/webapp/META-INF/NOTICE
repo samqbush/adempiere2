@@ -1,0 +1,7 @@
+ADempiere Phase 5c Jakarta web packaging beachhead.
+
+This archive includes ZK Community Edition components licensed under LGPL-3.0.
+See https://www.zkoss.org/license for the upstream licensing terms.
+
+The marker servlet is not a business endpoint. The archive remains bound to the
+loopback-only modern runtime until a later phase completes the web UI migration.
