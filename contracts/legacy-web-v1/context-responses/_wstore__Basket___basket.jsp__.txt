@@ -1,0 +1,82 @@
+
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+
+
+<html>
+
+<head>
+
+<link href=".css" rel="stylesheet" type="text/css"/>
+<!--[if IE 6]>
+<link href="-ie6.css" rel="stylesheet" type="text/css"/>
+<![endif]-->
+<!--[if gte IE 7]>
+<link href="-ie7.css" rel="stylesheet" type="text/css"/>
+<![endif]-->
+<link href="-print.css" rel="stylesheet" type="text/css" media="print"/>
+
+<script src="/adempiere/standard.js" language="JavaScript" type="text/JavaScript"></script>
+<script src="/adempiere/wstore.js" language="JavaScript" type="text/JavaScript"></script>
+
+<meta http-equiv="pragma" content="no-cache"/>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="description" content="ADempiere Web Store"/>
+
+<title> - My Basket</title>
+</head>
+<body><div id="page">
+
+<div id="header">
+	<div id="headerIcon">
+	  <a href="http://127.0.0.1:8888/wstore">
+	  <img src="AdempiereERP.gif" alt="ADempiere - 1999-2007" /></a>
+	</div>
+	<div id="headerMenu">
+	  <a class="menuMain" href="help.jsp">
+	  <img src="help.gif" alt="Help" width="16" height="16" border="0"/>Help</a>
+      <br/><span id="status"></span>
+    </div>
+	<div id="headerContent">
+	    
+	<input value="Login" name="Login" onclick="window.top.location.replace('./loginServlet');" type="button"/>
+	 
+	   
+      
+	</div>
+</div>
+
+<div id="main">
+	<div id="menu">
+	<a class="menuMain" href="index.jsp">Web Store</a><br />
+	
+	
+	<hr width="90%" align="left" />
+	<a class="menuMain" href="request.jsp?ForwardTo=http://127.0.0.1:8888/wstore">Contact us</a>
+	Parameter3
+</div>
+
+    <div id="vendorUse">
+	<br />
+</div>
+
+	<div id="content">
+	  <h1>Web Basket</h1>
+       
+      <p>Empty Basket (timeout) - Please go back, refresh the page and add products 
+        again.</p>
+        <p> 
+        <input name="Back" type="button" id="Back" value="Back to Web Store" onClick="window.top.location.replace('index.jsp');">
+      </p></div>
+</div>
+
+<div id="footer">
+	<div id="footerParam4">Parameter4&nbsp;</div>
+	<div id="footerParam5">Parameter5&nbsp;</div>
+	<div id="footerParam6">Parameter6&nbsp;</div>
+</div>
+
+</div></body>
+</html>

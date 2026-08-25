@@ -1,0 +1,4 @@
+# context	fact	value	provenance	source	note
+webui	session-timeout-minutes	60	source-inspected	zkwebui/WEB-INF/web.xml	A smoke cannot wait out a 60 minute idle timeout.
+webui	listener-class	org.adempiere.webui.session.SessionManagerListener	source-inspected	zkwebui/WEB-INF/web.xml	Registration is descriptor-visible; cache cleanup is not HTTP-observable.
+webui	filter-class	org.adempiere.webui.session.SessionTimeoutFilter	source-inspected	zkwebui/WEB-INF/web.xml	Filter participation is proven indirectly through representative routes.

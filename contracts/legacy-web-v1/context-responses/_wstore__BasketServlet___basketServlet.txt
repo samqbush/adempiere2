@@ -1,0 +1,105 @@
+
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+
+
+<html>
+
+<head>
+
+<link href="gardenworld.css" rel="stylesheet" type="text/css"/>
+<!--[if IE 6]>
+<link href="gardenworld-ie6.css" rel="stylesheet" type="text/css"/>
+<![endif]-->
+<!--[if gte IE 7]>
+<link href="gardenworld-ie7.css" rel="stylesheet" type="text/css"/>
+<![endif]-->
+<link href="gardenworld-print.css" rel="stylesheet" type="text/css" media="print"/>
+
+<script src="/adempiere/standard.js" language="JavaScript" type="text/JavaScript"></script>
+<script src="/adempiere/wstore.js" language="JavaScript" type="text/JavaScript"></script>
+
+<meta http-equiv="pragma" content="no-cache"/>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="description" content="ADempiere Web Store"/>
+
+<title>GardenWorld - My Basket</title>
+</head>
+<body><div id="page">
+
+<div id="header">
+	<div id="headerIcon">
+	  <a href="http://127.0.0.1:8888/wstore">
+	  <img src="ADempiere120x60.gif" alt="ADempiere - 1999-2007" /></a>
+	</div>
+	<div id="headerMenu">
+	  <a class="menuMain" href="help.jsp">
+	  <img src="help.gif" alt="Help" width="16" height="16" border="0"/>Help</a>
+      <br/><span id="status"></span>
+    </div>
+	<div id="headerContent">
+	    
+	<input value="Login" name="Login" onclick="window.top.location.replace('./loginServlet');" type="button"/>
+	 
+	   
+      
+	</div>
+</div>
+
+<div id="main">
+	<div id="menu">
+	<a class="menuMain" href="index.jsp">Web Store</a><br />
+	
+	
+	<hr width="90%" align="left" />
+	<a class="menuMain" href="request.jsp?ForwardTo=http://127.0.0.1:8888/wstore">Contact us</a>
+	Parameter3
+</div>
+
+    <div id="vendorUse">
+	<br />
+</div>
+
+	<div id="content">
+	  <h1>Web Basket</h1>
+        
+      <form action="basketServlet" method="post" enctype="application/x-www-form-urlencoded" name="basket" id="basket" >
+        <table class="contentTable">
+          <tr> 
+            <th>Product</th>
+            <th>Price</th>
+            <th>Quantity</th>
+            <th> Total</th>
+            <th>&nbsp;</th>
+          </tr>
+           
+          <tr> 
+            <th>0</th>
+            <th>&nbsp;</th>
+            <th>&nbsp;</th>
+            <th>
+              <div class="amount"> 0.00</div></th>
+            <th><input  type="button" name="Checkout" id="Checkout" value="Create Secure Order" 
+	    	onClick="window.top.location.replace('./checkOutServlet');">
+			<!-- removed by request of BBB
+			&nbsp; <input name="CheckoutUnsecure" id="CheckoutUnsecure" value="Create Order" 
+	    	onClick="window.top.location.replace('checkOutServlet');" type="button">  -->
+            </th>
+          </tr>
+        </table>
+      </form>
+       <p> 
+        <input name="Back" type="button" id="Back" value="Back to Web Store" onClick="window.top.location.replace('index.jsp');">
+      </p></div>
+</div>
+
+<div id="footer">
+	<div id="footerParam4">Parameter4&nbsp;</div>
+	<div id="footerParam5">Parameter5&nbsp;</div>
+	<div id="footerParam6">Parameter6&nbsp;</div>
+</div>
+
+</div></body>
+</html>

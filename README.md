@@ -74,6 +74,32 @@ inventories; verifies the public ZK CE 10.3.0.1-jakarta target; and preserves
 the frozen Phase 4 SOAP assertions while Phase 5 takes ownership of non-SOAP
 routes.
 
+Phase 5b freezes the legacy web behaviour before any ZK source crosses to
+Jakarta:
+
+```bash
+./gradlew phase5bFinalVerification --dependency-verification=strict
+./gradlew phase5bLegacyWebOracleSmoke -Pphase3DbSystemPassword='<password>' \
+  --dependency-verification=strict
+```
+
+The frozen tree lives in `contracts/legacy-web-v1/`. The database-backed smoke
+boots the installed Tomcat 9 product, drives the real ZK 3.6 AU protocol through
+login, role selection, menu open and logout, captures twice with a fixture reset
+between runs, and replays both captures against the frozen oracle. The
+database-neutral gate verifies recursive WAR and nested-JAR logical digests,
+asserts that all 84 deployed non-SOAP routes are covered by 82 request vectors
+with a stated proof strength or excluded with an owner and a closing gate,
+proves the normalizer is not over-normalizing, and pins 24 runtime coordinates.
+
+Because no WAR binaries are committed, rollback depends on reproducible
+regeneration from the pinned source commit: 2287 archive entries are proven
+byte-identical across two independent clean builds, and the 13 entries that
+cannot be (code signatures, installation-configured `.jnlp` files, ZIP envelope
+metadata) are pinned individually and owned by later phases.
+`contracts/legacy-web-v1/domain-review.md` records the review that had to happen
+before a self-frozen baseline could become a gate.
+
 The Tomcat smoke requires HTTP 2xx/3xx from each deployed context except
 `ADInterface`, whose unrouted base path is explicitly expected to return 404;
 SOAP behavior remains a Phase 4 contract gate.

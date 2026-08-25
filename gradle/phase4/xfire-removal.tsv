@@ -23,3 +23,6 @@ scripts/phase4/smoke-compatibility-router.sh	migrate	Verify CXF-only routing thr
 scripts/phase4/verify-installed-api.sh	migrate	Reject XFire artifacts and publication from the installed compatibility WAR.
 scripts/phase4/verify-modern-soap-war.sh	retain-evidence	Retain the XFire absence gate for the modern deployable.
 scripts/phase4/verify-release-api.sh	migrate	Reject XFire artifacts and publication from both release archives.
+contracts/legacy-web-v1/oracle-exclusions.tsv	retain-evidence	Records the two /ADInterface routes as Phase 4-owned and points at the frozen xfire-v1 contract tree, so the Phase 5b oracle excludes the SOAP surface by assertion rather than by omission.
+scripts/phase5/capture-legacy-web-oracle.sh	retain-evidence	Documents why the Phase 5b capture skips the SOAP context and cites the frozen xfire-v1 contract tree that already covers it.
+scripts/phase5/generate-request-vectors.sh	retain-evidence	Documents why /ADInterface is omitted from the generated Phase 5b request vectors and cites the frozen xfire-v1 contract tree.

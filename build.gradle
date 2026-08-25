@@ -289,6 +289,7 @@ tasks.register('verifyPhase2RuntimePins', Exec) {
 apply from: 'gradle/phase3/distribution.gradle'
 apply from: 'gradle/phase4/contracts.gradle'
 apply from: 'gradle/phase5/contracts.gradle'
+apply from: 'gradle/phase5/oracle.gradle'
 
 tasks.withType(Javadoc) {
 	failOnError false

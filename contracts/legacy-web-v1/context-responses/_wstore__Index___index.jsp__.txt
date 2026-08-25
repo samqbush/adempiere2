@@ -1,0 +1,196 @@
+
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+
+
+
+<html>
+
+<head>
+
+<link href="gardenworld.css" rel="stylesheet" type="text/css"/>
+<!--[if IE 6]>
+<link href="gardenworld-ie6.css" rel="stylesheet" type="text/css"/>
+<![endif]-->
+<!--[if gte IE 7]>
+<link href="gardenworld-ie7.css" rel="stylesheet" type="text/css"/>
+<![endif]-->
+<link href="gardenworld-print.css" rel="stylesheet" type="text/css" media="print"/>
+
+<script src="/adempiere/standard.js" language="JavaScript" type="text/JavaScript"></script>
+<script src="/adempiere/wstore.js" language="JavaScript" type="text/JavaScript"></script>
+
+<meta http-equiv="pragma" content="no-cache"/>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="description" content="ADempiere Web Store"/>
+
+<title>GardenWorld - Welcome</title>
+</head>
+<body><div id="page">
+
+<div id="header">
+	<div id="headerIcon">
+	  <a href="http://127.0.0.1:8888/wstore">
+	  <img src="ADempiere120x60.gif" alt="ADempiere - 1999-2007" /></a>
+	</div>
+	<div id="headerMenu">
+	  <a class="menuMain" href="help.jsp">
+	  <img src="help.gif" alt="Help" width="16" height="16" border="0"/>Help</a>
+      <br/><span id="status"></span>
+    </div>
+	<div id="headerContent">
+	    
+	<input value="Login" name="Login" onclick="window.top.location.replace('./loginServlet');" type="button"/>
+	 
+	   
+      
+	</div>
+</div>
+
+
+
+<div id="main">
+	<div id="menu">
+	<a class="menuMain" href="index.jsp">Web Store</a><br />
+	
+	
+	<hr width="90%" align="left" />
+	<a class="menuMain" href="request.jsp?ForwardTo=http://127.0.0.1:8888/wstore">Contact us</a>
+	Parameter3
+</div>
+
+    <div id="vendorUse">
+	<br />
+</div>
+
+	<div id="content">
+	  <h1>Web Store</h1>
+      <form action="productServlet" method="post" enctype="application/x-www-form-urlencoded" name="search" id="search">
+          <fieldset>
+              <legend>Search</legend>
+
+              <label id="productSearch" for="SearchString">Product </label>
+              <input name="SearchString" type="text" id="SearchString" />
+                
+	<select id="ID_M_Product_Category_ID" name="M_Product_Category_ID">
+		<option value="-1">
+			 
+		</option>
+		<option value="107">
+			Bushes
+		</option>
+		<option value="109">
+			Chemicals
+		</option>
+		<option value="111">
+			Documentation
+		</option>
+		<option value="110">
+			Patio 
+		</option>
+		<option value="50001">
+			Raw Material
+		</option>
+		<option value="105">
+			Standard
+		</option>
+		<option value="108">
+			Tools
+		</option>
+		<option value="112">
+			Training
+		</option>
+		<option value="106">
+			Trees
+		</option>
+	</select>
+              <input type="submit" name="Submit" value="Search" />
+              
+                <p><i>Not all Products displayed - enter Search criteria to limit selection</i></p>
+              
+              
+          </fieldset>
+      </form>
+      <br/>
+      <form action="basketServlet" method="post" enctype="application/x-www-form-urlencoded" name="products" id="products">
+        <input name="M_PriceList_ID" type="hidden" value="101" />
+        <input name="M_PriceList_Version_ID" type="hidden" value="104" />
+        <table class="contentTable">
+          <tr> 
+            <th colspan="2" align="left">Product</th>
+            <th>Description</th>
+            <th>USD&nbsp;Price</th>
+            <th>Quantity</th>
+            <th>UOM</th>
+            <th>&nbsp;</th>
+            <th class="availProduct">Availability</th>
+          </tr>
+           
+        	
+        	
+        		
+        		
+	        		
+        		
+        	
+        	<tr> 
+            <td class="oddRow"></td>
+            <td class="oddRow"> <input name="Name_128" type="hidden" value="Azalea Bush" />
+                
+                    
+                    
+                        Azalea Bush
+                    
+                
+			</td>
+            <td class="oddRow">Azaleas are flowering shrubs. Azaleas bloom in spring in the Northern hemisphere and in winter in the Southern hemisphere, their flowers often lasting several weeks. Shade tolerant, they prefer living near or under trees. </td>
+            <td class="oddRow amount"> <input name="Price_128" type="hidden" value="23.75" /> 
+              23.75 </td>
+            <td class="oddRow quantity"> <input name="Qty_128" type="text" id="qty_128" value="1" size="5" maxlength="5" /></td>
+            <td class="oddRow">Each&nbsp;</td>
+            <td class="oddRow"> <input name="Add_128" type="submit" id="Add_128" value="Add" /></td>
+            <td class="oddRow availProduct"><!-- c:out value='$ {product.available}'/ -->&nbsp;</td>
+          </tr>
+           
+        	
+        	
+        		
+	        		
+        		
+        		
+        	
+        	<tr> 
+            <td class="evenRow"><img src="http://www.adempiere.com/images/f/f5/C32.png" /></td>
+            <td class="evenRow"> <input name="Name_146" type="hidden" value="How To Plant" />
+                
+                    
+                        <a href="http://www.adempiere.com/index.php/SampleProductDescriptionForDocumentation" target="pd">How To Plant</a>
+                    
+                    
+                
+			</td>
+            <td class="evenRow">Information on how to best to plant your future. </td>
+            <td class="evenRow amount"> <input name="Price_146" type="hidden" value="10" /> 
+              10.00 </td>
+            <td class="evenRow quantity"> <input name="Qty_146" type="text" id="qty_146" value="1" size="5" maxlength="5" /></td>
+            <td class="evenRow">Each&nbsp;</td>
+            <td class="evenRow"> <input name="Add_146" type="submit" id="Add_146" value="Add" /></td>
+            <td class="evenRow availProduct"><!-- c:out value='$ {product.available}'/ -->&nbsp;</td>
+          </tr>
+           
+        </table>
+      </form>
+	  <p><font size="-1">Price List: Standard 2003  (2) - </font></p>
+      <p>&nbsp;</p></div>
+</div>
+
+<div id="footer">
+	<div id="footerParam4">Parameter4&nbsp;</div>
+	<div id="footerParam5">Parameter5&nbsp;</div>
+	<div id="footerParam6">Parameter6&nbsp;</div>
+</div>
+
+</div></body>
+</html>

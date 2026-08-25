@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rs>
+<rid>4</rid>
+
+<r><c>rm</c>
+<d>zk_comp_7</d>
+</r>
+<r><c>addChd</c>
+<d>zk_comp_8</d>
+<d><![CDATA[<div id="zk_comp_60" z.type="zul.wnd2.Wnd2" z.autoz="true" class="z-window-embedded" z.zcls="z-window-embedded" z.shadow="false" z.minheight="100" z.minwidth="200"><div id="zk_comp_60!cave" class=" z-window-embedded-cnt-noborder"><div id="zk_comp_61" class="login-box-header"><span id="zk_comp_62" class="login-box-header-txt z-label" z.zcls="z-label" class="z-label">Login</span></div><table id="grdChooseRole" cellpadding="0" cellspacing="5" class="login-box-body"><tr id="zk_comp_63"><td id="zk_comp_64" class="login-box-header-logo" colspan="2"><img id="zk_comp_65" z.type="zul.widget.Img" src="/webui/theme/default/images/login-logo.png"/></td></tr><tr id="rowRole"><td id="zk_comp_66" class="login-label"><div id="zk_comp_67" style="text-align: right;"><span id="zk_comp_68" class="z-label" z.zcls="z-label" class="z-label">Role</span></div></td><td id="zk_comp_69" class="login-field"><span id="zk_comp_59" class="z-combobox" style="width:220px;" z.zcls="z-combobox" z.onSelect="true" z.aco="true" z.adr="true" z.type="zul.cb.Cmbox" z.combo="true"><table border='0' cellspacing='0' cellpadding='0' width='220px' style='display:inline-block'><tr style='white-space:nowrap; border:none220px'><td style='width: 100%; border:none'><input id="zk_comp_59!real" autocomplete="off" class="z-combobox-inp" value="GardenWorld Admin" type="text" style='width: 100%'/></td><td style='width: 17px'><span id="zk_comp_59!btn" class="z-combobox-btn" style="margin-left:2px"><img class="z-combobox-img" onmousedown="return false;" src="/webui/zkau/web/<ZKVER>/img/spacer.gif""/></span></td></tr></table><div id="zk_comp_59!pp" class="z-combobox-pp" style="display:none" tabindex="-1"><table id="zk_comp_59!cave" cellpadding="0" cellspacing="0"><tr id="zk_comp_70" z.type="Cmit" class="z-combo-item " z.zcls="z-combo-item" z.label="GardenWorld Admin">
+<td class="z-combo-item-img"></td>
+<td class="z-combo-item-text">GardenWorld&nbsp;Admin</td></tr>
+<tr id="zk_comp_71" z.type="Cmit" class="z-combo-item " z.zcls="z-combo-item" z.label="GardenWorld User">
+<td class="z-combo-item-img"></td>
+<td class="z-combo-item-text">GardenWorld&nbsp;User</td></tr>
+</table></div></span></td></tr><tr id="rowclient"><td id="zk_comp_72" class="login-label"><div id="zk_comp_73" style="text-align: right;"><span id="zk_comp_74" class="z-label" z.zcls="z-label" class="z-label">Client</span></div></td><td id="zk_comp_75" class="login-field"><span id="zk_comp_76" class="z-combobox" style="width:220px;" z.zcls="z-combobox" z.onSelect="true" z.aco="true" z.adr="true" z.type="zul.cb.Cmbox" z.combo="true"><table border='0' cellspacing='0' cellpadding='0' width='220px' style='display:inline-block'><tr style='white-space:nowrap; border:none220px'><td style='width: 100%; border:none'><input id="zk_comp_76!real" autocomplete="off" class="z-combobox-inp" value="GardenWorld" type="text" style='width: 100%'/></td><td style='width: 17px'><span id="zk_comp_76!btn" class="z-combobox-btn" style="margin-left:2px"><img class="z-combobox-img" onmousedown="return false;" src="/webui/zkau/web/<ZKVER>/img/spacer.gif""/></span></td></tr></table><div id="zk_comp_76!pp" class="z-combobox-pp" style="display:none" tabindex="-1"><table id="zk_comp_76!cave" cellpadding="0" cellspacing="0"><tr id="zk_comp_77" z.type="Cmit" class="z-combo-item " z.zcls="z-combo-item" z.label="GardenWorld">
+<td class="z-combo-item-img"></td>
+<td class="z-combo-item-text">GardenWorld</td></tr>
+</table></div></span></td></tr><tr id="rowOrganisation"><td id="zk_comp_78" class="login-label"><div id="zk_comp_79" style="text-align: right;"><span id="zk_comp_80" class="z-label" z.zcls="z-label" class="z-label">Organization</span></div></td><td id="zk_comp_81" class="login-field"><span id="zk_comp_82" class="z-combobox" style="width:220px;" z.zcls="z-combobox" z.onSelect="true" z.aco="true" z.adr="true" z.type="zul.cb.Cmbox" z.combo="true"><table border='0' cellspacing='0' cellpadding='0' width='220px' style='display:inline-block'><tr style='white-space:nowrap; border:none220px'><td style='width: 100%; border:none'><input id="zk_comp_82!real" autocomplete="off" class="z-combobox-inp" value="*" type="text" style='width: 100%'/></td><td style='width: 17px'><span id="zk_comp_82!btn" class="z-combobox-btn" style="margin-left:2px"><img class="z-combobox-img" onmousedown="return false;" src="/webui/zkau/web/<ZKVER>/img/spacer.gif""/></span></td></tr></table><div id="zk_comp_82!pp" class="z-combobox-pp" style="display:none" tabindex="-1"><table id="zk_comp_82!cave" cellpadding="0" cellspacing="0"><tr id="zk_comp_83" z.type="Cmit" class="z-combo-item " z.zcls="z-combo-item" z.label="*">
+<td class="z-combo-item-img"></td>
+<td class="z-combo-item-text">*</td></tr>
+<tr id="zk_comp_84" z.type="Cmit" class="z-combo-item " z.zcls="z-combo-item" z.label="Fertilizer">
+<td class="z-combo-item-img"></td>
+<td class="z-combo-item-text">Fertilizer</td></tr>
+<tr id="zk_comp_85" z.type="Cmit" class="z-combo-item " z.zcls="z-combo-item" z.label="Furniture">
+<td class="z-combo-item-img"></td>
+<td class="z-combo-item-text">Furniture</td></tr>
+<tr id="zk_comp_86" z.type="Cmit" class="z-combo-item " z.zcls="z-combo-item" z.label="HQ">
+<td class="z-combo-item-img"></td>
+<td class="z-combo-item-text">HQ</td></tr>
+<tr id="zk_comp_87" z.type="Cmit" class="z-combo-item " z.zcls="z-combo-item" z.label="Store Central">
+<td class="z-combo-item-img"></td>
+<td class="z-combo-item-text">Store&nbsp;Central</td></tr>
+<tr id="zk_comp_88" z.type="Cmit" class="z-combo-item " z.zcls="z-combo-item" z.label="Store East">
+<td class="z-combo-item-img"></td>
+<td class="z-combo-item-text">Store&nbsp;East</td></tr>
+<tr id="zk_comp_89" z.type="Cmit" class="z-combo-item " z.zcls="z-combo-item" z.label="Store North">
+<td class="z-combo-item-img"></td>
+<td class="z-combo-item-text">Store&nbsp;North</td></tr>
+<tr id="zk_comp_90" z.type="Cmit" class="z-combo-item " z.zcls="z-combo-item" z.label="Store South">
+<td class="z-combo-item-img"></td>
+<td class="z-combo-item-text">Store&nbsp;South</td></tr>
+<tr id="zk_comp_91" z.type="Cmit" class="z-combo-item " z.zcls="z-combo-item" z.label="Store West">
+<td class="z-combo-item-img"></td>
+<td class="z-combo-item-text">Store&nbsp;West</td></tr>
+</table></div></span></td></tr><tr id="rowWarehouse"><td id="zk_comp_92" class="login-label"><div id="zk_comp_93" style="text-align: right;"><span id="zk_comp_94" class="z-label" z.zcls="z-label" class="z-label">Warehouse</span></div></td><td id="zk_comp_95" class="login-field"><span id="zk_comp_96" class="z-combobox" style="width:220px;" z.zcls="z-combobox" z.onSelect="true" z.aco="true" z.adr="true" z.type="zul.cb.Cmbox" z.combo="true"><table border='0' cellspacing='0' cellpadding='0' width='220px' style='display:inline-block'><tr style='white-space:nowrap; border:none220px'><td style='width: 100%; border:none'><input id="zk_comp_96!real" autocomplete="off" class="z-combobox-inp" value="*" type="text" style='width: 100%'/></td><td style='width: 17px'><span id="zk_comp_96!btn" class="z-combobox-btn" style="margin-left:2px"><img class="z-combobox-img" onmousedown="return false;" src="/webui/zkau/web/<ZKVER>/img/spacer.gif""/></span></td></tr></table><div id="zk_comp_96!pp" class="z-combobox-pp" style="display:none" tabindex="-1"><table id="zk_comp_96!cave" cellpadding="0" cellspacing="0"><tr id="zk_comp_97" z.type="Cmit" class="z-combo-item " z.zcls="z-combo-item" z.label="*">
+<td class="z-combo-item-img"></td>
+<td class="z-combo-item-text">*</td></tr>
+</table></div></span></td></tr></table><div id="zk_comp_98" class="login-box-footer"><table id="zk_comp_99" z.type="zul.box.Box" class="login-box-footer-pnl z-hbox" z.zcls="z-hbox" cellpadding="0" cellspacing="0">
+<tr id="zk_comp_99!cave"
+ valign="top"><td id="zk_comp_100!chdextr" z.coexist="true" align="left"><table id="zk_comp_100" z.type="zul.box.Box" class="z-hbox" style="width:100%;text-align:left;" z.zcls="z-hbox" cellpadding="0" cellspacing="0">
+<tr id="zk_comp_100!cave"
+ valign="top"><td id="zk_comp_101!chdextr" z.coexist="true" align="left"><div id="zk_comp_101" align="left"></div></td>
+</tr></table></td>
+<td id="zk_comp_100!chdextr2" class="z-hbox-sep"></td>
+<td id="zk_comp_102!chdextr" z.coexist="true" align="left"><div id="zk_comp_102" align="center"></div></td>
+<td id="zk_comp_102!chdextr2" class="z-hbox-sep"></td>
+<td id="zk_comp_103!chdextr" z.coexist="true" align="left"><table id="zk_comp_103" z.type="zul.box.Box" class="z-hbox" style="width:100%;text-align:right;" z.zcls="z-hbox" cellpadding="0" cellspacing="0">
+<tr id="zk_comp_103!cave"
+ valign="top"><td id="zk_comp_104!chdextr" z.coexist="true" align="left"><div id="zk_comp_104" align="right"><span z.type="zul.btn.Button" id="Cancel105" class="z-button"  title="Cancel" z.zcls="z-button"><table id="Cancel105!box" cellspacing="0" cellpadding="0" border="0" class="login-btn z-button ">
+<tr><td class="z-button-tl"><button id="Cancel105!real" class="z-button"></button></td><td class="z-button-tm"></td><td class="z-button-tr"></td></tr>
+<tr><td class="z-button-cl"></td><td class="z-button-cm"><img src="images/Cancel16.png" align="absmiddle" id="Cancel105!hvig"/></td>
+<td class="z-button-cr"><div></div></td></tr>
+<tr><td class="z-button-bl"></td><td class="z-button-bm"></td><td class="z-button-br"></td></tr>
+</table></span><span z.type="zul.btn.Button" id="Ok106" class="z-button"  title="OK" z.zcls="z-button"><table id="Ok106!box" cellspacing="0" cellpadding="0" border="0" class="login-btn z-button ">
+<tr><td class="z-button-tl"><button id="Ok106!real" class="z-button"></button></td><td class="z-button-tm"></td><td class="z-button-tr"></td></tr>
+<tr><td class="z-button-cl"></td><td class="z-button-cm"><img src="images/Ok16.png" align="absmiddle" id="Ok106!hvig"/></td>
+<td class="z-button-cr"><div></div></td></tr>
+<tr><td class="z-button-bl"></td><td class="z-button-bm"></td><td class="z-button-br"></td></tr>
+</table></span></div></td>
+</tr></table></td>
+</tr></table></div></div></div>]]></d>
+</r>
+<r><c>focus</c>
+<d>zk_comp_59</d>
+</r>
+<r><c>script</c>
+<d><![CDATA[zk.GROUPING=",";
+zk.DECIMAL=".";
+zk.PERCENT="%";
+zk.MINUS="-";
+zk.DOW_1ST=0;
+zk.SDOW=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+zk.S2DOW=zk.SDOW;
+zk.FDOW=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+zk.SMON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+zk.S2MON=zk.SMON;
+zk.FMON=["January","February","March","April","May","June","July","August","September","October","November","December"];
+zk.APM=["AM","PM"];
+]]></d>
+</r>
+<r><c>script</c>
+<d><![CDATA[adempiere.store.set("zkTimeoutText", "The page or component you request is no longer available. This is normally caused by timeout or rebooting the server.")]]></d>
+</r>
+</rs>

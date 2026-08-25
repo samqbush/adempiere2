@@ -1,0 +1,192 @@
+#!/usr/bin/env bash
+# Phase 5b normalizer.
+#
+# Implements contracts/legacy-web-v1/normalization-policy.md. Reduces a captured
+# legacy web response to a comparable form by replacing ONLY the fields the
+# policy classifies as `normalized`.
+#
+# This normalizer is deliberately narrow. Component uuids (zk_comp_<n>) are NOT
+# normalized, because AdempiereIdGenerator delegates to SahiIdGenerator_v1,
+# which makes them a deterministic function of the component construction path.
+# Leaving them literal is what allows the oracle to detect changed component
+# counts, changed construction order, and changed command targets.
+#
+# Desktop normalization is value-driven rather than pattern-driven: the actual
+# desktop id is replaced literally wherever it occurs. ZK 3.6 derives several
+# tokens from one desktop id (the `z.dtid` attribute, the
+# `zk.process('clientInfo', ...)` argument, the `zkCmsp.start(...)` server-push
+# bootstrap, and dynamic resource URLs under /zkau/view/<dtid>/), so a
+# value-driven rule collapses them consistently while still failing if their
+# relationship to each other changes.
+#
+# The transformation runs in Python rather than bash/sed. Authenticated desktop
+# responses exceed 600 KB, where bash parameter-expansion substitution is
+# quadratic and takes minutes, and BSD sed lacks the word-boundary support an
+# earlier draft assumed.
+#
+# The output is a comparison artifact only. It must never be fed back into a
+# request: the capture driver keeps a separate unnormalized copy for building
+# subsequent requests.
+set -euo pipefail
+
+usage() {
+  cat >&2 <<'EOF'
+Usage: normalize-web-capture.sh [--dtid <desktop-id>] [file]
+
+Reads stdin when file is omitted. --dtid supplies the live desktop id for
+captures that do not themselves carry a z.dtid attribute; the capture driver
+always knows it, and AU responses never restate it.
+EOF
+  exit 64
+}
+
+explicit_dtid=${ZKAU_DTID:-}
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dtid)
+      [[ $# -ge 2 ]] || usage
+      explicit_dtid=$2
+      shift 2
+      ;;
+    -h|--help) usage ;;
+    --) shift; break ;;
+    -*) usage ;;
+    *) break ;;
+  esac
+done
+
+if [[ $# -gt 1 ]]; then
+  usage
+fi
+
+input=${1:--}
+if [[ "$input" != "-" && ! -f "$input" ]]; then
+  echo "No such capture file: $input" >&2
+  exit 66
+fi
+
+exec python3 - "$input" "$explicit_dtid" <<'PY'
+import re
+import sys
+
+path, explicit_dtid = sys.argv[1], sys.argv[2]
+if path == "-":
+    body = sys.stdin.read()
+else:
+    with open(path, encoding="utf-8", errors="surrogateescape") as handle:
+        body = handle.read()
+
+# Value-driven desktop normalization. The desktop id is supplied by the capture
+# driver when known, because ZK restates `z.dtid` only in the bootstrap
+# document; AU responses embed the same id without ever naming it. Falling back
+# to extraction keeps the normalizer usable standalone. Absent a desktop id
+# (static assets, plain servlet responses) this is a no-op.
+desktop_id = explicit_dtid
+if not desktop_id:
+    match = re.search(r'z\.dtid="([^"]*)"', body)
+    desktop_id = match.group(1) if match else ""
+
+if desktop_id:
+    # A plain string replace is wrong here and fails intermittently. ZK desktop
+    # ids are short, lowercase and alphanumeric (e.g. "gth"), so an unanchored
+    # replace rewrites any word that happens to contain them: a real capture
+    # turned `maxlength="40"` into `maxlen<DTID>="40"`. Whether that corruption
+    # happens depends on the random id, which makes the oracle flaky rather than
+    # merely wrong. The id is therefore replaced only where it appears as a whole
+    # token -- bounded by characters that cannot occur inside a ZK id.
+    body = re.sub(
+        r'(?<![0-9A-Za-z_])' + re.escape(desktop_id) + r'(?![0-9A-Za-z_])',
+        "<DTID>",
+        body,
+    )
+
+# Each rule below corresponds to a `normalized` field in the policy. Rules are
+# narrow on purpose: a broad rule would absorb a real regression.
+RULES = (
+    # Session identity. The cookie value and the URL-rewritten form are the same
+    # secret in two encodings; both are session-scoped, neither is behaviour.
+    (r'(?i)(jsessionid=)[0-9A-Fa-f]+', r'\1<SESSION>'),
+    # Residual desktop id occurrences when the value was not recoverable.
+    (r'dtid="[^"]*"', 'dtid="<DTID>"'),
+    (r'"dtid":"[^"]*"', '"dtid":"<DTID>"'),
+    # Page uuid. ZK derives it from the desktop id, so it is session-scoped.
+    # Anchored to the ZK page-uuid shape so component uuids cannot be caught.
+    (r'\bz_[a-z0-9]{1,8}_[0-9]+\b', '<PAGEUUID>'),
+    (r'z\.zidsp="[^"]*"', 'z.zidsp="<PAGEUUID>"'),
+    # ZK build cache-buster in static resource URLs.
+    (r'/zkau/web/[0-9]+/', '/zkau/web/<ZKVER>/'),
+    # Database-generated session id.
+    (r'AD_Session_ID=[0-9]+', 'AD_Session_ID=<AD_SESSION>'),
+    # Wall-clock timestamps rendered into payloads.
+    (r'[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?', '<TIMESTAMP>'),
+    # Java Date.toString() ("Mon Aug 24 12:16:50 MDT 2026"). Several legacy
+    # servlets render it straight into the response body, and the web-store
+    # servlets emit it URL-encoded, so both encodings are normalized. Without
+    # this rule the shallow oracle is not reproducible.
+    (r'[A-Z][a-z]{2} [A-Z][a-z]{2} [0-9]{1,2} [0-9]{2}:[0-9]{2}:[0-9]{2} [A-Z]{2,5} [0-9]{4}', '<TIMESTAMP>'),
+    (r'[A-Z][a-z]{2}\+[A-Z][a-z]{2}\+[0-9]{1,2}\+[0-9]{2}%3A[0-9]{2}%3A[0-9]{2}\+[A-Z]{2,5}\+[0-9]{4}', '<TIMESTAMP>'),
+    # Ant stamps the build time into Adempiere.DATE_VERSION, which the login
+    # page renders as "Release 3.9.4 20260824-1143". It is a build coordinate,
+    # not behaviour: two builds of identical source differ here, so without this
+    # rule the oracle can only ever replay against the exact build that produced
+    # it and rollback verification is impossible. The rule is anchored to the
+    # release line and to the YYYYMMDD-HHMM shape so it cannot absorb a changed
+    # product version, which stays part of the contract.
+    (r'(Release +[0-9][^ <]*) +[0-9]{8}-[0-9]{4}', r'\1 <BUILD-STAMP>'),
+    # Response headers. Content-Length is reduced to a presence class rather
+    # than dropped, so an empty-vs-nonempty body change still fails.
+    (r'(?im)^(Date|Expires|Last-Modified):.*$', r'\1: <HTTP-DATE>'),
+    (r'(?im)^(ETag):.*$', r'\1: <ETAG>'),
+    (r'(?im)^(Content-Length): *0 *$', r'\1: <EMPTY>'),
+    (r'(?im)^(Content-Length): *[0-9]+ *$', r'\1: <NONEMPTY>'),
+    # Host runtime coordinates rendered into the login page's version box. The
+    # product prints the VM name/version and the OS name/version of whichever
+    # machine runs Tomcat, so a developer laptop and a CI runner disagree on a
+    # value that is not product behaviour and is already pinned in
+    # capture-environment.tsv. The surrounding row markup stays stable, so a
+    # version box that loses, renames, or reorders a row still fails.
+    (r'(<td align="right">JVM</td>\s*<td>:</td>\s*<td aligh="left">)[^<]*(</td>)',
+     r'\1<JVM>\2'),
+    (r'(<td align="right">OS</td>\s*<td>:</td>\s*<td aligh="left">)[^<]*(</td>)',
+     r'\1<OS>\2'),
+    # ADEMPIERE_HOME, base64-encoded into the login page's user-token call. It
+    # records where the product was unpacked, not how it behaves. The component
+    # uuid argument stays stable, so a moved or renamed call still fails.
+    (r"(adempiere\.findUserToken\('[^']*', ')[^']*(')",
+     r"\1<ADEMPIERE-HOME>\2"),
+    (r"(adempiere\.removeUserToken\(')[^']*(')",
+     r"\1<ADEMPIERE-HOME>\2"),
+)
+
+for pattern, replacement in RULES:
+    body = re.sub(pattern, replacement, body)
+
+# ZK 3.6 emits one <link rel="stylesheet"> per language addon it discovered on
+# the classpath, and it emits them in classloader discovery order. That order is
+# a property of how the host filesystem enumerates WEB-INF/lib, so the same
+# product serves the same stylesheets in a different sequence on macOS and on
+# Linux. The set of stylesheets is behaviour and stays stable; the sequence
+# within one contiguous block is not, so the block is compared as a sorted set.
+# A dropped, added, or rewritten stylesheet still fails.
+STYLESHEET_LINE = re.compile(r'^<link rel="stylesheet" ')
+
+
+def canonicalize_stylesheet_blocks(text):
+    lines = text.split("\n")
+    out, block = [], []
+    for line in lines:
+        if STYLESHEET_LINE.match(line):
+            block.append(line)
+            continue
+        if block:
+            out.extend(sorted(block))
+            block = []
+        out.append(line)
+    out.extend(sorted(block))
+    return "\n".join(out)
+
+
+body = canonicalize_stylesheet_blocks(body)
+
+sys.stdout.write(body if body.endswith("\n") else body + "\n")
+PY

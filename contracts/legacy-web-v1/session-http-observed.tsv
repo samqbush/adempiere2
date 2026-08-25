@@ -1,0 +1,10 @@
+observation	value	source
+role_default_rowRole	GardenWorld Admin	runtime-observed
+role_default_rowclient	GardenWorld	runtime-observed
+role_default_rowOrganisation	*	runtime-observed
+role_default_rowWarehouse	*	runtime-observed
+menu_window_row	zk_comp_172	runtime-observed
+bootstrap_set_cookie_shape	JSESSIONID[httponly,path]	observed
+logout_redirect_target	index.zul	observed
+logout_invalidates_http_session	no	observed (session id unchanged across logout)
+post_logout_bootstrap_status	200	observed

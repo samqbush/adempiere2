@@ -6,10 +6,13 @@
 >
 > **Planning date:** 2026-08-20.
 >
-> **Status:** Phases 1-4 are merged to `develop`. Phase 4 completed as
-> `8c0ca4c1d6b35a5f366d6dd2150ed3bb27bc2a89`. Phase 5a is in progress on
-> `phase-5a-web-inventory-and-target`; it owns the ZK/Jakarta inventory,
-> Phase 4-to-5 route-contract hand-off, and target-stack ADR.
+> **Status:** Phases 1-4 and Phase 5a are merged to `develop`. Phase 4 completed
+> as `8c0ca4c1d6b35a5f366d6dd2150ed3bb27bc2a89`; Phase 5a completed as
+> `dc7e84f68` (PR #6) and owns the ZK/Jakarta inventory, the Phase 4-to-5
+> route-contract hand-off, and the target-stack ADR. Phase 5b is in progress on
+> `phase-5b-legacy-web-oracle`; it freezes the installed Tomcat 9 web/UI oracle
+> in `contracts/legacy-web-v1/` and pins the legacy web artifacts before any ZK
+> source crosses to Jakarta.
 > Required-check enforcement remains a repository-administrator action and
 > residual risk R8.
 
@@ -156,7 +159,7 @@ Observed:
 | Background server and scheduler | Phase 2 executes an isolated scheduler fixture exactly once and proves transaction/context cleanup on JDK 21 | **A - Freeze-then-lift** with processor discovery/scheduler characterization | **L3** | **Phase 2 milestone crossed locally**; PR CI remains the authoritative merge gate | **L3** |
 | Full Ant distribution and installer | The complete reactor is configured to build `tools` before `base`, but no local product archive or setup run was completed | **B - Beachhead-then-expand.** Make a minimal installable distribution first, then expand reactor coverage. | **L1** | **Phase 3**: installer builds, silent setup completes, product starts, and at least one DB-backed test passes in CI | **L3** |
 | Database seed and XML migrations | Phase 2 restores the committed seed to disposable PostgreSQL 14.6, applies only `394lts`, and verifies `AD_System` release/version | **A - Freeze-then-lift** using seed checksum, schema inventory, and release-scoped migration contracts | **L3** | **Phase 2 milestone crossed locally**; Phase 3 expands this into the full distribution/installer gate | **L3** |
-| ZK web UI/session boundary | Ant-only; 298 Java files reference `org.zkoss` (279 through imports); no boot or tests | **B - Beachhead-then-expand** via a login/menu/read-only window walking skeleton, then incremental screen migration | **L1** | **Phase 5**: modern ZK/Jakarta slice boots on the target runtime and passes session/tenant isolation tests | **L3**, then L4 as route/e2e coverage expands |
+| ZK web UI/session boundary | Phase 5b drives the real ZK 3.6 AU protocol through login, role selection, menu and logout on the installed Tomcat 9 product, and replays it as a frozen oracle; 298 Java files reference `org.zkoss` (279 through imports) | **B - Beachhead-then-expand** via a login/menu/read-only window walking skeleton, then incremental screen migration | **L3** for the legacy oracle (Phase 5b); **L1** for the unbuilt modern slice | **Phase 5**: modern ZK/Jakarta slice boots on the target runtime and passes session/tenant isolation tests | **L3**, then L4 as route/e2e coverage expands |
 | SOAP and legacy servlet applications | XFire and servlet descriptors are present; no endpoint booted; 11 route descriptors | **B - Beachhead-then-expand** using a contract-preserving adapter and per-route cutover | **L1** | **Phase 4**: one real SOAP operation and one route class pass replay/contract tests on the target stack | **L3** |
 | Domain extension modules | Most Gradle modules compile transitively, but tests and metadata bindings are not exercised | Mixed: **A** for compilable modules, **B** for Ant-only UI/deployment pieces | **L1** | **Phase 3** for Gradle/Ant buildability; feature-specific testability follows Phases 4-6 | **L3** |
 
@@ -185,7 +188,7 @@ necessarily block merges.
 | R1 | Core | Phase 2 smoke and Phase 3 DB-backed metadata validation protect selected runtime and dictionary seams; broader business behavior remains | Phase 5 | Expand representative document, accounting, and UI behavior coverage. |
 | R2 | Swing/POS | Closed for the Phase 2 Garden World login/role/menu/process slice; broader operator workflows remain outside this phase | Closed in Phase 2; broader coverage Phase 5 | The semantic Xvfb smoke is now gated; expand coverage during the ZK/client modernization. |
 | R3 | Background jobs | Exact-once scheduler execution and context/transaction cleanup are proven; production discovery breadth and observability remain | Phase 6 | Expand processor discovery and add operational metrics/alerts. |
-| R4 | Web UI | The installed Tomcat 9 product is the approved local oracle, but production-specific customizations remain unknown | Phase 5 | Phase 5b freezes checksum-pinned installed artifacts and fixtures; production owners must separately validate custom overlays. |
+| R4 | Web UI | Phase 5b froze the installed Tomcat 9 oracle in `contracts/legacy-web-v1/` and pinned the legacy web artifacts, so the local rollback baseline now exists and is gated. Three residuals remain: production-specific customizations are still unknown and unvalidated; rollback depends on reproducible regeneration rather than retained binaries, with 13 pinned non-reproducible entries owned by Phase 7 and Phase 5e; and 4 of 82 request vectors are `context-reachability-only` because `/*` filters have no independently addressable URL | Phase 5e for session and packaging findings; Phase 5c for per-filter browser proof; Phase 7 for full artifact reproducibility | Production owners must separately validate custom overlays. Phase 5c adds browser-level semantic snapshots; Phase 5e closes the session, route-defect and packaging exclusions; Phase 7 closes the reproducibility residuals. |
 | R5 | SOAP/servlets | Unknown consumers and undocumented route classes may break | Phase 4 | Inventory consumers, freeze WSDL/HTTP fixtures, and run parallel replay. |
 | R6 | Database | Production size, custom schema, supported engines, and rollback windows are unknown | Phase 6 | Approve customer-specific migration runbook and rehearse on a sanitized copy. |
 | R7 | Extension metadata | The fail-closed validator names 16 pre-existing active `AD_Process` bindings with absent or incompatible classes | Phase 7 | Obtain usage evidence, then correct or retire every row in `gradle/phase3/metadata-quarantine.tsv`; additions and stale quarantine rows fail CI. |
@@ -969,7 +972,8 @@ Jakarta-compatible stack through vertical slices.
 
 **Status:** Phase 5 is an umbrella milestone delivered through sequential
 `phase-5a-*` through `phase-5h-*` branches. Each increment merges to `develop`
-before the next begins. Phase 5a is in progress.
+before the next begins. Phase 5a merged as `dc7e84f68`. Phase 5b is in progress
+on `phase-5b-legacy-web-oracle`.
 
 **Regime:** Legacy ZK/Tomcat 9 remains lit; modern ZK/Tomcat 10.1 slice moves
 from dark to lit, then expands.
@@ -1027,6 +1031,67 @@ from dark to lit, then expands.
   (ZK APIs, `javax` -> `jakarta`, descriptors, tests/config); H3 fired (Tomcat
   runtime and all deployment pins); H4 fired for browser/public/infra routes; H5
   cleared; H6 applies to any compatibility auth shim; H7/H8 apply.
+
+#### Phase 5b decisions and findings
+
+Phase 5b froze the legacy web oracle in `contracts/legacy-web-v1/` and pinned the
+legacy web artifacts. Scoping decisions:
+
+- **HTTP/ZK-AU protocol-level capture only.** No browser tooling in 5b; real
+  browser semantic snapshots remain Phase 5c's "verified browser tooling" task.
+  The ZK 3.6 AU wire format was derived from the shipped `au.org.js` rather than
+  guessed, and drives an eight-step flow through logout.
+- **Deep oracle for `/webui`, shallow request vectors for the other contexts.**
+  84 deployed routes are covered by 82 reviewed request vectors plus 20 owned
+  exclusions. The two `/ADInterface` routes stay Phase 4-owned by assertion.
+- **Checksum manifest only.** No WAR binaries are committed or released;
+  rollback depends on reproducible regeneration from the pinned source commit.
+- **Split gates.** DB-backed `phase5bLegacyWebOracleSmoke` and DB-neutral
+  `phase5bFinalVerification`.
+
+Normalization is **field-parsed, not token-regex**, and is protected in both
+directions: the capture A/B self-diff detects under-normalization, and
+`verifyPhase5NormalizerMutationProof` detects over-normalization against a
+committed raw fixture, so the gate stays database-neutral. It runs 11 cases.
+
+The rollback rehearsal, not inspection, produced the substantive findings.
+Rebuilding from the pinned commit against a **freshly restored seed** proved
+that first login is not idempotent: it creates `AD_Preference`, `AD_Tree_Favorite`
+and `AD_ChangeLog` rows, and every opened window records an `AD_RecentItem` that
+the desktop menu then renders. The replay therefore primes a cold database and
+resets the fixture before capture A as well as between A and B. The same
+rehearsal exposed two normalizer defects that would have produced a green but
+worthless oracle: the Ant build stamp rendered into the login page (which would
+have pinned the oracle to one build and made rollback verification impossible),
+and an unanchored desktop-id replacement that intermittently corrupted unrelated
+text such as `maxlength`. Both are fixed and pinned by regression cases.
+
+Reproducibility residuals, each pinned per entry rather than waved away:
+`not-reproducible-code-signed` (4 entries; JCE signatures),
+`not-reproducible-installation-configured` (2 `.jnlp` entries embedding the
+installer's encrypted connection string), and `not-reproducible-informational`
+(7 ZIP-envelope rows). Against these, **2287 entries were proven byte-identical
+across two independent clean builds from deleted outputs**. Pin verification is
+therefore a reproducible-subset comparison *plus* an unchanged non-reproducible
+entry set, so a newly unreproducible entry cannot appear unnoticed. Whole-tree
+artifact reproducibility remains Phase 7's concern.
+
+Product findings frozen with owners rather than blessed:
+`/adempiere` and `/mobile` answer every path from one catch-all handler, so
+their packaged static assets are unreachable; four routes answer HTTP 500;
+logout does not invalidate the HTTP session; the session cookie carries neither
+`Secure` nor `SameSite`. All are recorded in `oracle-exclusions.tsv` with an
+owner and a closing gate, and reviewed in `contracts/legacy-web-v1/domain-review.md`.
+
+**Hazard red-team (5b):** H1/H2 cleared (5b removes and rewrites nothing); H3
+fired and is mitigated by `capture-environment.tsv` plus
+`verifyPhase5OracleEnvironment` over 24 runtime coordinates; H4 fired and is
+mitigated by per-route `proof_strength`; H5 fired and is mitigated by splitting
+session facts into HTTP-observed and source-inspected files; H6 held as a hard
+constraint — the capture uses ordinary credentials through the ordinary login
+flow and adds nothing to the T-register; H7 cleared by an empty
+`git log origin/develop..HEAD` at branch creation; H8 fired and is closed by
+these in-PR documentation updates.
 
 #### Verification & Exit Criteria (Definition of Done)
 

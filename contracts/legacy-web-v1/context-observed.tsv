@@ -1,0 +1,83 @@
+context	route_id	method	path	http_status	content_type	charset	location_header	proof_strength	body_digest
+/	/::AdRedirector::/AdRedirector	GET	/AdRedirector	500	text/html	utf-8	none	exact-servlet-dispatch	d99f21c61f439d891a8503d8902a63b1a1a99c7842d7acf0a267d80360e3d96b
+/	/::Broadcast::/	GET	/	302		none	http://127.0.0.1:8888/admin/	exact-servlet-dispatch	01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+/	/::CacheService::/cache/*	GET	/cache/	200		none	none	exact-servlet-dispatch	3511bec53068d607e2604c85d82765474cb7bb4e5f45c3c76962f8effbc8308f
+/	/::Community::/communityServlet	GET	/communityServlet	500	text/html	utf-8	none	exact-servlet-dispatch	866df01da5d7ce6d4dd31abb38e8b09b1024f24284d55a742caeff7272d83d56
+/	/::MediaBroadcast::/media/*	GET	/media/	302		none	http://127.0.0.1:8888/admin/	exact-servlet-dispatch	01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+/	/::RequestServlet::/requestServlet	GET	/requestServlet	302		none	/nullnull	exact-servlet-dispatch	01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+/	/::StageBroadcast::/stage/*	GET	/stage/	302		none	http://127.0.0.1:8888/admin/	exact-servlet-dispatch	01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+/	/::XMLBroadcast::/xml/*	GET	/xml/	500	text/html	utf-8	none	exact-servlet-dispatch	b150451b7549e7ab35347dd8ea216c7be086c1e601620dfae0b3e3cb84e4d0c8
+/adempiere	/adempiere::WAccount::/WAccount	GET	/adempiere/WAccount	200	text/html	none	none	exact-servlet-dispatch	5db53054171724bda66600695ad6589e6297f9ab413e5da2fbae041ed154e750
+/adempiere	/adempiere::WAttachment::/WAttachment	GET	/adempiere/WAttachment	200	text/html	none	none	exact-servlet-dispatch	5db53054171724bda66600695ad6589e6297f9ab413e5da2fbae041ed154e750
+/adempiere	/adempiere::WChat::/WChat	GET	/adempiere/WChat	200	text/html	none	none	exact-servlet-dispatch	5db53054171724bda66600695ad6589e6297f9ab413e5da2fbae041ed154e750
+/adempiere	/adempiere::WFieldUpdate::/WFieldUpdate	GET	/adempiere/WFieldUpdate	200	text/html	none	none	exact-servlet-dispatch	5db53054171724bda66600695ad6589e6297f9ab413e5da2fbae041ed154e750
+/adempiere	/adempiere::WFilter::/*	GET	/adempiere/	200	text/html	none	none	context-reachability-only	5db53054171724bda66600695ad6589e6297f9ab413e5da2fbae041ed154e750
+/adempiere	/adempiere::WFindAdv::/WFindAdv	GET	/adempiere/WFindAdv	200	text/html	none	none	exact-servlet-dispatch	5db53054171724bda66600695ad6589e6297f9ab413e5da2fbae041ed154e750
+/adempiere	/adempiere::WHelp::/WHelp	GET	/adempiere/WHelp	200	text/html	none	none	exact-servlet-dispatch	5db53054171724bda66600695ad6589e6297f9ab413e5da2fbae041ed154e750
+/adempiere	/adempiere::WLocation::/WLocation	GET	/adempiere/WLocation	200	text/html	none	none	exact-servlet-dispatch	5db53054171724bda66600695ad6589e6297f9ab413e5da2fbae041ed154e750
+/adempiere	/adempiere::WLogin::/WLogin	GET	/adempiere/WLogin	200	text/html	UTF-8	none	exact-servlet-dispatch	38b5803b31ddc89357751105e5982aed1fffdea35c8c821fe97d2316a3338348
+/adempiere	/adempiere::WLookup::/WLookup	GET	/adempiere/WLookup	200	text/html	none	none	exact-servlet-dispatch	5db53054171724bda66600695ad6589e6297f9ab413e5da2fbae041ed154e750
+/adempiere	/adempiere::WMenu::/WMenu	GET	/adempiere/WMenu	200	text/html	none	none	exact-servlet-dispatch	5db53054171724bda66600695ad6589e6297f9ab413e5da2fbae041ed154e750
+/adempiere	/adempiere::WProcess::/WProcess	GET	/adempiere/WProcess	200	text/html	none	none	exact-servlet-dispatch	5db53054171724bda66600695ad6589e6297f9ab413e5da2fbae041ed154e750
+/adempiere	/adempiere::WReport::/WReport	GET	/adempiere/WReport	200	text/html	none	none	exact-servlet-dispatch	5db53054171724bda66600695ad6589e6297f9ab413e5da2fbae041ed154e750
+/adempiere	/adempiere::WRequest::/WRequest	GET	/adempiere/WRequest	200	text/html	none	none	exact-servlet-dispatch	5db53054171724bda66600695ad6589e6297f9ab413e5da2fbae041ed154e750
+/adempiere	/adempiere::WStart::/WStart	GET	/adempiere/WStart	200	text/html	none	none	exact-servlet-dispatch	5db53054171724bda66600695ad6589e6297f9ab413e5da2fbae041ed154e750
+/adempiere	/adempiere::WStatus::/WStatus	GET	/adempiere/WStatus	200	text/html	none	none	exact-servlet-dispatch	5db53054171724bda66600695ad6589e6297f9ab413e5da2fbae041ed154e750
+/adempiere	/adempiere::WTask::/WTask	GET	/adempiere/WTask	200	text/html	none	none	exact-servlet-dispatch	5db53054171724bda66600695ad6589e6297f9ab413e5da2fbae041ed154e750
+/adempiere	/adempiere::WValuePreference::/WValuePreference	GET	/adempiere/WValuePreference	200	text/html	none	none	exact-servlet-dispatch	5db53054171724bda66600695ad6589e6297f9ab413e5da2fbae041ed154e750
+/adempiere	/adempiere::WWindow::/WWindow	GET	/adempiere/WWindow	200	text/html	none	none	exact-servlet-dispatch	5db53054171724bda66600695ad6589e6297f9ab413e5da2fbae041ed154e750
+/adempiere	/adempiere::WWorkflow::/WWorkflow	GET	/adempiere/WWorkflow	200	text/html	none	none	exact-servlet-dispatch	5db53054171724bda66600695ad6589e6297f9ab413e5da2fbae041ed154e750
+/adempiere	/adempiere::WZoom::/WZoom	GET	/adempiere/WZoom	200	text/html	none	none	exact-servlet-dispatch	5db53054171724bda66600695ad6589e6297f9ab413e5da2fbae041ed154e750
+/admin	/admin::AdempiereMonitor::/adempiereMonitor/*	GET	/admin/adempiereMonitor/	401		none	none	exact-servlet-dispatch	01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+/admin	/admin::AdempiereMonitorFilter::/adempiereMonitor/*	GET	/admin/adempiereMonitor/	401		none	none	exact-servlet-dispatch	01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+/admin	/admin::JnlpDownloadServlet::*.jnlp	GET	/admin/phase5b-probe.jnlp	404	text/html	utf-8	none	exact-servlet-dispatch	faf69406c3ef3f315e1c7b23ee94ad244fd6f54dff0a24627ef2fa6506cfb6e8
+/admin	/admin::StatusInfo::/statusInfo	GET	/admin/statusInfo	200	text/html	ISO-8859-1	none	exact-servlet-dispatch	985c0bd5174c1269bce5772e4dc6e741c89260a0af4eb9dc10443b0f2a7198cc
+/mobile	/mobile::DisplayChart::/DisplayChart	GET	/mobile/DisplayChart	200	text/html	UTF-8	none	exact-servlet-dispatch	ae4a31d1926f2774da2c50fc479d894b0202587a4e17b7103ccad79e79276b9b
+/mobile	/mobile::LoginDynUpdate::/LoginDynUpdate	GET	/mobile/LoginDynUpdate	200	text/html	UTF-8	none	exact-servlet-dispatch	ae4a31d1926f2774da2c50fc479d894b0202587a4e17b7103ccad79e79276b9b
+/mobile	/mobile::WFieldUpdate::/WFieldUpdate	GET	/mobile/WFieldUpdate	200	text/html	UTF-8	none	exact-servlet-dispatch	ae4a31d1926f2774da2c50fc479d894b0202587a4e17b7103ccad79e79276b9b
+/mobile	/mobile::WFilter::/*	GET	/mobile/	200	text/html	UTF-8	none	context-reachability-only	ae4a31d1926f2774da2c50fc479d894b0202587a4e17b7103ccad79e79276b9b
+/mobile	/mobile::WFindAdv::/WFindAdv	GET	/mobile/WFindAdv	200	text/html	UTF-8	none	exact-servlet-dispatch	ae4a31d1926f2774da2c50fc479d894b0202587a4e17b7103ccad79e79276b9b
+/mobile	/mobile::WHelp::/WHelp	GET	/mobile/WHelp	200	text/html	UTF-8	none	exact-servlet-dispatch	ae4a31d1926f2774da2c50fc479d894b0202587a4e17b7103ccad79e79276b9b
+/mobile	/mobile::WLocation::/WLocation	GET	/mobile/WLocation	200	text/html	UTF-8	none	exact-servlet-dispatch	ae4a31d1926f2774da2c50fc479d894b0202587a4e17b7103ccad79e79276b9b
+/mobile	/mobile::WLogin::/WLogin	GET	/mobile/WLogin	200	text/html	UTF-8	none	exact-servlet-dispatch	ae4a31d1926f2774da2c50fc479d894b0202587a4e17b7103ccad79e79276b9b
+/mobile	/mobile::WLookup::/WLookup	GET	/mobile/WLookup	200	text/html	UTF-8	none	exact-servlet-dispatch	ae4a31d1926f2774da2c50fc479d894b0202587a4e17b7103ccad79e79276b9b
+/mobile	/mobile::WMenu::/WMenu	GET	/mobile/WMenu	200	text/html	UTF-8	none	exact-servlet-dispatch	ae4a31d1926f2774da2c50fc479d894b0202587a4e17b7103ccad79e79276b9b
+/mobile	/mobile::WProcess::/WProcess	GET	/mobile/WProcess	200	text/html	UTF-8	none	exact-servlet-dispatch	ae4a31d1926f2774da2c50fc479d894b0202587a4e17b7103ccad79e79276b9b
+/mobile	/mobile::WReport::/WReport	GET	/mobile/WReport	200	text/html	UTF-8	none	exact-servlet-dispatch	ae4a31d1926f2774da2c50fc479d894b0202587a4e17b7103ccad79e79276b9b
+/mobile	/mobile::WWindow::/WWindow	GET	/mobile/WWindow	200	text/html	UTF-8	none	exact-servlet-dispatch	ae4a31d1926f2774da2c50fc479d894b0202587a4e17b7103ccad79e79276b9b
+/mobile	/mobile::WZoom::/WZoom	GET	/mobile/WZoom	200	text/html	UTF-8	none	exact-servlet-dispatch	ae4a31d1926f2774da2c50fc479d894b0202587a4e17b7103ccad79e79276b9b
+/webui	/webui::auEngine::/zkau/*	GET	/webui/zkau/	200		none	none	exact-servlet-dispatch	01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+/webui	/webui::dspLoader::*.dsp	GET	/webui/theme/default/css/theme.css.dsp	200	text/css	UTF-8	none	exact-servlet-dispatch	a188e64c1c1f1cce8d10146c3aae48119008ed3379c6a59ee36ea1e2142d9af7
+/webui	/webui::requestFilter::/*	GET	/webui/	200	text/html	UTF-8	none	context-reachability-only	748c416e498bb9a9db1a1bd555f57a023b8551762ac4ad2bee3975a638642672
+/webui	/webui::timelineFeed::/timeline	GET	/webui/timeline	200		none	none	exact-servlet-dispatch	01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+/webui	/webui::zkLoader::*.zhtml	GET	/webui/phase5b-probe.zhtml	404	text/html	utf-8	none	exact-servlet-dispatch	f83ab65f27fe201d3ae5b6c376c25a163fde8ef934b564669cd0ff052afe40a1
+/webui	/webui::zkLoader::*.zul	GET	/webui/index.zul	200	text/html	UTF-8	none	exact-servlet-dispatch	748c416e498bb9a9db1a1bd555f57a023b8551762ac4ad2bee3975a638642672
+/wstore	/wstore::AdvertisementServlet::/advertisementServlet/*	GET	/wstore/advertisementServlet/	302		none	advertisements.jsp	exact-servlet-dispatch	01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+/wstore	/wstore::AssetServlet::/assetServlet/*	GET	/wstore/assetServlet/	200	text/html	UTF-8	none	exact-servlet-dispatch	9a89606446ff0186478a8dffff6f7ab7a8d0a1242904afd090661254a4b3fe37
+/wstore	/wstore::Basket::/basket.jsp/*	GET	/wstore/basket.jsp/	200	text/html	UTF-8	none	exact-servlet-dispatch	6c227154a93f68d245977804b1202d6a52063b3b96c835d389fa4e0ae298c5e8
+/wstore	/wstore::BasketServlet::/basketServlet	GET	/wstore/basketServlet	200	text/html	UTF-8	none	exact-servlet-dispatch	4bb8fb5b26ae2ecd2fcedf0990616144c26c75331f30ab4c5484c280ea88ff28
+/wstore	/wstore::CheckOutServlet::/checkOutServlet	GET	/wstore/checkOutServlet	302		none	https://127.0.0.1:4444/wstore/checkOutServlet	exact-servlet-dispatch	01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+/wstore	/wstore::Click::/click/*	GET	/wstore/click/	302		none	http://www.adempiere.net/	exact-servlet-dispatch	01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+/wstore	/wstore::Counter::/counter/*	GET	/wstore/counter/	200		none	none	exact-servlet-dispatch	01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+/wstore	/wstore::EMailServlet::/emailServlet/*	GET	/wstore/emailServlet/	302		none	loginServlet?ForwardTo=emailVerify.jsp	exact-servlet-dispatch	01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+/wstore	/wstore::ExpenseServlet::/expenseServlet	GET	/wstore/expenseServlet	302		none	expenses.jsp	exact-servlet-dispatch	01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+/wstore	/wstore::Index::/index.jsp/*	GET	/wstore/index.jsp/	200	text/html	UTF-8	none	exact-servlet-dispatch	75a3b9e2e823e16f0e3858904bed81e39cde98c40e055740b0704144ca146834
+/wstore	/wstore::Info::/info.jsp	GET	/wstore/info.jsp	302	text/html	UTF-8	loginServlet;jsessionid=<SESSION>?ForwardTo=info.jsp	exact-servlet-dispatch	01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+/wstore	/wstore::InfoServlet::/infoServlet	GET	/wstore/infoServlet	302	text/html	UTF-8	loginServlet;jsessionid=<SESSION>?ForwardTo=info.jsp	exact-servlet-dispatch	01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+/wstore	/wstore::InvoiceServlet::/invoiceServlet/*	GET	/wstore/invoiceServlet/	200	text/html	UTF-8	none	exact-servlet-dispatch	bed6859bc1051884dd2d90b93c2f18944b3f3aec3925aac9b2e3073ba64346ba
+/wstore	/wstore::IssueReportServlet::/issueReportServlet/*	GET	/wstore/issueReportServlet/	200	text/html	UTF-8	none	exact-servlet-dispatch	a5604ee7749df88a52ae375370a4012b1b7b20c9ee78b7cb4bafd009d769d73b
+/wstore	/wstore::LocationServlet::/locationServlet	GET	/wstore/locationServlet	200	text/xml	UTF-8	none	exact-servlet-dispatch	6aa1784b74db771255f2d5dedac0ab064bfbd35a4ec1a629db549eea02922979
+/wstore	/wstore::Login::/login.jsp/*	GET	/wstore/login.jsp/	200	text/html	UTF-8	none	exact-servlet-dispatch	bed6859bc1051884dd2d90b93c2f18944b3f3aec3925aac9b2e3073ba64346ba
+/wstore	/wstore::LoginServlet::/loginServlet	GET	/wstore/loginServlet	302		none	https://127.0.0.1:4444/wstore/loginServlet	exact-servlet-dispatch	01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+/wstore	/wstore::NoteServlet::/noteServlet/*	GET	/wstore/noteServlet/	200	text/html	UTF-8	none	exact-servlet-dispatch	bed6859bc1051884dd2d90b93c2f18944b3f3aec3925aac9b2e3073ba64346ba
+/wstore	/wstore::OrderServlet::/orderServlet	GET	/wstore/orderServlet	302		none	https://127.0.0.1:4444/wstore/orderServlet	exact-servlet-dispatch	01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+/wstore	/wstore::PaymentServlet::/paymentServlet	GET	/wstore/paymentServlet	500	text/html	UTF-8	none	exact-servlet-dispatch	75a3b9e2e823e16f0e3858904bed81e39cde98c40e055740b0704144ca146834
+/wstore	/wstore::ProductServlet::/productServlet/*	GET	/wstore/productServlet/	200	text/html	UTF-8	none	exact-servlet-dispatch	75a3b9e2e823e16f0e3858904bed81e39cde98c40e055740b0704144ca146834
+/wstore	/wstore::RegistrationServlet::/registrationServlet	GET	/wstore/registrationServlet	302		none	registration.jsp	exact-servlet-dispatch	01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+/wstore	/wstore::Request::/request.jsp/*	GET	/wstore/request.jsp/	302	text/html	UTF-8	loginServlet;jsessionid=<SESSION>?ForwardTo=request.jsp&SalesRep_ID=	exact-servlet-dispatch	01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+/wstore	/wstore::RequestServlet::/requestServlet/*	GET	/wstore/requestServlet/	200	text/html	UTF-8	none	exact-servlet-dispatch	bed6859bc1051884dd2d90b93c2f18944b3f3aec3925aac9b2e3073ba64346ba
+/wstore	/wstore::RfQServlet::/rfqServlet/*	GET	/wstore/rfqServlet/	200	text/html	UTF-8	none	exact-servlet-dispatch	bed6859bc1051884dd2d90b93c2f18944b3f3aec3925aac9b2e3073ba64346ba
+/wstore	/wstore::SearchServlet::/searchServlet	GET	/wstore/searchServlet	200	text/xml	UTF-8	none	exact-servlet-dispatch	6aa1784b74db771255f2d5dedac0ab064bfbd35a4ec1a629db549eea02922979
+/wstore	/wstore::UpdateServlet::/updateServlet	GET	/wstore/updateServlet	200		none	none	exact-servlet-dispatch	01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+/wstore	/wstore::WebStoreFilter::/*	GET	/wstore/	200	text/html	UTF-8	none	context-reachability-only	75a3b9e2e823e16f0e3858904bed81e39cde98c40e055740b0704144ca146834
+/wstore	/wstore::WorkflowServlet::/workflowServlet/*	GET	/wstore/workflowServlet/	200	text/html	UTF-8	none	exact-servlet-dispatch	bed6859bc1051884dd2d90b93c2f18944b3f3aec3925aac9b2e3073ba64346ba
