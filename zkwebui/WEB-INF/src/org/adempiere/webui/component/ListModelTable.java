@@ -28,7 +28,7 @@ import java.util.Vector;
 import org.adempiere.webui.event.WTableModelEvent;
 import org.adempiere.webui.event.WTableModelListener;
 import org.zkoss.zk.ui.Executions;
-import org.zkoss.zul.ListModelExt;
+import org.adempiere.webui.compat.ListModelExt;
 import org.zkoss.zul.ListModelList;
 import org.zkoss.zul.event.ListDataEvent;
 

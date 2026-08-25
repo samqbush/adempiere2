@@ -159,7 +159,7 @@ Observed:
 | Background server and scheduler | Phase 2 executes an isolated scheduler fixture exactly once and proves transaction/context cleanup on JDK 21 | **A - Freeze-then-lift** with processor discovery/scheduler characterization | **L3** | **Phase 2 milestone crossed locally**; PR CI remains the authoritative merge gate | **L3** |
 | Full Ant distribution and installer | The complete reactor is configured to build `tools` before `base`, but no local product archive or setup run was completed | **B - Beachhead-then-expand.** Make a minimal installable distribution first, then expand reactor coverage. | **L1** | **Phase 3**: installer builds, silent setup completes, product starts, and at least one DB-backed test passes in CI | **L3** |
 | Database seed and XML migrations | Phase 2 restores the committed seed to disposable PostgreSQL 14.6, applies only `394lts`, and verifies `AD_System` release/version | **A - Freeze-then-lift** using seed checksum, schema inventory, and release-scoped migration contracts | **L3** | **Phase 2 milestone crossed locally**; Phase 3 expands this into the full distribution/installer gate | **L3** |
-| ZK web UI/session boundary | Phase 5c drives the real ZK 3.6 product through a checksum-verified Chromium semantic oracle, while the packaging-only ZK 10.3.0.1-jakarta WAR boots only a loopback 503 marker; 298 Java files reference `org.zkoss` (279 through imports) | **B - Beachhead-then-expand** via a login/menu/read-only window walking skeleton, then incremental screen migration | **L3** for the legacy oracle; **L1** for the packaging-only modern slice | **Phase 5d**: modern ZK/Jakarta slice boots on the target runtime and passes login, role, menu, and read-only-window tests | **L3**, then L4 as route/e2e coverage expands |
+| ZK web UI/session boundary | Phase 5d drives BOTH renderings through a checksum-verified Chromium semantic oracle: the frozen ZK 3.6 product on Tomcat 9 and the functional ZK CE 10.3.0.1-jakarta `/webui-modern` slice on loopback Tomcat 10.1.59. 310 Java files reference `org.zkoss` after the migration added 15 ADempiere-owned CE compatibility sources | **B - Beachhead-then-expand** via a login/menu/read-only window walking skeleton, then incremental screen migration | **L3** for both the legacy oracle and the modern slice | **Phase 5d milestone crossed**: the modern slice boots on the target runtime and passes login, role, menu, and read-only-window tests, reproducing all eleven comparable frozen semantic facts and the zero-write database effect | **L3**, then L4 as route/e2e coverage expands |
 | SOAP and legacy servlet applications | XFire and servlet descriptors are present; no endpoint booted; 11 route descriptors | **B - Beachhead-then-expand** using a contract-preserving adapter and per-route cutover | **L1** | **Phase 4**: one real SOAP operation and one route class pass replay/contract tests on the target stack | **L3** |
 | Domain extension modules | Most Gradle modules compile transitively, but tests and metadata bindings are not exercised | Mixed: **A** for compilable modules, **B** for Ant-only UI/deployment pieces | **L1** | **Phase 3** for Gradle/Ant buildability; feature-specific testability follows Phases 4-6 | **L3** |
 
@@ -188,7 +188,7 @@ necessarily block merges.
 | R1 | Core | Phase 2 smoke and Phase 3 DB-backed metadata validation protect selected runtime and dictionary seams; broader business behavior remains | Phase 5 | Expand representative document, accounting, and UI behavior coverage. |
 | R2 | Swing/POS | Closed for the Phase 2 Garden World login/role/menu/process slice; broader operator workflows remain outside this phase | Closed in Phase 2; broader coverage Phase 5 | The semantic Xvfb smoke is now gated; expand coverage during the ZK/client modernization. |
 | R3 | Background jobs | Exact-once scheduler execution and context/transaction cleanup are proven; production discovery breadth and observability remain | Phase 6 | Expand processor discovery and add operational metrics/alerts. |
-| R4 | Web UI | Phase 5c adds two isolated Playwright captures with fixture reset, semantic/network/error contracts, additive installed/release overlays, and rollback rehearsal. Production customizations remain unknown; 13 legacy entries remain non-reproducible; four `/*` filter vectors remain honestly `context-reachability-only`; inherited 404/page errors are allowlisted; Servlet 2.4 descriptor migration remains manual because Eclipse Transformer does not perform it | Phase 5d for source/descriptors and first modern boot; Phase 5e for session defects; Phase 5f for inherited route defects; Phase 7 for full artifact reproducibility | Production owners validate custom overlays. Do not treat the 503 marker as modern UI testability or the browser context requests as direct filter-effect proof. |
+| R4 | Web UI | Phase 5d replaces the 503 marker with a functional modern slice and crosses the Testability Milestone: two fixture-isolated modern captures, a self-diff, and an eleven-fact plus zero-write comparison with the frozen legacy baseline at matching capture ordinals. Residuals that remain: production customizations are still unknown; 13 legacy entries remain non-reproducible; the four `/*` filter vectors remain honestly `context-reachability-only`; the modern slice serves only the walking-skeleton routes, so DSP/timeline/JSP/TLD/non-ZK routes are untested on ZK CE; JasperReports' interactive web viewer is excluded from the modern runtime (residual R4-5d-1); and the modern slice's visual parity is unreviewed - only its semantic facts are | Phase 5e for session defects and cohort routing; Phase 5f for non-ZK routes, DSP/JSP/TLD assets and the timeline; Phase 5g for report parity and screen-level visual parity; Phase 7 for full artifact reproducibility | Production owners validate custom overlays. Do not read the eleven matched semantic facts as screen-level parity, and do not treat the browser context requests as direct filter-effect proof. |
 | R5 | SOAP/servlets | Unknown consumers and undocumented route classes may break | Phase 4 | Inventory consumers, freeze WSDL/HTTP fixtures, and run parallel replay. |
 | R6 | Database | Production size, custom schema, supported engines, and rollback windows are unknown | Phase 6 | Approve customer-specific migration runbook and rehearse on a sanitized copy. |
 | R7 | Extension metadata | The fail-closed validator names 16 pre-existing active `AD_Process` bindings with absent or incompatible classes | Phase 7 | Obtain usage evidence, then correct or retire every row in `gradle/phase3/metadata-quarantine.tsv`; additions and stale quarantine rows fail CI. |
@@ -973,11 +973,11 @@ Jakarta-compatible stack through vertical slices.
 **Status:** Phase 5 is an umbrella milestone delivered through sequential
 `phase-5a-*` through `phase-5h-*` branches. Each increment merges to `develop`
 before the next begins. Phase 5a merged as `dc7e84f68`; Phase 5b merged as
-`cac0efdcaa13464e069291992214880cd0239ec5`. Phase 5c is in progress on
-`phase-5c-jakarta-web-beachhead`.
+`cac0efdcaa13464e069291992214880cd0239ec5`; Phase 5c merged as `3154ced80`.
+Phase 5d is in progress on `phase-5d-zk-functional-slice`.
 
-**Regime:** Legacy ZK/Tomcat 9 remains lit; modern ZK/Tomcat 10.1 slice moves
-from dark to lit, then expands.
+**Regime:** Legacy ZK/Tomcat 9 remains lit; the modern ZK/Tomcat 10.1 slice
+crossed from dark to lit at Phase 5d and now expands.
 
 **Safety rung:** L3, progressing toward L4.
 
@@ -1150,6 +1150,98 @@ fixture reset is marker-guarded; H6 fired as a constraint and no public route,
 security bypass, second cookie, or unverified download exists; H7 cleared at
 branch creation from merged Phase 5b; H8 is closed by these synchronized docs,
 commands, topology, and CI changes.
+
+#### Phase 5d decisions and findings
+
+Phase 5d crosses the web UI Testability Milestone. `webui-modern.war` keeps the
+Phase 5c artifact name and `/webui-modern` context path, and its contents are
+replaced entirely: the Phase 5c marker servlet and its 503 route are gone, and
+the archive now carries the migrated ZK compile closure, hand-written Servlet 6
+and ZK 10 descriptors, and the shared ADempiere runtime.
+
+- **Descriptors are hand-written, not transformed.** Eclipse Transformer does not
+  migrate the Servlet 2.4 schema, which Phase 5c already recorded. The Phase 5d
+  `web.xml` declares only the routes the walking skeleton needs - the ZK session
+  listener, `WebUIServlet` on `*.zul`/`*.zhtml`, `DHtmlUpdateServlet` on
+  `/zkau/*`, and `SessionTimeoutFilter` on `/*` - and carries an empty
+  `<absolute-ordering/>` so no library fragment, including ZK's own
+  `zkwebfragment`, can inject an undeclared route. `*.dsp`, `/timeline`, the two
+  `resource-ref` datasource declarations, `WEB-INF/tld/**`, `WEB-INF/xsd/**` and
+  `jboss-web.xml` are explicitly not migrated and stay with Phase 5f.
+- **`zk.xml` differs from the ZK 3.6 file in exactly three reviewed places:**
+  Comet server push (Enterprise-only) becomes the CE polling implementation, the
+  four `.dsp`-theme font properties are dropped, and the ZK 3.6 `i3-log.conf`
+  monitor is dropped.
+- **The shared runtime is repackaged, not re-resolved.** The third-party layer
+  comes from the shipped, code-signed `AdempiereSLib.jar` through a reviewed
+  allow-list in `gradle/phase5/modern-web-shared-runtime.tsv`, so `/webui-modern`
+  runs the library versions the product ships. ADempiere's own code comes from
+  the Ant-built `lib/Adempiere.jar` and the installed `packages.jar`; the base
+  copy of the one colliding class is dropped so the installed merge order
+  (`install/Adempiere/build.xml:213-227`, packages wins) is reproduced exactly.
+  Signatures, `META-INF/versions/**` and root `module-info` are stripped, and the
+  gate rejects any duplicate class across `WEB-INF/classes` and `WEB-INF/lib`.
+- **Six ZK CE runtime defects were found by the capture, not by inspection.**
+  Each is fixed in ADempiere-owned code with a regression test or a reviewed
+  contract row: the ZK 3.x `#enter` control key that made ZK CE reject the
+  *entire* shortcut specification (and reached the client a second time through
+  `getCtrlKeys()`); ZK CE's two-directional "flex or size, not both" rule at nine
+  call sites; the fixed 20px menu-lookup row that ZK CE's taller combobox
+  overflowed, leaving the lookup visible and unclickable; the desktop header
+  collapsing to zero height under ZK CE's 16px region padding, which let the
+  region body cover Change Role and Log Out; `layout.js` still calling the
+  removed ZK 3.6 `$e()` and `zkau` globals on every grid row change; and a
+  pre-existing brace error in a `GridTabRowRenderer` injected script that ZK CE
+  surfaced as a page-level `SyntaxError`.
+- **`oracle.jdbc` is packaged on the PostgreSQL lane.**
+  `org.compiere.util.CCachedRowSet` *extends* `oracle.jdbc.rowset.OracleCachedRowSet`
+  (`base/src/org/compiere/util/CCachedRowSet.java:42`), so every ADempiere runtime
+  loads it regardless of the configured database. Omitting it failed the modern
+  desktop after role selection.
+- **ZK CE 10 logs through SLF4J 2, which is a no-op without a provider.** The WAR
+  ships `slf4j-jdk14` so a ZK server-side failure reaches the container log
+  instead of only the browser. Without it the first three defects above were
+  diagnosable only from client-side error boxes.
+- **Coexistence is measured in its own session.** The Phase 4 SOAP corpus
+  authenticates 44 times and every ADempiere login writes an `AD_Session` row,
+  which `contracts/legacy-web-v1/database-effects.tsv` allows a capture exactly
+  one of. Folding the corpus into a measured capture would have forced that
+  assertion to be loosened, so a third authenticated session hosts it. The Phase
+  4 fixture that rewrites GardenAdmin's password is applied only after the two
+  measured captures, so those captures use the frozen oracle's own credential.
+- **Comparison is over a reviewed subset.** `modern-comparable-facts.tsv` records
+  which frozen legacy facts the modern slice must reproduce and why the four
+  `filter-*` facts cannot be compared: they describe Tomcat 9 contexts the modern
+  runtime does not deploy. All eleven comparable facts, including the zero-write
+  database effect, matched. Modern route classes are frozen separately in
+  `modern-route-classes.tsv`, which records the three inherited outbound hosts
+  that come from ADempiere's own markup and the two the slice removed.
+- **`phase5dFinalVerification` does not chain `phase5cFinalVerification`.** That
+  gate still asserts the 503 marker this phase removed. The Phase 5c assertions
+  that remain true are depended on individually, and the historical marker
+  evidence is preserved in `docs/modernization/phase-5c-evidence.md`.
+
+**Hazard red-team (5d):** H1 fired and is mitigated by the reviewed shared-runtime
+allow-list, the web-asset ledger and the duplicate-class rejection; H2 fired and
+is why the descriptors are hand-written and the six ZK CE defects are fixed in
+source rather than worked around in the test; H3 fired and is mitigated by
+running both lanes concurrently and proving distinct ports, JVMs and
+`CATALINA_BASE` trees with one shared marker-owned database; H4 fired and is
+mitigated by the frozen modern route-class contract, which reports an
+unclassified route verbatim; H5 fired for the `AD_Session` effect and is closed
+by the separate coexistence session rather than by loosening the frozen contract;
+H6 held as a hard constraint - ordinary credentials, no auth bypass, no second
+cookie, no copied desktop state, no public route; H7 cleared by an empty
+`git log origin/develop..HEAD` at branch creation; H8 is closed by these
+synchronized plan, README, ARCHITECTURE and instruction updates.
+
+Canonical Phase 5d gates:
+
+```bash
+./gradlew phase5dFinalVerification --dependency-verification=strict
+./gradlew phase5dModernWebSmoke -Pphase3DbSystemPassword='<password>' \
+  --dependency-verification=strict
+```
 
 #### Verification & Exit Criteria (Definition of Done)
 

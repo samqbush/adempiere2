@@ -1,0 +1,89 @@
+# Phase 5d reviewed repackaging of the shipped ADempiere server library.
+#
+# The functional /webui-modern WAR takes its third-party runtime from the
+# installed, code-signed lib/AdempiereSLib.jar, which install/Adempiere/build.xml
+# (setupSLib, line 355) builds by merging CSTools.jar, oracle.jar, driver.jar and
+# CompiereJasperReqs.jar. Taking the runtime from the shipped server library
+# rather than from a second, independently resolved dependency graph keeps
+# /webui-modern on the same library versions the product ships.
+#
+# That archive holds 73,040 entries and roughly 276 MB uncompressed, most of it
+# unreachable from the Phase 5d walking skeleton (Oracle JDBC, Groovy, Jython,
+# Kotlin, icepdf, Telegram and Discord clients, the AWS SDK, ...). This file is
+# therefore an allow-list, not a deny-list: `include` rows name the namespaces
+# the slice actually needs, and `exclude` rows are applied on top of them.
+#
+# Both directions are verified. zkwebui `verifyPhase5dModernWebWar` re-checks
+# every `exclude` row against the packaged bytes, and independently rejects any
+# class that appears in more than one WEB-INF/lib jar or in both WEB-INF/lib and
+# WEB-INF/classes, so an include row that reaches too far fails the same gate.
+#
+# pattern	disposition	reason
+#
+# --- Reviewed includes ------------------------------------------------------
+org/postgresql/**	include	The PostgreSQL JDBC driver from driver.jar. The Phase 5d runtime lane connects to the marker-owned disposable PostgreSQL database, so this is the one library without which nothing works.
+com/zaxxer/**	include	HikariCP, selected by org.compiere.db.CConnection for the ADempiere connection pool.
+oracle/jdbc/**	include	NOT an Oracle-database decision. org.compiere.util.CCachedRowSet EXTENDS oracle.jdbc.rowset.OracleCachedRowSet (base/src/org/compiere/util/CCachedRowSet.java:42), so every ADempiere runtime loads it regardless of the configured database. Omitting it made the modern desktop fail with NoClassDefFoundError oracle/jdbc/rowset/OracleCachedRowSet after role selection.
+oracle/sql/**	include	Required by oracle/jdbc above.
+oracle/net/**	include	Required by oracle/jdbc above.
+oracle/core/**	include	Required by oracle/jdbc above.
+oracle/jpub/**	include	Required by oracle/jdbc above.
+oracle/security/**	include	Required by oracle/jdbc above.
+# Reviewed and NOT included, because the shipped server library does not contain them at all:
+#   org/apache/commons/dbcp, org/apache/commons/pool - AdempiereSLib.jar carries no
+#     commons-dbcp or commons-pool class, so the installed product cannot be running
+#     that pool either. HikariCP above is the pool the product actually ships.
+#   org/apache/commons/collections (3.x), org/apache/commons/lang, org/apache/commons/lang3
+#     - absent for the same reason; commons-collections4 below is the version shipped.
+org/apache/log4j/**	include	Reached through library code that logs through Log4j 1.x; a missing appender class surfaces as a NoClassDefFoundError at first log, not at deployment.
+org/apache/logging/**	include	The Log4j 2 API/impl pair shipped in the same server library, for libraries bound to it.
+org/apache/commons/logging/**	include	Commons Logging, used by JasperReports and by the digester/beanutils chain below.
+org/apache/commons/beanutils/**	include	JasperReports report loading.
+org/apache/commons/digester/**	include	JasperReports report loading.
+org/apache/commons/collections4/**	include	Used directly by org.compiere and by Apache POI 3.17.
+org/apache/commons/codec/**	include	Base64 and digest helpers used by org.compiere.util and by the report chain.
+org/apache/commons/validator/**	include	Used by org.compiere validation utilities.
+javax/activation/**	include	JavaBeans Activation Framework. Removed from Java SE 11, so the runtime must carry it; it is not a Jakarta web namespace.
+com/sun/activation/**	include	The implementation half of javax.activation above.
+javax/mail/**	include	JavaMail API used by org.compiere.util.EMail for the mail-enabled parts of the dictionary.
+com/sun/mail/**	include	The JavaMail implementation half.
+net/sf/jasperreports/**	include	JasperReports 6.x, reached through org.compiere.jr.report.ReportStarter, which WebUIServlet.init installs as the report viewer provider on every boot.
+com/lowagie/**	include	iText 2.x, the PDF back end JasperReports exports through.
+com/itextpdf/**	include	iText 5/7, used directly by org.adempiere.pdf and the archive/print chain.
+io/konik/**	include	ZUGFeRD harness reached through the org.adempiere.pdf export path.
+org/jfree/**	include	JFreeChart, used by the ADempiere performance/dashboard chart rendering.
+io/vavr/**	include	Functional collections used throughout org.compiere.model and the session manager.
+org/apache/poi/**	include	Apache POI, used by the ADempiere Excel export path.
+org/openxmlformats/**	include	The OOXML schemas Apache POI binds to.
+org/apache/xmlbeans/**	include	XMLBeans runtime for the OOXML schemas above.
+schemaorg_apache_xmlbeans/**	include	Generated XMLBeans schema types for the OOXML schemas above.
+com/microsoft/schemas/**	include	Generated XMLBeans schema types Apache POI binds to for VML and Office drawing.
+net/sourceforge/barbecue/**	include	Barcode rendering reached from the JasperReports report chain.
+net/sourceforge/openforecast/**	include	Forecast models reached from org.compiere.process.
+it/sauronsoftware/**	include	cron4j, used by the ADempiere scheduler that the desktop dashboard reads.
+com/google/zxing/**	include	QR/barcode encoding used by org.adempiere.pdf and the print engine.
+org/json/**	include	JSON parsing used by org.compiere.util and by the OpenID authentication support that AdempiereWebUI calls on every login.
+net/minidev/**	include	JSON Smart, required by the OpenID authentication support above.
+net/bytebuddy/**	include	Byte Buddy, already declared as a modernUi runtime dependency; the shipped server library is the version the product runs with.
+net/miginfocom/**	include	MigLayout. The client Swing forms live in the same Adempiere.jar as the model classes the web UI loads, so a stray Swing class initialisation must not fail with a missing layout manager.
+com/jgoodies/**	include	The JGoodies look and feel, for the same reason as MigLayout.
+org/adempiere/legacy/**	include	ADempiere's own vendored copy of the Apache ECS HTML element library, used by the print/HTML export path. It does not overlap Adempiere.jar.
+#
+# --- Reviewed exclusions, applied on top of the includes ---------------------
+javax/servlet/**	exclude	Legacy servlet namespace. AdempiereSLib.jar carries 25 javax.servlet.jsp.jstl entries from CSTools.jar. Jakarta EE 10 owns jakarta.servlet, the container provides it, and no Phase 5d route is a JSP or JSTL page.
+org/apache/taglibs/**	exclude	The JSTL implementation behind the javax.servlet.jsp.jstl API excluded above.
+org/apache/commons/io/**	exclude	ZK CE 10 resolves commons-io:commons-io:2.19.0 through zk and zhtml.
+org/apache/commons/fileupload/**	exclude	ZK CE 10 uses org.apache.commons:commons-fileupload2-jakarta-servlet5. The Servlet 2.x-era commons-fileupload in the server library links against javax.servlet.
+bsh/**	exclude	ZK CE 10 resolves org.apache-extras.beanshell:bsh:2.0b6 for its own zscript engine. Two BeanShell implementations in one classloader is a silent behaviour change.
+javassist/**	exclude	ZK CE 10 resolves org.javassist:javassist:3.29.2-GA through zel.
+org/slf4j/**	exclude	ZK CE 10 resolves org.slf4j:slf4j-api:2.0.7. Two SLF4J APIs in one classloader is the classic "multiple bindings" failure.
+com/google/common/**	exclude	ZK CE 10 resolves com.google.guava:guava:33.4.8-jre.
+org/zkoss/**	exclude	Any org.zkoss class inside the shipped server library is a ZK 3.6 artifact. The ZK runtime for this WAR is the locked ZK CE 10.3.0.1-jakarta closure only.
+org/zkforge/**	exclude	ZK 3.x add-on namespace. gradle/phase5/zk-compile-closure.gradle already bans it in source; it must not reappear as bytecode.
+javatests/**	exclude	Test sources that leaked into an upstream third-party jar. Tests are never packaged.
+net/sf/jasperreports/j2ee/**	exclude	JasperReports' own javax.servlet export servlets. They link against the legacy servlet namespace and no Phase 5d route reaches them; report export goes through org.compiere.jr.report.ReportStarter instead.
+net/sf/jasperreports/web/**	exclude	JasperReports' HTML/interactive web viewer. Every class in it links against javax.servlet. The Phase 5d route runs no report; org.compiere.jr.report.ReportStarter renders through the file/viewer path instead. Residual R4-5d-1: Phase 5g owns report parity and must decide whether the interactive viewer is migrated or dropped.
+net/sf/jasperreports/phantomjs/**	exclude	The PhantomJS bridge for JasperReports chart rendering, whose ServletContextListener links against javax.servlet. PhantomJS is an abandoned project and no Phase 5d route reaches it.
+net/sourceforge/barbecue/BarcodeServlet*	exclude	The single javax.servlet-linked class in Barbecue. The barcode renderer itself is included; only its optional servlet front end is removed.
+org/apache/commons/logging/impl/ServletContextCleaner*	exclude	Commons Logging's optional javax.servlet context cleaner. The logging implementation is included; only the servlet hook is removed.
+org/jfree/chart/servlet/**	exclude	JFreeChart's optional javax.servlet chart-serving helpers. The chart engine itself is included; only its servlet front end is removed.

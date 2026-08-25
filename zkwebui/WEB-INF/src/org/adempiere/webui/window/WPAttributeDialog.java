@@ -16,6 +16,7 @@
  *****************************************************************************/
 package org.adempiere.webui.window;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.PreparedStatement;
@@ -69,9 +70,9 @@ import org.zkoss.zk.ui.HtmlBasedComponent;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.South;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.South;
 import org.zkoss.zul.Menuitem;
 import org.zkoss.zul.Menupopup;
 import org.zkoss.zul.impl.InputElement;
@@ -212,7 +213,7 @@ public class WPAttributeDialog extends Window implements EventListener
 		
 		Center center = new Center();
 		center.setParent(mainLayout);
-		center.setFlex(true);
+		ZkCompat.setFlex(center, true);
 		center.appendChild(centerPanel);
 
 		South south = new South();

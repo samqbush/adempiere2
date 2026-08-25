@@ -1,0 +1,40 @@
+# Phase 5d reviewed static web assets for the functional /webui-modern WAR.
+#
+# The Phase 5d slice serves exactly one flow:
+#
+#     login -> role selection -> desktop/menu -> read-only "Error Message" window
+#
+# Every row below was reviewed against that flow. The build reads this ledger, so
+# a directory cannot join the archive without a recorded decision, and
+# `verifyPhase5dModernWebWar` independently rejects the excluded classes of
+# content listed at the bottom of this file.
+#
+# The Phase 5d entry pages, the Servlet 6 descriptor, the ZK 10 configuration and
+# the replacement stylesheet are NOT listed here: they live in
+# zkwebui/src/phase5d/webapp and are contributed by the war task's
+# webAppDirectory, because they are authored for this phase rather than reused.
+#
+# source_pattern	disposition	war_path	strip_prefix
+css/**	include	css	css/
+js/**	include	js	js/
+zul/**	include	zul	zul/
+theme/default/**	include	theme/default	theme/default/
+images/**	include	images	images/
+#
+# --- Reviewed exclusions -----------------------------------------------------
+#
+# theme/default/images/zkex/**	exclude	ZK 3.6 zkex border-layout sprites. zkex is ZK's commercial edition; the Phase 5d slice renders the same layout with the ADempiere-owned CE portal adapter and must carry no zkex artifact of any kind.
+# theme/default/css/*.dsp	exclude	ZK 3.6 DSP theme. ZK CE 10 ships no DSP interpreter and the Phase 5d descriptor maps no *.dsp route; css/phase5d-modern.css replaces it.
+# images_old/**	exclude	Retired image backup tree. Never referenced by ITheme or any ZUL on the Phase 5d route.
+# dist/**	exclude	26 MB of build distribution output, not a served asset.
+# WEB-INF/lib/**	exclude	The ZK 3.6 runtime jars, including the commercial zkex/zkmax pair and the ZK 3.x add-ons keylistener, fckez, timelinez, timeplotz, gmapsz and zml.
+# WEB-INF/tld/**	exclude	Vendor tag libraries. No JSP page is on the Phase 5d route; Phase 5f owns JSP/Jakarta Tags migration.
+# WEB-INF/xsd/**	exclude	Vendor schemas that only the ZK 3.6 tag libraries reference.
+# WEB-INF/jboss-web.xml	exclude	JBoss deployment metadata. The Phase 5d runtime is Tomcat 10.1 only.
+# WEB-INF/web-2.5.xml	exclude	Superseded Servlet 2.5 descriptor kept beside the 2.4 one in the legacy tree.
+# WEB-INF/src/**	exclude	Source tree. WEB-INF/classes carries the compiled modernUi closure instead.
+# WEB-INF/test/**	exclude	Test tree. Tests are never packaged.
+# index.zul	exclude	Superseded by the reviewed Phase 5d entry page in src/phase5d/webapp.
+# timeout.zul	exclude	Superseded by the reviewed Phase 5d timeout page in src/phase5d/webapp.
+# theme.zs	exclude	zscript that resolves the DSP stylesheet paths; nothing in the Phase 5d slice loads it.
+# RUN_build.bat	exclude	Developer convenience script, not a served asset.

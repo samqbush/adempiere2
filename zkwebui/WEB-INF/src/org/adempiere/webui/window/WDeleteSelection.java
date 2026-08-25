@@ -14,6 +14,7 @@
  *****************************************************************************/
 package org.adempiere.webui.window;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.util.Vector;
 
 import org.adempiere.controller.DeleteSelectionController;
@@ -29,10 +30,10 @@ import org.zkoss.zhtml.Text;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.South;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.zkoss.zul.South;
 import org.zkoss.zul.Div;
 
 
@@ -103,7 +104,7 @@ public class WDeleteSelection extends DeleteSelectionController implements Event
 		
 		Center center = new Center();
 		center.setParent(layout);
-		center.setFlex(true);
+		ZkCompat.setFlex(center, true);
 		center.appendChild(listbox);
 		listbox.setWidth("100%");
 		listbox.setVflex(true);

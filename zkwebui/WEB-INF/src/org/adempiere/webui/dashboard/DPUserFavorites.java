@@ -16,6 +16,7 @@
  *****************************************************************************/
 package org.adempiere.webui.dashboard;
 
+import org.adempiere.webui.compat.ZkCompat;
 import org.adempiere.exceptions.AdempiereException;
 import org.adempiere.webui.component.ADTreeFavoriteOnDropListener;
 import org.adempiere.webui.component.Checkbox;
@@ -42,7 +43,7 @@ import org.zkoss.zul.Menuitem;
 import org.zkoss.zul.Menupopup;
 import org.zkoss.zul.Panel;
 import org.zkoss.zul.Panelchildren;
-import org.zkoss.zul.SimpleTreeNode;
+import org.adempiere.webui.compat.SimpleTreeNode;
 import org.zkoss.zul.Toolbar;
 import org.zkoss.zul.Tree;
 import org.zkoss.zul.Treeitem;
@@ -120,7 +121,7 @@ public class DPUserFavorites extends DashboardPanel implements EventListener, Tr
 
 		trashCan = new Image(ITheme.DASHBOARD_DELETE_IMAGE);
 		favToolbar.appendChild(trashCan);
-		trashCan.setAlign("left");
+		ZkCompat.setAlign(trashCan, "left");
 		trashCan.setDroppable(SimpleFavoriteTreeModel.USER_FAVORITE_DRAGGABLE_TYPE);
 		trashCan.setStyle("margin: 5px;");
 		trashCan.setTooltiptext(Msg.getMsg(Env.getCtx(), "DPUserFavorites.trashcan.tooltip"));
@@ -136,7 +137,7 @@ public class DPUserFavorites extends DashboardPanel implements EventListener, Tr
 		
 		this.setTooltiptext(Msg.getMsg(Env.getCtx(), "DPUserFavorites.tooltip"));
 
-		int childCount = ((SimpleFavoriteTreeModel) tree.getModel()).getRoot().getChildCount();
+		int childCount = ((SimpleFavoriteTreeModel) (Object) tree.getModel()).getRoot().getChildCount();
 		if (childCount == 0)  //Root node only. Add a hint to the user.
 		{
 			showHint();
@@ -244,7 +245,7 @@ public class DPUserFavorites extends DashboardPanel implements EventListener, Tr
 			tree = new Tree();
 			tree.setMultiple(false);
 			tree.setWidth("100%");
-			tree.setFixedLayout(false);
+			ZkCompat.setFixedLayout(tree, false);
 			tree.setStyle("border:none");
 			tree.setClass("menu-tree");
 		}
@@ -381,7 +382,7 @@ public class DPUserFavorites extends DashboardPanel implements EventListener, Tr
 		if (event.getType() == TreeDataEvent.INTERVAL_ADDED 
 			 || event.getType() == TreeDataEvent.INTERVAL_REMOVED)
 		{
-			int childCount = ((SimpleFavoriteTreeModel) tree.getModel()).getRoot().getChildCount();
+			int childCount = ((SimpleFavoriteTreeModel) (Object) tree.getModel()).getRoot().getChildCount();
 			if (childCount == 0)  
 			{
 				// The tree is empty and won't occupy screen space so it can't serve as a drop target.

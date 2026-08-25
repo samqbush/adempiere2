@@ -33,7 +33,7 @@ import org.compiere.util.CLogger;
 import org.compiere.util.DisplayType;
 import org.compiere.util.Env;
 import org.compiere.util.Msg;
-import org.zkforge.keylistener.Keylistener;
+import org.adempiere.webui.component.Keylistener;
 import org.zkoss.zk.au.out.AuFocus;
 import org.zkoss.zk.au.out.AuScript;
 import org.zkoss.zk.ui.AbstractComponent;
@@ -43,9 +43,9 @@ import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zk.ui.event.KeyEvent;
 import org.zkoss.zk.ui.util.Clients;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.South;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.South;
 import org.zkoss.zul.Column;
 import org.zkoss.zul.Div;
 import org.zkoss.zul.Paging;
@@ -391,6 +391,7 @@ public class GridPanel extends Borderlayout implements EventListener
 			keyListener = new Keylistener();
 			if (windowPanel != null)
 				windowPanel.getStatusBar().appendChild(keyListener);
+			keyListener.bindTo(listbox);
 		}
 		addKeyListener();
 
@@ -980,6 +981,7 @@ public class GridPanel extends Borderlayout implements EventListener
 			keyListener = new Keylistener();
 			if (windowPanel != null)
 				windowPanel.getStatusBar().appendChild(keyListener);
+			keyListener.bindTo(listbox);
 		}
 		if(!((ADTabPanel)tabPanel).isGridView() )
 			keyListener.setCtrlKeys(CNTRL_KEYS);

@@ -25,7 +25,6 @@ import java.util.Map;
 
 import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.event.EventListener;
-import org.zkoss.zk.ui.event.Express;
 
 /**
  *
@@ -88,12 +87,12 @@ public class Grid extends org.zkoss.zul.Grid
 	}
 	public boolean addEventListener(String evtnm, EventListener listener)
 	{
-		return addEventListener((listener instanceof Express) ? 1000 : 0, evtnm, listener);
+		return addEventListener(0, evtnm, listener);
 	}
 	
 	public boolean addEventListener(int priority, String evtnm, EventListener listener)
 	{
-		boolean b = super.addEventListener(evtnm, listener);
+		boolean b = super.addEventListener(priority, evtnm, listener);
 		if (b)
 		{
 			final EventListenerInfo listenerInfo = new EventListenerInfo(priority, listener);
@@ -165,6 +164,25 @@ public class Grid extends org.zkoss.zul.Grid
 	 * 
 	 * @author Sachin
 	 */
+	/**
+	 * ZK CE 10 replaced the ZK 3.6 {@code fixedLayout} property with the
+	 * inverse {@code sizedByContent}.
+	 *
+	 * @param fixedLayout legacy fixed layout flag
+	 */
+	public void setFixedLayout(boolean fixedLayout)
+	{
+		setSizedByContent(!fixedLayout);
+	}
+
+	/**
+	 * @return legacy fixed layout flag
+	 */
+	public boolean isFixedLayout()
+	{
+		return !isSizedByContent();
+	}
+
 	private static class EventListenerInfo
 	{
 		private final int			priority;

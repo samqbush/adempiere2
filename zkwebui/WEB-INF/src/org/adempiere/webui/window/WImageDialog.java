@@ -16,6 +16,7 @@
  *****************************************************************************/
 package org.adempiere.webui.window;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.io.InputStream;
 import java.util.logging.Level;
 
@@ -34,10 +35,10 @@ import org.zkoss.util.media.Media;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.South;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.zkoss.zul.South;
 import org.zkoss.zul.Fileupload;
 import org.zkoss.zul.Image;
 import org.zkoss.zul.Separator;
@@ -135,7 +136,7 @@ public class WImageDialog extends Window implements EventListener
 		parameterPanel.appendChild((fileButton));
 		
 		Center center = new Center();
-		center.setFlex(true);
+		ZkCompat.setFlex(center, true);
 		center.setParent(mainLayout);
 		center.appendChild(image);
 		center.setStyle("background-color: transparent");
@@ -201,7 +202,7 @@ public class WImageDialog extends Window implements EventListener
 			if (imageFile == null)
 				return;
 		}
-		catch (InterruptedException e) 
+		catch (org.zkoss.zk.ui.SuspendNotAllowedException e)
 		{
 			log.warning(e.getLocalizedMessage());
 			return;

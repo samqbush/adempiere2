@@ -11,10 +11,10 @@ import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.Properties;
 
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.adempiere.webui.component.ZkCssHelper;
 import org.adempiere.webui.session.ServerContext;
@@ -22,7 +22,7 @@ import org.adempiere.webui.session.SessionManager;
 import org.compiere.model.MAssignmentSlot;
 import org.compiere.model.ScheduleUtil;
 import org.compiere.util.Env;
-import org.zkforge.timeline.util.TimelineUtil;
+import org.adempiere.webui.compat.timeline.TimelineUtil;
 import org.zkoss.xel.fn.XmlFns;
 import org.zkoss.xml.XMLs;
 

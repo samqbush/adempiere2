@@ -131,7 +131,7 @@ public class WFilenameEditor extends WEditor
 			if (file == null)
 				return;
 		}
-		catch (InterruptedException e)
+		catch (org.zkoss.zk.ui.SuspendNotAllowedException e)
 		{
 			log.warning(e.getLocalizedMessage());
 			return;

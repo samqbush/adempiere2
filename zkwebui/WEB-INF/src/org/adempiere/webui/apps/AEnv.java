@@ -34,7 +34,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.logging.Level;
 
-import javax.servlet.ServletRequest;
+import jakarta.servlet.ServletRequest;
 
 import org.adempiere.pdf.IText7Document;
 import org.adempiere.webui.component.Window;

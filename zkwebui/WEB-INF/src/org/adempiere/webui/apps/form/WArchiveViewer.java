@@ -60,8 +60,8 @@ import org.zkoss.util.media.AMedia;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
-import org.zkoss.zul.Div;
-import org.zkoss.zul.Hbox;
+import org.adempiere.webui.component.Div;
+import org.adempiere.webui.component.Hbox;
 import org.zkoss.zul.Iframe;
 
 /**

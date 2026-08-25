@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Phase 5d session-timeout page for /webui-modern, referenced by
+  WEB-INF/zk.xml <timeout-uri>.
+
+  Rewritten from zkwebui/timeout.zul. The only removed lines are the ZK 3.6 DSP
+  theme init and the icon link it produced:
+
+      <?init zscript="theme.zs" ?>
+      <?link rel="icon" type="image/png" href="${browserIcon}"?>
+
+  theme.zs calls ThemeManager.getStyleSheet(), which resolves to
+  /theme/default/css/theme.css.dsp. The Phase 5d descriptor maps no *.dsp route,
+  so the icon is linked directly at its static path instead.
+-->
+<?page title="Adempiere" contentType="text/html;charset=UTF-8" automaticTimeout="false"?>
+<?link rel="icon" type="image/png" href="theme/default/images/icon.png"?>
+<zk>
+    <window width="60%" mode="highlighted">
+        <vbox style="padding: 5px">
+            <div id="timeoutText"></div>
+            <div style="margin-top: 10px">
+                <toolbarbutton label="Login or invalidated session in 20 seconds timeout ">
+                    <attribute name="onClick"><![CDATA[
+                               Executions.getCurrent().sendRedirect("/index.zul");
+                    ]]></attribute>
+                </toolbarbutton>
+                <intbox id="ibx" value="1"/>
+                <timer delay="1000" id="pooltimer" repeats="true">
+                    <attribute name="onTimer"><![CDATA[
+                        ibx.setValue(ibx.getValue() + 1);
+                    ]]></attribute>
+                </timer>
+            </div>
+        </vbox>
+        <script defer="true">
+        <![CDATA[
+            var callback = function(ok, val) {
+                if (ok && !!val)
+                {
+                    $e("${timeoutText.uuid}").innerHTML = val;
+                }
+            };
+
+            adempiere.store.get("zkTimeoutText", callback);
+        ]]>
+        </script>
+    </window>
+</zk>

@@ -20,8 +20,8 @@ import org.compiere.util.CLogger;
 import org.compiere.util.Ini;
 import org.zkoss.zk.ui.http.HttpSessionListener;
 
-import javax.servlet.http.HttpSession;
-import javax.servlet.http.HttpSessionEvent;
+import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpSessionEvent;
 import java.util.Enumeration;
 import java.util.Optional;
 import java.util.logging.Level;

@@ -16,6 +16,7 @@
  *****************************************************************************/
 package org.adempiere.webui.window;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -71,10 +72,10 @@ import org.zkoss.zk.ui.Executions;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zul.Div;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.adempiere.webui.component.Div;
 import org.zkoss.zul.Filedownload;
 import org.zkoss.zul.Fileupload;
 import org.zkoss.zul.Hbox;
@@ -363,7 +364,7 @@ public class ZkReportViewer extends Window implements EventListener {
 		North north = new North();
 		north.setParent(layout);
 		north.setCollapsible(false);
-		north.setFlex(true);
+		ZkCompat.setFlex(north, true);
 
 		Vbox box = new Vbox();
 		box.setWidth("100%");
@@ -371,7 +372,7 @@ public class ZkReportViewer extends Window implements EventListener {
 		box.setParent(north);
 
 		Center center = new Center();
-		center.setFlex(true);
+		ZkCompat.setFlex(center, true);
 		layout.appendChild(center);
 		iframe = new Iframe();
 		iframe.setId("reportFrame");
@@ -945,7 +946,7 @@ public class ZkReportViewer extends Window implements EventListener {
 			if (file == null)
 				return;
 		}
-		catch (InterruptedException e)
+		catch (org.zkoss.zk.ui.SuspendNotAllowedException e)
 		{
 			log.warning(e.getLocalizedMessage());
 			return;
@@ -1297,7 +1298,7 @@ public class ZkReportViewer extends Window implements EventListener {
 					//	
 					return true;
 				}
-			} catch (InterruptedException e) {
+			} catch (org.zkoss.zk.ui.SuspendNotAllowedException e) {
 				log.severe(e.getLocalizedMessage());
 			}
 		}

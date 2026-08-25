@@ -148,7 +148,7 @@ public class WListItemRenderer implements ListitemRenderer, EventListener, Listi
 	/* (non-Javadoc)
 	 * @see org.zkoss.zul.ListitemRenderer#render(org.zkoss.zul.Listitem, java.lang.Object)
 	 */
-	public void render(Listitem item, Object data) throws Exception
+	public void render(Listitem item, Object data, int index) throws Exception
 	{
 		render((ListItem)item, data);
 	}

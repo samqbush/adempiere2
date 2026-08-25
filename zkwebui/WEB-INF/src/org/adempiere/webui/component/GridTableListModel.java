@@ -23,7 +23,7 @@ import org.compiere.model.GridTable;
 import org.zkoss.zk.ui.Executions;
 import org.zkoss.zul.AbstractListModel;
 import org.zkoss.zul.ListModel;
-import org.zkoss.zul.ListModelExt;
+import org.adempiere.webui.compat.ListModelExt;
 import org.zkoss.zul.ListitemComparator;
 import org.zkoss.zul.event.ListDataEvent;
 

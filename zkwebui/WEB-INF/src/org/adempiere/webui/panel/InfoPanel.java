@@ -17,6 +17,7 @@
 
 package org.adempiere.webui.panel;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.math.BigDecimal;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -66,7 +67,7 @@ import org.compiere.util.Env;
 import org.compiere.util.KeyNamePair;
 import org.compiere.util.Msg;
 import org.compiere.util.Util;
-import org.zkforge.keylistener.Keylistener;
+import org.adempiere.webui.component.Keylistener;
 import org.zkoss.zk.au.out.AuEcho;
 import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.event.Event;
@@ -75,13 +76,13 @@ import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zk.ui.event.KeyEvent;
 import org.zkoss.zk.ui.event.SelectEvent;
 import org.zkoss.zk.ui.util.Clients;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.South;
-import org.zkoss.zkex.zul.West;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.zkoss.zul.South;
+import org.zkoss.zul.West;
 import org.zkoss.zul.Div;
-import org.zkoss.zul.ListModelExt;
+import org.adempiere.webui.compat.ListModelExt;
 import org.zkoss.zul.Listitem;
 import org.zkoss.zul.Paging;
 import org.zkoss.zul.Separator;
@@ -473,11 +474,11 @@ public abstract class InfoPanel extends Window implements EventListener, WTableM
 		div.setStyle("width :100%; height: 100%");
 		p_centerCenter.appendChild(div);
 		p_centerCenter.setAutoscroll(false);
-        p_centerCenter.setFlex(true);
+        ZkCompat.setFlex(p_centerCenter, true);
 		//
 		p_centerSouth.setCollapsible(true);
 		p_centerSouth.setSplittable(true);
-		p_centerSouth.setFlex(true);
+		ZkCompat.setFlex(p_centerSouth, true);
 
 		//  Setup the north reset button and criteria grid
 		West spWest = new West();
@@ -530,6 +531,7 @@ public abstract class InfoPanel extends Window implements EventListener, WTableM
         // Add Key Events
         keyListener = new Keylistener();
 		
+		keyListener.bindTo(this);
 		keyListener.setCtrlKeys("#enter");
 		keyListener.addEventListener(Events.ON_CTRL_KEY, this);
 		addEventListener(Events.ON_CANCEL, this);
@@ -992,7 +994,7 @@ public abstract class InfoPanel extends Window implements EventListener, WTableM
 	}
 
     private void addDoubleClickListener() {
-		Iterator<?> i = p_table.getListenerIterator(Events.ON_DOUBLE_CLICK);
+		Iterator<?> i = p_table.getEventListeners(Events.ON_DOUBLE_CLICK).iterator();
 		while (i.hasNext()) {
 			if (i.next() == this)
 				return;

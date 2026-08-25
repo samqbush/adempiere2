@@ -1,6 +1,7 @@
 package org.adempiere.webui.apps.form;
 
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.util.ArrayList;
 
 import org.adempiere.exceptions.AdempiereException;
@@ -25,15 +26,15 @@ import org.compiere.util.CLogger;
 import org.compiere.util.Env;
 import org.compiere.util.Msg;
 import org.compiere.util.Trx;
-import org.zkforge.keylistener.Keylistener;
+import org.adempiere.webui.component.Keylistener;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zk.ui.event.KeyEvent;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.South;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.zkoss.zul.South;
 import org.zkoss.zul.Separator;
 
 /**
@@ -104,7 +105,8 @@ public class WQuickEntrySheet extends Window implements EventListener, DataStatu
 		gridPanel.init(gridTab);
 
 		keyListener = new Keylistener();
-			appendChild(keyListener);
+		appendChild(keyListener);
+		keyListener.bindTo(this);
 		keyListener.setCtrlKeys(CNTRL_KEYS);
 		keyListener.addEventListener(Events.ON_CTRL_KEY, this);
 		
@@ -154,7 +156,7 @@ public class WQuickEntrySheet extends Window implements EventListener, DataStatu
 		selPanel.setHeight("99%");
 
 		North north = new North();
-		north.setFlex(true);
+		ZkCompat.setFlex(north, true);
 		north.setStyle("border: none");
 		north.appendChild(selNorthPanel);
 		selPanel.appendChild(north);
@@ -162,7 +164,7 @@ public class WQuickEntrySheet extends Window implements EventListener, DataStatu
 		Center center = new Center();
 
 		center.appendChild(gridPanel);
-		center.setFlex(true);
+		ZkCompat.setFlex(center, true);
 		selPanel.appendChild(center);
 
 		selSouthPanel.addActionListener(this);

@@ -16,6 +16,7 @@
  *****************************************************************************/
 package org.adempiere.webui.apps.form;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.util.Properties;
 import java.util.logging.Level;
 
@@ -49,10 +50,10 @@ import org.compiere.util.Env;
 import org.compiere.util.Msg;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.South;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.zkoss.zul.South;
 import org.zkoss.zul.Separator;
 
 /**
@@ -218,7 +219,7 @@ public class WStocktake extends Stocktake
 			m_gridController.switchRowPresentation();
 		Center center = new Center();
 		mainLayout.appendChild(center);
-		center.setFlex(true);
+		ZkCompat.setFlex(center, true);
 		center.appendChild(m_gridController);
 	}   //  dynInit
 

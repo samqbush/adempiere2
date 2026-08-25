@@ -15,6 +15,7 @@
  *****************************************************************************/
 package org.adempiere.webui.apps.form;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -48,10 +49,10 @@ import org.compiere.util.Msg;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.South;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.zkoss.zul.South;
 import org.zkoss.zul.Checkbox;
 import org.zkoss.zul.Comboitem;
 import org.zkoss.zul.Hbox;
@@ -180,7 +181,7 @@ public class WDeleteEntity extends DeleteEntityControler
 		treeCols.appendChild(treeCol);
 		treeCols.appendChild(treeCol2);
         tree.appendChild(treeCols); 		
-		center.setFlex(true);
+		ZkCompat.setFlex(center, true);
 		center.setAutoscroll(true);
 		
 		South south = new South();

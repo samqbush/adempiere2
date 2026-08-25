@@ -13,7 +13,7 @@
  *****************************************************************************/
 package org.adempiere.webui.util;
 
-import org.zkoss.zul.SimpleTreeNode;
+import org.adempiere.webui.compat.SimpleTreeNode;
 
 /**
  * 

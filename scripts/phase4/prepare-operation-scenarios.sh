@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 6 ]]; then
-	echo "Usage: prepare-operation-scenarios.sh <host> <port> <database> <user> <password> <database-marker>" >&2
+if [[ $# -ne 5 ]]; then
+	echo "Usage: ADEMPIERE_PHASE5D_DB_PASSWORD=... prepare-operation-scenarios.sh <host> <port> <database> <user> <database-marker>" >&2
 	exit 64
 fi
 
@@ -10,8 +10,8 @@ db_host=$1
 db_port=$2
 db_name=$3
 db_user=$4
-db_password=$5
-database_marker=$6
+db_password=${ADEMPIERE_PHASE5D_DB_PASSWORD:?database password environment variable is required}
+database_marker=$5
 
 if [[ ! "$db_host" =~ ^(127\.0\.0\.1|localhost|::1)$ ||
 		"$db_name" != "adempiere_phase3_ci" ||

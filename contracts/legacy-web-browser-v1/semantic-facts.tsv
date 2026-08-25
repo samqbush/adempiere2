@@ -2,6 +2,13 @@
 role-labels-visible	true
 desktop-user	GardenAdmin@GardenWorld.*
 menu-user-browser	true
+window-error-message-visible	true
+window-error-message-tab-label	Error Message
+window-error-message-readonly-columns	AD_Client_ID,AD_Language,AD_Org_ID
+window-error-message-marked-columns	AD_Client_ID=readonly-field,AD_Language=readonly-field,AD_Org_ID=readonly-field,IsActive=mandatory-field
+window-error-message-record-controls	Delete Selected Items=disabled,Delete record=disabled,New Record=enabled,Save changes=enabled
+window-error-message-delete-controls-disabled	true
+window-error-message-database-writes	0
 logout-login-visible	true
 filter-adempiere	200 context-reachability-only
 filter-mobile	200 context-reachability-only

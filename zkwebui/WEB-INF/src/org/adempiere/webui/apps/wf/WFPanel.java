@@ -12,6 +12,7 @@
  *****************************************************************************/
 package org.adempiere.webui.apps.wf;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.awt.Dimension;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
@@ -34,9 +35,9 @@ import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zk.ui.event.MouseEvent;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.South;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.South;
 import org.zkoss.zul.Area;
 import org.zkoss.zul.Div;
 import org.zkoss.zul.Html;
@@ -110,7 +111,7 @@ public class WFPanel extends Borderlayout implements EventListener
 		center.appendChild(contentPanel);
 		contentPanel.setStyle("width: 100%; heigh: 100%;");
 		center.setAutoscroll(true);
-		center.setFlex(true);
+		ZkCompat.setFlex(center, true);
 		
 		South south = new South();
 		this.appendChild(south);
@@ -119,7 +120,7 @@ public class WFPanel extends Borderlayout implements EventListener
 		south.setSplittable(true);
 		south.setCollapsible(true);
 		south.setAutoscroll(true);
-		south.setFlex(true);		
+		ZkCompat.setFlex(south, true);
 	}	//	jbInit
 
 	/**

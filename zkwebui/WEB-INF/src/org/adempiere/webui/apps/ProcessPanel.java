@@ -16,6 +16,7 @@ package org.adempiere.webui.apps;
 
 
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -63,11 +64,11 @@ import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zk.ui.util.Clients;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.South;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.zkoss.zul.South;
 import org.zkoss.zul.Comboitem;
-import org.zkoss.zul.Div;
+import org.adempiere.webui.component.Div;
 import org.zkoss.zul.Hbox;
 import org.zkoss.zul.Html;
 
@@ -219,7 +220,7 @@ public class ProcessPanel extends ProcessController implements SmallViewEditable
 		centerPanel = new Center();
 		mainLayout.appendChild(centerPanel);
 		centerPanel.appendChild(parameterPanel);
-		centerPanel.setFlex(false);
+		ZkCompat.setFlex(centerPanel, false);
 		//	FR [ 1051 ]
 		centerPanel.setStyle("border: none; overflow-y:auto;width:98%");
 		

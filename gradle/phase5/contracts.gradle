@@ -41,6 +41,7 @@ tasks.register('verifyPhase5Inventories') {
 	description = 'Fails when a reviewed Phase 5 inventory differs from the checkout'
 	dependsOn tasks.named('generatePhase5Inventories')
 	inputs.files phase5InventoryNames.collect { new File(phase5ReviewedDir, it) }
+	inputs.file new File(phase5ReviewedDir, 'zk-sources-phase5a.tsv')
 	doLast {
 		phase5InventoryNames.each { name ->
 			def reviewed = new File(phase5ReviewedDir, name)
@@ -54,11 +55,26 @@ tasks.register('verifyPhase5Inventories') {
 			}
 		}
 
+		// Phase 5a inventoried 295 live ZK sources. Phase 5d added 15
+		// ADempiere-owned ZK CE compatibility sources under
+		// zkwebui/WEB-INF/src/org/adempiere/webui/compat/ (plus the CE
+		// Keylistener, Div and Hbox replacements), which replace the ZK 3.x
+		// add-on and commercial APIs the migration removed. The count is pinned
+		// absolutely rather than allowed to grow: a new ZK source has to be a
+		// reviewed decision, not an accident.
 		def sourceRows = new File(phase5ReviewedDir, 'zk-sources.tsv').readLines()
 			.findAll { it && !it.startsWith('#') }
-		if (sourceRows.size() != 298) {
+		if (sourceRows.size() != 310) {
 			throw new GradleException(
-				"Expected 298 reviewed ZK source files, got ${sourceRows.size()}")
+				"Expected 310 current ZK source files, got ${sourceRows.size()}")
+		}
+		def baselineSourceRows =
+			new File(phase5ReviewedDir, 'zk-sources-phase5a.tsv').readLines()
+				.findAll { it && !it.startsWith('#') }
+		if (baselineSourceRows.size() != 298) {
+			throw new GradleException(
+				"Expected 298 Phase 5a compile-closure rows, got " +
+					"${baselineSourceRows.size()}")
 		}
 
 		def routeRows = new File(phase5ReviewedDir, 'route-contracts.tsv').readLines()

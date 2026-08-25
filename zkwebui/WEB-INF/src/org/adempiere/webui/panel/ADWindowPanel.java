@@ -23,6 +23,7 @@
 
 package org.adempiere.webui.panel;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.util.List;
 import java.util.Properties;
 
@@ -41,16 +42,16 @@ import org.compiere.model.MQuery;
 import org.compiere.util.CLogger;
 import org.compiere.util.Env;
 import org.compiere.util.Msg;
-import org.zkforge.keylistener.Keylistener;
+import org.adempiere.webui.component.Keylistener;
 import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.HtmlBasedComponent;
 import org.zkoss.zk.ui.event.Events;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.East;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.South;
-import org.zkoss.zkex.zul.West;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.East;
+import org.zkoss.zul.North;
+import org.zkoss.zul.South;
+import org.zkoss.zul.West;
 import org.zkoss.zul.Tab;
 import org.zkoss.zul.Vbox;
 
@@ -118,7 +119,7 @@ public class ADWindowPanel extends AbstractADWindowPanel
 	        North n = new North();
 	        n.setParent(layout);
 	        n.setCollapsible(false);
-	        n.setFlex(true);
+	        ZkCompat.setFlex(n, true);
 	        Vbox box = new Vbox();
 	        box.setWidth("100%");
 	        toolbar.setParent(box);
@@ -148,7 +149,7 @@ public class ADWindowPanel extends AbstractADWindowPanel
     	        layout.appendChild(west);
     	        west.setSplittable(false);
     	        west.setAutoscroll(true);
-    	        west.setFlex(true);
+	        ZkCompat.setFlex(west, true);
     	        LayoutUtils.addSclass("adwindow-nav adwindow-left-nav", west);
     	        adTab.setTabplacement(IADTab.LEFT);
     	        adTab.getTabSelectionComponent().setParent(west);
@@ -165,7 +166,7 @@ public class ADWindowPanel extends AbstractADWindowPanel
 		        layout.appendChild(east);
 		        east.setSplittable(false);
 		        east.setAutoscroll(true);
-		        east.setFlex(true);
+		        ZkCompat.setFlex(east, true);
 		        LayoutUtils.addSclass("adwindow-nav adwindow-right-nav", east);
 		        adTab.setTabplacement(IADTab.RIGHT);
 		        adTab.getTabSelectionComponent().setParent(east);
@@ -182,7 +183,7 @@ public class ADWindowPanel extends AbstractADWindowPanel
         contentArea = new Center();
         contentArea.setParent(layout);
         contentArea.setAutoscroll(true);
-        contentArea.setFlex(true);
+        ZkCompat.setFlex(contentArea, true);
         adTab.createPart(contentArea);
 
         if (parent instanceof Tabpanel) {
@@ -195,6 +196,7 @@ public class ADWindowPanel extends AbstractADWindowPanel
         		keyListener.detach();
         	keyListener = new Keylistener();
         	statusBar.appendChild(keyListener);
+	keyListener.bindTo(layout);
         	keyListener.setCtrlKeys("#f1#f2$#f2#f3#f4#f5#f6#f7#f8#f9#f10#f11#f12^f^i^n^s^d@#left@#right@#up@#down@#pgup@#pgdn@p^p@z@x");
         	keyListener.addEventListener(Events.ON_CTRL_KEY, toolbar);
         	keyListener.addEventListener(Events.ON_CTRL_KEY, this);

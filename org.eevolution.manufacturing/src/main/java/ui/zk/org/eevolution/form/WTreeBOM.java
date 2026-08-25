@@ -16,6 +16,7 @@
 
 package org.eevolution.form;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.beans.PropertyChangeEvent;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
@@ -50,12 +51,12 @@ import org.eevolution.manufacturing.model.MPPProductBOMLine;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.South;
-import org.zkoss.zkex.zul.West;
-import org.zkoss.zul.SimpleTreeNode;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.zkoss.zul.South;
+import org.zkoss.zul.West;
+import org.adempiere.webui.compat.SimpleTreeNode;
 import org.zkoss.zul.Space;
 import org.zkoss.zul.Tree;
 import org.zkoss.zul.Treecol;
@@ -229,7 +230,7 @@ public class WTreeBOM extends TreeBOM implements IFormController, EventListener,
 		dataPane.appendChild(tableBOM);
 		tableBOM.setVflex(true);
 		tableBOM.setFixedLayout(true);
-		center.setFlex(true);
+		ZkCompat.setFlex(center, true);
 		center.setAutoscroll(true);
 	}
 	
@@ -312,7 +313,7 @@ public class WTreeBOM extends TreeBOM implements IFormController, EventListener,
 			
 			SimpleTreeModel model = new SimpleTreeModel(parent);
 			m_tree.setPageSize(-1);
-			m_tree.setTreeitemRenderer(model);
+			m_tree.setItemRenderer(model);
 			m_tree.setModel(model);
 			
 		}
@@ -341,7 +342,7 @@ public class WTreeBOM extends TreeBOM implements IFormController, EventListener,
 			
 			SimpleTreeModel model = new SimpleTreeModel(parent);
 			m_tree.setPageSize(-1);
-			m_tree.setTreeitemRenderer(model);
+			m_tree.setItemRenderer(model);
 			m_tree.setModel(model);
 			
 		}

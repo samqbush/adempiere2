@@ -7,6 +7,7 @@
     </description>
   <!-- set global properties for this build -->
   <import file="../utils_dev/properties.xml"/>
+  <import file="../utils_dev/phase5d-frozen-zk.xml"/>
   <property name="src" location="src/main/java/base"/>
   <property name="build" location="build"/>
   <property name="dist"  location="dist"/>
@@ -74,20 +75,23 @@
 
   </target>
 
-    <target name="zkcompile" depends="dist"
-            description="compile the source " >
-        <!-- Compile the zk java code from ${src} into ${zkclasses} -->
-        <javac encoding="UTF-8" debug="true" srcdir="${zksrc}" sourcepath="${base}:${FinanceManagement}:${controller}" destdir="${zkclasses}" includeantruntime="false">
-            <classpath refid="compile.classpath"/>
-        </javac>
+    <target name="zkcompile" depends="dist, phase5d.materialize-frozen-zk"
+            description="stage the frozen legacy ZK package jar" >
+        <!-- Phase 5d: src/main/java/ui/zk now targets ZK CE 10.3.0.1-jakarta and is
+             compiled by Gradle (:org.spin.loan_management:compileZkUiJava). Compiling it here
+             against the ZK 3.6 jars in ../zkwebui/WEB-INF/lib is impossible, and
+             compiling it against ZK CE would change the shipped legacy artifact the
+             Phase 5b oracle is pinned to, so the frozen jar built from the Phase 5b
+             source commit is staged instead. -->
+        <echo message="Phase 5d: staging the frozen LoanManagementZk.jar"/>
     </target>
 
     <target name="zkdist" depends="zkcompile"
             description="generate the distribution" >
         <!-- Create the distribution directory -->
         <mkdir dir="${dist}/lib"/>
-        <!-- Put everything in ${zkclasses} into the MyProject-${DSTAMP}.jar file -->
-        <jar jarfile="${dist}/lib/LoanManagementZk.jar" basedir="${basedir}/build/zkwebui" includes="WEB-INF/"/>
+        <!-- Phase 5d: stage the frozen legacy ZK package jar instead of rebuilding it -->
+        <copy file="${phase5d.frozen.zkpackages}/LoanManagementZk.jar" tofile="${dist}/lib/LoanManagementZk.jar" overwrite="true"/>
 
         <!-- Create target Liberozk deployment -->
         <mkdir dir="${env.ADEMPIERE_HOME}/zkpackages/LoanManagement/lib"/>

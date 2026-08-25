@@ -12,6 +12,7 @@
  *****************************************************************************/
 package org.adempiere.webui.panel;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Timestamp;
@@ -34,11 +35,11 @@ import org.compiere.util.KeyNamePair;
 import org.compiere.util.Msg;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.South;
-import org.zkoss.zul.Div;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.zkoss.zul.South;
+import org.adempiere.webui.component.Div;
 
 /**
  * Display Product Attribute Instance Info
@@ -160,7 +161,7 @@ public class InfoPAttributeInstancePanel extends Window implements EventListener
         
         Center center = new Center();
         center.setAutoscroll(true);
-        center.setFlex(true);
+        ZkCompat.setFlex(center, true);
 		borderlayout.appendChild(center);
 		center.appendChild(m_table);
 		

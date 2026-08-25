@@ -1,0 +1,23 @@
+# Phase 5d reviewed zero-write contract for the browser read-only window step.
+#
+# contracts/legacy-web-v1/database-effects.tsv keeps ownership of the LOGIN and
+# ROLE deltas the flow is allowed to create (AD_Session, AD_Preference,
+# AD_RecentItem, AD_ChangeLog). This file adds only the window step's read-only
+# assertion, which is a different claim: opening the "Error Message" window must
+# write nothing at all.
+#
+# The claim matters because the ZK 3.6 window is NOT dictionary-read-only.
+# AD_Tab 314 carries IsReadOnly='N' and IsInsertRecord='Y', AD_Error is empty on
+# a restored seed, and the window therefore renders an unsaved auto-new record
+# with New Record and Save changes enabled. "Read-only" here is a property of
+# the FLOW, and the only honest way to assert it is to measure that nothing was
+# written.
+#
+# Enforced by scripts/phase5/measure-window-readonly-effect.sh compare, which is
+# invoked once per capture at matching capture ordinals.
+#
+# table	effect	allowed_delta	rationale
+AD_Error	none	exactly:0	The window's own table. The capture opens the window, reads it, and logs out without saving, so the unsaved auto-new record must never reach the database. A delta of 1 means the browser flow saved a record and the read-only claim is false.
+AD_Window	none	exactly:0	Window construction reads the application dictionary. A write means the flow mutated the dictionary it was only supposed to render.
+AD_Tab	none	exactly:0	Tab construction reads AD_Tab 314. A write means the flow mutated the dictionary it was only supposed to render.
+AD_Field	none	exactly:0	Field construction reads the tab's fields. A write means the flow mutated the dictionary it was only supposed to render.

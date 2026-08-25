@@ -25,6 +25,7 @@
 
 package org.adempiere.webui.window;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.sql.PreparedStatement;
@@ -95,10 +96,10 @@ import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zk.ui.util.Clients;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.South;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.zkoss.zul.South;
 import org.zkoss.zul.Comboitem;
 import org.zkoss.zul.Hbox;
 
@@ -383,7 +384,7 @@ public class FindWindow extends Window implements EventListener,ValueChangeListe
         Center center = new Center();
         layout.appendChild(center);
         center.appendChild(contentSimple);
-        center.setFlex(true);
+        ZkCompat.setFlex(center, true);
 
         South south = new South();
         layout.appendChild(south);
@@ -514,7 +515,7 @@ public class FindWindow extends Window implements EventListener,ValueChangeListe
         Center center = new Center();
         layout.appendChild(center);
         center.appendChild(advancedPanel);
-        center.setFlex(true);
+        ZkCompat.setFlex(center, true);
 
         South south = new South();
         layout.appendChild(south);

@@ -21,7 +21,7 @@ import java.io.IOException;
 
 import org.adempiere.webui.apps.AEnv;
 import org.compiere.util.CLogger;
-import org.zkforge.keylistener.Keylistener;
+import org.adempiere.webui.component.Keylistener;
 import org.zkoss.zhtml.Text;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
@@ -169,6 +169,7 @@ public class Messagebox extends Window implements EventListener
 
 		keyListener = new Keylistener();
 		
+		keyListener.bindTo(this);
 		keyListener.setCtrlKeys("#enter");
 		keyListener.addEventListener(Events.ON_CTRL_KEY, this);
 		addEventListener(Events.ON_CANCEL, this);

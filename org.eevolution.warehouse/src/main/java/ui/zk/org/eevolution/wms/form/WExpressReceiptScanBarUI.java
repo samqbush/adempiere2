@@ -18,6 +18,7 @@
 
 package org.eevolution.wms.form;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -55,10 +56,10 @@ import org.eevolution.wms.services.ExpressReceiptScanBar;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.South;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.zkoss.zul.South;
 import org.zkoss.zul.Separator;
 
 /**
@@ -207,7 +208,7 @@ public class WExpressReceiptScanBarUI extends ExpressReceiptScanBar implements I
 
 		Center center = new Center();
 		center.setBorder("none");
-		center.setFlex(true);
+		ZkCompat.setFlex(center, true);
 		center.setAutoscroll(true);
 		borderlayout.appendChild(center);
 		center.appendChild(productTable);

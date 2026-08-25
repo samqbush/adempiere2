@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Phase 5d Servlet 6 deployment descriptor for the functional /webui-modern
+  ADempiere ZK CE 10.3.0.1-jakarta slice.
+
+  This descriptor was written by hand and reviewed route by route. Eclipse
+  Transformer does not migrate Servlet 2.4 schemas (gradle/phase5/transformer-rules.tsv
+  records `servlet-descriptors  manual-migration`), so nothing here is a
+  mechanical rewrite of zkwebui/WEB-INF/web.xml.
+
+  SCOPE - only the routes the Phase 5d walking skeleton needs:
+
+    login -> role selection -> desktop/menu -> read-only "Error Message" window
+
+  Declared here:
+    * ZK session listener (org.adempiere.webui.session.SessionManagerListener)
+      registers the container session in SessionManager. The Phase 5d session
+      filter below refuses to forward a request whose session was never
+      registered, so the listener is a hard prerequisite, not decoration.
+    * zkLoader  -> *.zul, *.zhtml  (ADempiere WebUIServlet extends ZK
+      DHtmlLayoutServlet and performs ADempiere startup)
+    * auEngine  -> /zkau/*         (ZK asynchronous update engine; also serves
+      the ZK client resources under /zkau/web/**)
+    * requestFilter -> /*          (ADempiere SessionTimeoutFilter)
+
+  DELIBERATELY NOT MIGRATED (Phase 5f owns them, per MODERNIZATION_PLAN.md
+  task 5f "Migrate non-ZK servlets, JSP/Jakarta Tags/TLD assets, and inherited
+  routes by independently reversible context"):
+    * dspLoader  *.dsp  - the ZK 3.6 org.zkoss.web.servlet.dsp.InterpreterServlet
+      and the whole .dsp theme. ZK CE 10 does not ship the DSP interpreter, and
+      the Phase 5d entry page therefore links reviewed static CSS instead.
+    * timelineFeed /timeline - org.adempiere.webui.TimelineEventFeed; the
+      timeline dashboard gadget is not on the Phase 5d route.
+    * The two java/AdempiereDS and java/AdempiereSRDS <resource-ref> entries.
+      The Phase 5d loopback runtime connects through ADEMPIERE_HOME's
+      AdempiereEnv.properties exactly as the Phase 4 CXF WAR does, so declaring
+      a container DataSource reference that no Tomcat 10 <Resource> satisfies
+      would be a descriptor that documents something untrue.
+    * Every WEB-INF/tld/** vendor tag library, WEB-INF/xsd/**, and
+      WEB-INF/jboss-web.xml. No JSP or JSTL page is on the Phase 5d route and
+      no JBoss deployment exists in this phase.
+
+  <absolute-ordering/> is intentionally empty: it excludes every web fragment on
+  the classpath, so no library (including ZK's own zkwebfragment) can inject an
+  undeclared servlet, listener, or mapping into this context. Every route in
+  /webui-modern is the reviewed set above and nothing else.
+-->
+<web-app xmlns="https://jakarta.ee/xml/ns/jakartaee"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee https://jakarta.ee/xml/ns/jakartaee/web-app_6_0.xsd"
+         version="6.0"
+         metadata-complete="true">
+	<display-name>ADempiere WebUI (Phase 5d ZK CE 10 Jakarta slice)</display-name>
+
+	<absolute-ordering/>
+
+	<listener>
+		<description>Registers and cleans up the ADempiere ZK session</description>
+		<listener-class>org.adempiere.webui.session.SessionManagerListener</listener-class>
+	</listener>
+
+	<servlet>
+		<description>ZK loader for ZUML pages, extended with ADempiere startup</description>
+		<servlet-name>zkLoader</servlet-name>
+		<servlet-class>org.adempiere.webui.session.WebUIServlet</servlet-class>
+		<init-param>
+			<param-name>update-uri</param-name>
+			<param-value>/zkau</param-value>
+		</init-param>
+		<load-on-startup>1</load-on-startup>
+	</servlet>
+	<servlet-mapping>
+		<servlet-name>zkLoader</servlet-name>
+		<url-pattern>*.zul</url-pattern>
+	</servlet-mapping>
+	<servlet-mapping>
+		<servlet-name>zkLoader</servlet-name>
+		<url-pattern>*.zhtml</url-pattern>
+	</servlet-mapping>
+
+	<servlet>
+		<description>The ZK asynchronous update engine and client resource loader</description>
+		<servlet-name>auEngine</servlet-name>
+		<servlet-class>org.zkoss.zk.au.http.DHtmlUpdateServlet</servlet-class>
+	</servlet>
+	<servlet-mapping>
+		<servlet-name>auEngine</servlet-name>
+		<url-pattern>/zkau/*</url-pattern>
+	</servlet-mapping>
+
+	<filter>
+		<filter-name>requestFilter</filter-name>
+		<filter-class>org.adempiere.webui.session.SessionTimeoutFilter</filter-class>
+	</filter>
+	<filter-mapping>
+		<filter-name>requestFilter</filter-name>
+		<url-pattern>/*</url-pattern>
+	</filter-mapping>
+
+	<session-config>
+		<session-timeout>60</session-timeout>
+	</session-config>
+
+	<welcome-file-list>
+		<welcome-file>index.zul</welcome-file>
+	</welcome-file-list>
+
+	<!-- Only the media types the Phase 5d routes actually serve. -->
+	<mime-mapping>
+		<extension>css</extension>
+		<mime-type>text/css</mime-type>
+	</mime-mapping>
+	<mime-mapping>
+		<extension>gif</extension>
+		<mime-type>image/gif</mime-type>
+	</mime-mapping>
+	<mime-mapping>
+		<extension>js</extension>
+		<mime-type>application/javascript</mime-type>
+	</mime-mapping>
+	<mime-mapping>
+		<extension>png</extension>
+		<mime-type>image/png</mime-type>
+	</mime-mapping>
+	<mime-mapping>
+		<extension>zhtml</extension>
+		<mime-type>text/html</mime-type>
+	</mime-mapping>
+	<mime-mapping>
+		<extension>zul</extension>
+		<mime-type>text/html</mime-type>
+	</mime-mapping>
+</web-app>

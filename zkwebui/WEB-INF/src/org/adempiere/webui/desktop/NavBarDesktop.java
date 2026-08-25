@@ -13,6 +13,7 @@
  *****************************************************************************/
 package org.adempiere.webui.desktop;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -59,12 +60,12 @@ import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zk.ui.event.OpenEvent;
 import org.zkoss.zk.ui.util.Clients;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.West;
-import org.zkoss.zkmax.zul.Portalchildren;
-import org.zkoss.zkmax.zul.Portallayout;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.zkoss.zul.West;
+import org.adempiere.webui.compat.Portalchildren;
+import org.adempiere.webui.compat.Portallayout;
 import org.zkoss.zul.Div;
 import org.zkoss.zul.Html;
 import org.zkoss.zul.Panel;
@@ -145,7 +146,7 @@ public class NavBarDesktop extends TabbedDesktop implements MenuListener, Serial
         leftRegion.setCollapsible(true);
         leftRegion.setSplittable(true);
         leftRegion.setTitle("Navigation");
-        leftRegion.setFlex(true);
+        ZkCompat.setFlex(leftRegion, true);
         leftRegion.addEventListener(Events.ON_OPEN, new EventListener() {			
 			@Override
 			public void onEvent(Event event) throws Exception {
@@ -191,7 +192,7 @@ public class NavBarDesktop extends TabbedDesktop implements MenuListener, Serial
 
         windowArea = new Center();
         windowArea.setParent(layout);
-        windowArea.setFlex(true);
+        ZkCompat.setFlex(windowArea, true);
 
         windowContainer.createPart(windowArea);
 

@@ -52,14 +52,14 @@ import org.jfree.chart.encoders.ImageFormat;
 import org.zkoss.image.AImage;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.South;
-import org.zkoss.zkex.zul.West;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.zkoss.zul.South;
+import org.zkoss.zul.West;
 import org.zkoss.zul.Hbox;
 import org.zkoss.zul.Image;
 import org.zkoss.zul.Row;
-import org.zkoss.zul.SimpleTreeNode;
+import org.adempiere.webui.compat.SimpleTreeNode;
 import org.zkoss.zul.Tree;
 import org.zkoss.zul.Treecol;
 import org.zkoss.zul.Treecols;
@@ -226,7 +226,7 @@ public class WCRPDetail extends CRPDetail implements IFormController,
 
 		SimpleTreeModel model = new SimpleTreeModel(root);
 		tree.setPageSize(-1);
-		tree.setTreeitemRenderer(model);
+		tree.setItemRenderer(model);
 		tree.setModel(model);
 
 		return tree;

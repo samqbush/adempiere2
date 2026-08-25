@@ -21,6 +21,7 @@
 
 package org.adempiere.webui.apps.form;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -57,12 +58,12 @@ import org.zkoss.zk.ui.HtmlBasedComponent;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.South;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.zkoss.zul.South;
 import org.zkoss.zul.Caption;
 import org.zkoss.zul.Groupbox;
-import org.zkoss.zul.Hbox;
+import org.adempiere.webui.component.Hbox;
 import org.zkoss.zul.Label;
 import org.zkoss.zul.Radiogroup;
 import org.zkoss.zul.Separator;
@@ -179,7 +180,7 @@ public class WBOMDrop extends ADForm implements BOMDropForm, EventListener, Valu
 		Center center = new Center();
 		center.appendChild(selectBOMItemsPanel); 
 		center.setBorder("none");
-		center.setFlex(true);
+		ZkCompat.setFlex(center, true);
 		center.setAutoscroll(true);
 		mainLayout.appendChild(center);
 
@@ -382,7 +383,7 @@ public class WBOMDrop extends ADForm implements BOMDropForm, EventListener, Valu
 		Groupbox optionGroup = new Groupbox();
 		optionGroup.setMold("3d");
 		optionGroup.appendChild(caption);
-		optionGroup.setLegend(false);
+		ZkCompat.setLegend(optionGroup, false);
 		optionGroup.setContentStyle("border-style: solid; border-color: lightgray; border-width: 0px 1px 1px 1px; border-radius: 0px 0px 5px 5px;");
 		optionGroup.setTooltiptext(Msg.translate(Env.getCtx(), MSG_ClickToOpen));
 		optionGroup.setClosable(true);

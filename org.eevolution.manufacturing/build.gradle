@@ -13,13 +13,6 @@ allprojects {
 
 dependencies {
 	implementation fileTree(
-		dir: '../zkwebui/WEB-INF/lib',
-		include: [
-			'zhtml.jar',
-			'keylistener.jar',
-		]
-	)
-	implementation fileTree(
 		dir: '../tools/lib/testing',
 		include: [
 			'SuperCSV-with_src-1.52.jar'
@@ -140,3 +133,5 @@ signing {
 	useInMemoryPgpKeys(signingKey, signingPassword)
 	sign publishing.publications.mavenJava
 }
+
+apply from: rootProject.file('gradle/phase5/zk-ui-module.gradle')

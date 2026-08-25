@@ -48,4 +48,6 @@ zkwebui/WEB-INF/tld/zul/core.dsp.tld	tld	zkwebui	zk	migrate-or-review	5f
 zkwebui/WEB-INF/web-2.5.xml	xml	zkwebui	zk	migrate-or-review	5d
 zkwebui/WEB-INF/web.xml	xml	zkwebui	zk	migrate-or-review	5d
 zkwebui/WEB-INF/zk.xml	xml	zkwebui	zk	migrate-or-review	5d
-zkwebui/build.xml	xml	zkwebui	javax.servlet	migrate-or-review	5d
+zkwebui/src/phase5d/webapp/WEB-INF/web.xml	xml	zkwebui	zk	migrate-or-review	5d
+zkwebui/src/phase5d/webapp/WEB-INF/zk.xml	xml	zkwebui	zk	migrate-or-review	5d
+zkwebui/src/phase5d/webapp/index.zul	zul	zkwebui	zk	migrate-or-review	5d

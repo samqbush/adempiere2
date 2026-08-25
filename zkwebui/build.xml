@@ -10,10 +10,20 @@
          xmlns:unless="ant:unless">
 
   <description>
-	    This buildfile is used to build the Zk WebUI client.
+	    This buildfile stages the frozen legacy Zk WebUI client.
+
+	    Phase 5d migrated WEB-INF/src to ZK CE 10.3.0.1-jakarta, so this build
+	    file no longer compiles it: the migrated source cannot be compiled
+	    against the ZK 3.6 jars in WEB-INF/lib, and compiling it against ZK CE
+	    would silently change the shipped legacy artifact that the Phase 5b
+	    oracle is pinned to. Gradle owns the migrated compile
+	    (:zkwebui:compileModernUiJava) and the migrated tests
+	    (:zkwebui:modernUiTest); this build file only materializes and stages
+	    the frozen legacy webui.war.
   	</description>
   <!-- set global properties for this build -->
   <import file="../utils_dev/properties.xml" />
+  <import file="../utils_dev/phase5d-frozen-zk.xml" />
 
   <!--<property environment="env"/>-->
   <property name="src.dir" value="${basedir}/WEB-INF/src" />
@@ -24,199 +34,27 @@
   </property>
 
   <property name="war.name" value="webui" />
-  <property name="compile.debug" value="true" />
-  <property name="compile.deprecation" value="false" />
-  <property name="compile.optimize" value="true" />
 
-  <property name="test.src" value="WEB-INF/test/src/" />
-  <property name="test.build.dir" value="WEB-INF/test/build" />
-  <property name="test.results.dir" value="WEB-INF/test/test_results" />
-  <property name="base.test.build.dir" value="../base/test/build" />
-  <property name="base.build.dir" value="../base/build" />
-
-  <path id="compile.classpath">
-    <pathelement location="${basedir}" />
-    <pathelement location="${basedir}/WEB-INF/classes" />
-    <pathelement location="${basedir}/WEB-INF/src" />
-
-    <pathelement location="${Adempiere.dir}/../base/build" />
-    <pathelement location="${Adempiere.dir}/../client/build" />
-    <pathelement location="${Adempiere.dir}/../JasperReports/build" />
-    <fileset dir="${Adempiere.dir}">
-      <include name="*.jar" />
-    </fileset>
-
-    <pathelement location="${Adempiere.dir}/../tools/lib/javax.servlet-api-4.0.1.jar" />
-    <fileset dir="${basedir}/WEB-INF/lib">
-      <include name="*.jar" />
-    </fileset>
-  </path>
-
-  <target name="clean" description="delete class directory">
+  <target name="clean" description="delete class and distribution directories">
+    <!-- WEB-INF/classes/org only ever held the ZK 3.6 compile output that
+         Phase 5d retired, so removing it keeps a stale legacy compile from
+         leaking onto any downstream classpath. -->
     <delete dir="${classes.dir}/org" />
     <delete dir="${dist.dir}" />
   </target>
 
-  <target name="compile" depends="clean" description="Compile Java sources">
-    <mkdir dir="${classes.dir}" />
-    <javac source="21" target="21"
-           encoding="UTF-8"
-           srcdir="WEB-INF/src"
-           destdir="${classes.dir}"
-           debug="${compile.debug}"
-           deprecation="${compile.deprecation}"
-				optimize="${compile.optimize}"
-				includeantruntime="false">
-      <classpath refid="compile.classpath" />
-    </javac>
-    <copy todir="${classes.dir}" overwrite="true">
-      <fileset dir="WEB-INF/src">
-        <include name="**/*.xml" />
-      </fileset>
-    </copy>
-  </target>
-
-  <target name="war" depends="compile, integration-tests">
-    <echo message="=========== Build Zk Ajax UI ===========" />
-    <delete dir="${dist.dir}" />
-
+  <target name="war" depends="clean, phase5d.materialize-frozen-zk"
+          description="Stages the frozen legacy webui.war built from the Phase 5b source commit">
+    <echo message="=========== Stage frozen Zk Ajax UI ===========" />
     <mkdir dir="${dist.dir}" />
-
-    <war warfile="${dist.dir}/${war.name}.war" webxml="${WEBINF.dir}/web.xml">
-      <fileset dir="${basedir}"
-               excludes="
-                    .settings/**,
-                    bin/**,
-                    build/**,
-                    dist/**,
-                    .*,
-                    work/**,
-                    build.gradle,
-                    gradle.lockfile,
-                    src/**,
-                    WEB-INF/src/**,
-                    **/web.xml,
-                    **/test/**,
-                    WEB-INF/lib/*-sources.jar,
-                    **/test.zul">
-      </fileset>
-    </war>
-
-    <copy file="${dist.dir}/${war.name}.war" tofile="../lib/${war.name}.war" />
-  </target>
-
-  <!-- =========================================== -->
-  <!-- Tests                                       -->
-  <!-- =========================================== -->
-
-  <path id="test.class.path">
-    <pathelement location="${test.build.dir}" />
-    <pathelement location="${base.test.build.dir}" />
-    <pathelement location="${basedir}/WEB-INF/classes" />
-    <fileset dir="${adempiere.base}/lib" includes="**/*.jar" />
-    <fileset dir="${basedir}/WEB-INF/lib" includes="**/*.jar" />
-    <fileset dir="${adempiere.base}/tools/lib/junit" includes="**/*.jar" />
-  </path>
-
-  <target name="check.tests">
-    <condition property="unitTests.run">
-      <and>
-        <istrue value="${test.performTests}" />
-        <istrue value="${test.performUnitTests}" />
-      </and>
-    </condition>
-    <condition property="integrationTests.run">
-      <and>
-        <istrue value="${test.performTests}" />
-        <istrue value="${test.performIntegrationTests}" />
-      </and>
-    </condition>
-  </target>
-
-  <target name="alertIfTestSkipped"
-          depends="check.tests"
-          unless="${test.performTests}">
-    <echo message="Tests will not be performed. See adempiere/utils_dev/test.properties." />
-  </target>
-
-  <target name="clean.tests"
-          depends="alertIfTestSkipped"
-          if="${test.performTests}">
-    <delete dir="${test.build.dir}" />
-    <delete dir="${test.results.dir}" />
-  </target>
-
-  <target name="compile.test"
-          depends="compile, clean.tests"
-          if="${test.performTests}">
-    <mkdir dir="${test.build.dir}" />
-    <javac source="21" target="21"
-           encoding="UTF-8"
-           fork="true"
-           includeantruntime="false"
-           destdir="${test.build.dir}"
-           deprecation="on"
-           debug="on"
-           memoryinitialsize="512m"
-           memorymaximumsize="512m">
-      <src path="${test.src}" />
-      <classpath refid="test.class.path" />
-    </javac>
-  </target>
-
-  <target name="alertIfUnitTestSkipped"
-          depends="check.tests"
-          unless="unitTests.run">
-    <echo if:true="${test.performTests}">
-"===> Unit tests will not be performed. See adempiere/utils_dev/test.properties."</echo>
-  </target>
-
-  <target name="alertIfIntegrationTestSkipped"
-          depends="check.tests"
-          unless="integrationTests.run">
-    <echo if:true="${test.performTests}">
-"===> Integration tests will not be performed. See adempiere/utils_dev/test.properties."</echo>
-  </target>
-
-  <target name="unit-tests"
-          depends="compile.test, alertIfUnitTestSkipped"
-          if="unitTests.run">
-    <mkdir dir="../zkwebui/${test.results.dir}" />
-    <junitlauncher printsummary="false"
-                   haltonfailure="yes"
-                   failureproperty="test.failed"
-                   excludeTags="IntegrationTest">
-      <classpath refid="test.class.path" />
-      <testclasses outputdir="${adempiere.base}/zkwebui/${test.results.dir}">
-        <fileset dir="${test.build.dir}" />
-        <listener type="legacy-xml" sendSysErr="true" sendSysOut="true" />
-        <listener classname="org.adempiere.test.AdempiereTestExecutionListener"
-                  sendSysErr="true"
-                  sendSysOut="true" />
-        <fork />
-      </testclasses>
-    </junitlauncher>
-  </target>
-
-  <target name="integration-tests"
-          depends="unit-tests, alertIfIntegrationTestSkipped"
-          if="integrationTests.run">
-    <mkdir dir="../zkwebui/${test.results.dir}" />
-    <junitlauncher printsummary="false"
-                   haltonfailure="yes"
-                   failureproperty="test.failed"
-                   excludeTags="UnitTest">
-      <classpath refid="test.class.path" />
-      <testclasses outputdir="${adempiere.base}/zkwebui/${test.results.dir}">
-        <fileset dir="${test.build.dir}" />
-        <listener type="legacy-xml" sendSysErr="true" sendSysOut="true" />
-        <listener type="legacy-brief" sendSysErr="true" sendSysOut="true" />
-        <listener classname="org.adempiere.test.AdempiereTestExecutionListener"
-                  sendSysErr="true"
-                  sendSysOut="true" />
-        <fork />
-      </testclasses>
-    </junitlauncher>
+    <!-- dist/*.war stays populated because the packaged ZK modules resolve it
+         on their Ant compile classpath. -->
+    <copy file="${phase5d.frozen.war}"
+          tofile="${dist.dir}/${war.name}.war"
+          overwrite="true" />
+    <copy file="${phase5d.frozen.war}"
+          tofile="${Adempiere.dir}/${war.name}.war"
+          overwrite="true" />
   </target>
 
 </project>

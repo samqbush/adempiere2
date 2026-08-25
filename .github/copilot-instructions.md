@@ -11,7 +11,7 @@ component is testable. The plan-wide reproducible-CI Milestone is Phase 1, when
 the existing Ant unit-test baseline is recorded and Gradle must become
 reproducible and execute meaningful tests instead of `NO-SOURCE`.
 
-Phases 1-4, Phase 5a, and Phase 5b are merged to `develop`; Phase 4 completed as
+Phases 1-4, Phase 5a, Phase 5b, and Phase 5c are merged to `develop`; Phase 4 completed as
 `8c0ca4c1d6b35a5f366d6dd2150ed3bb27bc2a89`. All 33 XFire
 operation baselines and 11 additional scenarios now pass on the isolated CXF
 4.1.8/Jakarta EE 10 runtime on Tomcat 10.1.59/JDK 21. A Tomcat 9 compatibility
@@ -23,9 +23,15 @@ router became CXF-only. Active XFire source, publication, and runtime binaries
 are removed. Phase 5 is an umbrella milestone delivered through sequential
 `phase-5a-*` through `phase-5h-*` PRs. Phase 5a owns the ZK/Jakarta inventory,
 the supported-target ADR, and the Phase 4-to-5 non-SOAP route hand-off. Phase
-5b froze the Tomcat 9 oracle. Phase 5c adds a dark/L1 Jakarta packaging
-beachhead and verified semantic browser oracle; Phase 5d remains the first
-modern UI Testability Milestone.
+5b froze the Tomcat 9 oracle. Phase 5c added a dark/L1 Jakarta packaging
+beachhead and a verified semantic browser oracle. **Phase 5d crossed the modern
+UI Testability Milestone**: `webui-modern.war` keeps its artifact name and
+`/webui-modern` context path but now carries the functional ZK CE 10 slice, and
+it passes ordinary login, role selection, desktop/menu and the read-only "Error
+Message" window while reproducing all eleven comparable frozen legacy semantic
+facts and the zero-write database effect. The modern web component is therefore
+lit at L3, not dark at L1. The Phase 5c 503 marker no longer exists; its
+historical evidence lives in `docs/modernization/phase-5c-evidence.md`.
 
 The accepted target is ZK CE `10.3.0.1-jakarta` from the public ZK repository.
 Do not introduce evaluation artifacts or commercial repository credentials.
@@ -51,6 +57,8 @@ by a phase become canonical only after that phase's exit criteria prove them.
 | Phase 5b legacy web oracle replay | `./gradlew phase5bLegacyWebOracleSmoke -Pphase3DbSystemPassword='<password>' --dependency-verification=strict` | Marker-owned PostgreSQL gate that boots the installed Tomcat 9 product, drives the ZK 3.6 AU flow twice with a fixture reset between captures, proves the self-diff, and replays both captures against the frozen oracle |
 | Phase 5c packaging beachhead | `./gradlew phase5cFinalVerification --dependency-verification=strict` | Database-neutral gate for the packaging-only ZK Jakarta WAR, transformer fixtures and corpus report, loopback 503 marker, installed/release overlay, Phase 4 preservation, binding ADR, and artifact rollback |
 | Phase 5c browser and rollback | `./gradlew phase5cRollbackRehearsal -Pphase3DbSystemPassword='<password>' --dependency-verification=strict` | Marker-owned PostgreSQL gate for the Phase 5b replay plus two fixture-isolated semantic Playwright captures using only checksum-verified browser artifacts |
+| Phase 5d functional slice | `./gradlew phase5dFinalVerification --dependency-verification=strict` | Database-neutral gate for the functional ZK CE 10 `/webui-modern` WAR, the ZK compile closure, the current ZK source and namespace inventories, the frozen legacy artifact and source crossing, the installed/release overlay, artifact rollback, Phase 4 preservation, and the still-valid Phase 5b/5c assertions. Does **not** chain `phase5cFinalVerification` |
+| Phase 5d modern web smoke | `./gradlew phase5dModernWebSmoke -Pphase3DbSystemPassword='<password>' --dependency-verification=strict` | Marker-owned PostgreSQL gate that boots the modern ZK slice beside the unchanged Phase 4 CXF WAR in one loopback Tomcat 10.1.59 JVM, captures the login/role/menu/read-only-window flow twice with a fixture reset, compares eleven semantic facts and the zero-write effect with the frozen legacy baseline, and replays the complete Phase 4 SOAP corpus while a modern ZK session is authenticated |
 | Full product build, no DB restore | `ant build -Dnodbrestore=true` | Authoritative underlying Ant reactor; prefer the guarded Phase 3 lifecycle for CI |
 | Full product build with DB restore/migrations | `ant build -Dnodbrestore=false` | Database-affecting underlying reactor; run only against an approved disposable environment |
 | Gradle module build | `./gradlew build --dependency-verification=strict` | Reproducible Phase 2 gate on JDK 21 with Java 21 bytecode; omits quarantined Ant-only deployables |
@@ -69,8 +77,10 @@ by a phase become canonical only after that phase's exit criteria prove them.
 | End-to-end/contract | None currently canonical | Introduced incrementally in Phases 2-5 |
 
 Existing CI lives under `.github/workflows/`. Phase 4 currently includes 29
-Gradle projects after promoting the XFire-free web-service seam while Ant
-continues to own the legacy WAR. Phase 3 preserved all 32
+Gradle projects after promoting the XFire-free web-service seam. From Phase 5d
+the Ant reactor no longer compiles the migrated ZK trees: the legacy `webui.war`
+and the five ZK package jars are materialized from the frozen Phase 5b commit in
+an isolated worktree, and Gradle owns the modern `/webui-modern` WAR. Phase 3 preserved all 32
 Ant reactor entries and added explicit no-database and
 installed-product lanes, and retains the three-test disposable runtime smoke.
 The `jbossfacet` surface is explicitly quarantined because its checked-in JBoss

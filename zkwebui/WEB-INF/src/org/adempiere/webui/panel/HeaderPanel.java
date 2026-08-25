@@ -17,6 +17,7 @@
 
 package org.adempiere.webui.panel;
 
+import org.adempiere.webui.compat.ZkCompat;
 import org.adempiere.webui.LayoutUtils;
 import org.adempiere.webui.component.Panel;
 import org.adempiere.webui.theme.ThemeManager;
@@ -24,9 +25,9 @@ import org.adempiere.webui.window.AboutWindow;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.West;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.West;
 import org.zkoss.zul.Image;
 import org.zkoss.zul.Vbox;
 
@@ -85,8 +86,15 @@ public class HeaderPanel extends Panel implements EventListener
     	userPanel.setParent(center);
     	userPanel.setWidth("100%");
     	userPanel.setHeight("100%");
-    	userPanel.setStyle("position: absolute");
-    	center.setFlex(true);
+	// Phase 5d: this was "position: absolute". Under ZK 3.6 the .dsp theme
+	// supplied the positioning context; under ZK CE 10 the absolutely
+	// positioned panel leaves the flow, the Center region collapses to zero
+	// height, and the north region's own body paints over the Change Role and
+	// Log Out controls - which then render, report as visible, and cannot be
+	// clicked. "relative" keeps the positioning context the panel's children
+	// rely on while leaving it in the region's flow.
+	userPanel.setStyle("position: relative");
+	ZkCompat.setFlex(center, true);
     	LayoutUtils.addSclass("desktop-header-right", center);
     	//the following doesn't work when declare as part of the header-right style
     	center.setStyle("background-color: transparent; border: none;");

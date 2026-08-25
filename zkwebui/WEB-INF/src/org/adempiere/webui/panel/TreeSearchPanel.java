@@ -17,6 +17,7 @@
 
 package org.adempiere.webui.panel;
 
+import org.adempiere.webui.component.SimpleTreeModel;
 import java.util.TreeMap;
 
 import org.adempiere.webui.apps.AEnv;
@@ -36,7 +37,7 @@ import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zk.ui.util.Clients;
 import org.zkoss.zul.Div;
-import org.zkoss.zul.SimpleTreeNode;
+import org.adempiere.webui.compat.SimpleTreeNode;
 import org.zkoss.zul.Tree;
 import org.zkoss.zul.Treeitem;
 import org.zkoss.zul.event.TreeDataEvent;
@@ -54,6 +55,16 @@ public class TreeSearchPanel extends Panel implements EventListener, TreeDataLis
 	 * 
 	 */
 	private static final long serialVersionUID = -1788127438140771622L;
+
+	/**
+	 * ADempiere-owned style class for the menu lookup panel.
+	 *
+	 * <p>Added in Phase 5d so the modern slice has a stable, product-owned name
+	 * for this panel. Every ZK-internal class around it (z-combobox-inp in ZK
+	 * 3.6, z-combobox-input in ZK CE 10) changes with the framework.
+	 */
+	public static final String SEARCH_PANEL_SCLASS = "adempiere-tree-search";
+
 	private TreeMap<String, Object> treeNodeItemMap = new TreeMap<String, Object>();
     private String[] treeValues;
     private String[] treeDescription;
@@ -113,7 +124,12 @@ public class TreeSearchPanel extends Panel implements EventListener, TreeDataLis
         lblSearch.setValue(Msg.getMsg(Env.getCtx(),"TreeSearch").replaceAll("&", "") + ":");
         lblSearch.setTooltiptext(Msg.getMsg(Env.getCtx(),"TreeSearchText"));
         div.appendChild(lblSearch);
-        String divStyle = " height: 20px; vertical-align: middle;";
+        // Phase 5d: the ZK 3.6 .dsp theme rendered an 11px font, which made this
+        // row exactly 20px tall. ZK CE 10's default theme renders a taller
+        // combobox, so a FIXED 20px box clips the input and lets the menu tree
+        // below overlap it - the lookup then exists, is visible, and cannot be
+        // clicked. The row keeps 20px as a minimum and sizes to its content.
+        String divStyle = " min-height: 20px; vertical-align: middle;";
         if (!AEnv.isInternetExplorer())
         {
         	divStyle += "margin-bottom: 10px; display: inline-block;";
@@ -130,9 +146,13 @@ public class TreeSearchPanel extends Panel implements EventListener, TreeDataLis
 
         this.appendChild(div);
         this.appendChild(cmbSearch);
+        // An ADempiere-owned style class, so the Phase 5g theme work and the
+        // Phase 5d browser assertions both have a stable name to target instead
+        // of a ZK-internal class that changes with the framework.
+        this.setSclass(SEARCH_PANEL_SCLASS);
         if (!AEnv.isInternetExplorer())
         {
-        	this.setStyle("height: 20px; padding: 7px;");
+	this.setStyle("min-height: 20px; padding: 7px;");
     	}
     }
 
@@ -234,14 +254,15 @@ public class TreeSearchPanel extends Panel implements EventListener, TreeDataLis
 	            treeItem = (Treeitem) node;
             } else {
             	SimpleTreeNode sNode = (SimpleTreeNode) node;
-            	int[] path = tree.getModel().getPath(tree.getModel().getRoot(), sNode);
+	SimpleTreeModel searchModel = (SimpleTreeModel) (Object) tree.getModel();
+	int[] path = searchModel.getPath(searchModel.getRoot(), sNode);
     			treeItem = tree.renderItemByPath(path);
     			tree.setSelectedItem(treeItem);
             }
             if (treeItem != null)
             {
                 select(treeItem);
-                Clients.showBusy(Msg.getMsg(Env.getCtx(), "Loading"), true);
+                Clients.showBusy(Msg.getMsg(Env.getCtx(), "Loading"));
                 Events.echoEvent("onPostSelect", this, null);
                 Event event2=new Event(Events.ON_CLICK, ((Component)(treeItem.getTreerow().getChildren().get(0))));
                 Events.postEvent(event2);
@@ -254,7 +275,7 @@ public class TreeSearchPanel extends Panel implements EventListener, TreeDataLis
      * don't call this directly, use internally for post selection event
      */
     public void onPostSelect() {
-    	Clients.showBusy(null, false);
+	Clients.clearBusy();
     	Event event = null;
     	if(tree.getSelectedItem() == null && eventToFire.equals(Events.ON_CLICK))
     		return;

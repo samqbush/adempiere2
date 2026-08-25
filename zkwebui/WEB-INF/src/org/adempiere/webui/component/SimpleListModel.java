@@ -71,7 +71,7 @@ public class SimpleListModel extends AbstractListModel implements ListitemRender
 			.append(src.substring(0, j)).append("...");
 	}
 	
-	public void render(Listitem item, Object data) throws Exception {
+	public void render(Listitem item, Object data, int index) throws Exception {
 		if (data instanceof Object[]) {
 			renderArray(item, (Object[])data);
 		} else if (data instanceof Collection) {

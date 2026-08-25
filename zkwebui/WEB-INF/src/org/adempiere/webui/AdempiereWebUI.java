@@ -39,8 +39,7 @@ import org.compiere.util.CLogger;
 import org.compiere.util.Env;
 import org.compiere.util.Language;
 import org.spin.authentication.services.OpenIDUtil;
-import org.zkforge.keylistener.Keylistener;
-import org.zkoss.zk.au.Command;
+import org.adempiere.webui.component.Keylistener;
 import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.Desktop;
 import org.zkoss.zk.ui.Executions;
@@ -60,8 +59,8 @@ import org.zkoss.zk.ui.sys.SessionCtrl;
 import org.zkoss.zk.ui.sys.Visualizer;
 import org.zkoss.zul.Window;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Locale;
@@ -110,6 +109,7 @@ public class AdempiereWebUI extends Window implements EventListener, IWebClient
     public void onCreate()
     {
 		Session session = getDesktop().getSession();
+		registerAuServices();
 		HttpSession httpSession = (HttpSession) session.getNativeSession();
 		ServerContext.setCurrentInstance(SessionManager.getSessionContext(httpSession.getId()));
 		this.getPage().setTitle(ThemeManager.getBrowserTitle());
@@ -201,8 +201,8 @@ public class AdempiereWebUI extends Window implements EventListener, IWebClient
 			httpSession.setMaxInactiveInterval(maxInactiveInterval);
 		});
 
-		MSession adempiereSession = MSession.get (ctx, currentSession.getRemoteAddr(),
-				currentSession.getRemoteHost(), httpSession.getId() );
+		MSession adempiereSession = MSession.get (ctx, Executions.getCurrent().getRemoteAddr(),
+				Executions.getCurrent().getRemoteHost(), httpSession.getId() );
 
 		//enable full interface, relook into this when doing preference
 		Env.setContext(ctx, "#ShowTrl", true);
@@ -210,7 +210,11 @@ public class AdempiereWebUI extends Window implements EventListener, IWebClient
 		Env.setContext(ctx, "#ShowAdvanced", true);
 
 		keyListener = new Keylistener();
-		keyListener.setPage(this.getPage());
+		keyListener.bindTo(this);
+		// #enter is a ZK 3.x org.zkforge.keylistener extended key. ZK CE rejects the
+		// entire specification on an unknown extended key, so Keylistener strips it
+		// and re-implements Enter on ZK CE's own onOK event; see
+		// org.adempiere.webui.component.Keylistener.
 		keyListener.setCtrlKeys("@a@c@d@e@f@h@l@m@n@o@p@r@s@t@z@x@#left@#right@#up@#down@#home@#end#enter^u@u@#pgdn@#pgup$#f2^#f2");
 		keyListener.setAutoBlur(false);
 
@@ -380,20 +384,35 @@ public class AdempiereWebUI extends Window implements EventListener, IWebClient
 			clientInfo.desktopWidth = c.getDesktopWidth();
 			clientInfo.desktopXOffset = c.getDesktopXOffset();
 			clientInfo.desktopYOffset = c.getDesktopYOffset();
-			clientInfo.timeZone = c.getTimeZone();
+			clientInfo.timeZone = c.getZoneId() == null
+					? java.util.TimeZone.getDefault()
+					: java.util.TimeZone.getTimeZone(c.getZoneId());
 			if (applicationDesktop != null)
 				applicationDesktop.setClientInfo(clientInfo);
 		}
 
 	}
 
-	//global command
-	static {
-		new ZoomCommand("onZoom", Command.IGNORE_OLD_EQUIV);
-		new DrillCommand("onDrillAcross", Command.IGNORE_OLD_EQUIV);
-		new DrillCommand("onDrillDown", Command.IGNORE_OLD_EQUIV);
-		new TokenCommand(TokenEvent.ON_USER_TOKEN, Command.IGNORE_OLD_EQUIV);
+	/**
+	 * ZK CE 10 removed the global {@code org.zkoss.zk.au.Command} registry that
+	 * ADempiere used to install its AU commands from a static initializer. The
+	 * supported replacement is a desktop scoped {@code AuService}, so the same
+	 * four commands are registered once per desktop.
+	 */
+	private void registerAuServices()
+	{
+		Desktop desktop = getDesktop();
+		if (desktop == null || desktop.getAttribute(AU_SERVICES_REGISTERED) != null)
+			return;
+		desktop.addListener(new ZoomCommand("onZoom"));
+		desktop.addListener(new DrillCommand("onDrillAcross"));
+		desktop.addListener(new DrillCommand("onDrillDown"));
+		desktop.addListener(new TokenCommand(TokenEvent.ON_USER_TOKEN));
+		desktop.setAttribute(AU_SERVICES_REGISTERED, Boolean.TRUE);
 	}
+
+	private static final String AU_SERVICES_REGISTERED =
+			AdempiereWebUI.class.getName() + ".auServices";
 
 	@Override
 	public void changeRole(MUser user)

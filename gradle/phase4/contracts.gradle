@@ -1023,8 +1023,8 @@ tasks.register('preparePhase4OperationScenarios', Exec) {
 		phase4DbPort.get(),
 		phase4DbName.get(),
 		phase4DbUser.get(),
-		phase4DbPassword.get(),
 		phase4DatabaseMarker)
+	environment 'ADEMPIERE_PHASE5D_DB_PASSWORD', phase4DbPassword.get()
 }
 
 tasks.register('phase4ModernSoapDatabaseSmoke', Exec) {

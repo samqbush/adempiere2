@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Phase 5d modern entry page for /webui-modern.
+
+  Rewritten from zkwebui/index.zul rather than copied. The removed lines are the
+  ZK 3.6 DSP theme links:
+
+      <?init zscript="theme.zs" ?>
+      <?link ... href="${themeStyleSheet}"?>
+      <?link ... href="${themeStyleSheetByBrowser}"?>
+      <?link ... href="theme/default/css/color.css.dsp"?>
+      <?link ... href="theme/default/css/img.css.dsp"?>
+
+  Every one of those resolves to a *.dsp resource served by ZK 3.6's
+  org.zkoss.web.servlet.dsp.InterpreterServlet, which ZK CE 10 does not ship and
+  which this slice's Servlet 6 descriptor deliberately does not map. The ZK 3.6
+  <?meta http-equiv="X-UA-Compatible" content="IE=8"?> directive is dropped for
+  the same reason it should have been dropped years ago: it targets a browser
+  engine that no longer exists.
+
+  The ADempiere-owned window binding is preserved exactly: the page still
+  instantiates org.adempiere.webui.AdempiereWebUI, which is what drives
+  login -> role -> desktop/menu -> window.
+-->
+<?page style="height:100%"?>
+<?link rel="icon" type="image/png" href="theme/default/images/icon.png"?>
+<?link rel="stylesheet" type="text/css" href="css/PAPanel.css"?>
+<?link rel="stylesheet" type="text/css" href="css/phase5d-modern.css"?>
+<?script type="text/javascript" defer="defer" src="js/jquery-3.2.1.min.js" ?>
+<zk>
+	<script><![CDATA[
+		var zkTimeoutText = "The page or component you request is no longer available. This is normally caused by timeout or rebooting the server.";
+		adempiere.store.set("zkTimeoutText", zkTimeoutText);
+	]]></script>
+	<window use="org.adempiere.webui.AdempiereWebUI"/>
+</zk>

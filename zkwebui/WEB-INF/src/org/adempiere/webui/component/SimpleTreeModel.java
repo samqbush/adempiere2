@@ -28,7 +28,7 @@ import org.zkoss.lang.Objects;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
-import org.zkoss.zul.SimpleTreeNode;
+import org.adempiere.webui.compat.SimpleTreeNode;
 import org.zkoss.zul.Tree;
 import org.zkoss.zul.Treecell;
 import org.zkoss.zul.Treecol;
@@ -46,7 +46,7 @@ import org.zkoss.zul.event.TreeDataEvent;
  * @see https://adempiere.atlassian.net/browse/ADEMPIERE-442
  *
  */
-public class SimpleTreeModel extends org.zkoss.zul.SimpleTreeModel implements TreeitemRenderer, EventListener {
+public class SimpleTreeModel extends org.adempiere.webui.compat.SimpleTreeModel implements TreeitemRenderer, EventListener {
 
 	/**
 	 * 
@@ -103,7 +103,7 @@ public class SimpleTreeModel extends org.zkoss.zul.SimpleTreeModel implements Tr
 		}
 		tree.setPageSize(-1);
 		try {
-			tree.setTreeitemRenderer(treeModel);
+			tree.setItemRenderer(treeModel);
 			tree.setModel(treeModel);
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "Failed to setup tree");
@@ -148,7 +148,7 @@ public class SimpleTreeModel extends org.zkoss.zul.SimpleTreeModel implements Tr
 	 * @param ti
 	 * @param node
 	 */
-	public void render(Treeitem ti, Object node) {
+	public void render(Treeitem ti, Object node, int index) {
 		Treecell tc = new Treecell(Objects.toString(node));
 		Treerow tr = null;
 		if(ti.getTreerow()==null){
@@ -178,16 +178,6 @@ public class SimpleTreeModel extends org.zkoss.zul.SimpleTreeModel implements Tr
 		SimpleTreeNode root = (SimpleTreeNode) getRoot();
 		root.getChildren().add(newNode);
 		fireEvent(root, root.getChildCount() - 1, root.getChildCount() - 1, TreeDataEvent.INTERVAL_ADDED);
-	}
-
-	@Override
-	public SimpleTreeNode getRoot() {
-		return (SimpleTreeNode) super.getRoot();
-	}
-
-	@Override
-	public SimpleTreeNode getChild(Object parent, int index) {
-		return (SimpleTreeNode) super.getChild(parent, index);
 	}
 
 	/**

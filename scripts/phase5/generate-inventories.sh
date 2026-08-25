@@ -28,20 +28,55 @@ owner_for() {
 	esac
 }
 
+# Phase 5d: the inventories describe the WORKING TREE, not the index.
+#
+# The generator used `git grep`, which only sees tracked content. Phase 5d adds
+# ADempiere-owned ZK CE compatibility sources, and until they are committed
+# `git grep` reports an inventory that is missing exactly the files the phase
+# introduced - a green inventory over an incomplete tree. These helpers list and
+# search tracked plus untracked-but-not-ignored files instead, so the inventory
+# is the same before and after the commit.
+tree_files() {
+	git ls-files --cached --others --exclude-standard -- "$@" |
+		sort -u |
+		while IFS= read -r path; do
+			[ -f "$path" ] && printf '%s\n' "$path"
+		done
+}
+
+tree_grep_l() {
+	local pattern=$1
+	shift
+	# One grep over a batched file list rather than one grep per file: the
+	# per-file loop turned a two-second inventory into a ten-minute one.
+	tree_files "$@" | tr '\n' '\0' |
+		LC_ALL=C xargs -0 grep -lE "$pattern" 2>/dev/null || true
+}
+
+tree_grep_q() {
+	local pattern=$1 path=$2
+	LC_ALL=C grep -qE "$pattern" "$path" 2>/dev/null
+}
+
+tree_grep_count() {
+	local pattern=$1 path=$2
+	LC_ALL=C grep -oE "$pattern" "$path" 2>/dev/null | wc -l | tr -d ' '
+}
+
 {
 	printf '# path\towner\treference_count\tapi_families\tcompile_gate\tbehavior_gate\tdisposition\n'
-	git grep -l 'org\.zkoss' -- '*.java' |
+	tree_grep_l 'org\.zkoss' '*.java' |
 		sort |
 		while IFS= read -r path; do
-			count=$(git grep -o 'org\.zkoss' -- "$path" | wc -l | tr -d ' ')
+			count=$(tree_grep_count 'org\.zkoss' "$path")
 			families=
-			if git grep -q 'org\.zkoss\.zkmax' -- "$path"; then
+			if tree_grep_q 'org\.zkoss\.zkmax' "$path"; then
 				families=zkmax
 			fi
-			if git grep -q 'org\.zkoss\.zkex' -- "$path"; then
+			if tree_grep_q 'org\.zkoss\.zkex' "$path"; then
 				families=${families:+$families,}zkex
 			fi
-			if git grep -q 'org\.zkoss\.zk\|org\.zkoss\.zul\|org\.zkoss\.zhtml\|org\.zkoss\.util' -- "$path"; then
+			if tree_grep_q 'org\.zkoss\.zk|org\.zkoss\.zul|org\.zkoss\.zhtml|org\.zkoss\.util' "$path"; then
 				families=${families:+$families,}ce-core
 			fi
 			printf '%s\t%s\t%s\t%s\t5d\t5g\tmigrate-source\n' \
@@ -51,16 +86,16 @@ owner_for() {
 
 {
 	printf '# path\ttype\towner\treferences\tdisposition\tclosing_gate\n'
-	git ls-files |
+	tree_files |
 		grep -E '\.(jsp|tag|tld|zul|zhtml|dsp|xml)$' |
 		while IFS= read -r path; do
-			if git grep -q -E 'org\.zkoss|javax\.(servlet|mail|jms|ejb|annotation|activation)' -- "$path"; then
+			if tree_grep_q 'org\.zkoss|javax\.(servlet|mail|jms|ejb|annotation|activation)' "$path"; then
 				refs=
-				if git grep -q 'org\.zkoss' -- "$path"; then
+				if tree_grep_q 'org\.zkoss' "$path"; then
 					refs=zk
 				fi
 				for namespace in servlet mail jms ejb annotation activation; do
-					if git grep -q "javax\\.$namespace" -- "$path"; then
+					if tree_grep_q "javax\\.$namespace" "$path"; then
 						refs=${refs:+$refs,}javax.$namespace
 					fi
 				done
@@ -77,7 +112,7 @@ owner_for() {
 {
 	printf '# path\tnamespace\tclassification\towner\tdisposition\tclosing_gate\n'
 	for namespace in servlet mail jms ejb annotation activation swing print sql naming crypto imageio; do
-		git grep -l "javax\\.$namespace" -- \
+		tree_grep_l "javax\\.$namespace" \
 			'*.java' '*.jsp' '*.tag' '*.tld' '*.zul' '*.zhtml' '*.dsp' '*.xml' |
 			sort -u |
 			while IFS= read -r path; do
@@ -103,6 +138,110 @@ owner_for() {
 					"$(owner_for "$path")" "$disposition" "$gate"
 			done
 	done
+
+	# Phase 5d: the ZK commercial, ZK 3.x add-on and ZK 3.6-removed-API
+	# namespaces. The Phase 5a ledger covered only javax.*, which described the
+	# starting position and said nothing about the namespaces the ZK migration
+	# actually had to resolve. Each one is resolved by an ADempiere-owned
+	# replacement under zkwebui/WEB-INF/src/org/adempiere/webui/compat/ rather
+	# than by a commercial artifact or a repository credential.
+	#
+	# The classification and disposition are derived from where the reference
+	# lives, so a reference that reappears in a migrated production source is
+	# reported as `unresolved` here and fails
+	# gradle/phase5/zk-compile-closure.gradle at the same time.
+	for namespace in \
+			'org.zkoss.zkex' \
+			'org.zkoss.zkmax' \
+			'org.zkforge' \
+			'org.zkoss.zul.api' \
+			'org.zkoss.zul.SimpleTreeModel' \
+			'org.zkoss.zul.SimpleTreeNode' \
+			'org.zkoss.zul.ListModelExt' \
+			'org.zkoss.zk.ui.render'; do
+		escaped=$(printf '%s' "$namespace" | sed 's/\./\\./g')
+		case "$namespace" in
+			org.zkoss.zkex|org.zkoss.zkmax) classification=zk-commercial ;;
+			org.zkforge) classification=zk3-addon ;;
+			*) classification=zk3-removed-api ;;
+		esac
+		tree_grep_l "$escaped" \
+			'*.java' '*.zul' '*.zhtml' '*.dsp' '*.xml' '*.tsv' '*.gradle' |
+			sort -u |
+			while IFS= read -r path; do
+				# A Java source that names the namespace only inside a comment is
+				# documenting the migration, not using the API. The compile
+				# closure gate strips comments before scanning for exactly this
+				# reason, so the ledger uses the same rule instead of a different
+				# one.
+				case "$path" in
+					*.java)
+						if ! sed -e 's#//.*##' "$path" |
+								tr '\n' '\001' |
+								sed -e 's#/\*[^\001]*\?\*/# #g' |
+								tr '\001' '\n' |
+								LC_ALL=C grep -qE "$escaped"; then
+							continue
+						fi
+						;;
+				esac
+				case "$path" in
+					*_Test.java|*/test/*|*/testScripts/*)
+						disposition=test-assertion
+						gate=5d
+						;;
+					zkwebui/WEB-INF/src/org/adempiere/webui/compat/timeline/*)
+						disposition=replaced-adempiere-owned
+						gate=5f
+						;;
+					zkwebui/WEB-INF/src/org/adempiere/webui/compat/*|\
+					zkwebui/WEB-INF/src/org/adempiere/webui/component/Keylistener.java)
+						disposition=replaced-adempiere-owned
+						gate=5d
+						;;
+					zkwebui/WEB-INF/zk.xml|zkwebui/WEB-INF/web.xml|\
+					zkwebui/WEB-INF/web-2.5.xml|zkwebui/WEB-INF/lib/*|\
+					zkwebui/WEB-INF/tld/*|zkwebui/theme/*|zkwebui/index.zul|\
+					zkwebui/timeout.zul|zkwebui/zul/*)
+						# The ZK 3.6 descriptors and assets of the FROZEN legacy
+						# artifact. They are not migrated: the legacy web product
+						# is materialized from the Phase 5b commit and removed
+						# with Tomcat 9 in Phase 5h.
+						disposition=frozen-legacy-artifact
+						gate=5h
+						;;
+					gradle/*|contracts/*|docs/*|scripts/*|*.md)
+						disposition=recorded-in-contract
+						gate=5d
+						;;
+					zkwebui/src/phase5d/*|*/build.gradle)
+						disposition=replaced-ce-equivalent
+						gate=5d
+						;;
+					*)
+						disposition=unresolved
+						gate=5d
+						;;
+				esac
+				printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+					"$path" "$namespace" "$classification" \
+					"$(owner_for "$path")" "$disposition" "$gate"
+			done
+	done
+
+	# The reviewed replacement map. These rows cannot be discovered by scanning:
+	# the replacement classes deliberately contain no reference to the namespace
+	# they replace, because gradle/phase5/zk-compile-closure.gradle fails the
+	# build if one does.
+	awk -F'\t' 'NF >= 5 && $0 !~ /^#/ {
+			printf "%s\t%s\treplacement\t%s\treplaced-adempiere-owned\t%s\n",
+				$1, $2, owner($1), $4
+		}
+		function owner(path,   head) {
+			head = path
+			sub(/\/.*$/, "", head)
+			return head
+		}' gradle/phase5/zk-namespace-replacements.tsv
 } >"$output_dir/namespace-ownership.tsv"
 
 {

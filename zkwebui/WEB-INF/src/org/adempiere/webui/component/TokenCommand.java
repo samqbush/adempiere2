@@ -16,7 +16,8 @@ package org.adempiere.webui.component;
 import org.adempiere.webui.event.TokenEvent;
 import org.zkoss.lang.Objects;
 import org.zkoss.zk.au.AuRequest;
-import org.zkoss.zk.au.Command;
+import org.adempiere.webui.compat.AuRequests;
+import org.zkoss.zk.au.AuService;
 import org.zkoss.zk.mesg.MZk;
 import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.UiException;
@@ -27,15 +28,38 @@ import org.zkoss.zk.ui.event.Events;
  * @author hengsin
  *
  */
-public class TokenCommand extends Command {
+public class TokenCommand implements AuService {
 
-	public TokenCommand(String id, int flags) {
-		super(id, flags);
+	private final String command;
+
+	public TokenCommand(String command) {
+		this.command = command;
 	}
 
-	@Override
-	protected void process(AuRequest request) {
-		final String[] data = request.getData();
+	/**
+	 * @return the AU command this service answers
+	 */
+	public String getId() {
+		return command;
+	}
+
+	/**
+	 * ZK CE 10 dispatches custom AU commands through {@link AuService}
+	 * instead of the removed {@code org.zkoss.zk.au.Command} registry.
+	 *
+	 * @param request AU request
+	 * @param everError true when an error was already reported
+	 * @return true when this service consumed the request
+	 */
+	public boolean service(AuRequest request, boolean everError) {
+		if (!command.equals(request.getCommand()))
+			return false;
+		process(request);
+		return true;
+	}
+
+	private void process(AuRequest request) {
+		final String[] data = AuRequests.positionalData(request);
 
 		final Component comp = request.getComponent();
 		if (comp == null)

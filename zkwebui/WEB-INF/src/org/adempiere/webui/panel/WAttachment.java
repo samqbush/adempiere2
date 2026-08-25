@@ -16,6 +16,7 @@
 
 package org.adempiere.webui.panel;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -36,16 +37,16 @@ import org.compiere.util.Env;
 import org.compiere.util.Msg;
 import org.zkoss.util.media.AMedia;
 import org.zkoss.util.media.Media;
-import org.zkoss.zk.au.AuScript;
+import org.zkoss.zk.au.out.AuScript;
 import org.zkoss.zk.au.out.AuEcho;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zk.ui.util.Clients;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.South;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.zkoss.zul.South;
 import org.zkoss.zul.Div;
 import org.zkoss.zul.Filedownload;
 import org.zkoss.zul.Fileupload;
@@ -223,7 +224,7 @@ public class WAttachment extends Window implements EventListener
 			
 		Center centerPane = new Center();
 		centerPane.setAutoscroll(true);
-		centerPane.setFlex(true);
+		ZkCompat.setFlex(centerPane, true);
 		mainPanel.appendChild(centerPane);
 		centerPane.appendChild(previewPanel);
 		
@@ -468,7 +469,7 @@ public class WAttachment extends Window implements EventListener
 				return;
 			}
 		}
-		catch (InterruptedException e) 
+		catch (org.zkoss.zk.ui.SuspendNotAllowedException e)
 		{
 			log.log(Level.WARNING, e.getLocalizedMessage(), e);
 		}

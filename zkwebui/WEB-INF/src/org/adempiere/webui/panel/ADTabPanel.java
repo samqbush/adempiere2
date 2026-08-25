@@ -17,6 +17,9 @@
 
 package org.adempiere.webui.panel;
 
+import org.adempiere.webui.compat.SimpleTreeNode;
+import org.adempiere.webui.component.Div;
+import org.adempiere.webui.compat.ZkCompat;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyVetoException;
 import java.beans.VetoableChangeListener;
@@ -55,9 +58,9 @@ import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zk.ui.util.Clients;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.West;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.West;
 import org.zkoss.zul.*;
 import org.zkoss.zul.Panel;
 import org.zkoss.zul.Row;
@@ -179,7 +182,8 @@ public class ADTabPanel extends Div implements Evaluatee, EventListener, DataSta
         //have problem moving the following out as css class
         grid.setWidth("100%");
         grid.setHeight("100%");
-        grid.setVflex(true);
+        // ZK CE 10 rejects vflex on a component that already carries a height.
+        ZkCompat.setVflex(grid, true);
         grid.setStyle("margin:0; padding:0; position: absolute");
         grid.makeNoStrip();
 
@@ -234,7 +238,7 @@ public class ADTabPanel extends Div implements Evaluatee, EventListener, DataSta
 			layout.appendChild(west);
 
 			Center center = new Center();
-			center.setFlex(true);
+			ZkCompat.setFlex(center, true);
 			center.appendChild(grid);
 			layout.appendChild(center);
 
@@ -320,19 +324,19 @@ public class ADTabPanel extends Div implements Evaluatee, EventListener, DataSta
             		}
 
                     row = new Row();
-                    row.setSpans("5");
+                    ZkCompat.setSpans(row, "5");
                     row.appendChild(new Separator());
                     rows.appendChild(row);
 
                     row = new Group();
-                    row.setSpans("2,3");
+                    ZkCompat.setSpans(row, "2,3");
                     rows.appendChild(row);
                     includedTab.put(field.getIncluded_Tab_ID(), (Group)row);
 
     				org.zkoss.zul.Div div = new Div();
                     div.setWidth("100%");
                     row = new org.adempiere.webui.component.Row();
-                    row.setSpans("5");
+                    ZkCompat.setSpans(row, "5");
                     row.appendChild(div);
                     rows.appendChild(row);
                     horizontalIncludedTab.put(field.getIncluded_Tab_ID(),  div);
@@ -391,7 +395,7 @@ public class ADTabPanel extends Div implements Evaluatee, EventListener, DataSta
             			List<org.zkoss.zul.Row> headerRows = new ArrayList<org.zkoss.zul.Row>();
             			fieldGroupHeaders.put(fieldGroup, headerRows);
 
-            			row.setSpans("5");
+			ZkCompat.setSpans(row, "5");
             			row.appendChild(new Separator());
             			rows.appendChild(row);
             			headerRows.add(row);
@@ -402,7 +406,7 @@ public class ADTabPanel extends Div implements Evaluatee, EventListener, DataSta
             			if (X_AD_FieldGroup.FIELDGROUPTYPE_Label.equals(field.getFieldGroupType()))
             			{
             				row = new Row();
-                			row.setSpans("4");
+			ZkCompat.setSpans(row, "4");
             				Label groupLabel = new Label(fieldGroup);
             				row.appendChild(groupLabel);
             				row.appendChild(createSpacer());
@@ -410,7 +414,7 @@ public class ADTabPanel extends Div implements Evaluatee, EventListener, DataSta
             				headerRows.add(row);
 
             				row = new Row();
-	                        row.setSpans("4");
+	                        ZkCompat.setSpans(row, "4");
 	                        Separator separator = new Separator();
 	                        separator.setBar(true);
 	            			row.appendChild(separator);
@@ -495,7 +499,7 @@ public class ADTabPanel extends Div implements Evaluatee, EventListener, DataSta
                     }
                     row.appendChild(editor.getComponent());
                     if (field.isLongField()) {
-                    	row.setSpans("1,3,1");
+	ZkCompat.setSpans(row, "1,3,1");
                     	row.appendChild(createSpacer());
                     	rows.appendChild(row);
                     	if (rowList != null)
@@ -1196,7 +1200,7 @@ public class ADTabPanel extends Div implements Evaluatee, EventListener, DataSta
     private void deleteNode(int recordId) {
 		if (recordId <= 0) return;
 
-		SimpleTreeModel model = (SimpleTreeModel) treePanel.getTree().getModel();
+		SimpleTreeModel model = (SimpleTreeModel) (Object) treePanel.getTree().getModel();
 
 		if (treePanel.getTree().getSelectedItem() != null) {
 			SimpleTreeNode treeNode = (SimpleTreeNode) treePanel.getTree().getSelectedItem().getValue();
@@ -1220,7 +1224,7 @@ public class ADTabPanel extends Div implements Evaluatee, EventListener, DataSta
 			boolean summary = gridTab.getValueAsBoolean("IsSummary");
 			String imageIndicator = (String)gridTab.getValue("Action");  //  Menu - Action
 			//
-			SimpleTreeModel model = (SimpleTreeModel) treePanel.getTree().getModel();
+			SimpleTreeModel model = (SimpleTreeModel) (Object) treePanel.getTree().getModel();
 			SimpleTreeNode treeNode = model.getRoot();
 			MTreeNode root = (MTreeNode) treeNode.getData();
 			MTreeNode node = new MTreeNode (gridTab.getRecord_ID(), 0, name, description,
@@ -1242,7 +1246,7 @@ public class ADTabPanel extends Div implements Evaluatee, EventListener, DataSta
 			if (data.getNode_ID() == recordId) return;
 		}
 
-		SimpleTreeModel model = (SimpleTreeModel) treePanel.getTree().getModel();
+		SimpleTreeModel model = (SimpleTreeModel) (Object) treePanel.getTree().getModel();
 		SimpleTreeNode treeNode = model.find(null, recordId);
 		if (treeNode != null) {
 			int[] path = model.getPath(model.getRoot(), treeNode);
@@ -1397,7 +1401,7 @@ public class ADTabPanel extends Div implements Evaluatee, EventListener, DataSta
 
 
 		org.zkoss.zul.Row row = new Row();
-		row.setSpans("5");
+		ZkCompat.setSpans(row, "5");
 
 		if(!ep.gridWindow.getTab(ep.tabIndex).isDisplayed())
 		{
@@ -1669,7 +1673,7 @@ public class ADTabPanel extends Div implements Evaluatee, EventListener, DataSta
 
 		for (Object o : ((Row) row).getChildren()) {
 
-			if(o instanceof org.zkoss.zkex.zul.Borderlayout)
+			if(o instanceof org.zkoss.zul.Borderlayout)
 			{
 				return 0;
 			}
@@ -1863,7 +1867,7 @@ public class ADTabPanel extends Div implements Evaluatee, EventListener, DataSta
         // Create a Panel Object
         Panel panel = new Panel();
         //Setting Properties to Panel
-        panel.setFramable(true);
+        ZkCompat.setFramable(panel, true);
     	//panel.setStyle("overflow:auto");
         panel.setWidth("100%");
         panel.setHeight("100%");
@@ -1878,7 +1882,8 @@ public class ADTabPanel extends Div implements Evaluatee, EventListener, DataSta
         newGrid.setStyle("margin:0; padding:0; position: absolute; border: none;");
         newGrid.makeNoStrip();
         newGrid.setWidth("100%");
-        newGrid.setHeight("100%");
+        // Set AFTER the vflex above, so ZK CE would reject the height here.
+        ZkCompat.setHeight(newGrid, "100%");
         // Grid append to Panel Children
         ep.panelChildren.appendChild( newGrid );
         // Panel Children Append to Panel
@@ -1895,11 +1900,11 @@ public class ADTabPanel extends Div implements Evaluatee, EventListener, DataSta
         org.zkoss.zul.Row newRow = new Group();
         // Create a Row For ToolBar
         org.zkoss.zul.Row toolbarRow = new org.adempiere.webui.component.Row();
-        toolbarRow.setSpans("5");
+        ZkCompat.setSpans(toolbarRow, "5");
         ep.toolbarRow = toolbarRow;
         //Create a Row For All Widgets
         org.zkoss.zul.Row panelRow = new org.adempiere.webui.component.Row();
-        panelRow.setSpans("5");
+        ZkCompat.setSpans(panelRow, "5");
         panelRow.setWidth("100%");
         panelRow.setHeight("100%");
         // Added to Group

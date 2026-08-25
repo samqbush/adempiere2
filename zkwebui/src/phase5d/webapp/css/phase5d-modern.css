@@ -1,0 +1,97 @@
+/*
+ * Phase 5d reviewed static stylesheet for /webui-modern.
+ *
+ * This file replaces the ZK 3.6 .dsp theme (theme.css.dsp, themeie.css.dsp,
+ * thememoz.css.dsp, color.css.dsp, img.css.dsp) for the Phase 5d slice. It is
+ * deliberately minimal: it carries only the page-height rule the ADempiere
+ * desktop layout needs, and the four ADempiere-owned field-state marker classes
+ * that the Phase 5d browser assertions read.
+ *
+ * The DSP theme is NOT reproduced. Two of its behaviours are dropped on
+ * purpose:
+ *   * it imported https://fonts.googleapis.com/css?family=Open+Sans, i.e. the
+ *     loopback-only modern runtime would make an outbound request on every
+ *     page load;
+ *   * it depended on ZK 3.6 internal component class names (.z-toolbar-button,
+ *     .z-listbox and friends) which ZK CE 10 renames.
+ *
+ * Component appearance therefore comes from the ZK CE 10 default theme. The
+ * marker classes below intentionally set only a background so they remain
+ * observable without asserting a colour scheme this phase has not reviewed.
+ */
+
+html, body {
+	height: 100%;
+	margin: 0;
+	padding: 0;
+}
+
+.readonly-field {
+	background-color: #f0f0f0;
+}
+
+.mandatory-field {
+	background-color: #fffacd;
+}
+
+.normal-field {
+	background-color: transparent;
+}
+
+.login-window {
+	margin: 0 auto;
+}
+
+/*
+ * ADempiere-owned desktop header layout.
+ *
+ * theme.css.dsp:158-165 gave .desktop-header a fixed 50px height and a full
+ * width. Without it the header's inner Borderlayout has no height at all under
+ * ZK CE 10, every region inside it collapses to 0px, and the Change Role /
+ * Log Out controls render outside the 32px north body - visible, but covered by
+ * it and therefore unclickable. Only the two geometry properties are carried
+ * over; the ZK 3.6 background image and colour scheme are Phase 5g's concern.
+ */
+.desktop-header {
+	width: 100%;
+	height: 100%;
+}
+
+/*
+ * ZK CE 10's default theme pads every region body by 16px. The desktop header
+ * region is sized to exactly the header height
+ * (DefaultDesktop.HEADER_REGION_HEIGHT), so that padding would leave the header
+ * no content height at all and the region body would then cover the controls it
+ * contains.
+ */
+.desktop-header-region > .z-north-body {
+	padding: 0;
+}
+
+.desktop-header > .z-borderlayout,
+.desktop-header .z-borderlayout {
+	height: 100%;
+}
+
+/* theme.css.dsp:100-110 */
+.desktop-header-left {
+	margin: 0;
+	margin-left: 5px;
+	margin-top: 3px;
+}
+
+.desktop-header-right {
+	margin: 0;
+	margin-top: 3px;
+	padding-right: 5px;
+}
+
+/*
+ * The Phase 5d menu lookup panel (TreeSearchPanel.SEARCH_PANEL_SCLASS). ZK CE 10
+ * renders a taller combobox than the ZK 3.6 .dsp theme did, so the row is sized
+ * by its content instead of by a fixed 20px box.
+ */
+.adempiere-tree-search {
+	min-height: 20px;
+	white-space: nowrap;
+}

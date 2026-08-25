@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ================================================================= -->
+<!-- Phase 5d: frozen legacy ZK artifact crossing                      -->
+<!-- ================================================================= -->
+<project name="phase5d-frozen-zk" basedir=".">
+  <description>
+    Phase 5d migrates zkwebui/WEB-INF/src and the packaged modules'
+    src/main/java/ui/zk trees to ZK CE 10.3.0.1-jakarta. Those sources can no
+    longer be compiled against the ZK 3.6 jars in zkwebui/WEB-INF/lib, so the
+    Ant reactor no longer builds the legacy web artifacts from the working
+    tree.
+
+    Instead the legacy webui.war and the legacy ZK package jars are
+    materialized from the exact commit the Phase 5b oracle was frozen at
+    (contracts/legacy-web-v1/capture-environment.tsv:source_commit) in an
+    isolated, throwaway Git worktree. The reactor, the installer, and the
+    release archives then consume those frozen artifacts unchanged, so the
+    shipped legacy product still matches the frozen Phase 5b pins entry for
+    entry while no migrated source is ever compiled against ZK 3.6.
+
+    Rollback is the frozen artifact itself: it is rebuilt from a named commit,
+    not from a dual source tree.
+  </description>
+
+  <!-- Self-locating so the crossing works no matter which module imports it. -->
+  <dirname property="phase5d.utils.dir" file="${ant.file.phase5d-frozen-zk}"/>
+  <property name="phase5d.trunk" location="${phase5d.utils.dir}/.."/>
+  <property name="phase5d.frozen.dir" location="${phase5d.trunk}/build/phase5d/legacy-webui"/>
+  <property name="phase5d.frozen.war" location="${phase5d.frozen.dir}/webui.war"/>
+  <property name="phase5d.frozen.zkpackages" location="${phase5d.frozen.dir}/zkpackages"/>
+  <property name="phase5d.materialize.script"
+            location="${phase5d.trunk}/scripts/phase5/materialize-legacy-webui-war.sh"/>
+
+  <!-- Materializes the frozen legacy web artifacts. The script is idempotent
+       and reuses an already materialized set for the same commit, so calling
+       this from every crossed reactor entry costs one build, not six. -->
+  <target name="phase5d.materialize-frozen-zk"
+          description="Materializes the frozen legacy webui.war and ZK package jars">
+    <fail message="Phase 5d: missing ${phase5d.materialize.script}">
+      <condition>
+        <not><available file="${phase5d.materialize.script}" type="file"/></not>
+      </condition>
+    </fail>
+    <exec executable="bash" dir="${phase5d.trunk}" failonerror="true">
+      <arg value="${phase5d.materialize.script}"/>
+      <arg value="${phase5d.trunk}"/>
+      <arg value="${phase5d.frozen.dir}"/>
+    </exec>
+    <fail message="Phase 5d: no frozen webui.war was materialized at ${phase5d.frozen.war}">
+      <condition>
+        <not><available file="${phase5d.frozen.war}" type="file"/></not>
+      </condition>
+    </fail>
+    <fail message="Phase 5d: no frozen ZK package jars were materialized in ${phase5d.frozen.zkpackages}">
+      <condition>
+        <not><available file="${phase5d.frozen.zkpackages}" type="dir"/></not>
+      </condition>
+    </fail>
+  </target>
+</project>

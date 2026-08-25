@@ -21,6 +21,7 @@
 
 package org.adempiere.webui.apps.form;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.sql.PreparedStatement;
@@ -53,13 +54,13 @@ import org.zkoss.util.media.Media;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.South;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.zkoss.zul.South;
 import org.zkoss.zul.Div;
 import org.zkoss.zul.Fileupload;
-import org.zkoss.zul.Hbox;
+import org.adempiere.webui.component.Hbox;
 import org.zkoss.zul.Separator;
 
 /**
@@ -125,7 +126,7 @@ public class WFileImport extends FileImportController implements IFormController
 			layout.appendChild(north);
 			north.appendChild(northPanel);
 			Center center = new Center();
-			center.setFlex(true);
+			ZkCompat.setFlex(center, true);
 			layout.appendChild(center);
 			center.appendChild(centerPanel);
 			South south = new South();
@@ -289,7 +290,7 @@ public class WFileImport extends FileImportController implements IFormController
 		InputStream file = null;
 		try {
 			media = Fileupload.get();
-		} catch (InterruptedException e) {
+		} catch (org.zkoss.zk.ui.SuspendNotAllowedException e) {
 			e.printStackTrace();
 		}
 		//	

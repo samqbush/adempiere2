@@ -26,7 +26,7 @@ import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zul.Panel;
 import org.zkoss.zul.Panelchildren;
-import org.zkoss.zul.SimpleTreeNode;
+import org.adempiere.webui.compat.SimpleTreeNode;
 import org.zkoss.zul.Toolbar;
 import org.zkoss.zul.Tree;
 import org.zkoss.zul.Treeitem;
@@ -191,7 +191,7 @@ public class ADTreePanel extends Panel implements EventListener
 			return;	
 
 		//  try to find the node
-		SimpleTreeModel model = (SimpleTreeModel) tree.getModel();
+		SimpleTreeModel model = (SimpleTreeModel) (Object) tree.getModel();
 		SimpleTreeNode root = model.getRoot();
 		SimpleTreeNode node = model.find(null, keyID);
 		

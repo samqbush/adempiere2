@@ -1,0 +1,14 @@
+# field	value	marker
+panels	1
+visible	true
+tab	Menu (1)
+tab	Error Message
+column	AD_Client_ID	readonly-field
+column	AD_Language	readonly-field
+column	AD_Org_ID	readonly-field
+column	IsActive	mandatory-field
+control	Delete Selected Items	true
+control	Delete record	true
+control	New Record	false
+control	Save changes	false
+database-writes	0
