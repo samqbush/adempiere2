@@ -694,7 +694,6 @@ gradle/phase5/zk-compile-closure.gradle	org.zkoss.zkmax	zk-commercial	gradle	rec
 gradle/phase5/zk-functional-slice.gradle	org.zkoss.zkmax	zk-commercial	gradle	recorded-in-contract	5d
 gradle/phase5/zk-namespace-replacements.tsv	org.zkoss.zkmax	zk-commercial	gradle	recorded-in-contract	5d
 gradle/phase5/zk-source-moves.tsv	org.zkoss.zkmax	zk-commercial	gradle	recorded-in-contract	5d
-zkwebui/WEB-INF/src/org/adempiere/webui/compat/Combobox2Default.java	org.zkoss.zkmax	zk-commercial	zkwebui	replaced-adempiere-owned	5d
 zkwebui/WEB-INF/zk.xml	org.zkoss.zkmax	zk-commercial	zkwebui	frozen-legacy-artifact	5h
 zkwebui/src/phase5d/webapp/WEB-INF/zk.xml	org.zkoss.zkmax	zk-commercial	zkwebui	replaced-ce-equivalent	5d
 gradle/phase5/legacy-web-artifact.gradle	org.zkforge	zk3-addon	gradle	recorded-in-contract	5d
@@ -702,8 +701,6 @@ gradle/phase5/namespace-ownership.tsv	org.zkforge	zk3-addon	gradle	recorded-in-c
 gradle/phase5/zk-compile-closure.gradle	org.zkforge	zk3-addon	gradle	recorded-in-contract	5d
 gradle/phase5/zk-functional-slice.gradle	org.zkforge	zk3-addon	gradle	recorded-in-contract	5d
 gradle/phase5/zk-namespace-replacements.tsv	org.zkforge	zk3-addon	gradle	recorded-in-contract	5d
-zkwebui/WEB-INF/src/org/adempiere/webui/component/Keylistener.java	org.zkforge	zk3-addon	zkwebui	replaced-adempiere-owned	5d
-zkwebui/WEB-INF/test/src/org/adempiere/webui/component/Keylistener_Test.java	org.zkforge	zk3-addon	zkwebui	test-assertion	5d
 zkwebui/build.gradle	org.zkforge	zk3-addon	zkwebui	replaced-ce-equivalent	5d
 gradle/phase5/legacy-web-artifact.gradle	org.zkoss.zul.api	zk3-removed-api	gradle	recorded-in-contract	5d
 gradle/phase5/namespace-ownership.tsv	org.zkoss.zul.api	zk3-removed-api	gradle	recorded-in-contract	5d
@@ -712,7 +709,6 @@ gradle/phase5/zk-namespace-replacements.tsv	org.zkoss.zul.api	zk3-removed-api	gr
 gradle/phase5/namespace-ownership.tsv	org.zkoss.zul.SimpleTreeModel	zk3-removed-api	gradle	recorded-in-contract	5d
 gradle/phase5/zk-compile-closure.gradle	org.zkoss.zul.SimpleTreeModel	zk3-removed-api	gradle	recorded-in-contract	5d
 gradle/phase5/zk-namespace-replacements.tsv	org.zkoss.zul.SimpleTreeModel	zk3-removed-api	gradle	recorded-in-contract	5d
-zkwebui/WEB-INF/src/org/adempiere/webui/compat/SimpleTreeModel.java	org.zkoss.zul.SimpleTreeModel	zk3-removed-api	zkwebui	replaced-adempiere-owned	5d
 gradle/phase5/legacy-web-artifact.gradle	org.zkoss.zul.SimpleTreeNode	zk3-removed-api	gradle	recorded-in-contract	5d
 gradle/phase5/namespace-ownership.tsv	org.zkoss.zul.SimpleTreeNode	zk3-removed-api	gradle	recorded-in-contract	5d
 gradle/phase5/zk-compile-closure.gradle	org.zkoss.zul.SimpleTreeNode	zk3-removed-api	gradle	recorded-in-contract	5d
@@ -721,11 +717,9 @@ gradle/phase5/legacy-web-artifact.gradle	org.zkoss.zul.ListModelExt	zk3-removed-
 gradle/phase5/namespace-ownership.tsv	org.zkoss.zul.ListModelExt	zk3-removed-api	gradle	recorded-in-contract	5d
 gradle/phase5/zk-compile-closure.gradle	org.zkoss.zul.ListModelExt	zk3-removed-api	gradle	recorded-in-contract	5d
 gradle/phase5/zk-namespace-replacements.tsv	org.zkoss.zul.ListModelExt	zk3-removed-api	gradle	recorded-in-contract	5d
-zkwebui/WEB-INF/src/org/adempiere/webui/compat/ListModelExt.java	org.zkoss.zul.ListModelExt	zk3-removed-api	zkwebui	replaced-adempiere-owned	5d
 gradle/phase5/namespace-ownership.tsv	org.zkoss.zk.ui.render	zk3-removed-api	gradle	recorded-in-contract	5d
 gradle/phase5/zk-compile-closure.gradle	org.zkoss.zk.ui.render	zk3-removed-api	gradle	recorded-in-contract	5d
 gradle/phase5/zk-namespace-replacements.tsv	org.zkoss.zk.ui.render	zk3-removed-api	gradle	recorded-in-contract	5d
-zkwebui/WEB-INF/src/org/adempiere/webui/compat/Combobox2Default.java	org.zkoss.zk.ui.render	zk3-removed-api	zkwebui	replaced-adempiere-owned	5d
 zkwebui/WEB-INF/src/org/adempiere/webui/compat/Portallayout.java	org.zkoss.zkex	replacement	zkwebui	replaced-adempiere-owned	5d
 zkwebui/WEB-INF/src/org/adempiere/webui/compat/Portalchildren.java	org.zkoss.zkex	replacement	zkwebui	replaced-adempiere-owned	5d
 zkwebui/WEB-INF/src/org/adempiere/webui/compat/HtmlEditor.java	org.zkoss.zkex	replacement	zkwebui	replaced-adempiere-owned	5d

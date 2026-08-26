@@ -176,10 +176,13 @@ tree_grep_count() {
 				# one.
 				case "$path" in
 					*.java)
-						if ! sed -e 's#//.*##' "$path" |
-								tr '\n' '\001' |
-								sed -e 's#/\*[^\001]*\?\*/# #g' |
-								tr '\001' '\n' |
+						# GNU and BSD sed disagree on the non-greedy expression
+						# previously used here, which made Linux CI drop a
+						# comment-only namespace row that macOS retained. Perl's
+						# whole-file mode gives both hosts the same Java comment
+						# stripping semantics.
+						if ! perl -0777 -pe \
+								's{/\*.*?\*/}{}gs; s{//[^\n]*}{}g' "$path" |
 								LC_ALL=C grep -qE "$escaped"; then
 							continue
 						fi

@@ -526,7 +526,7 @@ tasks.named('war') {
 tasks.register('verifyPhase5dModernWebWar') {
 	group = 'verification'
 	description = 'Verifies the functional Phase 5d modern web WAR content and linkage'
-	dependsOn tasks.named('war')
+	dependsOn tasks.named('war'), tasks.named('modernUiTestClasses')
 	inputs.file tasks.named('war').flatMap { it.archiveFile }
 	inputs.file phase5dSharedRuntimeContract
 	inputs.file phase5dWebAssetContract
@@ -1295,4 +1295,12 @@ tasks.named('check') {
 	dependsOn tasks.named('verifyPhase5cTransformer')
 	dependsOn tasks.named('modernUiTest')
 	dependsOn tasks.named('browserContractTest')
+}
+
+// The functional WAR repackages Ant-built runtime libraries and therefore has
+// its own Phase 5d lifecycle. Keep generic `build` focused on Gradle-owned
+// compilation/tests; the canonical Phase 5d gate invokes and verifies `war`
+// explicitly after the Phase 3 distribution exists.
+tasks.named('assemble') {
+	setDependsOn([])
 }

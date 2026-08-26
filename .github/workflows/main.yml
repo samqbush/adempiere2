@@ -300,6 +300,7 @@ jobs:
           if-no-files-found: warn
           path: |
             build/phase5/evidence/
+            build/phase5/generated/
             build/phase5c/
             build/phase5d/
             zkwebui/build/phase5d/
