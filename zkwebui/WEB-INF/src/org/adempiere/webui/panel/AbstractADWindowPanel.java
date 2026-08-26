@@ -84,8 +84,8 @@ import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zk.ui.util.Clients;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.North;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.North;
 import org.zkoss.zul.Menuitem;
 import org.zkoss.zul.Menupopup;
 
@@ -1790,7 +1790,7 @@ public abstract class AbstractADWindowPanel extends AbstractUIPart implements To
 				processModalDialog.setPage(this.getComponent().getPage());
 				processModalDialog.doModal();
 			}
-			catch (InterruptedException e) {
+			catch (org.zkoss.zk.ui.SuspendNotAllowedException e) {
 			}
 		}
 		else
@@ -2344,14 +2344,14 @@ public abstract class AbstractADWindowPanel extends AbstractUIPart implements To
 		m_uiLocked = true;
 
 		if (Executions.getCurrent() != null)
-			Clients.showBusy(null, true);
+			Clients.showBusy(null);
 		else
 		{
 			try {
 				//get full control of desktop
 				Executions.activate(getComponent().getDesktop(), 2000);
 				try {
-					Clients.showBusy(null, true);
+					Clients.showBusy(null);
                 } catch(Error ex){
                 	throw ex;
                 } finally{
@@ -2384,7 +2384,7 @@ public abstract class AbstractADWindowPanel extends AbstractUIPart implements To
 			{
 				updateUI(pi);
 			} else {
-				Clients.showBusy(null, false);
+				Clients.clearBusy();
 			}
 		}
 		else
@@ -2397,7 +2397,7 @@ public abstract class AbstractADWindowPanel extends AbstractUIPart implements To
 					{
 						updateUI(pi);
 					} else {
-						Clients.showBusy(null, false);
+						Clients.clearBusy();
 					}
                 } catch(Error ex){
                 	throw ex;
@@ -2429,7 +2429,7 @@ public abstract class AbstractADWindowPanel extends AbstractUIPart implements To
 		ProcessInfoUtil.setLogFromDB(pi);
 		String logInfo = pi.getLogInfo();
 		//	
-		Clients.showBusy(null, false);
+		Clients.clearBusy();
 		if (logInfo.length() > 0)
 			FDialog.info(curWindowNo, this.getComponent(), Env.getHeader(ctx, curWindowNo),
 				pi.getTitle() + "<br>" + logInfo);

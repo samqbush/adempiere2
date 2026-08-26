@@ -16,6 +16,7 @@
  *****************************************************************************/
 package org.adempiere.webui.window;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.util.logging.Level;
 
 import org.adempiere.controller.RecordInfoController;
@@ -35,10 +36,10 @@ import org.zkoss.zhtml.Text;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.South;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.zkoss.zul.South;
 import org.zkoss.zul.Div;
 import org.zkoss.zul.Listhead;
 import org.zkoss.zul.Listheader;
@@ -143,7 +144,7 @@ public class WRecordInfo extends RecordInfoController implements EventListener
 		
 		Center center = new Center();
 		center.setParent(layout);
-		center.setFlex(true);
+		ZkCompat.setFlex(center, true);
 		if (isOk())
 		{
 			North north = new North();

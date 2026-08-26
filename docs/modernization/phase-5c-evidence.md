@@ -1,5 +1,15 @@
 # Phase 5c evidence
 
+> **Superseded in part by Phase 5d.** The HTTP 503 packaging marker and the
+> `phase5cModernWebPackagingSmoke` task described below no longer exist:
+> Phase 5d replaced the marker archive with the functional ZK CE 10 slice while
+> keeping the `webui-modern.war` artifact name and the `/webui-modern` context
+> path. This document is retained unchanged as the historical record of what the
+> marker proved, because a phase's evidence is not improved by editing it after
+> the fact. Everything else here - the transformer results, the overlay
+> manifests, the verified browser tooling, and the rollback rehearsal - is still
+> live and is depended on individually by `phase5dFinalVerification`.
+
 Phase 5c establishes a dark/L1 Jakarta web packaging beachhead. It does not
 claim that the modern ZK application compiles, boots, or serves users.
 

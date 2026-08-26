@@ -17,8 +17,6 @@
 
 package org.adempiere.webui.component;
 
-import org.zkoss.zul.Div;
-
 /**
  *
  * @author  <a href="mailto:agramdass@gmail.com">Ashley G Ramdass</a>

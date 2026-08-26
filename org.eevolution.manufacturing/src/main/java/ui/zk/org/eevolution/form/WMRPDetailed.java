@@ -3,6 +3,7 @@ package org.eevolution.form;
 
 
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.math.BigDecimal;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -61,9 +62,9 @@ import org.eevolution.manufacturing.model.MPPProductPlanning;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.South;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.zkoss.zul.South;
 import org.zkoss.zul.Div;
 import org.zkoss.zul.Menuitem;
 import org.zkoss.zul.Menupopup;
@@ -537,7 +538,7 @@ public class WMRPDetailed extends MRPDetailed implements IFormController, EventL
 		mainLayout.appendChild(center);
 		p_table.setVflex(true);
 		p_table.setFixedLayout(true);
-		center.setFlex(true);
+		ZkCompat.setFlex(center, true);
 		//center.setAutoscroll(true);
 		
 		Div div = new Div();

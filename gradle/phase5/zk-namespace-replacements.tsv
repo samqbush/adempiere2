@@ -1,0 +1,37 @@
+# Phase 5d: ADempiere-owned replacements for ZK APIs the CE 10 target removed.
+#
+# Every row is a reviewed decision, not a scan result, and that is why it lives
+# in its own file: the replacement classes deliberately contain NO reference to
+# the namespace they replace - gradle/phase5/zk-compile-closure.gradle fails the
+# build if one does - so no amount of grepping the source can discover this
+# mapping. scripts/phase5/generate-inventories.sh emits these rows verbatim into
+# gradle/phase5/namespace-ownership.tsv, and
+# `verifyPhase5dCurrentZkInventory` fails if a named replacement file does not
+# exist.
+#
+# The three families and why each one had to be replaced:
+#
+#   org.zkoss.zkex   ZK Professional Edition. Not obtainable without a
+#                    commercial licence, and MODERNIZATION_PLAN.md forbids
+#                    introducing evaluation artifacts or commercial repository
+#                    credentials.
+#   org.zkoss.zkmax  ZK Enterprise Edition, same constraint.
+#   org.zkforge      ZK 3.x community add-ons that were never published for ZK
+#                    CE 10.
+#
+# replacement_path	legacy_namespace	replaces	closing_gate	rationale
+zkwebui/WEB-INF/src/org/adempiere/webui/compat/Portallayout.java	org.zkoss.zkex	org.zkoss.zkex.zul.Portallayout	5d	ADempiere-owned CE portal layout adapter, as the Phase 5 "Decisions made" block requires.
+zkwebui/WEB-INF/src/org/adempiere/webui/compat/Portalchildren.java	org.zkoss.zkex	org.zkoss.zkex.zul.Portalchildren	5d	The child container half of the portal layout adapter above.
+zkwebui/WEB-INF/src/org/adempiere/webui/compat/HtmlEditor.java	org.zkoss.zkex	org.zkoss.zkex.zul.HtmlEditor	5d	ADempiere-owned rich text editor host built on ZK CE components.
+zkwebui/WEB-INF/src/org/adempiere/webui/compat/AuRequests.java	org.zkoss.zkmax	org.zkoss.zkmax.au.out.AuRequests	5d	ADempiere-owned AU request helpers built on the ZK CE AU API.
+zkwebui/src/phase5d/webapp/WEB-INF/zk.xml	org.zkoss.zkmax	org.zkoss.zkmax.ui.comet.CometServerPush	5d	Comet server push is Enterprise-only; the Phase 5d descriptor selects the CE org.zkoss.zk.ui.impl.PollingServerPush instead.
+zkwebui/WEB-INF/src/org/adempiere/webui/component/Keylistener.java	org.zkforge	org.zkforge.keylistener.Keylistener	5d	ADempiere-owned shortcut host on ZK CE ctrlKeys, including the #enter translation ZK CE's parser rejects.
+zkwebui/WEB-INF/src/org/adempiere/webui/compat/timeline/Timeline.java	org.zkforge	org.zkforge.timeline.Timeline	5f	ADempiere-owned timeline component stub. The /timeline route itself is Phase 5f.
+zkwebui/WEB-INF/src/org/adempiere/webui/compat/timeline/Bandinfo.java	org.zkforge	org.zkforge.timeline.data.Bandinfo	5f	Band metadata for the timeline component above.
+zkwebui/WEB-INF/src/org/adempiere/webui/compat/timeline/BandScrollEvent.java	org.zkforge	org.zkforge.timeline.event.BandScrollEvent	5f	Scroll event for the timeline component above.
+zkwebui/WEB-INF/src/org/adempiere/webui/compat/timeline/TimelineUtil.java	org.zkforge	org.zkforge.timeline.util.TimelineUtil	5f	Utility half of the timeline component above.
+zkwebui/WEB-INF/src/org/adempiere/webui/compat/SimpleTreeModel.java	org.zkoss.zul.SimpleTreeModel	org.zkoss.zul.SimpleTreeModel	5d	Removed from ZK CE; the menu tree and every AD_Tree view depend on it.
+zkwebui/WEB-INF/src/org/adempiere/webui/compat/SimpleTreeNode.java	org.zkoss.zul.SimpleTreeNode	org.zkoss.zul.SimpleTreeNode	5d	Removed from ZK CE; the node type the model above carries.
+zkwebui/WEB-INF/src/org/adempiere/webui/compat/ListModelExt.java	org.zkoss.zul.ListModelExt	org.zkoss.zul.ListModelExt	5d	Removed from ZK CE; the sortable list-model contract the grids implement.
+zkwebui/WEB-INF/src/org/adempiere/webui/compat/Combobox2Default.java	org.zkoss.zul.api	org.zkoss.zul.api.Combobox	5d	The ZK 3.6 zul api facade was removed by ZK CE 6.
+zkwebui/WEB-INF/src/org/adempiere/webui/compat/ZkCompat.java	org.zkoss.zk.ui.render	org.zkoss.zk.ui.render.*	5d	The ZK 3.6 server-side renderer SPI was removed by ZK CE 5; this holds the property-level equivalents (region flex, align, row spans, and the ZK CE flex-versus-size rule).

@@ -1,5 +1,6 @@
 package org.adempiere.webui.component;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.util.LinkedList;
@@ -26,9 +27,9 @@ import org.zkoss.util.media.AMedia;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
 import org.zkoss.zul.Iframe;
 import org.zkoss.zul.Separator;
 import org.zkoss.zul.Toolbar;
@@ -152,7 +153,7 @@ public class SMJReportViewer extends Window implements EventListener {
 				north.appendChild(toolBar);
 				
 				Center center = new Center();
-				center.setFlex(true);
+				ZkCompat.setFlex(center, true);
 				layout.appendChild(center);
 				iframe = new Iframe();
 				iframe.setId("reportFrame");

@@ -13,6 +13,7 @@
  *****************************************************************************/
 package org.adempiere.webui.dashboard;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.util.Enumeration;
 
 import org.adempiere.exceptions.DBException;
@@ -80,7 +81,7 @@ public class DPFavourites extends DashboardPanel implements EventListener {
 		// Elaine 2008/07/24
 		Image img = new Image(ITheme.DASHBOARD_DELETE_IMAGE);
 		favToolbar.appendChild(img);
-		img.setAlign("right");
+		ZkCompat.setAlign(img, "right");
 		img.setDroppable(DELETE_FAV_DROPPABLE);
 		img.addEventListener(Events.ON_DROP, this);
 		//

@@ -37,8 +37,8 @@ import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zk.ui.event.MouseEvent;
-import org.zkoss.zul.SimpleTreeModel;
-import org.zkoss.zul.SimpleTreeNode;
+import org.adempiere.webui.compat.SimpleTreeModel;
+import org.adempiere.webui.compat.SimpleTreeNode;
 import org.zkoss.zul.Tree;
 import org.zkoss.zul.Treecell;
 import org.zkoss.zul.Treeitem;
@@ -118,7 +118,7 @@ public class SimpleFavoriteTreeModel extends SimpleTreeModel implements EventLis
 		tree.setPageSize(-1);
 		try
 		{
-			tree.setTreeitemRenderer(treeModel);
+			tree.setItemRenderer(treeModel);
 			tree.setModel(treeModel);
 			//TODO : Might be need to code here for default expand collapse
 		}
@@ -184,7 +184,7 @@ public class SimpleFavoriteTreeModel extends SimpleTreeModel implements EventLis
 	 * @see org.zkoss.zul.TreeitemRenderer#render(org.zkoss.zul.Treeitem, java.lang.Object)
 	 */
 	@Override
-	public void render(Treeitem ti, Object node) throws Exception
+	public void render(Treeitem ti, Object node, int index) throws Exception
 	{
 		SimpleTreeNode stn = (SimpleTreeNode) node;
 		MTreeNode mtn = (MTreeNode) stn.getData();
@@ -410,7 +410,7 @@ public class SimpleFavoriteTreeModel extends SimpleTreeModel implements EventLis
 			int index = path.length - 1;
 			for (int i = 0; i < index; i++)
 			{
-				parentNode = (SimpleTreeNode) getChild((Object) parentNode, path[i]);
+				parentNode = (SimpleTreeNode) getChild(parentNode, path[i]);
 			}
 			return parentNode;
 		}
@@ -435,9 +435,4 @@ public class SimpleFavoriteTreeModel extends SimpleTreeModel implements EventLis
 		return null;
 	}
 	
-	@Override
-	public SimpleTreeNode getChild(Object parent, int index) {
-		return (SimpleTreeNode) super.getChild(parent, index);
-	}
-
 }

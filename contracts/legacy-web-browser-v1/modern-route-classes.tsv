@@ -1,0 +1,38 @@
+# Phase 5d reviewed route classes for the modern /webui-modern slice.
+#
+# The frozen legacy contract's network-classes.tsv describes four Tomcat 9
+# contexts and the ZK 3.6 AU route. The modern runtime deploys /webui-modern and
+# the Phase 4 /ADInterface only, so its route classes are a different set and are
+# frozen here rather than compared against the legacy file.
+#
+# Every request the capture makes is classified by
+# ModernWindowExtraction.routeClass and the resulting set must equal this file
+# exactly. A request that matches no class is reported as `unclassified` and
+# fails, so a new route cannot be absorbed into an existing bucket.
+#
+# class	method	target	disposition	reason
+context	GET	/webui-modern/	expected	The modern context itself: the entry page, the reviewed static assets, and the logout return.
+zkau	GET	expected	The ZK CE 10 asynchronous update engine, reached on every desktop and window interaction.
+zkau	POST	expected	The same engine for the AU commands the login, role, menu and window steps send.
+zk-resource	GET	expected	The ZK CE 10 client bundle under /webui-modern/zkau/web/**, served by the AU servlet.
+#
+# --- Inherited outbound requests --------------------------------------------
+#
+# These are NOT introduced by Phase 5d. They come from ADempiere's own login and
+# desktop markup and are present in the frozen legacy contract's
+# network-classes.tsv too. The capture blocks every non-loopback request before
+# it leaves the browser, so they are recorded as attempted and never completed.
+# They are listed here rather than silently allowed so that a NEW outbound host
+# fails the gate.
+external	GET	www.zkoss.org	inherited	The "Powered by ZK" button on the ADempiere login page.
+external	GET	sfx-images.mozilla.org	inherited	The inherited "Get Firefox" button on the ADempiere login page.
+external	GET	www.google.com	inherited	The inherited Google Calendar link rendered by the desktop.
+#
+# --- Removed by Phase 5d -----------------------------------------------------
+#
+# fonts.googleapis.com	removed	The ZK 3.6 .dsp theme opened color.css.dsp with
+#   @import url('https://fonts.googleapis.com/css?family=Open+Sans'), so the
+#   legacy product made an outbound font request on every page load. The Phase 5d
+#   slice does not carry the .dsp theme, and this class must therefore NOT appear.
+# www.adempiere.com	removed	Rendered by a legacy context the modern runtime does
+#   not deploy.

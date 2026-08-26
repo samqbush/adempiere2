@@ -379,7 +379,7 @@ public class GridTabRowRenderer implements RowRenderer, RowRendererExt, Renderer
 	 * @param data
 	 * @see RowRenderer#render(Row, Object)
 	 */
-	public void render(Row row, Object data) throws Exception {
+	public void render(Row row, Object data, int index) throws Exception {
 		
 		//don't render if not visible
 		if (gridPanel != null && !gridPanel.isVisible()) {
@@ -544,7 +544,12 @@ public class GridTabRowRenderer implements RowRenderer, RowRendererExt, Renderer
 						+ "$(this).val(event.key);"
 						+ "}"
 						+"$(this).focus();"
-						+ "}});");
+						// The ZK 3.6-era text closed each()'s callback with "}}"
+						// and never closed keyup()'s, so the browser rejected the
+						// whole injected script with "missing ) after argument
+						// list". Both calls are closed properly now.
+						+ "});"
+						+ "});");
 				
 				if (currentDiv.getComponent() instanceof NumberBox) {
 					componentUuId = ((Component)((Component)((Component)((Component)currentDiv.getComponent().getChildren().get(0)).getChildren().get(0)).getChildren().get(0)).getChildren().get(0)).getUuid();

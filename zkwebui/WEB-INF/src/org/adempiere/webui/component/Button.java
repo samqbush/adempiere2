@@ -58,6 +58,25 @@ public class Button extends org.zkoss.zul.Button
     {
         super.setDisabled(!enabled);
     }
+
+    /**
+     * ZK CE 10 renamed the ZK 3.6 {@code src} property of a button to
+     * {@code image}.
+     *
+     * @param src image source
+     */
+    public void setSrc(String src)
+    {
+        setImage(src);
+    }
+
+    /**
+     * @return image source
+     */
+    public String getSrc()
+    {
+        return getImage();
+    }
     
     public boolean isEnabled()
     {

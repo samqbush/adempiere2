@@ -104,11 +104,36 @@ public class Listbox extends org.zkoss.zul.Listbox implements EventListener
         return (ListItem)super.getSelectedItem();
     }
     
+    /**
+     * ZK CE 10 types {@code Listbox.getItems()} as {@code List<Listitem>}, so
+     * the ADempiere typed accessor can no longer override it.
+     *
+     * @return the list items typed as the ADempiere {@link ListItem}
+     */
     @SuppressWarnings("unchecked")
-    public List<ListItem> getItems()
+    public List<ListItem> getListItems()
     {
-        return (List<ListItem>)super.getItems();
+        return (List<ListItem>)(List<?>)super.getItems();
     }
+
+	/**
+	 * ZK CE 10 replaced the ZK 3.6 {@code fixedLayout} property with the
+	 * inverse {@code sizedByContent}.
+	 *
+	 * @param fixedLayout legacy fixed layout flag
+	 */
+	public void setFixedLayout(boolean fixedLayout)
+	{
+		setSizedByContent(!fixedLayout);
+	}
+
+	/**
+	 * @return legacy fixed layout flag
+	 */
+	public boolean isFixedLayout()
+	{
+		return !isSizedByContent();
+	}
     
     /** 
      * Set selected item for the list box based on the value of list item
@@ -125,7 +150,7 @@ public class Listbox extends org.zkoss.zul.Listbox implements EventListener
             return ;
         }
         
-        List<ListItem> items = getItems();
+        List<ListItem> items = getListItems();
         for (ListItem item : items)
         {
         	if (value.getClass() != item.getValue().getClass()) {
@@ -349,7 +374,7 @@ public class Listbox extends org.zkoss.zul.Listbox implements EventListener
 	@Override
 	public String toString() {
 		StringBuffer items = new StringBuffer("[");
-		for (ListItem item : getItems()) {
+		for (ListItem item : getListItems()) {
 			if (items.length() > 1)
 				items.append(", ");
 			items.append(item.toString());

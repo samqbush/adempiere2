@@ -12,8 +12,10 @@
  *****************************************************************************/
 package org.adempiere.webui.component;
 
+import org.adempiere.webui.compat.ZkCompat;
+
 /**
- * 
+ *
  * @author Low Heng Sin
  *
  */
@@ -28,7 +30,7 @@ public class ListboxFactory {
 		listbox.setMold("select");
 		return listbox;
 	}
-	
+
 	/**
 	 * Create new data table instance for use in custom form.
 	 * @return WListbox
@@ -38,8 +40,9 @@ public class ListboxFactory {
 		dataTable.setWidth("100%");
 		dataTable.setHeight("100%");
 		dataTable.setFixedLayout(true);
-		dataTable.setVflex(true);
-		
+		// ZK CE 10 rejects vflex on a component that already carries a height.
+		ZkCompat.setVflex(dataTable, true);
+
 		return dataTable;
 	}
 

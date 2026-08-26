@@ -11,12 +11,45 @@ def playwrightVersion = '1.62.0'
 def transformerVersion = '1.0.0'
 
 sourceSets {
+	// Phase 5d removed the Phase 5c packaging marker. The `main` source set no
+	// longer owns any Java: the WAR's classes are the migrated modernUi closure.
 	main {
 		java {
-			srcDirs = ['src/phase5c/java']
+			srcDirs = []
 		}
 		resources {
 			srcDirs = []
+		}
+	}
+	modernUi {
+		java {
+			srcDirs = ['WEB-INF/src']
+		}
+		resources {
+			// WEB-INF/src already carries metainfo/zk/lang-addon.xml, which is
+			// byte-identical to the copy the Ant build stages into
+			// WEB-INF/classes. Only the source tree is a resource root.
+			srcDirs = ['WEB-INF/src']
+			include '**/*.xml'
+		}
+	}
+	modernUiTest {
+		java {
+			srcDirs = [
+				'WEB-INF/test/src',
+				rootProject.file('org.adempiere.test/src/test/java')
+			]
+		}
+		resources {
+			srcDirs = [rootProject.file('org.adempiere.test/src/test/resource')]
+		}
+	}
+	browserContract {
+		java {
+			srcDirs = ['src/browserContract/java']
+		}
+		resources {
+			srcDirs = [rootProject.file('contracts/legacy-web-browser-v1')]
 		}
 	}
 	browserTest {
@@ -28,6 +61,14 @@ sourceSets {
 				'src/browserTest/resources',
 				rootProject.file('contracts/legacy-web-browser-v1')
 			]
+		}
+	}
+	modernBrowserTest {
+		java {
+			srcDirs = ['src/modernBrowserTest/java']
+		}
+		resources {
+			srcDirs = [rootProject.file('contracts/legacy-web-browser-v1')]
 		}
 	}
 	transformerFixture {
@@ -42,69 +83,886 @@ sourceSets {
 
 configurations {
 	phase5Transformer
+	browserContractImplementation.extendsFrom testImplementation
+	browserContractRuntimeOnly.extendsFrom testRuntimeOnly
 	browserTestImplementation.extendsFrom testImplementation
 	browserTestRuntimeOnly.extendsFrom testRuntimeOnly
+	modernBrowserTestImplementation.extendsFrom testImplementation
+	modernBrowserTestRuntimeOnly.extendsFrom testRuntimeOnly
+	modernUiElements {
+		canBeConsumed = true
+		canBeResolved = false
+	}
+	modernUiTestImplementation.extendsFrom modernUiImplementation
+	// Phase 5d: the ZK CE Jakarta closure that is shipped inside the WAR. It is
+	// resolved separately from modernUiRuntimeClasspath so the archive cannot
+	// inherit an ADempiere project jar or a compile-only artifact by accident.
+	modernWebZk
 }
 
 dependencies {
-	implementation "org.zkoss.zk:zk:${zkVersion}"
-	implementation "org.zkoss.zk:zul:${zkVersion}"
-	implementation "org.zkoss.zk:zkplus:${zkVersion}"
-	implementation "org.zkoss.zk:zhtml:${zkVersion}"
 	compileOnly 'jakarta.servlet:jakarta.servlet-api:6.0.0'
 	phase5Transformer "org.eclipse.transformer:org.eclipse.transformer.cli:${transformerVersion}"
+	browserContractImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+	browserContractRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+	browserTestImplementation sourceSets.browserContract.output
 	browserTestImplementation "com.microsoft.playwright:playwright:${playwrightVersion}"
 	browserTestImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
 	browserTestRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+	modernBrowserTestImplementation sourceSets.browserContract.output
+	modernBrowserTestImplementation "com.microsoft.playwright:playwright:${playwrightVersion}"
+	modernBrowserTestImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+	modernBrowserTestRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
 	transformerFixtureCompileOnly 'javax.servlet:javax.servlet-api:4.0.1'
+
+	modernWebZk "org.zkoss.zk:zk:${zkVersion}"
+	modernWebZk "org.zkoss.zk:zul:${zkVersion}"
+	modernWebZk "org.zkoss.zk:zkplus:${zkVersion}"
+	modernWebZk "org.zkoss.zk:zhtml:${zkVersion}"
+	// ZK CE 10 logs through SLF4J 2, which is a no-op without a provider. Without
+	// this binding a ZK server-side failure is reported to the browser and to
+	// nowhere else, which is exactly the situation in which a container log is
+	// needed. slf4j-jdk14 routes ZK's log into the same java.util.logging stream
+	// ADempiere's CLogger and Tomcat's JULI already write to, so the modern lane
+	// produces one log rather than two.
+	modernWebZk 'org.slf4j:slf4j-jdk14:2.0.7'
+
+	// Phase 5d: the real ZK web client compiled against locked ZK CE Jakarta
+	modernUiImplementation "org.zkoss.zk:zk:${zkVersion}"
+	modernUiImplementation "org.zkoss.zk:zul:${zkVersion}"
+	modernUiImplementation "org.zkoss.zk:zkplus:${zkVersion}"
+	modernUiImplementation "org.zkoss.zk:zhtml:${zkVersion}"
+	modernUiImplementation project(path: ':base')
+	modernUiImplementation project(path: ':client')
+	modernUiImplementation project(path: ':JasperReports')
+	modernUiImplementation project(path: ':org.adempiere.request')
+	modernUiImplementation 'org.apache.poi:poi:3.17'
+	modernUiImplementation 'org.jfree:jfreechart:1.0.14'
+	modernUiImplementation 'net.bytebuddy:byte-buddy:1.15.4'
+	// Compile only: reached through :base and :client signatures
+	modernUiCompileOnly 'com.itextpdf:itextpdf:5.5.2'
+	modernUiCompileOnly 'io.konik:harness:1.0.0'
+	modernUiCompileOnly 'jakarta.servlet:jakarta.servlet-api:6.0.0'
+
+	modernUiTestImplementation sourceSets.modernUi.output
+	modernUiTestImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+	modernUiTestImplementation 'org.junit.jupiter:junit-jupiter-params:5.7.0'
+	modernUiTestImplementation 'org.junit.platform:junit-platform-engine:1.7.0'
+	modernUiTestImplementation 'org.junit.platform:junit-platform-launcher:1.7.0'
+	modernUiTestImplementation 'org.mockito:mockito-junit-jupiter:4.11.0'
+	modernUiTestImplementation 'org.mockito:mockito-inline:4.11.0'
+	modernUiTestImplementation 'net.bytebuddy:byte-buddy:1.15.4'
+	modernUiTestImplementation 'net.bytebuddy:byte-buddy-agent:1.15.4'
+	modernUiTestImplementation files(rootProject.file('tools/lib/testing/SuperCSV-with_src-1.52.jar'))
+	modernUiTestImplementation files(rootProject.file('tools/lib/commons-lang-2.1.jar'))
+	modernUiTestRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
 }
 
-tasks.named('war') {
-	archiveFileName = 'webui-modern.war'
-	webAppDirectory = file('src/phase5c/webapp')
+tasks.named('modernUiClasses') {
+	description = 'Compiles the ZK web client against locked ZK CE Jakarta'
+}
+
+tasks.register('modernUiJar', Jar) {
+	group = 'build'
+	description = 'Packages the ZK CE Jakarta web client classes for downstream UI modules'
+	archiveAppendix = 'modern-ui'
+	from sourceSets.modernUi.output
 	reproducibleFileOrder = true
 	preserveFileTimestamps = false
 	duplicatesStrategy = DuplicatesStrategy.FAIL
 }
 
-tasks.register('verifyPhase5cModernWebWar') {
+artifacts {
+	modernUiElements tasks.named('modernUiJar')
+}
+
+tasks.register('modernUiTest', Test) {
 	group = 'verification'
-	description = 'Verifies the dark Phase 5c Jakarta packaging beachhead'
-	dependsOn tasks.named('war')
-	inputs.file tasks.named('war').flatMap { it.archiveFile }
+	description = 'Runs the zkwebui JUnit Jupiter tests against locked ZK CE Jakarta'
+	testClassesDirs = sourceSets.modernUiTest.output.classesDirs
+	classpath = sourceSets.modernUiTest.runtimeClasspath
+	useJUnitPlatform()
+	reports.junitXml.required = true
+	reports.junitXml.outputLocation = layout.buildDirectory.dir('test-results/modernUiTest')
+	reports.html.required = true
+	reports.html.outputLocation = layout.buildDirectory.dir('reports/tests/modernUiTest')
+	testLogging {
+		events 'passed', 'skipped', 'failed'
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5d: the functional /webui-modern ZK CE 10.3.0.1-jakarta application.
+//
+// The Phase 5c archive of the same name carried one marker servlet that answered
+// HTTP 503. Phase 5d replaces its contents entirely while keeping the artifact
+// name and context path fixed, so the installed and release overlays, their
+// checksum manifests, and the rollback rehearsal keep working unchanged.
+//
+// WEB-INF/lib composition, and why each layer comes from where it does:
+//
+//   ZK CE closure        resolved from the `modernWebZk` configuration, so every
+//                        ZK artifact and every ZK-owned transitive dependency is
+//                        pinned by gradle/verification-metadata.xml. zkwebfragment
+//                        is excluded: it contains no class, only a web-fragment
+//                        that would register ZK's own DHtmlLayoutServlet instead
+//                        of ADempiere's WebUIServlet.
+//
+//   ADempiere core       repackaged from the Ant-built lib/Adempiere.jar, using
+//                        the Phase 4 pattern in
+//                        org.adempiere.webservice/build.gradle: strip the code
+//                        signature, then drop the seven classes that link
+//                        against the legacy javax.servlet API.
+//
+//   ADempiere packages   repackaged from the installed lib/packages.jar with the
+//                        same two servlet-linked classes Phase 4 drops.
+//
+//   Shared runtime       repackaged from the installed, code-signed
+//                        lib/AdempiereSLib.jar. That archive is the shipped
+//                        server library (install/Adempiere/build.xml:355 merges
+//                        CSTools.jar, oracle.jar, driver.jar and
+//                        CompiereJasperReqs.jar into it), so taking the
+//                        third-party runtime from it keeps /webui-modern on the
+//                        same library versions the product ships rather than on
+//                        a second, silently different set.
+//
+// Every exclusion applied to AdempiereSLib.jar is reviewed and recorded in
+// gradle/phase5/modern-web-shared-runtime.tsv; the build reads that file rather
+// than hard-coding the list, and verifyPhase5dModernWebWar rejects any duplicate
+// class that survives.
+// ---------------------------------------------------------------------------
+
+def phase5dAntCoreLibrary = rootProject.file('lib/Adempiere.jar')
+def phase5dInstalledLibDir =
+	rootProject.file('build/phase3/runtime/Adempiere/lib')
+def phase5dSharedLibrary = new File(phase5dInstalledLibDir, 'AdempiereSLib.jar')
+def phase5dPackagesLibrary = new File(phase5dInstalledLibDir, 'packages.jar')
+def phase5dSharedRuntimeContract =
+	rootProject.file('gradle/phase5/modern-web-shared-runtime.tsv')
+def phase5dWebAssetContract =
+	rootProject.file('gradle/phase5/modern-web-assets.tsv')
+
+def phase5dReadContract = { File file ->
+	if (!file.isFile()) {
+		throw new GradleException("Missing Phase 5d contract ${file}")
+	}
+	file.readLines('UTF-8')
+		.findAll { !it.trim().isEmpty() && !it.startsWith('#') }
+		.collect { it.split('\t', -1) }
+}
+
+/** Reviewed AdempiereSLib.jar dispositions, keyed by Ant-style pattern. */
+def phase5dSharedRuntimeRows = {
+	def rows = phase5dReadContract(phase5dSharedRuntimeContract)
+	def included = rows.findAll { it[1] == 'include' }.collect { it[0] }
+	def excluded = rows.findAll { it[1] == 'exclude' }.collect { it[0] }
+	if (included.isEmpty()) {
+		throw new GradleException(
+			'gradle/phase5/modern-web-shared-runtime.tsv declares no include')
+	}
+	if (!excluded.contains('javax/servlet/**')) {
+		throw new GradleException(
+			'gradle/phase5/modern-web-shared-runtime.tsv must exclude javax/servlet/**')
+	}
+	[included: included, excluded: excluded]
+}
+
+/**
+ * Classes that link against the legacy javax.servlet API. Phase 4 established
+ * this exact set for the SOAP runtime
+ * (org.adempiere.webservice/build.gradle modernAdempiereCoreJar /
+ * modernAdempierePackagesJar); Phase 5d reuses it rather than inventing a
+ * second, drifting list, and verifyPhase5dModernWebWar re-derives it from the
+ * packaged bytes so a new servlet-linked class cannot slip in unnoticed.
+ */
+def phase5dServletLinkedCoreClasses = [
+	'org/compiere/model/MAd*.class',
+	'org/compiere/util/FileUpload*.class',
+	'org/compiere/util/WebEnv*.class',
+	'org/compiere/util/WebLogin*.class',
+	'org/compiere/util/WebSessionCtx*.class',
+	'org/compiere/util/WebUser*.class',
+	'org/compiere/util/WebUtil*.class',
+]
+def phase5dServletLinkedPackageClasses = [
+	'org/compiere/asset/model/MAssetDelivery*.class',
+	'org/compiere/asset/model/MRegistration*.class',
+]
+
+/**
+ * Classes that the installed product's own merge order lets a 2Pack package
+ * override.
+ *
+ * install/Adempiere/build.xml:213-227 rebuilds Adempiere.jar as
+ * customization.jar + packages.jar + patches.jar + AdempiereOriginal.jar with
+ * duplicate="preserve", so on a collision the packages copy wins and the base
+ * copy never reaches the installed classpath. lib/Adempiere.jar in the source
+ * tree is the pre-install reactor output and still carries the base copy. Taking
+ * both jars verbatim would therefore ship two different bytecodes for the same
+ * name; dropping the base copy reproduces the installed precedence exactly.
+ */
+def phase5dPackagesOverride = { ->
+	if (project.ext.has('phase5dPackagesOverrideNames')) {
+		return project.ext.phase5dPackagesOverrideNames
+	}
+	def packaged = [] as Set
+	new java.util.zip.ZipFile(phase5dPackagesLibrary).withCloseable { zip ->
+		zip.entries().findAll { !it.directory && it.name.endsWith('.class') }
+			.each { packaged << it.name }
+	}
+	def overrides = [] as TreeSet
+	new java.util.zip.ZipFile(phase5dAntCoreLibrary).withCloseable { zip ->
+		zip.entries().findAll { !it.directory && packaged.contains(it.name) }
+			.each { overrides << it.name }
+	}
+	project.ext.phase5dPackagesOverrideNames = overrides
+	overrides
+}
+
+/** Archive members that must never be re-archived into a repackaged jar. */
+def phase5dArchiveHygieneExcludes = [
+	'META-INF/MANIFEST.MF',
+	'META-INF/INDEX.LIST',
+	'META-INF/*.SF',
+	'META-INF/*.RSA',
+	'META-INF/*.DSA',
+	// A repackaged jar declares no Multi-Release manifest attribute, so a
+	// versioned entry carried across would be an undeclared multi-release entry
+	// that the JVM silently ignores and a reader silently misreads.
+	'META-INF/versions/**',
+	'module-info.class',
+]
+
+def phase5dRepackage = { Jar task, String fileName, File source, List<String> drops ->
+	task.group = 'build'
+	task.archiveFileName = fileName
+	task.destinationDirectory = layout.buildDirectory.dir('phase5d')
+	task.reproducibleFileOrder = true
+	task.preserveFileTimestamps = false
+	task.duplicatesStrategy = DuplicatesStrategy.FAIL
+	task.doFirst {
+		if (!source.isFile()) {
+			throw new GradleException(
+				"Missing Ant-built Phase 5d runtime input ${source}; run the Phase 3 " +
+				'distribution first')
+		}
+	}
+	task.from({ zipTree(source) }) {
+		phase5dArchiveHygieneExcludes.each { exclude it }
+		drops.each { exclude it }
+	}
+}
+
+tasks.register('modernWebCoreJar', Jar) {
+	description = 'Repackages the Ant-built ADempiere core without legacy servlet linkage'
+	inputs.file phase5dPackagesLibrary
+	phase5dRepackage(
+		delegate,
+		'webui-modern-core.jar',
+		phase5dAntCoreLibrary,
+		phase5dServletLinkedCoreClasses)
+	doFirst {
+		if (!phase5dPackagesLibrary.isFile()) {
+			throw new GradleException(
+				"Missing installed package library ${phase5dPackagesLibrary}; run the " +
+				'Phase 3 distribution first')
+		}
+	}
+	eachFile { details ->
+		if (phase5dPackagesOverride().contains(details.path)) {
+			details.exclude()
+		}
+	}
+}
+
+tasks.register('modernWebPackagesJar', Jar) {
+	description = 'Repackages the installed ADempiere package modules without legacy servlet linkage'
+	phase5dRepackage(
+		delegate,
+		'webui-modern-packages.jar',
+		phase5dPackagesLibrary,
+		phase5dServletLinkedPackageClasses)
+}
+
+tasks.register('modernWebSharedRuntimeJar', Jar) {
+	description = 'Repackages the reviewed subset of the shipped ADempiere server library'
+	inputs.file phase5dSharedRuntimeContract
+	group = 'build'
+	archiveFileName = 'webui-modern-shared-runtime.jar'
+	destinationDirectory = layout.buildDirectory.dir('phase5d')
+	reproducibleFileOrder = true
+	preserveFileTimestamps = false
+	duplicatesStrategy = DuplicatesStrategy.FAIL
+	doFirst {
+		if (!phase5dSharedLibrary.isFile()) {
+			throw new GradleException(
+				"Missing installed shared library ${phase5dSharedLibrary}; run the " +
+				'Phase 3 distribution first')
+		}
+	}
+	from({ zipTree(phase5dSharedLibrary) }) {
+		def rows = phase5dSharedRuntimeRows()
+		rows.included.each { include it }
+		phase5dArchiveHygieneExcludes.each { exclude it }
+		rows.excluded.each { exclude it }
+	}
+}
+
+tasks.register('generatePhase5dModernWebProvenance') {
+	group = 'build'
+	description = 'Records the source commit and inputs the modern web WAR was built from'
+	dependsOn tasks.named('modernUiClasses')
+	inputs.files(
+		phase5dAntCoreLibrary,
+		phase5dSharedLibrary,
+		phase5dPackagesLibrary)
+	outputs.file layout.buildDirectory.file('phase5d/modern-web-provenance.tsv')
+	outputs.upToDateWhen { false }
 	doLast {
-		def archive = tasks.named('war').get().archiveFile.get().asFile
-		def names = []
-		zipTree(archive).visit { details ->
-			if (!details.directory) {
-				names << details.relativePath.pathString
+		def digest = { File file ->
+			java.security.MessageDigest.getInstance('SHA-256')
+				.digest(file.bytes).encodeHex().toString()
+		}
+		def git = { List<String> arguments ->
+			def out = new ByteArrayOutputStream()
+			exec {
+				workingDir rootProject.projectDir
+				commandLine(['git'] + arguments)
+				standardOutput = out
+			}
+			out.toString('UTF-8').trim()
+		}
+		def commit = git(['rev-parse', 'HEAD'])
+		def dirty = git(['status', '--porcelain']).isEmpty() ? 'no' : 'yes'
+		def target = layout.buildDirectory
+			.file('phase5d/modern-web-provenance.tsv').get().asFile
+		target.parentFile.mkdirs()
+		target.withWriter('UTF-8') { out ->
+			out.writeLine('# Phase 5d modern web WAR provenance')
+			out.writeLine('# key\tvalue')
+			out.writeLine("source_commit\t${commit}")
+			out.writeLine("worktree_dirty\t${dirty}")
+			out.writeLine("zk_target\tCE ${zkVersion}")
+			[
+				'ant_core_library'   : phase5dAntCoreLibrary,
+				'shared_library'     : phase5dSharedLibrary,
+				'packages_library'   : phase5dPackagesLibrary,
+			].each { key, file ->
+				out.writeLine("${key}\t${rootProject.relativePath(file)}\t${digest(file)}")
+			}
+			sourceSets.modernUi.output.classesDirs.files
+				.findAll { it.directory }
+				.sort { it.absolutePath }
+				.each { dir ->
+					out.writeLine("modern_ui_classes\t${rootProject.relativePath(dir)}")
+				}
+		}
+	}
+}
+
+tasks.named('war') {
+	description = 'Builds the functional Phase 5d /webui-modern ZK CE Jakarta application'
+	archiveFileName = 'webui-modern.war'
+	webAppDirectory = file('src/phase5d/webapp')
+	reproducibleFileOrder = true
+	preserveFileTimestamps = false
+	duplicatesStrategy = DuplicatesStrategy.FAIL
+	dependsOn(
+		tasks.named('modernUiClasses'),
+		tasks.named('modernWebCoreJar'),
+		tasks.named('modernWebPackagesJar'),
+		tasks.named('modernWebSharedRuntimeJar'),
+		tasks.named('generatePhase5dModernWebProvenance'))
+	// The war plugin's default classpath is the `main` runtime classpath, which
+	// Phase 5d empties. Everything below is declared explicitly instead.
+	classpath = files()
+	into('WEB-INF/classes') {
+		from sourceSets.modernUi.output
+	}
+	into('WEB-INF/lib') {
+		from configurations.modernWebZk.filter {
+			it.isFile() && it.name.endsWith('.jar') &&
+				!it.name.startsWith('zkwebfragment-')
+		}
+		from tasks.named('modernWebCoreJar').flatMap { it.archiveFile }
+		from tasks.named('modernWebPackagesJar').flatMap { it.archiveFile }
+		from tasks.named('modernWebSharedRuntimeJar').flatMap { it.archiveFile }
+	}
+	into('META-INF') {
+		from tasks.named('generatePhase5dModernWebProvenance')
+			.map { it.outputs.files.singleFile }
+		rename { 'phase5d-provenance.tsv' }
+	}
+	// Reviewed static web assets. gradle/phase5/modern-web-assets.tsv is the
+	// reviewed ledger; the include set is read from it so an asset cannot join
+	// the archive without a recorded decision.
+	phase5dReadContract(phase5dWebAssetContract)
+		.findAll { it[1] == 'include' }
+		.each { row ->
+			into(row[2]) {
+				from(projectDir) {
+					include row[0]
+					// The Phase 5d entry pages, descriptors and stylesheet live in
+					// src/phase5d/webapp and are added by webAppDirectory.
+					exclude 'src/**'
+					// ZK 3.6 DSP theme, vendor tag libraries and schemas, JBoss
+					// deployment metadata, sources, backups, and commercial ZK
+					// sprites never ship.
+					exclude '**/*.dsp'
+					exclude '**/*.tld'
+					exclude '**/*.xsd'
+					exclude '**/*.java'
+					exclude '**/*.bak'
+					exclude '**/*~'
+					exclude '**/zkex/**'
+					exclude '**/zkmax/**'
+					eachFile { it.path = it.path.replaceFirst(/^${row[3]}/, '') }
+				}
+				includeEmptyDirs = false
 			}
 		}
+}
+
+tasks.register('verifyPhase5dModernWebWar') {
+	group = 'verification'
+	description = 'Verifies the functional Phase 5d modern web WAR content and linkage'
+	dependsOn tasks.named('war'), tasks.named('modernUiTestClasses')
+	inputs.file tasks.named('war').flatMap { it.archiveFile }
+	inputs.file phase5dSharedRuntimeContract
+	inputs.file phase5dWebAssetContract
+	outputs.file rootProject.layout.buildDirectory
+		.file('phase5/evidence/phase5d-modern-web-war.tsv')
+	doLast {
+		def archive = tasks.named('war').get().archiveFile.get().asFile
+		def problems = []
+		def names = [] as TreeSet
+		def libJars = [:]
+		def classOwners = [:].withDefault { [] as TreeSet }
+		def readEntry = { java.util.zip.ZipFile zip, java.util.zip.ZipEntry entry ->
+			zip.getInputStream(entry).withCloseable { it.readAllBytes() }
+		}
+
+		new java.util.zip.ZipFile(archive).withCloseable { zip ->
+			zip.entries().findAll { !it.directory }.each { entry ->
+				names << entry.name
+				if (entry.name.startsWith('WEB-INF/lib/') &&
+						entry.name.endsWith('.jar')) {
+					libJars[entry.name] = readEntry(zip, entry)
+				}
+				if (entry.name.startsWith('WEB-INF/classes/') &&
+						entry.name.endsWith('.class')) {
+					classOwners[entry.name.substring('WEB-INF/classes/'.length())] <<
+						'WEB-INF/classes'
+				}
+			}
+		}
+
+		// 1. Required routes, classes and resources. Naming the concrete classes
+		//    the login -> role -> menu -> window flow needs means an archive that
+		//    packaged only the framework cannot pass.
 		def required = [
 			'WEB-INF/web.xml',
-			'WEB-INF/classes/org/adempiere/webui/phase5c/PackagingMarkerServlet.class',
-			'META-INF/NOTICE'
+			'WEB-INF/zk.xml',
+			'index.zul',
+			'timeout.zul',
+			'css/phase5d-modern.css',
+			'META-INF/NOTICE',
+			'META-INF/phase5d-provenance.tsv',
+			'WEB-INF/classes/metainfo/zk/lang-addon.xml',
+			'js/token.js',
+			'js/persist-min.js',
+			'WEB-INF/classes/org/adempiere/webui/AdempiereWebUI.class',
+			'WEB-INF/classes/org/adempiere/webui/WLogin.class',
+			'WEB-INF/classes/org/adempiere/webui/session/WebUIServlet.class',
+			'WEB-INF/classes/org/adempiere/webui/session/SessionManager.class',
+			'WEB-INF/classes/org/adempiere/webui/session/SessionManagerListener.class',
+			'WEB-INF/classes/org/adempiere/webui/session/SessionContextListener.class',
+			'WEB-INF/classes/org/adempiere/webui/session/SessionTimeoutFilter.class',
+			'WEB-INF/classes/org/adempiere/webui/panel/LoginPanel.class',
+			'WEB-INF/classes/org/adempiere/webui/panel/RolePanel.class',
+			'WEB-INF/classes/org/adempiere/webui/panel/MenuPanel.class',
+			'WEB-INF/classes/org/adempiere/webui/panel/TreeSearchPanel.class',
+			'WEB-INF/classes/org/adempiere/webui/desktop/DefaultDesktop.class',
+			'WEB-INF/classes/org/adempiere/webui/window/ADWindow.class',
+			'WEB-INF/classes/org/adempiere/webui/editor/WEditor.class',
+			'WEB-INF/classes/org/adempiere/webui/part/WindowContainer.class',
+			'WEB-INF/classes/org/adempiere/webui/AdempiereIdGenerator.class',
 		]
 		def missing = required.findAll { !names.contains(it) }
-		if (!missing.empty) {
-			throw new GradleException("Modern web WAR is missing ${missing}")
+		if (!missing.isEmpty()) {
+			problems << "missing required entries ${missing}"
 		}
-		def forbiddenNames = names.findAll { name ->
-			def lower = name.toLowerCase(Locale.ROOT)
-			lower.contains('zkex') ||
-				lower.contains('zkmax') ||
-				lower.contains('webui/adempierewebui') ||
-				lower.endsWith('/webui.class')
+
+		// 2. The Phase 5c marker must be gone, not merely unmapped.
+		def markerEntries = names.findAll { it.toLowerCase(Locale.ROOT).contains('phase5c') }
+		if (!markerEntries.isEmpty()) {
+			problems << "the Phase 5c packaging marker is still packaged ${markerEntries}"
 		}
-		if (!forbiddenNames.empty) {
+		// XML comments are stripped before the descriptor is read. Both Phase 5d
+		// descriptors document the routes they deliberately do NOT migrate by
+		// name, and a check that matched those explanations would be a check on
+		// the prose rather than on the deployment.
+		def stripXmlComments = { String text -> text.replaceAll('(?s)<!--.*?-->', ' ') }
+		def descriptor = stripXmlComments(new String(
+			zipTree(archive).matching { include 'WEB-INF/web.xml' }.singleFile.bytes,
+			'UTF-8'))
+		[
+			'PackagingMarkerServlet': 'the Phase 5c marker servlet',
+			'__phase5c'             : 'the Phase 5c marker route',
+			'InterpreterServlet'    : 'the ZK 3.6 DSP interpreter (Phase 5f owns it)',
+			'*.dsp'                 : 'the ZK 3.6 DSP route (Phase 5f owns it)',
+			'TimelineEventFeed'     : 'the timeline feed servlet (Phase 5f owns it)',
+			'javax.servlet'         : 'a legacy servlet namespace',
+		].each { needle, reason ->
+			if (descriptor.contains(needle)) {
+				problems << "WEB-INF/web.xml still declares ${reason}"
+			}
+		}
+		[
+			'jakarta.ee/xml/ns/jakartaee/web-app_6_0.xsd': 'the Servlet 6 schema',
+			'org.adempiere.webui.session.WebUIServlet'   : 'the ADempiere ZK loader',
+			'org.zkoss.zk.au.http.DHtmlUpdateServlet'    : 'the ZK AU engine',
+			'org.adempiere.webui.session.SessionTimeoutFilter': 'the ADempiere session filter',
+			'org.adempiere.webui.session.SessionManagerListener': 'the ADempiere session listener',
+			'<absolute-ordering/>'                       : 'the empty absolute ordering',
+		].each { needle, reason ->
+			if (!descriptor.contains(needle)) {
+				problems << "WEB-INF/web.xml does not declare ${reason}"
+			}
+		}
+		def zkConfig = stripXmlComments(new String(
+			zipTree(archive).matching { include 'WEB-INF/zk.xml' }.singleFile.bytes,
+			'UTF-8'))
+		if (!zkConfig.contains('org.zkoss.zk.ui.impl.PollingServerPush')) {
+			problems << 'WEB-INF/zk.xml does not select the ZK CE polling server push'
+		}
+		if (zkConfig.contains('zkmax') || zkConfig.contains('zkex')) {
+			problems << 'WEB-INF/zk.xml still selects a commercial ZK implementation'
+		}
+
+		// 3. Forbidden content.
+		def forbidden = [
+			(~/(?i)zkex/)                     : 'commercial ZK zkex artifact',
+			(~/(?i)zkmax/)                    : 'commercial ZK zkmax artifact',
+			(~/(?i)org[\/.]zkforge/)          : 'ZK 3.x org.zkforge add-on',
+			(~/(?i)^WEB-INF\/lib\/(zk|zul|zhtml|zkplus|zcommon|zweb|zml|keylistener|fckez|timelinez|timeplotz|gmapsz)\.jar$/)
+				: 'ZK 3.6 runtime jar',
+			(~/^WEB-INF\/tld\//)              : 'vendor tag library',
+			(~/^WEB-INF\/xsd\//)              : 'vendor schema',
+			(~/^WEB-INF\/jboss-web\.xml$/)    : 'JBoss deployment descriptor',
+			(~/^WEB-INF\/src\//)              : 'packaged source tree',
+			(~/^WEB-INF\/test\//)             : 'packaged test tree',
+			(~/(?i)\.dsp$/)                   : 'ZK 3.6 DSP theme resource',
+			(~/(?i)\.(java|bak)$/)            : 'source or backup file',
+			(~/(?i)images_old\//)             : 'retired image backup tree',
+			(~/^WEB-INF\/classes\/org\/adempiere\/test\//) : 'packaged test support',
+		]
+		names.each { name ->
+			forbidden.each { pattern, reason ->
+				if (pattern.matcher(name).find()) {
+					problems << "${name} is a ${reason}"
+				}
+			}
+		}
+
+		// No class produced by a zkwebui test source set may be packaged. The
+		// claim is exact rather than name-based: ADempiere's dictionary carries
+		// production classes called MTest, MQualityTest, I_Test and ALoginTest,
+		// and the shared runtime carries com.itextpdf.testutils.ITextTest, so a
+		// "*Test.class" rule would force the repackaging to drop production code
+		// in order to pass.
+		def testClassEntries = [] as Set
+		sourceSets.modernUiTest.output.classesDirs.files
+			.findAll { it.directory }
+			.each { dir ->
+				fileTree(dir) { include '**/*.class' }.each { file ->
+					testClassEntries << dir.toPath().relativize(file.toPath())
+						.toString().replace(File.separatorChar, '/' as char)
+				}
+			}
+		if (testClassEntries.isEmpty()) {
+			problems << 'the zkwebui modernUiTest source set produced no class to ' +
+				'compare against, so "tests are not packaged" would be vacuously true'
+		}
+		def packagedTests = names.findAll { name ->
+			name.startsWith('WEB-INF/classes/') &&
+				testClassEntries.contains(name.substring('WEB-INF/classes/'.length()))
+		}
+		if (!packagedTests.isEmpty()) {
+			problems << "test classes are packaged in the WAR: ${packagedTests.take(10)}"
+		}
+		def packagedTestsInLibs = [] as TreeSet
+		libJars.each { jarName, bytes ->
+			new java.util.zip.ZipInputStream(
+					new ByteArrayInputStream(bytes)).withCloseable { zip ->
+				for (def entry = zip.nextEntry; entry != null; entry = zip.nextEntry) {
+					if (!entry.isDirectory() && testClassEntries.contains(entry.name)) {
+						packagedTestsInLibs << "${jarName}!${entry.name}".toString()
+					}
+				}
+			}
+		}
+		if (!packagedTestsInLibs.isEmpty()) {
+			problems << "test classes are packaged in WEB-INF/lib: " +
+				"${packagedTestsInLibs.take(10)}"
+		}
+
+		// 4. Nothing in WEB-INF/lib may carry a stale signature, an undeclared
+		//    multi-release entry, a javax.servlet class, or a duplicate class.
+		def repackaged = [
+			'WEB-INF/lib/webui-modern-core.jar',
+			'WEB-INF/lib/webui-modern-packages.jar',
+			'WEB-INF/lib/webui-modern-shared-runtime.jar',
+		]
+		def missingRepackaged = repackaged.findAll { !names.contains(it) }
+		if (!missingRepackaged.isEmpty()) {
+			problems << "missing repackaged runtime jars ${missingRepackaged}"
+		}
+		def servletLinked = [] as TreeSet
+		libJars.each { jarName, bytes ->
+			def multiRelease = false
+			def versioned = [] as TreeSet
+			def signatures = [] as TreeSet
+			new java.util.zip.ZipInputStream(
+					new ByteArrayInputStream(bytes)).withCloseable { zip ->
+				for (def entry = zip.nextEntry; entry != null; entry = zip.nextEntry) {
+					if (entry.isDirectory()) {
+						continue
+					}
+					def content = zip.readAllBytes()
+					if (entry.name == 'META-INF/MANIFEST.MF') {
+						multiRelease = new String(content, 'UTF-8')
+							.replaceAll(/\r?\n /, '')
+							.toLowerCase(Locale.ROOT)
+							.contains('multi-release: true')
+					}
+					if (entry.name.startsWith('META-INF/versions/')) {
+						versioned << entry.name
+					}
+					if (entry.name.startsWith('META-INF/') &&
+							(entry.name.endsWith('.SF') || entry.name.endsWith('.RSA') ||
+								entry.name.endsWith('.DSA'))) {
+						signatures << entry.name
+					}
+					if (!entry.name.endsWith('.class') ||
+							entry.name.startsWith('META-INF/')) {
+						// META-INF/versions/** and a root module-info are archive
+						// metadata, not classpath classes; the multi-release check
+						// above already owns them.
+						continue
+					}
+					classOwners[entry.name] << jarName
+					if (jarName.startsWith('WEB-INF/lib/webui-modern-') &&
+							new String(content, 'ISO-8859-1').contains('javax/servlet')) {
+						servletLinked << "${jarName}!${entry.name}".toString()
+					}
+				}
+			}
+			if (!signatures.isEmpty()) {
+				problems << "${jarName} carries stale JAR signatures ${signatures.take(3)}"
+			}
+			if (!multiRelease && !versioned.isEmpty()) {
+				problems << "${jarName} carries undeclared multi-release entries " +
+					"${versioned.take(3)}"
+			}
+		}
+		if (!servletLinked.isEmpty()) {
+			problems << 'repackaged ADempiere runtime jars still link against the ' +
+				"legacy servlet namespace ${servletLinked.take(10)}"
+		}
+		def javaxServletClasses = classOwners.keySet()
+			.findAll { it.startsWith('javax/servlet/') }
+		if (!javaxServletClasses.isEmpty()) {
+			problems << "the legacy javax.servlet namespace is packaged " +
+				"${javaxServletClasses.take(5)}"
+		}
+		def jakartaServletClasses = classOwners.keySet()
+			.findAll { it.startsWith('jakarta/servlet/') }
+		if (!jakartaServletClasses.isEmpty()) {
+			problems << 'the Jakarta Servlet API is packaged in the WAR; the ' +
+				"container owns it ${jakartaServletClasses.take(5)}"
+		}
+		def duplicates = classOwners.findAll { it.value.size() > 1 }
+		if (!duplicates.isEmpty()) {
+			problems << 'duplicate classes across WEB-INF/classes and WEB-INF/lib: ' +
+				duplicates.take(10).collect { name, owners -> "${name} <- ${owners}" }
+		}
+
+		// 5. The reviewed shared-runtime exclusions must still hold in the
+		//    packaged bytes, not merely in the build script that produced them.
+		def sharedRuntime = libJars['WEB-INF/lib/webui-modern-shared-runtime.jar']
+		if (sharedRuntime == null) {
+			problems << 'the repackaged shared runtime jar is absent'
+		} else {
+			def sharedNames = [] as TreeSet
+			new java.util.zip.ZipInputStream(
+					new ByteArrayInputStream(sharedRuntime)).withCloseable { zip ->
+				for (def entry = zip.nextEntry; entry != null; entry = zip.nextEntry) {
+					if (!entry.isDirectory()) {
+						sharedNames << entry.name
+					}
+				}
+			}
+			// The Ant patterns are converted to regexes rather than compared by
+			// prefix: rows such as net/sourceforge/barbecue/BarcodeServlet* are
+			// neither a directory glob nor a literal name, and a prefix-only
+			// check would silently pass them.
+			def antToRegex = { String pattern ->
+				def builder = new StringBuilder('^')
+				int index = 0
+				while (index < pattern.length()) {
+					if (pattern.startsWith('/**', index)) {
+						builder.append('(/.*)?')
+						index += 3
+					} else if (pattern.startsWith('**', index)) {
+						builder.append('.*')
+						index += 2
+					} else if (pattern.charAt(index) == ('*' as char)) {
+						builder.append('[^/]*')
+						index += 1
+					} else {
+						builder.append(java.util.regex.Pattern.quote(
+							pattern.substring(index, index + 1)))
+						index += 1
+					}
+				}
+				~builder.append('$').toString()
+			}
+			phase5dReadContract(phase5dSharedRuntimeContract)
+				.findAll { it[1] == 'exclude' }
+				.each { row ->
+					def pattern = antToRegex(row[0])
+					def hits = sharedNames.findAll { pattern.matcher(it).matches() }
+					if (!hits.isEmpty()) {
+						problems << "reviewed exclusion ${row[0]} did not hold " +
+							"${hits.take(3)}"
+					}
+				}
+			// An allow-list that admits nothing is not an allow-list. Each
+			// include row must contribute at least one packaged entry, so a
+			// namespace that silently vanished from the shipped server library
+			// fails here instead of at first class load.
+			def emptyIncludes = phase5dReadContract(phase5dSharedRuntimeContract)
+				.findAll { it[1] == 'include' }
+				.collect { it[0] }
+				.findAll { row ->
+					def pattern = antToRegex(row)
+					!sharedNames.any { pattern.matcher(it).matches() }
+				}
+			if (!emptyIncludes.isEmpty()) {
+				problems << "reviewed shared-runtime includes matched nothing " +
+					"${emptyIncludes}"
+			}
+		}
+
+		// 6. The ZK CE closure must be present, locked, and free of the fragment
+		//    that would register a servlet this descriptor never declared.
+		def zkJars = names.findAll {
+			it.startsWith('WEB-INF/lib/') && it.contains('zk')
+		}
+		def unlockedZk = zkJars.findAll {
+			(it.contains('/zk-') || it.contains('/zul-') || it.contains('/zhtml-') ||
+				it.contains('/zkplus-') || it.contains('/zcommon-') ||
+				it.contains('/zweb-') || it.contains('/zel-')) &&
+				!it.contains(zkVersion)
+		}
+		if (!unlockedZk.isEmpty()) {
+			problems << "unlocked ZK artifacts are packaged ${unlockedZk}"
+		}
+		['zk', 'zul', 'zkplus', 'zhtml', 'zcommon', 'zweb'].each { module ->
+			if (!names.contains("WEB-INF/lib/${module}-${zkVersion}.jar".toString())) {
+				problems << "the locked ZK CE artifact ${module}-${zkVersion}.jar is missing"
+			}
+		}
+		if (names.any { it.startsWith('WEB-INF/lib/zkwebfragment-') }) {
+			problems << 'zkwebfragment is packaged; it would register ZK servlets ' +
+				'that WEB-INF/web.xml does not declare'
+		}
+
+		// 7. Provenance.
+		def provenance = new String(
+			zipTree(archive).matching { include 'META-INF/phase5d-provenance.tsv' }
+				.singleFile.bytes, 'UTF-8')
+		def provenanceRows = provenance.readLines()
+			.findAll { it && !it.startsWith('#') }
+			.collectEntries { def fields = it.split('\t', -1); [(fields[0]): fields] }
+		if (!(provenanceRows['source_commit']?.getAt(1) ==~ /[0-9a-f]{40}/)) {
+			problems << 'the packaged provenance records no source commit'
+		}
+		['ant_core_library', 'shared_library', 'packages_library'].each { key ->
+			if (!(provenanceRows[key]?.getAt(2) ==~ /[0-9a-f]{64}/)) {
+				problems << "the packaged provenance records no digest for ${key}"
+			}
+		}
+		[
+			'ant_core_library': phase5dAntCoreLibrary,
+			'shared_library': phase5dSharedLibrary,
+			'packages_library': phase5dPackagesLibrary,
+		].each { key, input ->
+			def recorded = provenanceRows[key]?.getAt(2)
+			def actual = input.isFile()
+				? java.security.MessageDigest.getInstance('SHA-256')
+					.digest(input.bytes).encodeHex().toString()
+				: null
+			if (recorded != actual) {
+				problems << "the packaged provenance digest for ${key} does not " +
+					"match ${rootProject.relativePath(input)}"
+			}
+		}
+
+		if (!problems.isEmpty()) {
 			throw new GradleException(
-				"Legacy or commercial UI artifacts entered the modern WAR: ${forbiddenNames}")
+				"The Phase 5d modern web WAR is not acceptable:\n  - " +
+				problems.unique().take(25).join('\n  - '))
 		}
-		def servlet = zipTree(archive).matching {
-			include 'WEB-INF/classes/org/adempiere/webui/phase5c/PackagingMarkerServlet.class'
-		}.singleFile
-		if (new String(servlet.bytes, 'ISO-8859-1').contains('javax/servlet')) {
-			throw new GradleException('Packaging marker contains a legacy servlet namespace')
+
+		def evidence = rootProject.layout.buildDirectory
+			.file('phase5/evidence/phase5d-modern-web-war.tsv').get().asFile
+		evidence.parentFile.mkdirs()
+		evidence.withWriter('UTF-8') { out ->
+			out.writeLine('# verifyPhase5dModernWebWar')
+			out.writeLine("archive\t${archive.name}")
+			out.writeLine("archive_sha256\t" +
+				java.security.MessageDigest.getInstance('SHA-256')
+					.digest(archive.bytes).encodeHex().toString())
+			out.writeLine("entries\t${names.size()}")
+			out.writeLine("web_inf_lib_jars\t${libJars.size()}")
+			out.writeLine("unique_classes\t${classOwners.size()}")
+			out.writeLine("duplicate_classes\t0")
+			out.writeLine("zk_target\tCE ${zkVersion}")
+			provenanceRows.each { key, fields ->
+				out.writeLine("provenance_${key}\t${fields.drop(1).join('\t')}")
+			}
+		}
+		logger.lifecycle(
+			"Phase 5d modern web WAR: ${names.size()} entries, ${libJars.size()} " +
+			"WEB-INF/lib jars, ${classOwners.size()} unique classes, no duplicates")
+	}
+}
+
+tasks.register('browserContractTest', Test) {
+	group = 'verification'
+	description = 'Runs the database-neutral Phase 5d browser contract mutation proofs'
+	testClassesDirs = sourceSets.browserContract.output.classesDirs
+	classpath = sourceSets.browserContract.runtimeClasspath
+	useJUnitPlatform()
+	reports.junitXml.required = true
+	reports.junitXml.outputLocation = layout.buildDirectory.dir('test-results/browserContractTest')
+	reports.html.required = true
+	reports.html.outputLocation = layout.buildDirectory.dir('reports/tests/browserContractTest')
+	testLogging {
+		events 'passed', 'skipped', 'failed'
+	}
+	doLast {
+		// A green run over an empty class directory is not coverage. The Phase 5c
+		// browser lane already depends on a database and a browser; the mutation
+		// proofs must not be able to disappear from the database-neutral gate
+		// without the gate noticing.
+		def executed = layout.buildDirectory.dir('test-results/browserContractTest')
+			.get().asFile.listFiles({ File file -> file.name.endsWith('.xml') } as FileFilter)
+		if (executed == null || executed.length == 0) {
+			throw new GradleException(
+				'The Phase 5d browser contract mutation proofs did not execute')
 		}
 	}
 }
@@ -126,6 +984,11 @@ tasks.register('browserTest', Test) {
 		layout.buildDirectory.dir('phase5c/browser').get().asFile.absolutePath
 	systemProperty 'phase5c.browser.fixtureScript',
 		rootProject.file('scripts/phase5/reset-oracle-fixture.sh').absolutePath
+	// Phase 5d read-only window measurement remains separate from the
+	// checksum-pinned fixture driver so the zero-write proof cannot silently
+	// change the frozen login/role fixture semantics.
+	systemProperty 'phase5c.browser.effectScript',
+		rootProject.file('scripts/phase5/measure-window-readonly-effect.sh').absolutePath
 	systemProperty 'phase5c.browser.dbHost',
 		rootProject.providers.gradleProperty('phase3DbHost').getOrElse('127.0.0.1')
 	systemProperty 'phase5c.browser.dbPort',
@@ -136,7 +999,7 @@ tasks.register('browserTest', Test) {
 	systemProperty 'phase5c.browser.dbUser',
 		rootProject.providers.gradleProperty('phase3DbUser')
 			.getOrElse('adempiere_phase3_ci')
-	systemProperty 'phase5c.browser.dbPassword',
+	environment 'ADEMPIERE_PHASE5D_DB_PASSWORD',
 		rootProject.providers.gradleProperty('phase3DbPassword')
 			.getOrElse('adempiere_phase3_ci')
 	systemProperty 'phase5c.browser.dbMarker',
@@ -151,6 +1014,103 @@ tasks.register('browserTest', Test) {
 				.get().asFile.isFile()) {
 			throw new GradleException(
 				'The verified Phase 5c browser installation is missing')
+		}
+	}
+}
+
+tasks.register('modernBrowserTest', Test) {
+	group = 'verification'
+	description = 'Drives the Phase 5d modern ZK CE 10 slice through login, role, menu, and the read-only window'
+	testClassesDirs = sourceSets.modernBrowserTest.output.classesDirs
+	classpath = sourceSets.modernBrowserTest.runtimeClasspath
+	useJUnitPlatform()
+	reports.junitXml.required = true
+	reports.junitXml.outputLocation =
+		layout.buildDirectory.dir('test-results/modernBrowserTest')
+	reports.html.required = true
+	reports.html.outputLocation =
+		layout.buildDirectory.dir('reports/tests/modernBrowserTest')
+	outputs.upToDateWhen { false }
+	outputs.cacheIf { false }
+	testLogging {
+		events 'passed', 'skipped', 'failed'
+		showStandardStreams = true
+	}
+	def apiPort = providers.provider {
+		def properties = new Properties()
+		rootProject.file('gradle/phase4/runtime.properties').withInputStream {
+			properties.load(it)
+		}
+		properties.getProperty('api.port')
+	}
+	systemProperty 'phase5d.modern.baseUrl',
+		providers.gradleProperty('phase5dModernBaseUrl')
+			.orElse(apiPort.map { "http://127.0.0.1:${it}".toString() }).get()
+	systemProperty 'phase5d.modern.contextPath', '/webui-modern'
+	systemProperty 'phase5d.modern.legacyPort',
+		providers.gradleProperty('phase5dLegacyPort').getOrElse('8888')
+	systemProperty 'phase5d.modern.user',
+		providers.gradleProperty('phase5dModernUser').getOrElse('GardenAdmin')
+	systemProperty 'phase5d.modern.password',
+		providers.gradleProperty('phase5dModernPassword').getOrElse('GardenAdmin')
+	systemProperty 'phase5d.modern.evidenceDir',
+		rootProject.layout.buildDirectory.dir('phase5d/browser')
+			.get().asFile.absolutePath
+	// The fixture and read-only effect scripts are the SAME marker-guarded
+	// scripts the frozen legacy oracle uses. Sharing them is what makes
+	// "matching capture ordinals" a fact rather than a claim.
+	systemProperty 'phase5d.modern.fixtureScript',
+		rootProject.file('scripts/phase5/reset-oracle-fixture.sh').absolutePath
+	systemProperty 'phase5d.modern.effectScript',
+		rootProject.file('scripts/phase5/measure-window-readonly-effect.sh')
+			.absolutePath
+	systemProperty 'phase5d.modern.coexistenceScript',
+		rootProject.file('scripts/phase5/capture-modern-coexistence.sh')
+			.absolutePath
+	// The Phase 4 operation fixtures are applied by the capture itself, AFTER
+	// the two measured captures, because one of them rewrites GardenAdmin's
+	// password and the measured captures must use the frozen legacy oracle's own
+	// credential.
+	systemProperty 'phase5d.modern.scenarioScript',
+		rootProject.file('scripts/phase4/prepare-operation-scenarios.sh').absolutePath
+	systemProperty 'phase5d.modern.coexistencePassword',
+		providers.gradleProperty('phase5dCoexistencePassword')
+			.getOrElse('phase4-pos-secret')
+	systemProperty 'phase5d.modern.dbHost',
+		rootProject.providers.gradleProperty('phase3DbHost').getOrElse('127.0.0.1')
+	systemProperty 'phase5d.modern.dbPort',
+		rootProject.providers.gradleProperty('phase3DbPort').getOrElse('5432')
+	systemProperty 'phase5d.modern.dbName',
+		rootProject.providers.gradleProperty('phase3DbName')
+			.getOrElse('adempiere_phase3_ci')
+	systemProperty 'phase5d.modern.dbUser',
+		rootProject.providers.gradleProperty('phase3DbUser')
+			.getOrElse('adempiere_phase3_ci')
+	environment 'ADEMPIERE_PHASE5D_DB_PASSWORD',
+		rootProject.providers.gradleProperty('phase3DbPassword')
+			.getOrElse('adempiere_phase3_ci')
+	systemProperty 'phase5d.modern.dbMarker',
+		'ADempiere Phase 3 disposable database'
+	environment 'PLAYWRIGHT_BROWSERS_PATH',
+		rootProject.layout.buildDirectory.dir('phase5c/playwright-browsers')
+			.get().asFile.absolutePath
+	environment 'PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD', '1'
+	doFirst {
+		delete rootProject.layout.buildDirectory.dir('phase5d/browser')
+		delete layout.buildDirectory.dir('test-results/modernBrowserTest')
+		if (!rootProject.layout.buildDirectory
+				.file('phase5c/playwright-browsers/verified-artifacts.tsv')
+				.get().asFile.isFile()) {
+			throw new GradleException(
+				'The verified Phase 5c browser installation is missing')
+		}
+	}
+	doLast {
+		def executed = layout.buildDirectory.dir('test-results/modernBrowserTest')
+			.get().asFile.listFiles({ File file -> file.name.endsWith('.xml') } as FileFilter)
+		if (executed == null || executed.length == 0) {
+			throw new GradleException(
+				'The Phase 5d modern browser capture did not execute')
 		}
 	}
 }
@@ -279,13 +1239,21 @@ def transformerCorpusReport = layout.buildDirectory.file(
 def transformerCorpusDryRunOutput = layout.buildDirectory.file(
 	'phase5c/transformer/legacy-corpus-dry-run.war')
 
+// Phase 5d: the corpus is the *verified* frozen legacy WAR, not whatever
+// lib/webui.war happened to contain after the last Ant run. lib/webui.war is now
+// a staged copy of that same frozen artifact, so pointing at the verified source
+// removes an incidental build-output dependency and makes this report
+// database-neutral instead of requiring a full Phase 3 distribution.
+def phase5dFrozenLegacyWar = rootProject.layout.buildDirectory.file(
+	'phase5d/legacy-webui/webui.war')
+
 tasks.register('phase5cTransformerCorpusReport', JavaExec) {
 	group = 'verification'
-	description = 'Runs a non-shipping transformer dry run over the legacy web WAR'
-	dependsOn rootProject.tasks.named('phase3NoDatabaseDistribution')
+	description = 'Runs a non-shipping transformer dry run over the frozen legacy web WAR'
+	dependsOn rootProject.tasks.named('verifyPhase5dLegacyWebArtifacts')
 	classpath = configurations.phase5Transformer
 	mainClass = 'org.eclipse.transformer.cli.JakartaTransformerCLI'
-	inputs.file rootProject.file('lib/webui.war')
+	inputs.file phase5dFrozenLegacyWar
 	outputs.file transformerCorpusReport
 	def reportStream = [value: null]
 	doFirst {
@@ -296,7 +1264,7 @@ tasks.register('phase5cTransformerCorpusReport', JavaExec) {
 		standardOutput = reportStream.value
 		errorOutput = reportStream.value
 		args(
-			rootProject.file('lib/webui.war').absolutePath,
+			phase5dFrozenLegacyWar.get().asFile.absolutePath,
 			transformerCorpusDryRunOutput.get().asFile.absolutePath,
 			'--dryrun',
 			'--verbose',
@@ -324,6 +1292,15 @@ tasks.register('phase5cTransformerCorpusReport', JavaExec) {
 }
 
 tasks.named('check') {
-	dependsOn tasks.named('verifyPhase5cModernWebWar')
 	dependsOn tasks.named('verifyPhase5cTransformer')
+	dependsOn tasks.named('modernUiTest')
+	dependsOn tasks.named('browserContractTest')
+}
+
+// The functional WAR repackages Ant-built runtime libraries and therefore has
+// its own Phase 5d lifecycle. Keep generic `build` focused on Gradle-owned
+// compilation/tests; the canonical Phase 5d gate invokes and verifies `war`
+// explicitly after the Phase 3 distribution exists.
+tasks.named('assemble') {
+	setDependsOn([])
 }

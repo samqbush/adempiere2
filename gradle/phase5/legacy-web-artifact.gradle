@@ -1,0 +1,494 @@
+import java.security.MessageDigest
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
+
+// Phase 5d: the frozen legacy web artifact and its Ant/install crossing.
+//
+// Phase 5d migrates zkwebui/WEB-INF/src and the packaged modules' ui/zk trees to
+// ZK CE 10.3.0.1-jakarta. Those sources can no longer compile against ZK 3.6, so
+// the Ant reactor can no longer produce the legacy webui.war from the working
+// tree. The legacy web product still ships, still installs, and is still the
+// Phase 5b oracle, so the artifact is instead *materialized* from the exact
+// commit the Phase 5b oracle was frozen at
+// (contracts/legacy-web-v1/capture-environment.tsv:source_commit) in an isolated
+// Git worktree.
+//
+// Everything here is fail-closed: a missing artifact, a drifted entry, a
+// reintroduced source compile, or a lost reactor entry fails the build.
+
+def phase5dContractDir = rootProject.file('contracts/legacy-web-v1')
+def phase5dArtifactContract = new File(phase5dContractDir, 'legacy-web-artifacts.tsv')
+def phase5dCaptureEnvironment = new File(phase5dContractDir, 'capture-environment.tsv')
+def phase5dScript = rootProject.file('scripts/phase5/materialize-legacy-webui-war.sh')
+def phase5dOutputDir = rootProject.layout.buildDirectory.dir('phase5d/legacy-webui')
+def phase5dWarFile = phase5dOutputDir.map { it.file('webui.war') }
+def phase5dProvenanceFile = phase5dOutputDir.map { it.file('provenance.tsv') }
+def phase5dZkPackagesDir = phase5dOutputDir.map { it.dir('zkpackages') }
+
+// The Ant reactor entries whose ui/zk tree Phase 5d migrated. Their compiled ZK
+// classes are merged into the deployed webui.war by the installer, so they are
+// part of the same frozen legacy artifact and are crossed the same way.
+def phase5dCrossedZkModules = [
+	'org.adempiere.pos': 'ADempierePOSzk.jar',
+	'org.eevolution.manufacturing': 'ManufacturingManagementZk.jar',
+	'org.eevolution.hr_and_payroll': 'HumanResourceAndPayrollZk.jar',
+	'org.eevolution.warehouse': 'WarehouseManagementZk.jar',
+	'org.spin.loan_management': 'LoanManagementZk.jar',
+]
+
+def phase5dExpectedAntReactorEntries = 32
+
+// ZK 3.6 and commercial namespaces. The Phase 5d compile closure proves the
+// migrated sources contain none of them; the frozen legacy artifact must still
+// be full of them. That asymmetry is the direct proof that the shipped WAR was
+// not produced from current source. Each marker is pinned with the exact number
+// of frozen classes that carry it, so a partial rebuild cannot pass by leaving
+// one marker behind.
+def phase5dLegacyBytecodeMarkers = [
+	'org/zkoss/zkex/'             : 68,
+	'org/zkoss/zkmax/'            : 3,
+	'org/zkoss/zul/api/'          : 2,
+	'org/zkforge/'                : 14,
+	'org/zkoss/zul/SimpleTreeNode': 19,
+	'org/zkoss/zul/ListModelExt'  : 3,
+	'org/zkoss/zk/au/Command'     : 4,
+]
+def phase5dLegacySourceMarkers = [
+	'org.zkoss.zkex.',
+	'org.zkoss.zkmax.',
+	'org.zkoss.zul.api.',
+	'org.zkforge.',
+	'org.zkoss.zul.SimpleTreeNode',
+	'org.zkoss.zul.ListModelExt',
+	'org.zkoss.zk.au.Command',
+]
+
+// ---------------------------------------------------------------------------
+// Canonical digests.
+//
+// These reproduce gradle/phase5/oracle.gradle exactly. Any divergence would make
+// this gate compare a different number than the frozen contract records, so the
+// normalization, the nested-archive recursion, and the row shape are duplicated
+// deliberately rather than approximated.
+// ---------------------------------------------------------------------------
+def phase5dSha512 = { byte[] content ->
+	MessageDigest.getInstance('SHA-512').digest(content).encodeHex().toString()
+}
+
+def phase5dNestedSuffixes = ['.jar', '.war', '.ear', '.zip', '.rar']
+
+def phase5dIsNestedArchive = { String entryName ->
+	def lower = entryName.toLowerCase(Locale.ROOT)
+	phase5dNestedSuffixes.any { lower.endsWith(it) }
+}
+
+def phase5dIsManifest = { String entryName ->
+	entryName == 'META-INF/MANIFEST.MF' || entryName.endsWith('/META-INF/MANIFEST.MF')
+}
+
+def phase5dReadFully = { InputStream input ->
+	def buffer = new ByteArrayOutputStream()
+	byte[] chunk = new byte[65536]
+	for (int read = input.read(chunk); read != -1; read = input.read(chunk)) {
+		buffer.write(chunk, 0, read)
+	}
+	buffer.toByteArray()
+}
+
+def phase5dNormalizeContent = { String entryName, byte[] content ->
+	if (!phase5dIsManifest(entryName)) {
+		return content
+	}
+	def text = new String(content, 'UTF-8')
+	def unfolded = text.replaceAll(/\r?\n /, '')
+	def normalized = unfolded.replaceAll(/(?m)^(Implementation-Version:.*?)\d{8}-\d{4}\s*$/) { full, prefix ->
+		"${prefix}<BUILD-STAMP>"
+	}
+	normalized.getBytes('UTF-8')
+}
+
+def phase5dLogicalDigest
+phase5dLogicalDigest = { byte[] archiveBytes ->
+	def lines = []
+	new ZipInputStream(new ByteArrayInputStream(archiveBytes)).withCloseable { zip ->
+		for (ZipEntry entry = zip.nextEntry; entry != null; entry = zip.nextEntry) {
+			if (entry.isDirectory()) {
+				continue
+			}
+			byte[] content = phase5dReadFully(zip)
+			byte[] canonical = phase5dIsNestedArchive(entry.name) ?
+				content : phase5dNormalizeContent(entry.name, content)
+			def digest = phase5dIsNestedArchive(entry.name) ?
+				phase5dLogicalDigest(content) :
+				phase5dSha512(canonical)
+			lines << "${entry.name}\t${canonical.length}\t${digest}"
+		}
+	}
+	phase5dSha512(lines.sort().join('\n').getBytes('UTF-8'))
+}
+
+def phase5dEntryRows = { File archive ->
+	def rows = []
+	new ZipFile(archive).withCloseable { zip ->
+		zip.entries().each { ZipEntry entry ->
+			if (entry.isDirectory()) {
+				return
+			}
+			byte[] content = zip.getInputStream(entry).withCloseable { phase5dReadFully(it) }
+			def nested = phase5dIsNestedArchive(entry.name)
+			byte[] canonical = nested ? content :
+				phase5dNormalizeContent(entry.name, content)
+			rows << [
+				path: entry.name,
+				size: canonical.length,
+				digest: nested ? phase5dLogicalDigest(content) : phase5dSha512(canonical),
+			]
+		}
+	}
+	rows.sort { it.path }
+}
+
+// install/Adempiere/build.xml:16-22 strips these from every archive it merges
+// into the deployed webui.war.
+def phase5dInstallerStripped = { String path ->
+	path == 'META-INF/MANIFEST.MF' || path == 'META-INF/INDEX.LIST' ||
+		(path.startsWith('META-INF/') &&
+			(path.endsWith('.SF') || path.endsWith('.RSA') || path.endsWith('.DSA')))
+}
+
+def phase5dReadContractRows = { String warName ->
+	if (!phase5dArtifactContract.isFile()) {
+		throw new GradleException("Missing frozen Phase 5b contract ${phase5dArtifactContract}")
+	}
+	phase5dArtifactContract.readLines()
+		.findAll { it && !it.startsWith('#') }
+		.collect { it.split('\t', -1) }
+		.findAll { it[0] == warName }
+}
+
+def phase5dFrozenCommit = {
+	if (!phase5dCaptureEnvironment.isFile()) {
+		throw new GradleException("Missing ${phase5dCaptureEnvironment}")
+	}
+	def row = phase5dCaptureEnvironment.readLines()
+		.findAll { it && !it.startsWith('#') }
+		.collect { it.split('\t', -1) }
+		.find { it[0] == 'source_commit' }
+	if (row == null || !(row[1] ==~ /[0-9a-f]{40}/)) {
+		throw new GradleException(
+			'contracts/legacy-web-v1/capture-environment.tsv has no usable source_commit')
+	}
+	row[1]
+}
+
+def phase5dReadProvenance = {
+	def file = phase5dProvenanceFile.get().asFile
+	if (!file.isFile()) {
+		throw new GradleException(
+			"Missing materialized frozen artifact provenance ${file}; " +
+				'run materializePhase5dLegacyWebArtifacts')
+	}
+	def values = [:]
+	def jars = [:]
+	file.readLines().findAll { it && !it.startsWith('#') }.each { line ->
+		def fields = line.split('\t', -1)
+		if (fields[0] == 'zkpackage_jar') {
+			jars[fields[1]] = fields[2]
+		} else {
+			values[fields[0]] = fields.size() > 1 ? fields[1] : ''
+		}
+	}
+	[values: values, jars: jars]
+}
+
+def phase5dJavaHome = {
+	javaToolchains.launcherFor {
+		languageVersion = JavaLanguageVersion.of(21)
+	}.get().metadata.installationPath.asFile.absolutePath
+}
+
+// ---------------------------------------------------------------------------
+// Tasks
+// ---------------------------------------------------------------------------
+
+tasks.register('materializePhase5dLegacyWebArtifacts', Exec) {
+	group = 'verification'
+	description =
+		'Builds the frozen legacy webui.war and ZK package jars from the Phase 5b source commit in an isolated worktree'
+	inputs.files(phase5dScript, phase5dCaptureEnvironment)
+	outputs.files(phase5dWarFile, phase5dProvenanceFile)
+	outputs.dir(phase5dZkPackagesDir)
+	doFirst {
+		commandLine(
+			'bash',
+			phase5dScript.absolutePath,
+			rootProject.projectDir.absolutePath,
+			phase5dOutputDir.get().asFile.absolutePath,
+			phase5dJavaHome())
+	}
+	// Exec needs a command at configuration time even though doFirst replaces it.
+	commandLine('bash', '-c', 'true')
+}
+
+tasks.register('verifyPhase5dLegacyWebArtifacts') {
+	group = 'verification'
+	description =
+		'Proves the materialized frozen legacy artifacts reproduce the Phase 5b webui.war pins entry for entry'
+	dependsOn tasks.named('materializePhase5dLegacyWebArtifacts')
+	inputs.file phase5dArtifactContract
+	inputs.file phase5dCaptureEnvironment
+	doLast {
+		def frozenCommit = phase5dFrozenCommit()
+		def provenance = phase5dReadProvenance()
+		if (provenance.values['source_commit'] != frozenCommit) {
+			throw new GradleException(
+				"The materialized legacy artifacts came from ${provenance.values['source_commit']}, " +
+					"but the Phase 5b contract froze ${frozenCommit}")
+		}
+		if (provenance.values['frozen_worktree_clean'] != 'yes') {
+			throw new GradleException('The frozen worktree was not clean when the artifacts were built')
+		}
+
+		def war = phase5dWarFile.get().asFile
+		if (!war.isFile()) {
+			throw new GradleException("Missing materialized frozen webui.war at ${war}")
+		}
+		def zkPackagesDir = phase5dZkPackagesDir.get().asFile
+		def zkJars = (zkPackagesDir.listFiles() ?: [] as File[])
+			.findAll { it.isFile() && it.name.endsWith('.jar') }
+			.sort { it.name }
+		if (zkJars.isEmpty()) {
+			throw new GradleException("No materialized frozen ZK package jars in ${zkPackagesDir}")
+		}
+		def missingCrossedJars = phase5dCrossedZkModules.values()
+			.findAll { name -> !zkJars.any { it.name == name } }
+		if (!missingCrossedJars.isEmpty()) {
+			throw new GradleException(
+				"The frozen artifact set is missing crossed ZK package jars: ${missingCrossedJars}")
+		}
+
+		// Reconstruct the deployed webui.war entry table from the frozen inputs
+		// the installer merges, in install/Adempiere/build.xml's `setupWLib`
+		// order. `duplicate="preserve"` means first source wins.
+		def merged = [:]
+		def contributor = [:]
+		def contribute = { String source, File archive ->
+			phase5dEntryRows(archive).each { row ->
+				if (phase5dInstallerStripped(row.path) || merged.containsKey(row.path)) {
+					return
+				}
+				merged[row.path] = row
+				contributor[row.path] = source
+			}
+		}
+		def zkCustomization = rootProject.file('lib/zkcustomization.jar')
+		def zkPatches = rootProject.file('lib/zkpatches.jar')
+		[zkCustomization, zkPatches].each {
+			if (!it.isFile()) {
+				throw new GradleException("Missing tracked installer input ${it}")
+			}
+		}
+		contribute('lib/zkcustomization.jar', zkCustomization)
+		zkJars.each { contribute("zkpackages/${it.name}", it) }
+		contribute('lib/zkpatches.jar', zkPatches)
+		contribute('frozen webui.war', war)
+
+		def contractRows = phase5dReadContractRows('webui.war')
+		if (contractRows.isEmpty()) {
+			throw new GradleException('The Phase 5b contract has no webui.war rows')
+		}
+		def reproducible = contractRows.findAll { it[1] != null && !it[1].startsWith('@') && it[5] == 'reproducible' }
+		def nonReproducible = contractRows.findAll { it[5] != 'reproducible' }
+			.collect { "${it[1]}\t${it[5]}".toString() }.toSet()
+
+		// The named non-reproducible set is asserted unchanged rather than
+		// re-derived. The WAR envelope is deliberately NOT compared: Ant stamps
+		// the ZIP central directory, so envelope equality is not a property this
+		// gate can honestly claim.
+		def expectedNonReproducible = ['@envelope\tnot-reproducible-informational'] as Set
+		if (nonReproducible != expectedNonReproducible) {
+			throw new GradleException(
+				"The named non-reproducible webui.war entry set changed. " +
+					"expected=${expectedNonReproducible.sort()}, got=${nonReproducible.sort()}")
+		}
+
+		def contractIndex = reproducible.collectEntries { [(it[1]): it] }
+		def missing = (contractIndex.keySet() - merged.keySet()).sort()
+		def added = (merged.keySet() - contractIndex.keySet()).sort()
+		def changed = contractIndex.keySet().intersect(merged.keySet()).findAll { path ->
+			def expected = contractIndex[path]
+			def actual = merged[path]
+			expected[2] != actual.size.toString() || expected[3] != actual.digest
+		}.sort()
+		if (missing || added || changed) {
+			throw new GradleException(
+				"The materialized frozen legacy web artifacts do not reproduce the Phase 5b " +
+					"webui.war pins. missing=${missing.take(5)}, added=${added.take(5)}, " +
+					"changed=${changed.take(5).collect { "${it} (from ${contributor[it]})" }}")
+		}
+
+		// Single-number confirmation using the frozen entry-set digest formula.
+		def entrySetDigest = phase5dSha512(
+			merged.values().sort { it.path }
+				.collect { "${it.path}\t${it.size}\t${it.digest}" }
+				.join('\n').getBytes('UTF-8'))
+		def archiveRow = contractRows.find { it[1] == '@archive' }
+		if (archiveRow == null) {
+			throw new GradleException('The Phase 5b contract has no webui.war @archive row')
+		}
+		if (archiveRow[3] != entrySetDigest) {
+			throw new GradleException(
+				"The materialized webui.war entry-set digest is ${entrySetDigest}, " +
+					"the Phase 5b contract pins ${archiveRow[3]}")
+		}
+		if (archiveRow[2] != merged.size().toString()) {
+			throw new GradleException(
+				"The materialized webui.war has ${merged.size()} reproducible entries, " +
+					"the Phase 5b contract pins ${archiveRow[2]}")
+		}
+
+		def evidence = new File(rootProject.buildDir, 'phase5/evidence')
+		evidence.mkdirs()
+		new File(evidence, 'phase5d-legacy-web-artifacts.txt').withWriter('UTF-8') { out ->
+			out.writeLine('verifyPhase5dLegacyWebArtifacts')
+			out.writeLine("source_commit\t${frozenCommit}")
+			out.writeLine("reproducible_entries_matched\t${merged.size()}")
+			out.writeLine("entry_set_digest\t${entrySetDigest}")
+			out.writeLine("envelope_compared\tno (Ant stamps the ZIP central directory)")
+			out.writeLine("non_reproducible_entries\t${nonReproducible.sort().join(',')}")
+			contributor.values().countBy { it }.sort { it.key }.each { source, count ->
+				out.writeLine("contributed_by\t${source}\t${count}")
+			}
+		}
+		logger.lifecycle(
+			"Phase 5d frozen legacy webui.war: ${merged.size()} reproducible entries reproduced " +
+				"from commit ${frozenCommit}; entry-set digest matches the Phase 5b pin")
+	}
+}
+
+tasks.register('verifyPhase5dLegacyWarSourceCrossing') {
+	group = 'verification'
+	description =
+		'Proves the shipped legacy web artifact is frozen and that no migrated ZK source is compiled against ZK 3.6'
+	dependsOn tasks.named('materializePhase5dLegacyWebArtifacts')
+	inputs.files(
+		rootProject.file('utils_dev/build.xml'),
+		rootProject.file('zkwebui/build.xml'))
+	doLast {
+		def problems = []
+
+		// 1. The Ant reactor still owns every entry it owned before Phase 5d.
+		def reactor = new groovy.xml.XmlSlurper(false, false)
+			.parse(rootProject.file('utils_dev/build.xml'))
+		def reactorEntries = reactor.target
+			.find { it.@name.text() == 'jar' }
+			.ant
+			.collect { it.@dir.text() }
+		if (reactorEntries.size() != phase5dExpectedAntReactorEntries) {
+			problems << "the Ant jar reactor has ${reactorEntries.size()} entries, " +
+				"expected ${phase5dExpectedAntReactorEntries}"
+		}
+		(['zkwebui'] + phase5dCrossedZkModules.keySet().toList()).each { entry ->
+			if (!reactorEntries.contains(entry)) {
+				problems << "the Ant jar reactor no longer contains ${entry}"
+			}
+		}
+
+		// 2. No Ant target may still compile a migrated ZK source tree.
+		def stripXmlComments = { String text -> text.replaceAll('(?s)<!--.*?-->', ' ') }
+		def crossingInclude = rootProject.file('utils_dev/phase5d-frozen-zk.xml')
+		if (!crossingInclude.isFile()) {
+			problems << 'utils_dev/phase5d-frozen-zk.xml is missing'
+		} else if (!crossingInclude.text.contains('materialize-legacy-webui-war.sh')) {
+			problems << 'utils_dev/phase5d-frozen-zk.xml does not run the materialization script'
+		}
+		def zkwebuiBuild = stripXmlComments(rootProject.file('zkwebui/build.xml').text)
+		if (zkwebuiBuild =~ /(?s)<javac\b[^>]*\bsrcdir\s*=\s*"[^"]*WEB-INF\/src/ ||
+			zkwebuiBuild =~ /(?s)<javac\b[^>]*>\s*<src\b[^>]*WEB-INF\/src/) {
+			problems << 'zkwebui/build.xml still compiles WEB-INF/src against the legacy ZK classpath'
+		}
+		if (!zkwebuiBuild.contains('phase5d-frozen-zk.xml') ||
+			!zkwebuiBuild.contains('${phase5d.frozen.war}')) {
+			problems << 'zkwebui/build.xml does not stage the materialized frozen legacy WAR'
+		}
+		phase5dCrossedZkModules.each { module, jarName ->
+			def buildFile = rootProject.file("${module}/build.xml")
+			if (!buildFile.isFile()) {
+				problems << "missing ${module}/build.xml"
+				return
+			}
+			def text = stripXmlComments(buildFile.text)
+			if (text =~ /(?s)<javac\b[^>]*\bsrcdir\s*=\s*"[^"]*ui\/zk/ ||
+				text =~ /(?s)<javac\b[^>]*\bsrcdir\s*=\s*"\$\{zk(src|_view)\}/) {
+				problems << "${module}/build.xml still compiles its migrated ui/zk tree"
+			}
+			if (!text.contains('phase5d-frozen-zk.xml') ||
+				!text.contains('${phase5d.frozen.zkpackages}')) {
+				problems << "${module}/build.xml does not stage the frozen ${jarName}"
+			}
+		}
+
+		// 3. The frozen artifact must still carry the ZK 3.6 and commercial
+		//    namespaces that the migrated sources no longer contain. If the WAR
+		//    were rebuilt from current source these markers would be gone.
+		def war = phase5dWarFile.get().asFile
+		def legacyMarkerHits = [:].withDefault { 0 }
+		new ZipFile(war).withCloseable { zip ->
+			zip.entries().each { ZipEntry entry ->
+				if (entry.isDirectory() ||
+					!entry.name.startsWith('WEB-INF/classes/org/adempiere/')) {
+					return
+				}
+				def bytes = zip.getInputStream(entry).withCloseable { phase5dReadFully(it) }
+				def text = new String(bytes, 'ISO-8859-1')
+				phase5dLegacyBytecodeMarkers.keySet().each { marker ->
+					if (text.contains(marker)) {
+						legacyMarkerHits[marker] = legacyMarkerHits[marker] + 1
+					}
+				}
+			}
+		}
+		def markerDrift = phase5dLegacyBytecodeMarkers
+			.findAll { marker, expected -> legacyMarkerHits[marker] != expected }
+			.collect { marker, expected -> "${marker}: ${legacyMarkerHits[marker]} != ${expected}" }
+		if (!markerDrift.isEmpty()) {
+			problems << "the frozen legacy WAR no longer carries the pinned ZK 3.6 and " +
+				"commercial references ${markerDrift}; it may have been rebuilt from migrated sources"
+		}
+
+		// 4. ... and the migrated sources must contain none of them, so the two
+		//    statements cannot both be satisfied by the same compile.
+		def migratedRoots = [rootProject.file('zkwebui/WEB-INF/src')] +
+			phase5dCrossedZkModules.keySet().collect {
+				rootProject.file("${it}/src/main/java/ui/zk")
+			}
+		def migratedViolations = []
+		migratedRoots.findAll { it.directory }.each { root ->
+			rootProject.fileTree(root) { include '**/*.java' }.each { source ->
+				def code = source.getText('UTF-8')
+					.replaceAll('(?s)/\\*.*?\\*/', ' ')
+					.replaceAll('(?m)//.*$', ' ')
+				phase5dLegacySourceMarkers.each { marker ->
+					if (code.contains(marker)) {
+						migratedViolations << "${rootProject.relativePath(source)}: ${marker}"
+					}
+				}
+			}
+		}
+		if (!migratedViolations.isEmpty()) {
+			problems << "migrated ZK sources still reference legacy ZK namespaces: " +
+				"${migratedViolations.take(10)}"
+		}
+
+		if (!problems.isEmpty()) {
+			throw new GradleException(
+				"Phase 5d legacy web source crossing is not proven: ${problems}")
+		}
+
+		logger.lifecycle(
+			"Phase 5d source crossing: ${reactorEntries.size()} Ant reactor entries preserved, " +
+				"${phase5dCrossedZkModules.size() + 1} ZK surfaces materialized from the frozen commit, " +
+				"legacy bytecode markers still present ${legacyMarkerHits.sort { it.key }}")
+	}
+}

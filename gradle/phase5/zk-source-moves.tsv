@@ -1,0 +1,9 @@
+# Phase 5d ZK source migration map.
+#
+# gradle/phase5/zk-sources.tsv is the frozen Phase 5a inventory and records the
+# pre-migration path of every ZK source file. When Phase 5d has to relocate a
+# file, the move is recorded here so the inventory stays immutable and the
+# compile-closure verification can still resolve every row to a real file.
+#
+# inventory_path	migrated_path	reason
+zkwebui/WEB-INF/src/org/zkoss/zkmax/zul/render/Combobox2Default.java	zkwebui/WEB-INF/src/org/adempiere/webui/compat/Combobox2Default.java	ADempiere-owned CE replacement moved out of the commercial org.zkoss.zkmax namespace

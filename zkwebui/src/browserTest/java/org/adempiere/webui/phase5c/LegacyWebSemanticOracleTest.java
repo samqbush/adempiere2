@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -17,12 +18,15 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
+import org.adempiere.webui.phase5d.BrowserSemanticContract;
+import org.adempiere.webui.phase5d.ErrorMessageWindowFacts;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.BrowserType;
+import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.Response;
@@ -39,16 +43,39 @@ class LegacyWebSemanticOracleTest {
 			Path.of(requiredProperty("phase5c.browser.evidenceDir"));
 
 	@Test
-	void replaysLegacySemanticContract() throws IOException, InterruptedException {
+	void replaysLegacySemanticContract() throws IOException {
 		Files.createDirectories(evidenceDir);
 		Path fixture = evidenceDir.resolve("fixture.tsv");
-		runFixture("snapshot", fixture);
 
-		Replay first = replay(evidenceDir.resolve("A"));
+		// First login is not idempotent: it creates the oracle user's
+		// AD_Preference rows and AD_Tree_Favorite node and change-logs both, and
+		// scripts/phase5/reset-oracle-fixture.sh verify branches on exactly that.
+		// Running captures A and B straight onto a freshly restored seed would
+		// therefore check a FIRST capture and a REPEAT capture against different
+		// rules and pass for the wrong reason. Prime a cold database instead of
+		// assuming a warm one, so both captures sit at the same ordinal. This
+		// mirrors scripts/phase5/replay-legacy-web-oracle.sh, which hit the same
+		// trap on the wire oracle.
+		if ("cold".equals(fixtureState())) {
+			Path prime = evidenceDir.resolve("prime.tsv");
+			runFixture("snapshot", prime);
+			replay(evidenceDir.resolve("prime"), false);
+			runFixture("reset", prime);
+		}
+
+		runFixture("snapshot", fixture);
+		// Reset before capture A as well as between A and B. Capture A is not
+		// entitled to inherit the AD_RecentItem rows a priming or previous
+		// capture left behind: opening a window records a recent item and the
+		// desktop renders that list, so without this the two captures would not
+		// start from the same fixture.
+		runFixture("reset", fixture);
+
+		Replay first = replay(evidenceDir.resolve("A"), true);
 		runFixture("verify", fixture);
 		runFixture("reset", fixture);
 
-		Replay second = replay(evidenceDir.resolve("B"));
+		Replay second = replay(evidenceDir.resolve("B"), true);
 		runFixture("verify", fixture);
 		runFixture("reset", fixture);
 
@@ -86,10 +113,24 @@ class LegacyWebSemanticOracleTest {
 				"Approved whitespace volatility was not normalized");
 	}
 
-	private Replay replay(Path captureDir) throws IOException {
+	/**
+	 * @param captureDir where this capture's evidence is written
+	 * @param strict whether the capture is compared against the frozen contract.
+	 *        A priming capture on a cold database is a fixture operation, not a
+	 *        measurement; treating it as one would compare a first login against
+	 *        the frozen repeat-login oracle.
+	 */
+	private Replay replay(Path captureDir, boolean strict) throws IOException {
 		List<String> requests = new ArrayList<>();
 		List<String> errors = new ArrayList<>();
 		Map<String, String> facts = new LinkedHashMap<>();
+
+		Files.createDirectories(captureDir);
+		Path countsBefore = captureDir.resolve("database-before.tsv");
+		Path countsAfter = captureDir.resolve("database-after.tsv");
+		Path effectLog = captureDir.resolve("database-effect.txt");
+		Files.deleteIfExists(effectLog);
+		runEffect(effectLog, "counts", countsBefore.toString());
 
 		try (Playwright playwright = Playwright.create();
 				Browser browser = playwright.chromium().launch(
@@ -150,6 +191,9 @@ class LegacyWebSemanticOracleTest {
 			facts.put("menu-user-browser",
 					Boolean.toString(page.getByText("User Browser",
 							new Page.GetByTextOptions().setExact(true)).count() > 0));
+
+			facts.putAll(openErrorMessageWindow(page, captureDir));
+
 			page.getByText("Log Out", new Page.GetByTextOptions().setExact(true)).click();
 			page.getByText("Login", new Page.GetByTextOptions().setExact(true)).first().waitFor();
 			facts.put("logout-login-visible", "true");
@@ -158,6 +202,29 @@ class LegacyWebSemanticOracleTest {
 			assertContext(page, facts, "/mobile/", "filter-mobile");
 			assertContext(page, facts, "/webui/", "filter-webui");
 			assertContext(page, facts, "/wstore/", "filter-wstore");
+		}
+
+		// The zero-write proof is taken after the browser closes, so a write
+		// still in flight cannot be missed, and before the fixture is reset, so
+		// the reset cannot hide one.
+		runEffect(effectLog, "counts", countsAfter.toString());
+		String comparison = runEffect(effectLog, "compare",
+				countsBefore.toString(), countsAfter.toString());
+		facts.put(ErrorMessageWindowFacts.FACT_DATABASE_WRITES,
+				measuredDelta(comparison));
+
+		Files.write(captureDir.resolve("semantic-facts.tsv"),
+				facts.entrySet().stream()
+						.map(entry -> entry.getKey() + "\t" + entry.getValue())
+						.toList(),
+				StandardCharsets.UTF_8);
+		Files.write(captureDir.resolve("network-requests.tsv"),
+				requests, StandardCharsets.UTF_8);
+		Files.write(captureDir.resolve("browser-errors.tsv"),
+				errors, StandardCharsets.UTF_8);
+
+		if (!strict) {
+			return new Replay(facts, requests, errors);
 		}
 
 		assertEquals(expectedFacts(), facts);
@@ -172,21 +239,89 @@ class LegacyWebSemanticOracleTest {
 		assertEquals(expectedNetworkClasses(), requestClasses(requests),
 				"Network request classes changed");
 
-		Files.createDirectories(captureDir);
-		Files.write(captureDir.resolve("semantic-facts.tsv"),
-				facts.entrySet().stream()
-						.map(entry -> entry.getKey() + "\t" + entry.getValue())
-						.toList(),
-				StandardCharsets.UTF_8);
-		Files.write(captureDir.resolve("network-requests.tsv"),
-				requests, StandardCharsets.UTF_8);
-		Files.write(captureDir.resolve("browser-errors.tsv"),
-				errors, StandardCharsets.UTF_8);
 		Set<String> unexpected = new TreeSet<>(errors);
 		unexpected.removeAll(allowedErrors());
 		assertTrue(unexpected.isEmpty(),
 				"Unexpected browser error classes: " + unexpected);
 		return new Replay(facts, requests, errors);
+	}
+
+	/**
+	 * Opens the exact "Error Message" menu item and observes the window.
+	 *
+	 * <p>The menu tree renders every node, but a collapsed branch has no box, so
+	 * clicking the row directly is not an action a browser can perform.
+	 * ADempiere's own menu lookup is used instead: it resolves the typed value
+	 * against an exact node-name map, opens the ancestor path, selects the item,
+	 * and posts the same {@code ON_CLICK} on the {@code Treerow} that
+	 * {@code MenuPanel.java:161,180} registers
+	 * ({@code TreeSearchPanel.java:215-252}). That is the event the frozen wire
+	 * oracle records as {@code onClick(menu-row:Error_Message)}, reached the way
+	 * a user reaches it.
+	 */
+	private Map<String, String> openErrorMessageWindow(Page page, Path captureDir)
+			throws IOException {
+		Locator lookup = page.locator(
+				"xpath=//span[@title='Enter text to search for in tree']"
+						+ "/ancestor::div[1]/following-sibling::span"
+						+ "[contains(@class,'z-combobox')]"
+						+ "//input[contains(@class,'z-combobox-inp')]");
+		lookup.waitFor();
+		// The value must be typed, not filled. ZK 3.6 drives the lookup from key
+		// events; a programmatic value assignment produces no onChanging and the
+		// menu lookup never resolves the node.
+		lookup.click();
+		lookup.pressSequentially(ErrorMessageWindowFacts.WINDOW_LABEL,
+				new Locator.PressSequentiallyOptions().setDelay(40));
+		// The suggestion carries the menu node's exact name in ZK's own
+		// z.label attribute, so waiting for it proves the lookup resolved the
+		// exact "Error Message" item rather than a prefix of something else.
+		Locator suggestion = page.locator("tr.z-combo-item[z\\.label=\""
+				+ ErrorMessageWindowFacts.WINDOW_LABEL + "\"]");
+		suggestion.first().waitFor();
+		assertEquals(ErrorMessageWindowFacts.WINDOW_LABEL, lookup.inputValue(),
+				"The menu lookup does not hold the exact window name");
+		// Waiting for the AU round trip that carries the selection is a
+		// post-condition, not a sleep: if the key press produced no onChange the
+		// step fails here, naming the cause, instead of timing out later on a
+		// tab that was never going to appear.
+		page.waitForResponse(
+				response -> response.request().url().contains("/zkau")
+						&& response.request().postData() != null
+						&& response.request().postData().contains("=onChange&")
+						&& response.request().postData().contains("Error%20Message"),
+				() -> lookup.press("Enter"));
+
+		// :text-is is an exact, whitespace-normalized match. A Java Pattern is
+		// NOT usable here: Playwright hands the pattern source to a JavaScript
+		// RegExp, which does not implement \Q...\E, so a quoted Java pattern
+		// silently matches nothing and the step times out for the wrong reason.
+		page.locator("span.z-tab-text:text-is('"
+				+ ErrorMessageWindowFacts.WINDOW_LABEL + "')").first().waitFor();
+		page.locator("div.desktop-tabpanel")
+				.filter(new Locator.FilterOptions()
+						.setHas(page.locator("[id*='_AD_Error_']")))
+				.first()
+				.waitFor();
+		// The toolbar is built after the tab panel is attached. Waiting for the
+		// destructive control the read-only claim depends on keeps the
+		// observation deterministic instead of timing-dependent.
+		page.locator("div.desktop-tabpanel a.toolbar-button[title='Delete record']")
+				.first()
+				.waitFor();
+
+		Object raw = page.evaluate(ErrorMessageWindowFacts.BROWSER_EXTRACTION_SCRIPT);
+		Files.writeString(captureDir.resolve("window-observation.txt"),
+				raw + System.lineSeparator(), StandardCharsets.UTF_8);
+
+		// The zero-write delta is measured against the database after the browser
+		// closes, so it is contributed there and stripped here. Deriving it in
+		// two places is how the two would eventually disagree.
+		Map<String, String> derived = new LinkedHashMap<>(
+				ErrorMessageWindowFacts.derive(
+						ErrorMessageWindowFacts.fromEvaluation(raw, 0)));
+		derived.remove(ErrorMessageWindowFacts.FACT_DATABASE_WRITES);
+		return derived;
 	}
 
 	private void assertContext(
@@ -202,39 +337,11 @@ class LegacyWebSemanticOracleTest {
 	}
 
 	private static Map<String, String> expectedFacts() throws IOException {
-		Map<String, String> facts = new LinkedHashMap<>();
-		try (var input = LegacyWebSemanticOracleTest.class.getResourceAsStream(
-				"/semantic-facts.tsv")) {
-			if (input == null) {
-				throw new IOException("Missing semantic-facts.tsv");
-			}
-			for (String line : new String(input.readAllBytes(), StandardCharsets.UTF_8)
-					.split("\\R")) {
-				if (line.isBlank() || line.startsWith("#")) {
-					continue;
-				}
-				String[] fields = line.split("\\t", 2);
-				facts.put(fields[0], fields[1]);
-			}
-		}
-		return facts;
+		return BrowserSemanticContract.facts();
 	}
 
 	private static Set<String> allowedErrors() throws IOException {
-		try (var input = LegacyWebSemanticOracleTest.class.getResourceAsStream(
-				"/allowed-browser-errors.tsv")) {
-			if (input == null) {
-				throw new IOException("Missing allowed-browser-errors.tsv");
-			}
-			Set<String> errors = new TreeSet<>();
-			for (String line : new String(input.readAllBytes(), StandardCharsets.UTF_8)
-					.split("\\R")) {
-				if (!line.isBlank() && !line.startsWith("#")) {
-					errors.add(line);
-				}
-			}
-			return errors;
-		}
+		return BrowserSemanticContract.allowedErrors();
 	}
 
 	private static Set<String> stableErrors(List<String> errors) {
@@ -248,20 +355,7 @@ class LegacyWebSemanticOracleTest {
 	}
 
 	private static Set<String> expectedNetworkClasses() throws IOException {
-		try (var input = LegacyWebSemanticOracleTest.class.getResourceAsStream(
-				"/network-classes.tsv")) {
-			if (input == null) {
-				throw new IOException("Missing network-classes.tsv");
-			}
-			Set<String> classes = new TreeSet<>();
-			for (String line : new String(input.readAllBytes(), StandardCharsets.UTF_8)
-					.split("\\R")) {
-				if (!line.isBlank() && !line.startsWith("#")) {
-					classes.add(line);
-				}
-			}
-			return classes;
-		}
+		return BrowserSemanticContract.networkClasses();
 	}
 
 	private static Set<String> requestClasses(List<String> requests) {
@@ -288,35 +382,72 @@ class LegacyWebSemanticOracleTest {
 	}
 
 	private static String normalizedText(String value) {
-		return value.replace('\u00a0', ' ')
-				.replaceAll("\\s+", " ")
-				.trim();
+		return BrowserSemanticContract.normalizedText(value);
 	}
 
 	private String normalizedUrl(String value) {
-		return value.replace(baseUrl, "")
-				.replaceAll(";jsessionid=[A-Fa-f0-9]+", ";jsessionid=<SESSION>")
-				.replaceAll("(/webui/zkau/view/)[^/]+/(zk_comp_)\\d+",
-						"$1<DTID>/$2<COMPONENT>")
-				.replaceAll("([?&]dtid=)[^&]+", "$1<DTID>");
+		return BrowserSemanticContract.normalizedUrl(baseUrl, value);
 	}
 
-	private void runFixture(String operation, Path fixture)
-			throws IOException, InterruptedException {
-		Process process = new ProcessBuilder(
-				requiredProperty("phase5c.browser.fixtureScript"),
+	private static String measuredDelta(String comparison) {
+		for (String line : comparison.split("\\R")) {
+			if (line.startsWith("window-readonly-delta=")) {
+				return line.substring("window-readonly-delta=".length()).trim();
+			}
+		}
+		throw new IllegalStateException(
+				"The read-only effect comparison reported no measured delta:\n" + comparison);
+	}
+
+	private void runFixture(String operation, Path fixture) {
+		runScript(requiredProperty("phase5c.browser.fixtureScript"),
+				"Fixture " + operation,
+				operation, fixture.toString());
+	}
+
+	private String fixtureState() {
+		return runScript(requiredProperty("phase5c.browser.fixtureScript"),
+				"Fixture state", "state").trim();
+	}
+
+	private String runEffect(Path log, String... arguments) throws IOException {
+		String output = runScript(requiredProperty("phase5c.browser.effectScript"),
+				"Read-only effect " + arguments[0], arguments);
+		Files.writeString(log, output, StandardCharsets.UTF_8,
+				StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+		return output;
+	}
+
+	/**
+	 * Runs a marker-guarded database script with the reviewed connection
+	 * parameters and returns its combined output, which is also echoed so a CI
+	 * failure is readable without re-running the whole lane.
+	 */
+	private String runScript(String script, String label, String... arguments) {
+		List<String> command = new ArrayList<>(List.of(
+				script,
 				requiredProperty("phase5c.browser.dbHost"),
 				requiredProperty("phase5c.browser.dbPort"),
 				requiredProperty("phase5c.browser.dbName"),
-				requiredProperty("phase5c.browser.dbUser"),
-				requiredProperty("phase5c.browser.dbPassword"),
-				requiredProperty("phase5c.browser.dbMarker"),
-				operation,
-				fixture.toString())
-				.inheritIO()
-				.start();
-		assertEquals(0, process.waitFor(),
-				"Fixture " + operation + " failed");
+				requiredProperty("phase5c.browser.dbUser")));
+		command.add(requiredProperty("phase5c.browser.dbMarker"));
+		command.addAll(List.of(arguments));
+		try {
+			Process process = new ProcessBuilder(command)
+					.redirectErrorStream(true)
+					.start();
+			String output = new String(process.getInputStream().readAllBytes(),
+					StandardCharsets.UTF_8);
+			int status = process.waitFor();
+			System.out.print(output);
+			assertEquals(0, status, label + " failed:\n" + output);
+			return output;
+		} catch (IOException exception) {
+			throw new IllegalStateException(label + " could not be started", exception);
+		} catch (InterruptedException exception) {
+			Thread.currentThread().interrupt();
+			throw new IllegalStateException(label + " was interrupted", exception);
+		}
 	}
 
 	private record Replay(
@@ -332,4 +463,5 @@ class LegacyWebSemanticOracleTest {
 		}
 		return value;
 	}
+
 }

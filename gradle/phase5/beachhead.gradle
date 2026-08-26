@@ -10,7 +10,7 @@ tasks.register('stagePhase5cInstalledWeb') {
 	description = 'Stages the Phase 5c web overlay on the installed loopback runtime'
 	dependsOn(
 		tasks.named('preparePhase4InstalledApi'),
-		':zkwebui:verifyPhase5cModernWebWar')
+		':zkwebui:verifyPhase5dModernWebWar')
 	inputs.file phase5cModernWar
 	outputs.files(
 		phase5cInstalledHome.map {
@@ -39,7 +39,7 @@ tasks.register('stagePhase5cReleaseWeb') {
 	description = 'Stages the Phase 5c web overlay in the unconfigured release tree'
 	dependsOn(
 		tasks.named('preparePhase4ReleaseApi'),
-		':zkwebui:verifyPhase5cModernWebWar')
+		':zkwebui:verifyPhase5dModernWebWar')
 	inputs.file phase5cModernWar
 	outputs.files(
 		new File(phase5cReleaseHome.asFile,
@@ -92,17 +92,15 @@ tasks.register('verifyPhase5cWebOverlay', Exec) {
 			'org.adempiere.webservice/build/libs/ADInterface-Modern-1.0.war'))
 }
 
-tasks.register('phase5cModernWebPackagingSmoke', Exec) {
-	group = 'verification'
-	description = 'Boots the loopback modern container with CXF and the 503 web marker'
-	dependsOn(
-		tasks.named('phase4ModernSoapRuntime'),
-		':zkwebui:verifyPhase5cModernWebWar')
-	commandLine(
-		'bash',
-		rootProject.file('scripts/phase5/smoke-modern-web-packaging.sh'),
-		phase5cModernWar.asFile)
-}
+// Phase 5d retired the Phase 5c `phase5cModernWebPackagingSmoke` task and
+// scripts/phase5/smoke-modern-web-packaging.sh. Both asserted that
+// /webui-modern/__phase5c/packaging answered HTTP 503, which was the correct
+// assertion while the archive contained one marker servlet and no application.
+// Phase 5d replaces that archive with the functional ZK CE 10 slice, so the
+// marker route no longer exists and an assertion about it could only be
+// satisfied by re-adding a success-shaped placeholder. The historical 503
+// evidence is preserved in docs/modernization/phase-5c-evidence.md; the live
+// replacement is phase5dModernWebSmoke in gradle/phase5/zk-functional-slice.gradle.
 
 tasks.register('installPhase5cBrowser', Exec) {
 	group = 'verification'
@@ -202,7 +200,11 @@ tasks.register('phase5cFinalVerification') {
 		tasks.named('phase5bFinalVerification'),
 		tasks.named('verifyPhase5cDecisions'),
 		tasks.named('verifyPhase5cWebOverlay'),
-		tasks.named('phase5cModernWebPackagingSmoke'),
+		// phase5cModernWebPackagingSmoke was removed by Phase 5d; see the note
+		// above installPhase5cBrowser. Its successor, phase5dModernWebSmoke,
+		// requires a database and therefore cannot join this database-neutral
+		// gate. Phase 5d does not chain phase5cFinalVerification: it depends on
+		// the Phase 5c assertions that remain true one by one.
 		':zkwebui:phase5cTransformerCorpusReport',
 		tasks.named('verifyPhase5cRollbackArtifacts'),
 		':zkwebui:check')

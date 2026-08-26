@@ -13,6 +13,7 @@
  *****************************************************************************/
 package org.adempiere.webui.component;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,10 +21,10 @@ import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.South;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.zkoss.zul.South;
 import org.zkoss.zul.Div;
 import org.zkoss.zul.Vbox;
 
@@ -54,7 +55,7 @@ public class Accordion extends Borderlayout implements EventListener {
 		north.setCollapsible(false);
 		
 		Center center = new Center();
-		center.setFlex(true);
+		ZkCompat.setFlex(center, true);
 		appendChild(new Center());
 		
 		South south = new South();

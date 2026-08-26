@@ -1,0 +1,429 @@
+// Phase 5d: the functional modern ZK CE 10 slice, its loopback runtime lane, and
+// the database-neutral final gate.
+//
+// Two gates, split the same way Phase 5b split its own:
+//
+//   phase5dModernWebSmoke      database-backed. Boots the modern ZK slice beside
+//                              the unchanged Phase 4 CXF WAR in one loopback
+//                              Tomcat 10.1.59 JVM, drives login -> role -> menu
+//                              -> read-only window twice with a marker-guarded
+//                              fixture reset between captures, replays the
+//                              complete Phase 4 SOAP corpus while the modern
+//                              session is authenticated, and compares the
+//                              modern semantic facts and database effects with
+//                              the frozen legacy baseline.
+//
+//   phase5dFinalVerification   database-neutral. Compile closure, migrated ZK
+//                              unit tests, functional WAR, current inventory,
+//                              frozen legacy artifact, installed/release
+//                              overlay, rollback artifacts, Phase 4
+//                              preservation, and the Phase 5b/5c assertions that
+//                              remain valid.
+//
+// phase5cFinalVerification is deliberately NOT chained. It still depends on
+// Phase 5c assertions about a 503 marker archive that Phase 5d replaced, so
+// chaining it would either re-introduce the marker or make this gate pass on an
+// assertion that is no longer true. The Phase 5c assertions that ARE still valid
+// are depended on individually below.
+
+def phase5dModernWar = rootProject.layout.projectDirectory.file(
+	'zkwebui/build/libs/webui-modern.war')
+def phase5dModernApiWar = rootProject.layout.projectDirectory.file(
+	'org.adempiere.webservice/build/libs/ADInterface-Modern-1.0.war')
+def phase5dAdempiereHome =
+	rootProject.layout.buildDirectory.dir('phase3/runtime/Adempiere')
+def phase5dTomcatHome = rootProject.layout.buildDirectory.dir('phase5d/tomcat10')
+def phase5dEvidenceDir = rootProject.layout.buildDirectory.dir('phase5d/evidence')
+
+def phase5dDbHost = providers.gradleProperty('phase3DbHost').orElse('127.0.0.1')
+def phase5dDbPort = providers.gradleProperty('phase3DbPort').orElse('5432')
+def phase5dDbName = providers.gradleProperty('phase3DbName')
+	.orElse('adempiere_phase3_ci')
+def phase5dDbUser = providers.gradleProperty('phase3DbUser')
+	.orElse('adempiere_phase3_ci')
+def phase5dDbPassword = providers.gradleProperty('phase3DbPassword')
+	.orElse('adempiere_phase3_ci')
+def phase5dDatabaseMarker = 'ADempiere Phase 3 disposable database'
+
+// ---------------------------------------------------------------------------
+// Runtime lane
+// ---------------------------------------------------------------------------
+
+tasks.register('startPhase5dModernWebLane', Exec) {
+	group = 'verification'
+	description = 'Starts the loopback modern ZK slice beside the Phase 4 CXF API'
+	dependsOn(
+		tasks.named('phase3AntDatabaseBuild'),
+		tasks.named('phase4ModernSoapRuntime'),
+		':zkwebui:verifyPhase5dModernWebWar')
+	commandLine(
+		'bash',
+		rootProject.file('scripts/phase5/start-modern-web-lane.sh'),
+		phase5dModernWar.asFile,
+		phase5dModernApiWar.asFile,
+		phase5dAdempiereHome.get().asFile,
+		phase5dTomcatHome.get().asFile)
+}
+
+tasks.register('stopPhase5dModernWebLane', Exec) {
+	group = 'verification'
+	description = 'Stops the Phase 5d loopback modern runtime lane'
+	commandLine(
+		'bash',
+		rootProject.file('scripts/phase5/stop-modern-web-lane.sh'),
+		phase5dTomcatHome.get().asFile)
+}
+
+tasks.register('phase5dModernWebSmoke') {
+	group = 'verification'
+	description =
+		'Canonical Phase 5d gate: modern ZK CE 10 login, role, menu, and read-only window on the marker-owned database'
+	// preparePhase4OperationScenarios is deliberately NOT a dependency. One of
+	// its fixtures rewrites GardenAdmin's password
+	// (scripts/phase4/prepare-operation-scenarios.sh:55-57), so applying it
+	// before the browser lane would make the two measured captures log in with a
+	// credential the frozen legacy oracle never used. The capture applies it
+	// itself, between the measured captures and the coexistence session.
+	dependsOn(
+		tasks.named('verifyPhase5dBrowserContractManifest'),
+		// Both loopback lanes run concurrently. The Tomcat 9 browser lane is
+		// what makes "distinct ports, distinct JVMs, one shared marker-owned
+		// database" a measurement rather than an assumption.
+		tasks.named('startPhase5cLegacyBrowserLane'),
+		':zkwebui:modernBrowserTest',
+		tasks.named('verifyPhase5dModernRuntimeEvidence'))
+}
+
+tasks.register('verifyPhase5dModernRuntimeEvidence') {
+	group = 'verification'
+	description =
+		'Fails when the modern runtime lane did not record coexistence, isolation, and SOAP evidence'
+	mustRunAfter ':zkwebui:modernBrowserTest'
+	doLast {
+		def browserEvidence = rootProject.layout.buildDirectory
+			.dir('phase5d/browser').get().asFile
+		def problems = []
+		def readRows = { File file ->
+			if (!file.isFile()) {
+				problems << "missing ${rootProject.relativePath(file)}"
+				return [:]
+			}
+			def values = [:].withDefault { [] }
+			file.readLines('UTF-8').findAll { it && !it.startsWith('#') }.each {
+				def fields = it.split('\t', -1)
+				values[fields[0]] << (fields.length > 1 ? fields[1] : '')
+			}
+			values
+		}
+
+		def lane = readRows(new File(phase5dEvidenceDir.get().asFile, 'modern-lane.tsv'))
+		if (lane['modern_web'] != ['200'] || lane['modern_api'] != ['200']) {
+			problems << 'the modern lane did not record a healthy ZK context and CXF API'
+		}
+		if (!(lane['listener']?.getAt(0) ==~ /127\.0\.0\.1:\d+/)) {
+			problems << "the modern lane listener is not loopback-only: ${lane['listener']}"
+		}
+		if (lane['shutdown_port'] != ['disabled']) {
+			problems << 'the modern lane did not disable the Tomcat shutdown port'
+		}
+
+		// The coexistence session must have produced the full evidence set. It is
+		// a separate session from the two measured captures on purpose: the Phase
+		// 4 SOAP corpus authenticates 44 times and every ADempiere login writes an
+		// AD_Session row, which the frozen contract allows a measured capture
+		// exactly one of.
+		['coexistence'].each { capture ->
+			def captureDir = new File(browserEvidence, capture)
+			def soap = new File(captureDir, 'phase4-soap-during-modern-session.tsv')
+			if (!soap.isFile() ||
+					!soap.text.contains('phase4_soap_corpus\tpass\twhile-modern-session-authenticated')) {
+				problems << "capture ${capture} recorded no passing Phase 4 SOAP corpus " +
+					'taken while the modern session was authenticated'
+			}
+			['before-soap', 'after-soap'].each { label ->
+				def runtime = readRows(new File(captureDir, "runtime-${label}.tsv"))
+				if (runtime['modern_web'] != ['200'] || runtime['modern_api'] != ['200']) {
+					problems << "capture ${capture} ${label}: one of the two colocated " +
+						'contexts was not answering'
+				}
+				def listeners = runtime['listener'] ?: []
+				def public_ = listeners.findAll {
+					it && !it.startsWith('127.0.0.1:') && !it.startsWith('localhost:')
+				}
+				if (!public_.isEmpty()) {
+					problems << "capture ${capture} ${label}: the modern JVM holds a " +
+						"non-loopback listener ${public_}"
+				}
+				if ((runtime['heap'] ?: []).isEmpty()) {
+					problems << "capture ${capture} ${label}: no heap evidence recorded"
+				}
+				def loaders = runtime['webapp_classloaders'] ?: []
+				if (loaders.isEmpty() || (loaders[0] as Integer) < 2) {
+					problems << "capture ${capture} ${label}: fewer than two webapp " +
+						"classloaders were observed (${loaders}); the ZK slice and the " +
+						'CXF WAR must be isolated from each other'
+				}
+				def home = (runtime['property'] ?: []).findAll {
+					it.startsWith('ADEMPIERE_HOME=')
+				}
+				if (home.size() != 1) {
+					problems << "capture ${capture} ${label}: expected exactly one " +
+						"ADEMPIERE_HOME system property, found ${home}"
+				} else if (!home[0].contains('build/phase3/runtime/Adempiere')) {
+					problems << "capture ${capture} ${label}: ADEMPIERE_HOME is not the " +
+						"guarded disposable installed tree (${home[0]})"
+				}
+			}
+			def isolation = readRows(new File(captureDir, 'lane-isolation.tsv'))
+			if (isolation['ports_distinct'] != ['yes']) {
+				problems << "capture ${capture}: the Tomcat 9 and Tomcat 10 lanes do not " +
+					'use distinct ports'
+			}
+			if (isolation['jvms_distinct'] != ['yes']) {
+				problems << "capture ${capture}: the Tomcat 9 and Tomcat 10 lanes do not " +
+					'use distinct JVMs'
+			}
+			// A "distinct ports" claim taken while only one container is running
+			// proves nothing, so the legacy lane must have answered during the
+			// capture.
+			if (!(isolation['legacy_pid']?.getAt(0) ==~ /\d+/)) {
+				problems << "capture ${capture}: the Tomcat 9 lane was not running, " +
+					'so lane isolation was never measured'
+			}
+			if (isolation['legacy_web'] != ['200']) {
+				problems << "capture ${capture}: the Tomcat 9 lane did not serve " +
+					"/webui/ during the capture (${isolation['legacy_web']})"
+			}
+			if (isolation['catalina_bases_distinct'] != ['yes']) {
+				problems << "capture ${capture}: the two lanes share a CATALINA_BASE"
+			}
+			if (isolation['shared_database_marker'] != [phase5dDatabaseMarker]) {
+				problems << "capture ${capture}: the shared database is not the " +
+					"marker-owned disposable database (${isolation['shared_database_marker']})"
+			}
+			def contexts = (isolation['modern_context'] ?: []).sort()
+			def expectedContexts = ['ADInterface.war', 'webui-modern.war']
+			if (contexts != expectedContexts) {
+				problems << "capture ${capture}: the modern container deploys " +
+					"${contexts}, expected exactly ${expectedContexts}"
+			}
+		}
+
+		// The cross-rendering comparison must have been written, and every
+		// comparable fact must be marked matched.
+		def comparison = new File(browserEvidence, 'modern-vs-legacy.tsv')
+		if (!comparison.isFile()) {
+			problems << 'the modern-versus-legacy semantic comparison was not written'
+		} else {
+			def rows = comparison.readLines('UTF-8').findAll { it }
+			if (rows.isEmpty() || rows.any { !it.endsWith('\tmatched') }) {
+				problems << 'the modern-versus-legacy semantic comparison is empty or ' +
+					'contains an unmatched fact'
+			}
+		}
+
+		if (!problems.isEmpty()) {
+			throw new GradleException(
+				"Phase 5d modern runtime evidence is incomplete:\n  - " +
+				problems.unique().join('\n  - '))
+		}
+		logger.lifecycle(
+			'Phase 5d modern runtime: two colocated contexts, two isolated webapp ' +
+			'classloaders, one ADEMPIERE_HOME, loopback-only listeners, distinct ' +
+			'Tomcat 9/10 ports, and the complete Phase 4 SOAP corpus replayed twice ' +
+			'while a modern ZK session was authenticated')
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Database-neutral gates
+// ---------------------------------------------------------------------------
+
+tasks.register('verifyPhase5dCurrentZkInventory') {
+	group = 'verification'
+	description =
+		'Proves the living ZK inventories describe the migrated tree rather than the Phase 5a baseline'
+	inputs.files(
+		rootProject.file('gradle/phase5/zk-sources.tsv'),
+		rootProject.file('gradle/phase5/zk-sources-phase5a.tsv'),
+		rootProject.file('gradle/phase5/namespace-ownership.tsv'),
+		rootProject.file('gradle/phase5/zk-target.properties'))
+	doLast {
+		def readRows = { File file ->
+			file.readLines('UTF-8')
+				.findAll { !it.trim().isEmpty() && !it.startsWith('#') }
+				.collect { it.split('\t', -1) }
+		}
+		def problems = []
+
+		// 1. Every file the living inventory names must exist. A stale row is a
+		//    silently wrong inventory.
+		def current = readRows(rootProject.file('gradle/phase5/zk-sources.tsv'))
+		def missing = current.collect { it[0] }
+			.findAll { !rootProject.file(it).isFile() }
+		if (!missing.isEmpty()) {
+			problems << "gradle/phase5/zk-sources.tsv names files that do not exist: " +
+				"${missing.take(10)}"
+		}
+
+		// 2. The living inventory must cover every ZK-referencing Java source in
+		//    the migrated trees, so a new file cannot join the closure unlisted.
+		def inventoried = current.collect {
+			rootProject.file(it[0]).canonicalPath
+		} as Set
+		def roots = [
+			'zkwebui/WEB-INF/src',
+			'org.adempiere.pos/src/main/java/ui/zk',
+			'org.eevolution.manufacturing/src/main/java/ui/zk',
+			'org.eevolution.hr_and_payroll/src/main/java/ui/zk',
+			'org.eevolution.warehouse/src/main/java/ui/zk',
+			'org.spin.loan_management/src/main/java/ui/zk',
+		].collect { rootProject.file(it) }.findAll { it.directory }
+		def uninventoried = []
+		roots.each { root ->
+			rootProject.fileTree(root) { include '**/*.java' }.each { source ->
+				if (source.getText('UTF-8').contains('org.zkoss') &&
+						!inventoried.contains(source.canonicalPath)) {
+					uninventoried << rootProject.relativePath(source)
+				}
+			}
+		}
+		if (!uninventoried.isEmpty()) {
+			problems << "ZK-referencing sources are missing from " +
+				"gradle/phase5/zk-sources.tsv: ${uninventoried.take(10)}"
+		}
+
+		// 3. The namespace ledger must record the migration outcome, not the
+		//    Phase 5a starting position. The namespace is column 2; column 1 is
+		//    the file that owns the reference.
+		def namespaces = readRows(
+			rootProject.file('gradle/phase5/namespace-ownership.tsv'))
+		def malformed = namespaces.findAll { it.length < 6 }
+		if (!malformed.isEmpty()) {
+			problems << "gradle/phase5/namespace-ownership.tsv has malformed rows: " +
+				"${malformed.take(3)}"
+		}
+		def commercial = namespaces.findAll { row ->
+			row.length >= 2 && (row[1].startsWith('org.zkoss.zkex') ||
+				row[1].startsWith('org.zkoss.zkmax') || row[1].startsWith('org.zkforge'))
+		}
+		if (commercial.isEmpty()) {
+			problems << 'gradle/phase5/namespace-ownership.tsv records no disposition ' +
+				'for the commercial and add-on ZK namespaces'
+		}
+		// Every reference must carry one of the reviewed dispositions. "unresolved"
+		// is what the generator emits when it cannot place a reference, and it is
+		// the only value that fails here.
+		def reviewedDispositions = [
+			'replaced-adempiere-owned',
+			'replaced-ce-equivalent',
+			'recorded-in-contract',
+			'frozen-legacy-artifact',
+			'test-assertion',
+		] as Set
+		def unresolved = commercial.findAll { row ->
+			!reviewedDispositions.contains(row.length >= 5 ? row[4] : '')
+		}
+		if (!unresolved.isEmpty()) {
+			problems << 'the commercial ZK namespaces still have references with no ' +
+				"reviewed Phase 5d disposition: ${unresolved.collect { it[0] }.unique()}"
+		}
+		// A ledger in which every commercial reference is merely "recorded in a
+		// contract" would be a ledger about documents, not about the migration.
+		// Each family must have an ADempiere-owned replacement, and that
+		// replacement has to exist on disk.
+		def replacements = readRows(
+			rootProject.file('gradle/phase5/zk-namespace-replacements.tsv'))
+		def missingReplacements = replacements
+			.collect { it[0] }
+			.findAll { !rootProject.file(it).isFile() }
+		if (!missingReplacements.isEmpty()) {
+			problems << 'gradle/phase5/zk-namespace-replacements.tsv names files that ' +
+				"do not exist: ${missingReplacements}"
+		}
+		['org.zkoss.zkex', 'org.zkoss.zkmax', 'org.zkforge'].each { family ->
+			def replaced = commercial.findAll {
+				it[1].startsWith(family) && it[4] == 'replaced-adempiere-owned'
+			}
+			if (replaced.isEmpty()) {
+				problems << "no ADempiere-owned replacement is recorded for ${family}"
+			}
+			if (!replacements.any { it[1] == family }) {
+				problems << "gradle/phase5/zk-namespace-replacements.tsv declares no " +
+					"replacement for ${family}"
+			}
+		}
+
+		if (!problems.isEmpty()) {
+			throw new GradleException(
+				"The living Phase 5 ZK inventories are not current:\n  - " +
+				problems.join('\n  - '))
+		}
+		logger.lifecycle(
+			"Phase 5d current inventory: ${current.size()} live ZK sources, all present, " +
+			"all ZK-referencing sources covered")
+	}
+}
+
+tasks.register('phase5dFinalVerification') {
+	group = 'verification'
+	description =
+		'Runs the database-neutral Phase 5d compile-closure, functional WAR, inventory, artifact, overlay, and preservation gates'
+	dependsOn(
+		// Phase 5d's own work
+		tasks.named('verifyPhase5dZkCompileClosure'),
+		tasks.named('verifyPhase5dCurrentZkInventory'),
+		tasks.named('verifyPhase5dLegacyWebArtifacts'),
+		tasks.named('verifyPhase5dLegacyWarSourceCrossing'),
+		tasks.named('verifyPhase5dBrowserContractManifest'),
+		':zkwebui:verifyPhase5dModernWebWar',
+		':zkwebui:modernUiTest',
+		':zkwebui:browserContractTest',
+		// Installed and release overlay carrying the functional WAR, plus the
+		// rollback rehearsal over the same artifacts.
+		tasks.named('verifyPhase5cWebOverlay'),
+		tasks.named('verifyPhase5cRollbackArtifacts'),
+		// Phase 4 preservation: the SOAP contracts, route classification and
+		// legacy-transport removal must all still hold with the modern web slice
+		// in the tree. This is the database-neutral half; the database-backed
+		// half runs inside phase5dModernWebSmoke while a modern session is
+		// authenticated.
+		tasks.named('phase4FinalVerification'),
+		// Phase 5b/5c assertions that remain valid after Phase 5d.
+		tasks.named('phase5bFinalVerification'),
+		tasks.named('verifyPhase5cDecisions'),
+		':zkwebui:verifyPhase5cTransformer',
+		':zkwebui:phase5cTransformerCorpusReport')
+}
+
+gradle.projectsEvaluated {
+	def modernBrowserTest = project(':zkwebui').tasks.named('modernBrowserTest')
+	def startLane = tasks.named('startPhase5dModernWebLane')
+	def stopLane = tasks.named('stopPhase5dModernWebLane')
+	def stopLegacyLane = tasks.named('stopPhase5cLegacyBrowserLane')
+	modernBrowserTest.configure {
+		dependsOn(
+			tasks.named('installPhase5cBrowser'),
+			tasks.named('startPhase5cLegacyBrowserLane'),
+			startLane)
+		finalizedBy stopLane, stopLegacyLane
+	}
+	startLane.configure { finalizedBy stopLane }
+	stopLane.configure {
+		mustRunAfter(
+			project(':zkwebui').tasks.named('compileModernBrowserTestJava'),
+			modernBrowserTest)
+	}
+	stopLegacyLane.configure {
+		mustRunAfter modernBrowserTest
+	}
+	// The disposable database must outlive every Phase 5d task that reads it.
+	tasks.named('cleanupPhase3Database') {
+		mustRunAfter(
+			tasks.named('phase5dModernWebSmoke'),
+			tasks.named('verifyPhase5dModernRuntimeEvidence'),
+			modernBrowserTest,
+			startLane,
+			stopLane)
+	}
+}

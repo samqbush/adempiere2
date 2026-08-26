@@ -291,6 +291,10 @@ apply from: 'gradle/phase4/contracts.gradle'
 apply from: 'gradle/phase5/contracts.gradle'
 apply from: 'gradle/phase5/oracle.gradle'
 apply from: 'gradle/phase5/beachhead.gradle'
+apply from: 'gradle/phase5/browser-contract.gradle'
+apply from: 'gradle/phase5/legacy-web-artifact.gradle'
+apply from: 'gradle/phase5/zk-compile-closure.gradle'
+apply from: 'gradle/phase5/zk-functional-slice.gradle'
 
 tasks.withType(Javadoc) {
 	failOnError false

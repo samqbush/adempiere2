@@ -1,0 +1,73 @@
+// Phase 5d: compile the ZK UI tree of a packaged ADempiere module against the
+// locked ZK CE Jakarta target.
+//
+// The Ant reactor compiles `src/main/java/base` together with
+// `src/main/java/ui/swing` into the module jar and then compiles
+// `src/main/java/ui/zk` against that output. Gradle only owned the `base` tree
+// before Phase 5d, so this script adds the two missing compile units without
+// changing the published `main` source set, the module jar, or the Maven
+// coordinates. The ZK tree is never packaged into the module jar; it is a
+// compile unit only until the Phase 5f packaging work.
+
+def phase5Target = new Properties()
+rootProject.file('gradle/phase5/zk-target.properties').withInputStream {
+	phase5Target.load(it)
+}
+def zkVersion = phase5Target.getProperty('zk.version')
+
+def swingUiDir = file('src/main/java/ui/swing')
+def zkUiDir = file('src/main/java/ui/zk')
+
+if (!zkUiDir.directory) {
+	throw new GradleException("${project.path} has no src/main/java/ui/zk tree")
+}
+
+sourceSets {
+	if (swingUiDir.directory) {
+		swingUi {
+			java {
+				srcDirs = [swingUiDir]
+			}
+			resources {
+				srcDirs = []
+			}
+		}
+	}
+	zkUi {
+		java {
+			srcDirs = [zkUiDir]
+		}
+		resources {
+			srcDirs = []
+		}
+	}
+}
+
+configurations {
+	if (swingUiDir.directory) {
+		swingUiImplementation.extendsFrom implementation, api
+	}
+	zkUiImplementation.extendsFrom implementation, api
+}
+
+dependencies {
+	if (swingUiDir.directory) {
+		swingUiImplementation sourceSets.main.output
+		swingUiImplementation project(path: ':client')
+		// Reached through the :client Swing signatures the module forms extend
+		swingUiImplementation 'com.miglayout:miglayout:3.7.1'
+		swingUiImplementation 'org.jfree:jfreechart:1.0.14'
+		zkUiImplementation sourceSets.swingUi.output
+	}
+	zkUiImplementation sourceSets.main.output
+	zkUiImplementation project(path: ':client')
+	zkUiImplementation project(path: ':zkwebui', configuration: 'modernUiElements')
+	zkUiImplementation "org.zkoss.zk:zk:${zkVersion}"
+	zkUiImplementation "org.zkoss.zk:zul:${zkVersion}"
+	zkUiImplementation "org.zkoss.zk:zkplus:${zkVersion}"
+	zkUiImplementation "org.zkoss.zk:zhtml:${zkVersion}"
+}
+
+tasks.named('zkUiClasses') {
+	description = 'Compiles the module ZK UI tree against locked ZK CE Jakarta'
+}

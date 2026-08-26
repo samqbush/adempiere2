@@ -17,6 +17,7 @@
  *****************************************************************************/
 package org.eevolution.form;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.io.File;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -66,10 +67,10 @@ import org.zkoss.util.media.AMedia;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.South;
-import org.zkoss.zul.Div;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.zkoss.zul.South;
+import org.adempiere.webui.component.Div;
 import org.zkoss.zul.Filedownload;
 import org.zkoss.zul.Hbox;
 import org.zkoss.zul.Separator;
@@ -229,7 +230,7 @@ public class WBrowser extends Browser implements IFormController,
 				south.setBorder("none");
 				
 				south.setAutoscroll(true);
-				south.setFlex(true);
+				ZkCompat.setFlex(south, true);
 				south.setCollapsible(true);
 				south.setTitle(Msg.getMsg(Env.getCtx(),("Parameter")));
 				south.setCollapsible(true);
@@ -562,9 +563,10 @@ public class WBrowser extends Browser implements IFormController,
 		Center dCenter = new Center();
 		dCenter.appendChild(detail);
 		dCenter.setBorder("none");
-		detail.setVflex(true);
+		// ZK CE 10 rejects vflex on a component that already carries a height.
+		ZkCompat.setVflex(detail, true);
 		detail.setFixedLayout(true);
-		dCenter.setFlex(true);
+		ZkCompat.setFlex(dCenter, true);
 		dCenter.setAutoscroll(true);
 		
 		detailPanel.setHeight("100%");

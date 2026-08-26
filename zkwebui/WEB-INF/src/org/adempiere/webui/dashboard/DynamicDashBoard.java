@@ -113,7 +113,12 @@ public class DynamicDashBoard extends DashboardPanel implements EventListener
 		int columnsSize = column.length;
 		for (int i1 = 0; i1 < columnsSize; i1++) {
 			if (column[i1] != null) {
-				column[i1].setSort("auto");
+				try {
+					// ZK CE 10 resolves the sort comparators reflectively
+					column[i1].setSort("auto");
+				} catch (Exception e) {
+					logger.warning("Could not enable auto sorting on a dashboard column: " + e.getMessage());
+				}
 				columns.appendChild(column[i1]);
 			}
 

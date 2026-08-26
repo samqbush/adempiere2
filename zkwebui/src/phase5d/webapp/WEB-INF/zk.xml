@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Phase 5d ZK CE 10.3.0.1-jakarta configuration for /webui-modern.
+
+  Hand-written from zkwebui/WEB-INF/zk.xml, element by element. The three
+  differences from the ZK 3.6 file are deliberate and each one is a Phase 5d
+  decision, not an accident of copying:
+
+  1. <server-push-class> was org.zkoss.zkmax.ui.comet.CometServerPush. zkmax is
+     ZK's commercial edition. MODERNIZATION_PLAN.md records the accepted target
+     as ZK CE, and gradle/phase5/zk-compile-closure.gradle fails the build on any
+     org.zkoss.zkmax reference, so Comet is replaced by the CE polling
+     implementation exactly as the Phase 5 "Decisions made" block requires.
+  2. The four org.zkoss.zul.theme.fontSize* library properties are dropped. They
+     were consumed by the ZK 3.6 .dsp theme, which Phase 5d does not migrate.
+     Carrying properties that nothing reads would suggest a theme this slice does
+     not ship.
+  3. <log><log-base/></log> is dropped: it configured ZK 3.6's i3-log.conf
+     monitor, which ZK CE 10 no longer has.
+
+  Everything else is preserved verbatim, including the ADempiere thread-context
+  listener, the automatic session timeout and its timeout URI, and the ADempiere
+  component id generator that the Phase 5d browser assertions depend on.
+-->
+<zk>
+	<!-- ADempiere thread session context handler -->
+	<listener>
+		<description>ADempiere WebUI Context management</description>
+		<listener-class>org.adempiere.webui.session.SessionContextListener</listener-class>
+	</listener>
+
+	<!-- Use the compressed client JavaScript, as in ZK 3.6. -->
+	<client-config>
+		<debug-js>false</debug-js>
+	</client-config>
+
+	<session-config>
+		<device-type>ajax</device-type>
+		<automatic-timeout/>
+		<timeout-uri>/timeout.zul</timeout-uri>
+	</session-config>
+
+	<system-config>
+		<id-generator-class>org.adempiere.webui.AdempiereIdGenerator</id-generator-class>
+	</system-config>
+
+	<!--
+		ZK CE server push. The ZK 3.6 descriptor selected
+		org.zkoss.zkmax.ui.comet.CometServerPush, which ships only in the
+		commercial edition.
+	-->
+	<device-config>
+		<device-type>ajax</device-type>
+		<server-push-class>org.zkoss.zk.ui.impl.PollingServerPush</server-push-class>
+	</device-config>
+</zk>

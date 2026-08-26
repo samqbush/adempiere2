@@ -1,0 +1,148 @@
+import java.security.MessageDigest
+
+// Phase 5d integrity gate for contracts/legacy-web-browser-v1/.
+//
+// The Phase 5b wire oracle has carried a manifest since it was frozen
+// (gradle/phase5/oracle.gradle), but the browser semantic contract did not. That
+// asymmetry mattered the moment Phase 5d started adding reviewed fixtures to it:
+// without a manifest, an unreviewed fixture can join the contract and a frozen
+// fact can be edited to make a failing gate pass, and neither shows up as
+// anything other than a green run.
+
+def phase5dBrowserContractDir = rootProject.file('contracts/legacy-web-browser-v1')
+
+def phase5dSha256 = { byte[] content ->
+	MessageDigest.getInstance('SHA-256').digest(content).encodeHex().toString()
+}
+
+// The manifest cannot contain its own digest; it is excluded by construction and
+// its integrity comes from review, exactly as in the Phase 5b oracle manifest.
+def phase5dManifestName = 'manifest.sha256'
+
+tasks.register('generatePhase5dBrowserContractManifest') {
+	group = 'verification'
+	description =
+		'Regenerates contracts/legacy-web-browser-v1/manifest.sha256 over every contract file except itself'
+	doLast {
+		def rows = []
+		phase5dBrowserContractDir.eachFileRecurse { file ->
+			if (!file.isFile()) {
+				return
+			}
+			def relative = phase5dBrowserContractDir.toPath()
+				.relativize(file.toPath()).toString()
+			if (relative == phase5dManifestName) {
+				return
+			}
+			rows << "${phase5dSha256(file.bytes)}\t${relative}"
+		}
+		rows.sort()
+		new File(phase5dBrowserContractDir, phase5dManifestName)
+			.withWriter('UTF-8') { writer ->
+				writer.println('# Phase 5d frozen legacy web browser semantic contract manifest')
+				writer.println(
+					'# SHA-256 over every file in contracts/legacy-web-browser-v1/ except this file.')
+				writer.println('# sha256\tpath')
+				rows.each { writer.println(it) }
+			}
+		logger.lifecycle(
+			"Wrote browser contract manifest covering ${rows.size()} files")
+	}
+}
+
+tasks.register('verifyPhase5dBrowserContractManifest') {
+	group = 'verification'
+	description =
+		'Fails when the browser semantic contract has a missing, unexpected, or altered file'
+	inputs.dir phase5dBrowserContractDir
+	doLast {
+		def manifest = new File(phase5dBrowserContractDir, phase5dManifestName)
+		if (!manifest.isFile()) {
+			throw new GradleException("Missing ${manifest}")
+		}
+		def expected = [:]
+		manifest.readLines().findAll { it && !it.startsWith('#') }.each { line ->
+			def fields = line.split('\t', -1)
+			expected[fields[1]] = fields[0]
+		}
+		def actual = [:]
+		phase5dBrowserContractDir.eachFileRecurse { file ->
+			if (!file.isFile()) {
+				return
+			}
+			def relative = phase5dBrowserContractDir.toPath()
+				.relativize(file.toPath()).toString()
+			if (relative == phase5dManifestName) {
+				return
+			}
+			actual[relative] = phase5dSha256(file.bytes)
+		}
+		def missing = (expected.keySet() - actual.keySet()).sort()
+		// An unexpected file is a real failure: an unreviewed fixture must never
+		// be able to silently join the contract.
+		def unexpected = (actual.keySet() - expected.keySet()).sort()
+		def altered = expected.keySet().intersect(actual.keySet())
+			.findAll { expected[it] != actual[it] }.sort()
+		def problems = []
+		if (missing) {
+			problems << "missing: ${missing}"
+		}
+		if (unexpected) {
+			problems << "unexpected: ${unexpected}"
+		}
+		if (altered) {
+			problems << "altered: ${altered}"
+		}
+		if (!problems.isEmpty()) {
+			throw new GradleException(
+				"contracts/legacy-web-browser-v1 does not match ${phase5dManifestName} " +
+					"(${problems.join('; ')}). Re-review the change, then run " +
+					"generatePhase5dBrowserContractManifest.")
+		}
+
+		// The contract is only meaningful if the reviewed window step is still
+		// declared. A manifest that faithfully records a contract someone emptied
+		// is a green gate over no coverage.
+		def facts = new File(phase5dBrowserContractDir, 'semantic-facts.tsv')
+			.readLines().findAll { it && !it.startsWith('#') }
+			.collectEntries { def fields = it.split('\t', 2); [(fields[0]): fields[1]] }
+		def requiredFacts = [
+			'window-error-message-visible': 'true',
+			'window-error-message-tab-label': 'Error Message',
+			'window-error-message-delete-controls-disabled': 'true',
+			'window-error-message-database-writes': '0'
+		]
+		def wrong = requiredFacts.findAll { name, value -> facts[name] != value }
+		if (!wrong.isEmpty()) {
+			throw new GradleException(
+				"The Phase 5d read-only window facts are missing or weakened: ${wrong}")
+		}
+		if (!facts['window-error-message-readonly-columns']) {
+			throw new GradleException(
+				'The Phase 5d contract declares no read-only AD_Error columns')
+		}
+		logger.lifecycle(
+			"Verified ${expected.size()} browser contract files and the Phase 5d window facts")
+	}
+}
+
+tasks.register('phase5dLegacyBrowserOracleSmoke') {
+	group = 'verification'
+	description =
+		'Replays the extended semantic browser oracle, including the read-only Error Message window step'
+	dependsOn(
+		tasks.named('verifyPhase5dBrowserContractManifest'),
+		tasks.named('phase5cLegacyBrowserOracleSmoke'))
+}
+
+gradle.projectsEvaluated {
+	project(':zkwebui').tasks.named('browserTest') {
+		dependsOn tasks.named('verifyPhase5dBrowserContractManifest')
+	}
+	project(':zkwebui').tasks.named('browserContractTest') {
+		dependsOn tasks.named('verifyPhase5dBrowserContractManifest')
+	}
+	tasks.named('phase5cFinalVerification') {
+		dependsOn tasks.named('verifyPhase5dBrowserContractManifest')
+	}
+}

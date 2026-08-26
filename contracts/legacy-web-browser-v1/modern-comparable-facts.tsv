@@ -1,0 +1,32 @@
+# Phase 5d: which frozen legacy semantic facts the modern ZK CE 10 slice must
+# reproduce.
+#
+# The Phase 5d modern capture runs the same flow as the frozen legacy browser
+# oracle - login, role selection, desktop/menu, read-only "Error Message" window,
+# logout - against /webui-modern on Tomcat 10.1 instead of /webui on Tomcat 9.
+# Its facts are compared with semantic-facts.tsv at matching capture ordinals.
+#
+# Not every frozen fact is comparable, and pretending otherwise would be the same
+# mistake the four filter-* facts were nearly used to make. This file records the
+# reviewed decision per fact, and ModernWindowExtraction.comparable() fails if a
+# capture produces no value for a fact marked `compare`, so a fact cannot quietly
+# drop out of the comparison.
+#
+# fact	disposition	reason
+role-labels-visible	compare	The role selection grid renders the same four ADempiere labels (Role, Client, Organization, Warehouse) in both renderings.
+desktop-user	compare	The desktop identity line is produced by ADempiere from the authenticated session, not by the UI framework.
+menu-user-browser	compare	The menu tree is built from the application dictionary, so the same role must see the same "User Browser" node.
+window-error-message-visible	compare	The core Phase 5d Testability Milestone claim: the window opens and renders.
+window-error-message-tab-label	compare	The tab label is the AD_Window name from the dictionary.
+window-error-message-readonly-columns	compare	The read-only column set is derived by ADempiere's WEditor from the dictionary, not by ZK.
+window-error-message-marked-columns	compare	The full field-state marker map, for the same reason.
+window-error-message-record-controls	compare	The toolbar state is derived by CWindowToolbar from AD_Tab and role access.
+window-error-message-delete-controls-disabled	compare	The destructive-control half of the read-only claim.
+window-error-message-database-writes	compare	The zero-write half of the read-only claim, measured against the same marker-owned database by the same script.
+logout-login-visible	compare	Logout must return the browser to the login page in both renderings.
+#
+# --- Reviewed as NOT comparable ---------------------------------------------
+filter-adempiere	not-comparable	/adempiere is a Tomcat 9 context. The Phase 5d modern runtime deploys /webui-modern and /ADInterface only, so there is nothing to compare. Phase 5f owns the non-ZK contexts.
+filter-mobile	not-comparable	/mobile is a Tomcat 9 context; see filter-adempiere.
+filter-webui	not-comparable	/webui is the ZK 3.6 context itself. The modern slice is /webui-modern by design, and Tomcat 9 remains the only browser-facing ingress through Phase 5h.
+filter-wstore	not-comparable	/wstore is a Tomcat 9 context; see filter-adempiere.

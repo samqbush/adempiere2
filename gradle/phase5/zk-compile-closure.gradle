@@ -1,0 +1,352 @@
+// Phase 5d: fail-closed proof that every inventoried ZK source has a compile
+// owner and that no migrated source still reaches a ZK 3.6 or commercial API.
+//
+// The Phase 5a inventory remains the immutable compile-closure baseline. The
+// living zk-sources.tsv inventory is regenerated as direct references migrate.
+// Relocated baseline rows resolve through zk-source-moves.tsv.
+
+def phase5dInventoryFile =
+	rootProject.file('gradle/phase5/zk-sources-phase5a.tsv')
+def phase5dCurrentInventoryFile =
+	rootProject.file('gradle/phase5/zk-sources.tsv')
+def phase5dMovesFile = rootProject.file('gradle/phase5/zk-source-moves.tsv')
+def phase5dTargetFile = rootProject.file('gradle/phase5/zk-target.properties')
+
+def phase5dExpectedProductionRows = 295
+def phase5dExpectedTestRows = 3
+
+// Source sets that are allowed to own an inventoried test row.
+def phase5dTestSourceSets = [':zkwebui:modernUiTest'] as Set
+
+// ZK 3.6 and commercial APIs that must not reappear in a migrated source.
+def phase5dBannedReferences = [
+	'org.zkoss.zkex.'                   : 'commercial ZK zkex namespace',
+	'org.zkoss.zkmax.'                  : 'commercial ZK zkmax namespace',
+	'org.zkforge.'                      : 'ZK 3.x org.zkforge add-on',
+	'org.zkoss.zul.api.'                : 'ZK 3.6 zul api facade removed by ZK CE 6',
+	'org.zkoss.zk.ui.render.'           : 'ZK 3.6 server side renderer SPI removed by ZK CE 5',
+	'org.zkoss.zul.SimpleTreeNode'      : 'ZK 3.6 SimpleTreeNode removed by ZK CE',
+	'org.zkoss.zul.SimpleTreeModel'     : 'ZK 3.6 SimpleTreeModel removed by ZK CE',
+	'org.zkoss.zul.ListModelExt'        : 'ZK 3.6 ListModelExt removed by ZK CE',
+	'org.zkoss.zk.au.Command'           : 'ZK 3.6 global AU command registry removed by ZK CE 5',
+	'org.zkoss.zk.ui.event.Express'     : 'ZK 3.6 Express listener marker removed by ZK CE 5',
+	'org.zkoss.zul.fn.ZkFns'            : 'ZK 3.6 zul function library removed by ZK CE',
+]
+
+def phase5dReadRows = { File file ->
+	file.readLines('UTF-8').findAll { !it.trim().isEmpty() && !it.startsWith('#') }
+		.collect { it.split('\t', -1) }
+}
+
+def phase5dStripComments = { String text ->
+	text.replaceAll('(?s)/\\*.*?\\*/', ' ').replaceAll('(?m)//.*$', ' ')
+}
+
+def phase5dOwnerProjects = [
+	':base',
+	':zkwebui',
+	':org.adempiere.pos',
+	':org.eevolution.manufacturing',
+	':org.eevolution.hr_and_payroll',
+	':org.eevolution.warehouse',
+	':org.spin.loan_management',
+]
+
+def phase5dCompileTaskPaths = [
+	':zkwebui:compileModernUiJava',
+	':zkwebui:compileModernUiTestJava',
+	':org.adempiere.pos:compileZkUiJava',
+	':org.eevolution.manufacturing:compileZkUiJava',
+	':org.eevolution.hr_and_payroll:compileZkUiJava',
+	':org.eevolution.warehouse:compileZkUiJava',
+	':org.spin.loan_management:compileZkUiJava',
+	':base:compileJava',
+]
+
+tasks.register('verifyPhase5dZkCompileClosure') {
+	group = 'verification'
+	description = 'Proves every inventoried ZK source compiles under a named Gradle source set on locked ZK CE Jakarta'
+	dependsOn phase5dCompileTaskPaths
+	dependsOn ':zkwebui:modernUiJar'
+	inputs.file phase5dInventoryFile
+	inputs.file phase5dCurrentInventoryFile
+	inputs.file phase5dMovesFile
+	inputs.file phase5dTargetFile
+
+	doLast {
+		if (!phase5dInventoryFile.isFile()) {
+			throw new GradleException("Missing Phase 5a inventory ${phase5dInventoryFile}")
+		}
+		if (!phase5dCurrentInventoryFile.isFile()) {
+			throw new GradleException(
+				"Missing current Phase 5 ZK inventory ${phase5dCurrentInventoryFile}")
+		}
+
+		// 1. Locked ZK CE Jakarta target
+		def target = new Properties()
+		phase5dTargetFile.withInputStream { target.load(it) }
+		def zkVersion = target.getProperty('zk.version')
+		if (target.getProperty('zk.edition') != 'CE' || zkVersion != '10.3.0.1-jakarta') {
+			throw new GradleException(
+				"Phase 5d requires the locked ZK CE 10.3.0.1-jakarta target, got " +
+				"${target.getProperty('zk.edition')} ${zkVersion}")
+		}
+
+		// 2. Source set ownership map
+		def owners = [:]
+		phase5dOwnerProjects.each { path ->
+			def owner = rootProject.findProject(path)
+			if (owner == null) {
+				throw new GradleException("Unknown Phase 5d owner project ${path}")
+			}
+			owner.extensions.findByType(SourceSetContainer)?.each { sourceSet ->
+				def compileTask = owner.tasks.findByName(sourceSet.compileJavaTaskName)
+				if (compileTask == null) {
+					return
+				}
+				sourceSet.java.srcDirs.each { dir ->
+					owners[dir.canonicalPath.toString()] = [
+						id: "${path}:${sourceSet.name}".toString(),
+						compileTask: "${path}:${sourceSet.compileJavaTaskName}".toString(),
+						classesDirs: sourceSet.output.classesDirs,
+					]
+				}
+			}
+
+		}
+		if (owners.isEmpty()) {
+			throw new GradleException('No Phase 5d compile source sets were discovered')
+		}
+
+		// 3. Migration map for relocated inventory rows
+		def moves = [:]
+		phase5dReadRows(phase5dMovesFile).each { fields ->
+			if (fields.length < 3) {
+				throw new GradleException("Malformed Phase 5d move row: ${fields}")
+			}
+			moves[fields[0]] = fields[1]
+		}
+		def usedMoves = [] as Set
+
+		// 4. Every inventory row must resolve to a file owned by a compile task
+		def rows = phase5dReadRows(phase5dInventoryFile)
+		def unresolved = []
+		def unowned = []
+		def misclassified = []
+		def assignments = [:]
+		def productionRows = 0
+		def testRows = 0
+		rows.each { fields ->
+			def inventoryPath = fields[0]
+			def resolvedPath = moves.containsKey(inventoryPath) ? moves[inventoryPath] : inventoryPath
+			if (moves.containsKey(inventoryPath)) {
+				usedMoves << inventoryPath
+			}
+			def source = rootProject.file(resolvedPath)
+			if (!source.isFile()) {
+				unresolved << "${inventoryPath} -> ${resolvedPath}"
+				return
+			}
+			def canonical = source.canonicalPath
+			def owner = owners.find { dir, info -> canonical.startsWith(dir + File.separator) }?.value
+			if (owner == null) {
+				unowned << resolvedPath
+				return
+			}
+			assignments[inventoryPath] = owner
+			def isTestRow = phase5dTestSourceSets.contains(owner.id)
+			if (isTestRow) {
+				testRows++
+			} else {
+				productionRows++
+			}
+			def looksLikeTest = resolvedPath.contains('/test/')
+			if (looksLikeTest != isTestRow) {
+				misclassified << "${resolvedPath} is owned by ${owner.id}"
+			}
+		}
+
+		if (!unresolved.isEmpty()) {
+			throw new GradleException(
+				"Inventoried ZK sources are missing and are not recorded in " +
+				"gradle/phase5/zk-source-moves.tsv: ${unresolved}")
+		}
+		if (!unowned.isEmpty()) {
+			throw new GradleException(
+				"Inventoried ZK sources have no Gradle compile owner: ${unowned}")
+		}
+		if (!misclassified.isEmpty()) {
+			throw new GradleException(
+				"Inventoried ZK sources are owned by the wrong kind of source set: ${misclassified}")
+		}
+		if (productionRows != phase5dExpectedProductionRows || testRows != phase5dExpectedTestRows) {
+			throw new GradleException(
+				"Phase 5d expects ${phase5dExpectedProductionRows} production and " +
+				"${phase5dExpectedTestRows} test inventory rows, resolved " +
+				"${productionRows} and ${testRows}")
+		}
+		def staleMoves = moves.keySet() - usedMoves
+		if (!staleMoves.isEmpty()) {
+			throw new GradleException(
+				"gradle/phase5/zk-source-moves.tsv has rows that no inventory row uses: ${staleMoves}")
+		}
+
+		// 5. Every compile task the closure relies on must exist and be enabled
+		phase5dCompileTaskPaths.each { taskPath ->
+			def compileTask = rootProject.tasks.findByPath(taskPath)
+			if (compileTask == null) {
+				throw new GradleException("Missing Phase 5d compile task ${taskPath}")
+			}
+			if (!compileTask.enabled) {
+				throw new GradleException("Phase 5d compile task ${taskPath} is disabled")
+			}
+		}
+
+		// 6. No ZK 3.6, zkex, zkmax or org.zkforge reference in a migrated source
+		def scanRoots = (assignments.values()*.id as Set)
+			.findAll { it != ':base:main' }
+			.collect { id ->
+				def (projectPath, sourceSetName) = [
+					id.substring(0, id.lastIndexOf(':')),
+					id.substring(id.lastIndexOf(':') + 1),
+				]
+				rootProject.project(projectPath).extensions
+					.getByType(SourceSetContainer).getByName(sourceSetName).java.srcDirs
+			}
+			.flatten()
+			.findAll { it.directory }
+		def scanFiles = [] as Set
+		scanRoots.each { dir ->
+			rootProject.fileTree(dir) { include '**/*.java' }.each { scanFiles << it }
+		}
+		rows.findAll { it[1] == 'base' }.each { fields ->
+			scanFiles << rootProject.file(moves.get(fields[0], fields[0]))
+		}
+		if (scanFiles.isEmpty()) {
+			throw new GradleException('Phase 5d banned reference scan found no sources')
+		}
+		def violations = []
+		scanFiles.each { source ->
+			def code = phase5dStripComments(source.getText('UTF-8'))
+			phase5dBannedReferences.each { needle, reason ->
+				if (code.contains(needle)) {
+					violations << "${rootProject.relativePath(source)}: ${needle} (${reason})"
+				}
+			}
+		}
+		if (!violations.isEmpty()) {
+			throw new GradleException(
+				"Migrated ZK sources still reference removed or commercial ZK APIs: " +
+				"${violations.take(20)}")
+		}
+
+		// 7. Only the locked ZK CE Jakarta artifacts may be on the compile classpath
+		def legacyJarNames = [
+			'zk.jar', 'zul.jar', 'zkex.jar', 'zkmax.jar', 'zhtml.jar', 'zcommon.jar',
+			'zweb.jar', 'zkplus.jar', 'zml.jar', 'keylistener.jar', 'fckez.jar',
+			'timelinez.jar', 'timeplotz.jar', 'gmapsz.jar',
+		] as Set
+		def classpathProblems = []
+		def zkSeen = [] as Set
+		[
+			[':zkwebui', 'modernUiCompileClasspath'],
+			[':zkwebui', 'modernUiTestCompileClasspath'],
+			[':org.adempiere.pos', 'zkUiCompileClasspath'],
+			[':org.eevolution.manufacturing', 'zkUiCompileClasspath'],
+			[':org.eevolution.hr_and_payroll', 'zkUiCompileClasspath'],
+			[':org.eevolution.warehouse', 'zkUiCompileClasspath'],
+			[':org.spin.loan_management', 'zkUiCompileClasspath'],
+		].each { projectPath, configurationName ->
+			def owner = rootProject.project(projectPath)
+			def configuration = owner.configurations.findByName(configurationName)
+			if (configuration == null) {
+				throw new GradleException("Missing configuration ${projectPath}:${configurationName}")
+			}
+			configuration.resolve().each { file ->
+				if (legacyJarNames.contains(file.name)) {
+					classpathProblems << "${projectPath}:${configurationName} -> ${file.name}"
+				}
+				if (file.name.startsWith('zk-') || file.name.startsWith('zul-') ||
+						file.name.startsWith('zhtml-') || file.name.startsWith('zkplus-')) {
+					zkSeen << file.name
+					if (!file.name.contains(zkVersion)) {
+						classpathProblems << "${projectPath}:${configurationName} -> ${file.name}"
+					}
+				}
+			}
+		}
+		if (!classpathProblems.isEmpty()) {
+			throw new GradleException(
+				"Legacy or unlocked ZK artifacts are on a Phase 5d compile classpath: ${classpathProblems}")
+		}
+		if (zkSeen.isEmpty()) {
+			throw new GradleException('No locked ZK CE Jakarta artifact was found on the Phase 5d compile classpaths')
+		}
+
+		// 8. Tests must never be packaged.
+		//
+		// The claim is exact: no class produced by the zkwebui test source sets
+		// may appear in a packaged archive. It is NOT "no class whose name ends
+		// in Test", because ADempiere's own dictionary carries production model
+		// classes called MTest, MQualityTest, I_Test and ALoginTest, and the
+		// shared runtime carries com.itextpdf.testutils.ITextTest and Log4j's
+		// ResolverUtil$Test. Rejecting those would force the repackaging to drop
+		// production classes to make a gate pass.
+		def modernUiTestSourceSet = rootProject.project(':zkwebui').extensions
+			.getByType(SourceSetContainer).getByName('modernUiTest')
+		def testClassesDirs = modernUiTestSourceSet.output.classesDirs.files
+			.collect { it.canonicalPath }
+		def testClassEntries = [] as Set
+		modernUiTestSourceSet.output.classesDirs.files
+			.findAll { it.directory }
+			.each { dir ->
+				rootProject.fileTree(dir) { include '**/*.class' }.each { file ->
+					testClassEntries << dir.toPath().relativize(file.toPath())
+						.toString().replace(File.separatorChar, '/' as char)
+				}
+			}
+		if (testClassEntries.isEmpty()) {
+			throw new GradleException(
+				'The zkwebui modernUiTest source set produced no class to compare ' +
+				'against, so "tests are not packaged" would be vacuously true')
+		}
+		def packagedTestClasses = []
+		rootProject.project(':zkwebui').tasks.withType(Jar).each { archiveTask ->
+			def archive = archiveTask.archiveFile.get().asFile
+			if (!archive.isFile()) {
+				return
+			}
+			new java.util.zip.ZipFile(archive).withCloseable { zip ->
+				zip.entries().findAll { !it.directory }.each { entry ->
+					def name = entry.name.startsWith('WEB-INF/classes/') ?
+						entry.name.substring('WEB-INF/classes/'.length()) : entry.name
+					if (testClassEntries.contains(name) ||
+							name.startsWith('org/adempiere/test/')) {
+						packagedTestClasses << "${archive.name}!${entry.name}"
+					}
+				}
+			}
+		}
+		if (!packagedTestClasses.isEmpty()) {
+			throw new GradleException(
+				"Phase 5d test classes must not be packaged: ${packagedTestClasses.take(20)}")
+		}
+		if (testClassesDirs.isEmpty()) {
+			throw new GradleException('The zkwebui modernUiTest source set produces no classes directory')
+		}
+
+		def summary = assignments.values().groupBy { it.id }
+			.collectEntries { id, list -> [(id): list.size()] }
+			.sort { it.key }
+		logger.lifecycle(
+			"Phase 5d ZK compile closure: ${productionRows} production and ${testRows} test rows owned by ${summary}")
+	}
+}
+
+// phase5dFinalVerification lives in gradle/phase5/zk-functional-slice.gradle,
+// which owns the full Phase 5d gate set. It is not defined here because this
+// file only owns the compile closure.
+
+tasks.named('check') {
+	dependsOn tasks.named('verifyPhase5dZkCompileClosure')
+}

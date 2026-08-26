@@ -18,8 +18,8 @@
 # self-diff is not an isolated experiment.
 set -euo pipefail
 
-if [[ $# -ne 8 ]]; then
-  echo "Usage: replay-legacy-web-oracle.sh <port> <oracle-user> <db-host> <db-port> <db-name> <db-user> <db-password> <db-marker>" >&2
+if [[ $# -ne 7 ]]; then
+  echo "Usage: ADEMPIERE_PHASE5D_DB_PASSWORD=... replay-legacy-web-oracle.sh <port> <oracle-user> <db-host> <db-port> <db-name> <db-user> <db-marker>" >&2
   exit 64
 fi
 
@@ -29,8 +29,7 @@ db_host=$3
 db_port=$4
 db_name=$5
 db_user=$6
-db_password=$7
-db_marker=$8
+db_marker=$7
 
 repo_root=$(git rev-parse --show-toplevel)
 work="$repo_root/build/phase5b/replay"
@@ -44,7 +43,7 @@ rm -rf "$work"
 mkdir -p "$work"
 
 run_fixture() {
-  "$fixture" "$db_host" "$db_port" "$db_name" "$db_user" "$db_password" "$db_marker" "$@"
+  "$fixture" "$db_host" "$db_port" "$db_name" "$db_user" "$db_marker" "$@"
 }
 
 # The frozen oracle was captured against a database where the oracle user had

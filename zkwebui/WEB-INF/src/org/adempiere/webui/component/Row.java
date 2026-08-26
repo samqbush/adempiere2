@@ -17,6 +17,9 @@
 
 package org.adempiere.webui.component;
 
+import org.adempiere.webui.compat.ZkCompat;
+import org.zkoss.zk.ui.Component;
+
 /**
  *
  * @author  <a href="mailto:agramdass@gmail.com">Ashley G Ramdass</a>
@@ -29,4 +32,58 @@ public class Row extends org.zkoss.zul.Row
 	 * 
 	 */
 	private static final long serialVersionUID = -3096460956090507074L;
+
+	private String spans;
+
+	private String widths;
+
+	/**
+	 * @return legacy comma separated column spans
+	 */
+	public String getSpans()
+	{
+		return spans;
+	}
+
+	/**
+	 * ZK CE 10 removed {@code Row.spans}; see
+	 * {@link ZkCompat#setSpans(org.zkoss.zul.Row, String)}.
+	 *
+	 * @param spans legacy comma separated column spans
+	 */
+	public void setSpans(String spans)
+	{
+		this.spans = spans;
+		ZkCompat.setSpans(this, spans);
+	}
+
+	/**
+	 * @return legacy comma separated cell widths
+	 */
+	public String getWidths()
+	{
+		return widths;
+	}
+
+	/**
+	 * ZK CE 10 removed {@code Row.widths}; the widths are applied to the row
+	 * children instead.
+	 *
+	 * @param widths legacy comma separated cell widths
+	 */
+	public void setWidths(String widths)
+	{
+		this.widths = widths;
+		ZkCompat.setWidths(this, widths);
+	}
+
+	@Override
+	public void onChildAdded(Component child)
+	{
+		super.onChildAdded(child);
+		if (spans != null)
+			ZkCompat.setSpans(this, spans);
+		if (widths != null)
+			ZkCompat.setWidths(this, widths);
+	}
 }

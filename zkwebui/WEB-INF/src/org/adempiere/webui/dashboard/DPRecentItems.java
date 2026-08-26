@@ -13,6 +13,7 @@
  *****************************************************************************/
 package org.adempiere.webui.dashboard;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -34,8 +35,8 @@ import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zul.Box;
 import org.zkoss.zul.Panel;
 import org.zkoss.zul.Panelchildren;
-import org.zkoss.zul.SimpleTreeModel;
-import org.zkoss.zul.SimpleTreeNode;
+import org.adempiere.webui.compat.SimpleTreeModel;
+import org.adempiere.webui.compat.SimpleTreeNode;
 import org.zkoss.zul.Toolbar;
 import org.zkoss.zul.Toolbarbutton;
 import org.zkoss.zul.Tree;
@@ -138,10 +139,10 @@ public class DPRecentItems extends DashboardPanel implements EventListener, Tree
 			tree = new Tree();
 			tree.setMultiple(false);
 			tree.setWidth("100%");
-			tree.setFixedLayout(false);
+			ZkCompat.setFixedLayout(tree, false);
 			tree.setStyle("border:none");
 			tree.setClass("menu-tree");
-			tree.setTreeitemRenderer(this);
+			tree.setItemRenderer(this);
 			bxRecentItems.appendChild(tree);
 
 		}
@@ -179,7 +180,7 @@ public class DPRecentItems extends DashboardPanel implements EventListener, Tree
 					continue; // record could have been deleted
 				}
 				SimpleTreeNode treeNode = new SimpleTreeNode(recentItem, new ArrayList<SimpleTreeNode>());
-				((List<SimpleTreeNode>) mroot.getChildren()).add(treeNode);
+				mroot.getChildren().add(treeNode);
 			}
 		}
 		
@@ -281,7 +282,7 @@ public class DPRecentItems extends DashboardPanel implements EventListener, Tree
 	 * @see org.zkoss.zul.TreeitemRenderer#render(org.zkoss.zul.Treeitem, java.lang.Object)
 	 */
 	@Override
-	public void render(Treeitem ti, Object node) throws Exception
+	public void render(Treeitem ti, Object node, int index) throws Exception
 	{
 		SimpleTreeNode stn = (SimpleTreeNode) node;
 		MRecentItem recentItem = (MRecentItem) stn.getData();

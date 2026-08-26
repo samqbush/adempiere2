@@ -894,8 +894,9 @@ tasks.register('phase5bLegacyWebOracleSmoke', Exec) {
 		phase5bDbProperty('phase3DbPort', phase5bInstalledEnv('ADEMPIERE_DB_PORT', '5432')),
 		phase5bDbProperty('phase3DbName', phase5bInstalledEnv('ADEMPIERE_DB_NAME', 'adempiere_phase3_ci')),
 		phase5bDbProperty('phase3DbUser', phase5bInstalledEnv('ADEMPIERE_DB_USER', 'adempiere_phase3_ci')),
-		phase5bDbProperty('phase3DbPassword', 'adempiere_phase3_ci'),
 		'ADempiere Phase 3 disposable database'
+	environment 'ADEMPIERE_PHASE5D_DB_PASSWORD',
+		phase5bDbProperty('phase3DbPassword', 'adempiere_phase3_ci')
 }
 
 // The Phase 3 cleanup finalizer drops the disposable database. It is attached to

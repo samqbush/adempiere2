@@ -16,6 +16,8 @@
  *****************************************************************************/
 package org.adempiere.webui.panel;
 
+import org.adempiere.webui.compat.ZkCompat;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -106,7 +108,7 @@ public class WSortTab extends Panel implements IADTabPanel {
 	private Button bRemove = new Button();
 	private Button bUp = new Button();
 	private Button bDown = new Button();
-	
+
 	private CWindowToolbar globalToolbar;
 
     private boolean isEmbedded = false;
@@ -153,8 +155,9 @@ public class WSortTab extends Panel implements IADTabPanel {
 		//	For List
 		yesList.setHeight("100%");
 		noList.setHeight("100%");
-		yesList.setVflex(true);
-		noList.setVflex(true);
+		// ZK CE 10 rejects vflex on a component that already carries a height.
+		ZkCompat.setVflex(yesList, true);
+		ZkCompat.setVflex(noList, true);
 
 		EventListener mouseListener = new EventListener()
 		{
@@ -278,7 +281,7 @@ public class WSortTab extends Panel implements IADTabPanel {
 		yesModel.removeAllElements();
 		noModel.removeAllElements();
 		sortTabController.loadData();
-		//	
+		//
 		setIsChanged(false);
 		bAdd.setEnabled(sortTabController.isReadWrite());
 		bRemove.setEnabled(sortTabController.isReadWrite());
@@ -436,7 +439,7 @@ public class WSortTab extends Panel implements IADTabPanel {
 		} else {
 			return;
 		}
-			
+
 		log.fine("");
 		String info = sortTabController.saveData(noModel.getElements(), yesModel.getElements());
 		//
@@ -448,7 +451,7 @@ public class WSortTab extends Panel implements IADTabPanel {
 	}	//	saveData
 
 	/**
-	 * 
+	 *
 	 */
 	public void unregisterPanel ()
 	{
@@ -511,9 +514,9 @@ public class WSortTab extends Panel implements IADTabPanel {
 		try
 		{
 			init();
-			sortTabController = new SortTabController(windowNo, gridTab.getAD_Table_ID(), 
+			sortTabController = new SortTabController(windowNo, gridTab.getAD_Table_ID(),
 					gridTab.getAD_ColumnSortOrder_ID(), gridTab.getAD_ColumnSortYesNo_ID(), gridTab.getParent_Column_ID()) {
-				
+
 				@Override
 				public void addItem(ListElement item) {
 					if (item.isYes()) {
@@ -587,24 +590,24 @@ public class WSortTab extends Panel implements IADTabPanel {
 	{
 		return globalToolbar;
 	}
-	
+
 	public void setGlobalToolbar(CWindowToolbar globalToolbar) {
 		this.globalToolbar = globalToolbar;
 	}
 
 	public void setUnselected(IADTabPanel panel)
     {
-    	((HtmlBasedComponent)this).setStyle("border:none;");
-		
+	((HtmlBasedComponent)this).setStyle("border:none;");
+
 		this.setWidth("100%");
 		this.setHeight("100%");
-		
+
     }
-    
+
     public void setSelected(IADTabPanel panel)
     {
-    	getGlobalToolbar().setCurrentPanel(panel);
-    	((HtmlBasedComponent)this).setStyle("border-left: 7px solid #fa962f; border-top: 1px solid #fa962f; border-bottom: 1px solid #fa962f; border-right: 1px solid #fa962f;");		
+	getGlobalToolbar().setCurrentPanel(panel);
+	((HtmlBasedComponent)this).setStyle("border-left: 7px solid #fa962f; border-top: 1px solid #fa962f; border-bottom: 1px solid #fa962f; border-right: 1px solid #fa962f;");
 		this.setWidth("99%");
 		this.setHeight("98%");
     }
@@ -641,7 +644,7 @@ public class WSortTab extends Panel implements IADTabPanel {
     {
         return isEmbedded;
     }
-    
+
     public boolean isGridView() {return false;}
 }	//ADSortTab
 

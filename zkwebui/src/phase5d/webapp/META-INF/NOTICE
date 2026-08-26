@@ -1,0 +1,23 @@
+ADempiere Phase 5d functional modern web UI (/webui-modern).
+
+This archive is the ZK Community Edition 10.3.0.1-jakarta slice of the ADempiere
+web client. It is built from the same source tree as the rest of the product and
+contains no evaluation, trial, or commercial ZK artifact.
+
+Third-party components
+----------------------
+* ZK Community Edition 10.3.0.1-jakarta and its ZK-published dependencies are
+  licensed under LGPL-3.0. See https://www.zkoss.org/license for the upstream
+  licensing terms.
+* The repackaged ADempiere runtime libraries carry their upstream licences
+  unchanged; they are re-archived, never modified.
+
+Scope
+-----
+The archive serves only the reviewed Phase 5d routes:
+
+    login -> role selection -> desktop/menu -> read-only "Error Message" window
+
+It is bound to the loopback-only modern runtime beside the Phase 4 CXF API WAR.
+Tomcat 9 remains the only browser-facing ingress until a later phase completes
+the web UI migration, so this context is not a public route.

@@ -12,14 +12,6 @@ allprojects {
 }
 
 dependencies {
-	implementation fileTree(
-		dir: '../zkwebui/WEB-INF/lib',
-		include: [
-			'zhtml.jar',
-			'keylistener.jar',
-		]
-	)
-
 	// Local
 	api project(path: ':base')
 }
@@ -126,3 +118,5 @@ signing {
 	useInMemoryPgpKeys(signingKey, signingPassword)
 	sign publishing.publications.mavenJava
 }
+
+apply from: rootProject.file('gradle/phase5/zk-ui-module.gradle')

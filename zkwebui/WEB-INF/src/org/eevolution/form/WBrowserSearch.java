@@ -35,7 +35,7 @@ import org.adempiere.webui.event.ContextMenuListener;
 import org.compiere.model.GridField;
 import org.compiere.swing.CEditor;
 import org.eevolution.grid.BrowserSearch;
-import org.zkoss.zul.Div;
+import org.adempiere.webui.component.Div;
 import org.zkoss.zul.Hbox;
 import org.zkoss.zul.Row;
 

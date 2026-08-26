@@ -14,6 +14,7 @@
 
 package org.adempiere.webui;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.util.Locale;
 import java.util.Properties;
 
@@ -28,12 +29,12 @@ import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.Executions;
 import org.zkoss.zk.ui.UiException;
 import org.zkoss.zk.ui.metainfo.PageDefinition;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.East;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.South;
-import org.zkoss.zkex.zul.West;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.East;
+import org.zkoss.zul.North;
+import org.zkoss.zul.South;
+import org.zkoss.zul.West;
 import org.zkoss.zul.Div;
 import org.zkoss.zul.Vbox;
 import org.zkoss.zul.Window;
@@ -67,7 +68,7 @@ public class WLogin extends AbstractUIPart
         Center center = new Center();
         center.setParent(layout);
         center.setBorder("none");
-        center.setFlex(true);
+        ZkCompat.setFlex(center, true);
         center.setAutoscroll(true);
         center.setStyle("border: none; background-color: transparent;");
 

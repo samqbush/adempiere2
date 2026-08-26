@@ -26,8 +26,8 @@
 # developer's shared local PostgreSQL instance.
 set -euo pipefail
 
-if [[ $# -lt 7 ]]; then
-  echo "Usage: reset-oracle-fixture.sh <host> <port> <database> <user> <password> <marker> <command> [args]" >&2
+if [[ $# -lt 6 ]]; then
+  echo "Usage: ADEMPIERE_PHASE5D_DB_PASSWORD=... reset-oracle-fixture.sh <host> <port> <database> <user> <marker> <command> [args]" >&2
   echo "  commands: state | snapshot <file> | verify <file> | reset <file>" >&2
   exit 64
 fi
@@ -36,10 +36,10 @@ db_host=$1
 db_port=$2
 db_name=$3
 db_user=$4
-db_password=$5
-database_marker=$6
-command=$7
-shift 7
+db_password=${ADEMPIERE_PHASE5D_DB_PASSWORD:?database password environment variable is required}
+database_marker=$5
+command=$6
+shift 6
 
 # The oracle user. GardenAdmin (AD_User_ID 101) is a seeded GardenWorld client
 # administrator with deterministic role/client/org/warehouse defaults, so the

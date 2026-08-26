@@ -110,11 +110,36 @@ Phase 5c adds the packaging-only Jakarta beachhead and semantic browser gate:
 
 The first command verifies the ZK CE `10.3.0.1-jakarta` WAR, Eclipse
 Transformer fixtures and report-only legacy-WAR scan, additive installed/release
-overlay, loopback Tomcat 10.1.59 marker, Phase 4 API preservation, and rollback
-artifacts. The second also replays the Phase 5b wire oracle and two isolated
-Playwright Java semantic captures against Tomcat 9 using only checksum-verified
-Chromium artifacts. The modern marker returns 503 by design; Phase 5d owns the
-first modern login and remains the Testability Milestone.
+overlay, Phase 4 API preservation, and rollback artifacts. The second also
+replays the Phase 5b wire oracle and two isolated Playwright Java semantic
+captures against Tomcat 9 using only checksum-verified Chromium artifacts.
+
+Phase 5d replaces the Phase 5c 503 marker with the functional modern slice and
+crosses the web UI Testability Milestone:
+
+```bash
+./gradlew phase5dFinalVerification --dependency-verification=strict
+./gradlew phase5dModernWebSmoke -Pphase3DbSystemPassword='<password>' \
+  --dependency-verification=strict
+```
+
+`webui-modern.war` keeps its artifact name and `/webui-modern` context path but
+now contains the migrated ZK compile closure, hand-written Servlet 6 and ZK 10
+descriptors for the login/role/menu/window routes, and the shared ADempiere
+runtime repackaged from the Ant-built `Adempiere.jar`, `packages.jar` and
+`AdempiereSLib.jar` using the Phase 4 pattern. The database-backed gate drives
+login, role selection, desktop/menu and the read-only "Error Message" window
+twice with a marker-guarded fixture reset between captures, compares all eleven
+comparable semantic facts and the zero-write database effect against the frozen
+legacy baseline at matching capture ordinals, and replays the complete Phase 4
+SOAP corpus in a third session while a modern ZK session is authenticated in the
+same Tomcat 10 JVM.
+
+`phase5dFinalVerification` deliberately does not chain
+`phase5cFinalVerification`: that gate still asserts the 503 marker Phase 5d
+removed. The Phase 5c assertions that remain true - the transformer determinism
+and corpus report, the ingress/session ADR, the installed/release overlay, and
+the artifact rollback - are depended on individually.
 
 The Tomcat smoke requires HTTP 2xx/3xx from each deployed context except
 `ADInterface`, whose unrouted base path is explicitly expected to return 404;

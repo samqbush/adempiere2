@@ -10,6 +10,7 @@
   <!-- set global properties for this build -->
   <property file="build.properties"/>
   <import file="../utils_dev/properties.xml"/>
+  <import file="../utils_dev/phase5d-frozen-zk.xml"/>
   <property name="dist" value="${basedir}/dist"/>
   <property name="domain_model_classes" value="${dist}/domain/class"/>
   <property name="zk_classes" value="${dist}/zk/WEB-INF/classes"/>
@@ -68,18 +69,18 @@
     </fileset>
   </path>
   <!-- Compile ZK Directory --> 
-  <target name="compileZkView" depends="init_zk, compileDomainModel"
-        description="compile the source zk" >
-    <!-- Compile the zk java code from ${src} into ${zkclasses} -->
-    
-    <echo message="Compile ZK Classes "/>
-    <javac encoding="UTF-8" srcdir="${zk_view}" destdir="${zk_classes}" includeantruntime="false" >
-      <classpath refid="compile.domain.classpath"/>
-      <classpath refid="compilezk.classpath"/>
-    </javac>
-    
-    <echo message="Create jar file "/>
-    <jar jarfile="../zkpackages/${project.name}zk.jar" basedir="${zkjar}"/>
+  <target name="compileZkView" depends="init_zk, compileDomainModel, phase5d.materialize-frozen-zk"
+        description="stage the frozen legacy ZK package jar" >
+    <!-- Phase 5d: src/main/java/ui/zk now targets ZK CE 10.3.0.1-jakarta and is
+         compiled by Gradle (:org.adempiere.pos:compileZkUiJava). Compiling it
+         here against the ZK 3.6 jars in ../zkwebui/WEB-INF/lib is impossible,
+         and compiling it against ZK CE would change the shipped legacy artifact
+         the Phase 5b oracle is pinned to, so the frozen jar built from the
+         Phase 5b source commit is staged instead. -->
+    <echo message="Stage frozen ZK package jar "/>
+    <copy file="${phase5d.frozen.zkpackages}/${project.name}zk.jar"
+          tofile="../zkpackages/${project.name}zk.jar"
+          overwrite="true"/>
   </target>
 
 

@@ -16,6 +16,7 @@
  *****************************************************************************/
 package org.adempiere.webui.apps.form;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -76,10 +77,10 @@ import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zk.ui.event.OpenEvent;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.South;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.zkoss.zul.South;
 import org.zkoss.zul.Filedownload;
 import org.zkoss.zul.Listcell;
 import org.zkoss.zul.Listfoot;
@@ -197,7 +198,7 @@ public class WTrialBalance extends TrialBalanceDrill implements IFormController,
 		center.appendChild(miniTable);
 		miniTable.setWidth("99%");
 		miniTable.setHeight("99%");
-		center.setFlex(true);
+		ZkCompat.setFlex(center, true);
 		center.setStyle("border: none");
 
 		// Command Panel
@@ -429,7 +430,7 @@ public class WTrialBalance extends TrialBalanceDrill implements IFormController,
 	}
 
 	private void updateFooter() {
-		List<ListItem> items = miniTable.getItems();
+		List<ListItem> items = miniTable.getListItems();
 		Iterator<ListItem> it = items.iterator();
 		
 		BigDecimal periodActual	= new BigDecimal(0.0);
@@ -521,7 +522,7 @@ public class WTrialBalance extends TrialBalanceDrill implements IFormController,
 	private void renderListBox()
 	{
 		miniTable.renderAll();
-		List<ListItem> items = miniTable.getItems();
+		List<ListItem> items = miniTable.getListItems();
 		Iterator<ListItem> it = items.iterator();
 		popup = new WEditorPopupMenu(true, false, false);
 		popup.addEventListener(Events.ON_OPEN, this);

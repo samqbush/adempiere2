@@ -12,6 +12,7 @@
  *****************************************************************************/
 package org.adempiere.webui.panel;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.math.BigDecimal;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -47,10 +48,10 @@ import org.compiere.util.Msg;
 import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.South;
-import org.zkoss.zul.Div;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.South;
+import org.adempiere.webui.component.Div;
 import org.zkoss.zul.Separator;
 import org.zkoss.zul.Textbox;
 
@@ -139,7 +140,7 @@ public class InfoPAttributePanel extends Window implements EventListener
 		Borderlayout layout = new Borderlayout();
 		Center center = new Center();
 		layout.appendChild(center);
-		center.setFlex(true);
+		ZkCompat.setFlex(center, true);
 		center.setAutoscroll(true);
 		center.setStyle("border: none");
 		this.appendChild(layout);

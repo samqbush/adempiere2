@@ -14,7 +14,8 @@ package org.adempiere.webui;
 
 import org.adempiere.webui.desktop.IDesktop;
 import org.compiere.model.MUser;
-import org.zkforge.keylistener.Keylistener;
+import org.adempiere.webui.component.Keylistener;
+import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.Page;
 
 import java.util.List;
@@ -49,7 +50,7 @@ public interface IWebClient {
 
 	public Page getPage();
 
-	public List getChildren();
+	public <T extends Component> List<T> getChildren();
 
 	public void detach();
 

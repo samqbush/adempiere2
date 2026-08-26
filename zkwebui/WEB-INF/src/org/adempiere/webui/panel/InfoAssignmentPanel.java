@@ -45,7 +45,7 @@ import org.compiere.util.Env;
 import org.compiere.util.Msg;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
-import org.zkoss.zul.Div;
+import org.adempiere.webui.component.Div;
 
 /**
 * Based on InfoAssignment written by Jorg Janke

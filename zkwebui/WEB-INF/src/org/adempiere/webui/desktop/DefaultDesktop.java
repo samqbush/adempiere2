@@ -17,6 +17,8 @@
 
 package org.adempiere.webui.desktop;
 
+import org.adempiere.webui.LayoutUtils;
+import org.adempiere.webui.compat.ZkCompat;
 import org.adempiere.core.domains.models.I_AD_Menu;
 import org.adempiere.core.domains.models.X_PA_DashboardContent;
 import org.adempiere.webui.apps.graph.WGraph;
@@ -51,12 +53,12 @@ import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zk.ui.event.OpenEvent;
 import org.zkoss.zk.ui.util.Clients;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.West;
-import org.zkoss.zkmax.zul.Portalchildren;
-import org.zkoss.zkmax.zul.Portallayout;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.zkoss.zul.West;
+import org.adempiere.webui.compat.Portalchildren;
+import org.adempiere.webui.compat.Portallayout;
 import org.zkoss.zul.Html;
 import org.zkoss.zul.Panel;
 import org.zkoss.zul.Panelchildren;
@@ -87,6 +89,16 @@ public class DefaultDesktop extends TabbedDesktop implements MenuListener, Seria
 	private static final CLogger logger = CLogger.getCLogger(DefaultDesktop.class);
 	
 	private static final String dynamic_Dashboard_zulFilepath = "/zul/DynamicDashBoard.zul";
+
+	/**
+	 * Phase 5d: the desktop header region height, taken from the ZK 3.6
+	 * theme.css.dsp {@code .desktop-header} rule that the modern slice does not
+	 * carry over.
+	 */
+	private static final String HEADER_REGION_HEIGHT = "50px";
+
+	/** ADempiere-owned class on the header region, used by the Phase 5d stylesheet. */
+	private static final String HEADER_REGION_SCLASS = "desktop-header-region";
 
     private Center windowArea;
 
@@ -152,6 +164,16 @@ public class DefaultDesktop extends TabbedDesktop implements MenuListener, Seria
         North n = new North();
         n.setSplittable(true);
         n.setCollapsible(false);
+        // Phase 5d: ZK CE 10's default theme pads a region body by 16px and
+        // sizes a North region to its content. The desktop header therefore
+        // collapsed to zero content height, and the region body then painted
+        // over the Change Role and Log Out controls: they rendered, reported as
+        // visible, and could not be clicked. theme.css.dsp:158-165 gave
+        // .desktop-header a fixed 50px height, so the region is sized to match
+        // it explicitly and carries an ADempiere-owned class the Phase 5d
+        // stylesheet uses to remove the inherited padding.
+        n.setHeight(HEADER_REGION_HEIGHT);
+        LayoutUtils.addSclass(HEADER_REGION_SCLASS, n);
         layout.appendChild(n);
         pnlHead.setParent(n);
 
@@ -161,7 +183,7 @@ public class DefaultDesktop extends TabbedDesktop implements MenuListener, Seria
         w.setCollapsible(true);
         w.setSplittable(true);
         w.setTitle(Util.cleanAmp(Msg.getMsg(Env.getCtx(), "Menu")));
-        w.setFlex(true);
+        ZkCompat.setFlex(w, true);
         w.addEventListener(Events.ON_OPEN, new EventListener() {			
 			@Override
 			public void onEvent(Event event) throws Exception {
@@ -178,7 +200,7 @@ public class DefaultDesktop extends TabbedDesktop implements MenuListener, Seria
 
         windowArea = new Center();
         windowArea.setParent(layout);
-        windowArea.setFlex(true);
+        ZkCompat.setFlex(windowArea, true);
 
         windowContainer.createPart(windowArea);
 

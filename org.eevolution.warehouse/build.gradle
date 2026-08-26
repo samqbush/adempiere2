@@ -120,3 +120,5 @@ signing {
 	useInMemoryPgpKeys(signingKey, signingPassword)
 	sign publishing.publications.mavenJava
 }
+
+apply from: rootProject.file('gradle/phase5/zk-ui-module.gradle')

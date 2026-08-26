@@ -15,6 +15,7 @@
  *****************************************************************************/
 package org.eevolution.form;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.awt.event.ActionEvent;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
@@ -57,9 +58,9 @@ import org.eevolution.hr.services.HRActionNotice;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
 import org.zkoss.zul.Div;
 import org.zkoss.zul.Space;
 
@@ -220,13 +221,14 @@ public class WHRActionNotice extends HRActionNotice implements IFormController,
 		row.appendChild(bOk);
 		//	
 		Center center = new Center();
-		center.setFlex(true);
+		ZkCompat.setFlex(center, true);
 		center.appendChild(miniTable);
 		mainLayout.appendChild(center);
 		miniTable.setVflex(true);
 		miniTable.setFixedLayout(true);
 		miniTable.setWidth("99%");
-		miniTable.setHeight("99%");
+		// Set AFTER the vflex above, so ZK CE would reject the height here.
+		ZkCompat.setHeight(miniTable, "99%");
 		configureMiniTable();
 
 	} // jbInit

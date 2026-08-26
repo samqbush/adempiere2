@@ -16,6 +16,7 @@
  *****************************************************************************/
 package org.spin.wms.form;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.Timestamp;
@@ -75,10 +76,10 @@ import org.eevolution.wms.model.MWMInOutBound;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
-import org.zkoss.zkex.zul.Borderlayout;
-import org.zkoss.zkex.zul.Center;
-import org.zkoss.zkex.zul.North;
-import org.zkoss.zkex.zul.South;
+import org.zkoss.zul.Borderlayout;
+import org.zkoss.zul.Center;
+import org.zkoss.zul.North;
+import org.zkoss.zul.South;
 import org.zkoss.zul.Separator;
 import org.zkoss.zul.Space;
 
@@ -414,7 +415,7 @@ public class WOutBoundOrder extends OutBoundOrder
 		stockLayout.appendChild(north);
 		north.setTitle(Msg.translate(Env.getCtx(), "WarehouseStockGroup"));
 		north.appendChild(invoiceLabel);
-		north.setFlex(true);
+		ZkCompat.setFlex(north, true);
 		south = new South();
 		south.setStyle("border: none");
 		south.appendChild(stockInfo.rightAlign());
@@ -427,7 +428,7 @@ public class WOutBoundOrder extends OutBoundOrder
 		center.setStyle("border: 1px solid #000; height:50%");
 		north = new North();
 		north.setStyle("border: none; height:90%;");
-		north.setFlex(true);
+		ZkCompat.setFlex(north, true);
 		medioLayout.appendChild(north);
 		north.appendChild(orderLineTable);
 		southAdded = new South();
@@ -439,7 +440,7 @@ public class WOutBoundOrder extends OutBoundOrder
 		southAdded.addEventListener("onClick", this);
 		southAdded.setHeight("50%");
 		southAdded.setZIndex(99);
-		southAdded.setFlex(true);
+		ZkCompat.setFlex(southAdded, true);
 		southAdded.setCollapsible(true);
 		southAdded.setOpen(false);
 		southAdded.setSplittable(true);
@@ -459,7 +460,7 @@ public class WOutBoundOrder extends OutBoundOrder
 		infoLayout.appendChild(north);
 		north.appendChild(orderLayout);
 		north.setSplittable(true);
-		north.setFlex(true);
+		ZkCompat.setFlex(north, true);
 		
 		center = new Center();
 		center.setStyle("border: none");

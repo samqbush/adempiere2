@@ -17,6 +17,7 @@
 
 package org.adempiere.webui.panel;
 
+import org.adempiere.webui.compat.ZkCompat;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.Properties;
@@ -89,7 +90,7 @@ public class MenuPanel extends Panel implements EventListener
         menuTree.setId("mnuMain");
         menuTree.setWidth("100%");
         menuTree.setVflex(true);
-        menuTree.setFixedLayout(false);
+        ZkCompat.setFixedLayout(menuTree, false);
         menuTree.setPageSize(-1); // Due to bug in the new paging functionality
         
         menuTree.setStyle("border: none");
