@@ -1292,7 +1292,6 @@ tasks.register('phase5cTransformerCorpusReport', JavaExec) {
 }
 
 tasks.named('check') {
-	dependsOn tasks.named('verifyPhase5dModernWebWar')
 	dependsOn tasks.named('verifyPhase5cTransformer')
 	dependsOn tasks.named('modernUiTest')
 	dependsOn tasks.named('browserContractTest')

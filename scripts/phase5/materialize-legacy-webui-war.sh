@@ -52,8 +52,17 @@ if [[ ! "${FROZEN_COMMIT}" =~ ^[0-9a-f]{40}$ ]]; then
 fi
 
 if ! git -C "${REPO_ROOT}" cat-file -e "${FROZEN_COMMIT}^{commit}" 2>/dev/null; then
-	echo "FAIL: frozen source commit ${FROZEN_COMMIT} is not present in this repository" >&2
-	exit 1
+	# actions/checkout intentionally creates a shallow clone. Fetch only the
+	# contract-pinned object rather than unshallowing the repository or trusting
+	# a moving branch name, then verify the exact object before using it.
+	if ! git -C "${REPO_ROOT}" fetch --no-tags --depth=1 origin "${FROZEN_COMMIT}"; then
+		echo "FAIL: could not fetch contract-pinned frozen source commit ${FROZEN_COMMIT}" >&2
+		exit 1
+	fi
+	if ! git -C "${REPO_ROOT}" cat-file -e "${FROZEN_COMMIT}^{commit}" 2>/dev/null; then
+		echo "FAIL: fetched data does not contain frozen source commit ${FROZEN_COMMIT}" >&2
+		exit 1
+	fi
 fi
 
 mkdir -p "${OUTPUT_DIR}"

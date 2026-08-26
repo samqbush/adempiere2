@@ -152,6 +152,12 @@ valid are depended on individually.
 coexistence, and rollback evidence. Required-check enforcement remains a manual
 repository-administrator action.
 
+The frozen rollback materializer accepts shallow CI checkouts by fetching only
+the exact contract-pinned source commit from `origin` and verifying that commit
+object before creating the isolated worktree. The generic Gradle `build`
+lifecycle compiles and tests the modern UI but does not package the Ant-backed
+functional WAR; `phase5dFinalVerification` remains the canonical WAR gate.
+
 ## Evidence produced
 
 | Path | Contents |
