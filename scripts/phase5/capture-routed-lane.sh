@@ -19,6 +19,14 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "$0")/../.." && pwd)
 operation=${1:?operation is required}
 
+file_mode() {
+  if stat -c '%a' "$1" >/dev/null 2>&1; then
+    stat -c '%a' "$1"
+  else
+    stat -f '%Lp' "$1"
+  fi
+}
+
 properties_file="$repo_root/gradle/phase4/runtime.properties"
 api_port=$(awk -F= '$1 == "api.port" {sub(/^[^=]*=/, ""); print; exit}' \
   "$properties_file")
@@ -249,7 +257,7 @@ backend)
         echo "The Phase 5e handoff key is missing: $handoff_key" >&2
         exit 66
       fi
-      key_mode=$(stat -f '%Lp' "$handoff_key" 2>/dev/null || stat -c '%a' "$handoff_key")
+      key_mode=$(file_mode "$handoff_key")
       if [[ "$key_mode" != "600" ]]; then
         echo "The Phase 5e handoff key is mode $key_mode; 600 is required" >&2
         exit 65

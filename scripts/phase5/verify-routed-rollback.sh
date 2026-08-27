@@ -250,7 +250,7 @@ for marker in \
   phase5e-customization.marker \
   phase5e-patch.marker \
   phase5e-package.marker; do
-  if ! printf '%s\n' "$rebuilt_entries" | grep -Fq "$marker"; then
+  if ! grep -Fq "$marker" <<<"$rebuilt_entries"; then
     echo "The setupWLib rehearsal did not merge $marker; the merge was a no-op" >&2
     exit 1
   fi
@@ -261,18 +261,18 @@ done
 # therefore WINS over the one inside webuiOriginal.war. That is recorded as an
 # observed installer property, not asserted as desirable.
 merged_web_xml=$(unzip -p "$merge_home/lib/webui.war" WEB-INF/web.xml)
-if ! printf '%s' "$merged_web_xml" | grep -Fq 'phase5e-rehearsal-customization'; then
+if ! grep -Fq 'phase5e-rehearsal-customization' <<<"$merged_web_xml"; then
   echo "The observed setupWLib precedence changed: a site WEB-INF/web.xml no " \
     "longer wins over lib/webuiOriginal.war" >&2
   exit 1
 fi
 
 # And, the point of the rehearsal: none of the Phase 5e overlay comes back.
-if printf '%s\n' "$rebuilt_entries" | grep -Fq 'webui-cohort-bridge.jar'; then
+if grep -Fq 'webui-cohort-bridge.jar' <<<"$rebuilt_entries"; then
   echo "A post-rollback setupWLib rebuild reintroduced the Phase 5e bridge" >&2
   exit 1
 fi
-if printf '%s' "$merged_web_xml" | grep -Fq 'phase5eCohortRouter'; then
+if grep -Fq 'phase5eCohortRouter' <<<"$merged_web_xml"; then
   echo "A post-rollback setupWLib rebuild reintroduced the Phase 5e router" >&2
   exit 1
 fi

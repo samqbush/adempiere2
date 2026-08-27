@@ -25,6 +25,14 @@ repo_root=${1:?repository root is required}
 adempiere_home=${2:?installed ADEMPIERE_HOME is required}
 handoff_key=${3:?handoff key path is required}
 
+file_mode() {
+  if stat -c '%a' "$1" >/dev/null 2>&1; then
+    stat -c '%a' "$1"
+  else
+    stat -f '%Lp' "$1"
+  fi
+}
+
 public_port=${PHASE5E_PUBLIC_PORT:-8888}
 properties_file="$repo_root/gradle/phase4/runtime.properties"
 api_port=$(awk -F= '$1 == "api.port" {sub(/^[^=]*=/, ""); print; exit}' \
@@ -40,7 +48,7 @@ if [[ ! -f "$handoff_key" ]]; then
   echo "The Phase 5e handoff key is missing: $handoff_key" >&2
   exit 66
 fi
-key_mode=$(stat -f '%Lp' "$handoff_key" 2>/dev/null || stat -c '%a' "$handoff_key")
+key_mode=$(file_mode "$handoff_key")
 if [[ "$key_mode" != "600" ]]; then
   echo "The Phase 5e handoff key is mode $key_mode; 600 is required" >&2
   exit 65

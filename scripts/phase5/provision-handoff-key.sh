@@ -23,6 +23,14 @@ set -euo pipefail
 key_path=${1:?handoff key path is required}
 key_bytes=${2:-48}
 
+file_mode() {
+  if stat -c '%a' "$1" >/dev/null 2>&1; then
+    stat -c '%a' "$1"
+  else
+    stat -f '%Lp' "$1"
+  fi
+}
+
 if [[ "$key_bytes" -lt 32 ]]; then
   echo "A handoff key needs at least 32 bytes; $key_bytes was requested" >&2
   exit 64
@@ -49,7 +57,7 @@ fi
 
 if [[ -f "$key_path" ]]; then
   existing_size=$(wc -c <"$key_path" | tr -d ' ')
-  existing_mode=$(stat -f '%Lp' "$key_path" 2>/dev/null || stat -c '%a' "$key_path")
+  existing_mode=$(file_mode "$key_path")
   if [[ "$existing_size" -ge 32 && "$existing_mode" == "600" ]]; then
     # Re-provisioning would invalidate every ticket already in flight and every
     # modern session that has not yet bootstrapped. A usable key is left alone.
@@ -76,7 +84,7 @@ fi
 chmod 600 "$key_path"
 
 size=$(wc -c <"$key_path" | tr -d ' ')
-mode=$(stat -f '%Lp' "$key_path" 2>/dev/null || stat -c '%a' "$key_path")
+mode=$(file_mode "$key_path")
 if [[ "$size" != "$key_bytes" || "$mode" != "600" ]]; then
   rm -f "$key_path"
   echo "The generated handoff key is ${size} bytes at mode ${mode}; refusing it" >&2
