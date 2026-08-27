@@ -1,0 +1,51 @@
+# The reviewed Phase 5e proxy header allowlists.
+#
+# Allowlists, not denylists. A header nobody has considered must not cross the
+# boundary in either direction, which is the only rule that stays correct when a
+# future browser, ZK version or Tomcat version invents one.
+#
+# header	direction	forwarded
+accept	request	true
+accept-encoding	request	true
+accept-language	request	true
+cache-control	request	true
+content-type	request	true
+if-modified-since	request	true
+if-none-match	request	true
+pragma	request	true
+user-agent	request	true
+x-requested-with	request	true
+cookie	request	false
+host	request	false
+authorization	request	false
+referer	request	false
+origin	request	false
+connection	request	false
+keep-alive	request	false
+te	request	false
+trailer	request	false
+transfer-encoding	request	false
+upgrade	request	false
+proxy-authorization	request	false
+x-forwarded-for	request	false
+x-adempiere-handoff-ticket	request	false
+x-adempiere-handoff-session	request	false
+cache-control	response	true
+content-disposition	response	true
+content-encoding	response	true
+content-language	response	true
+content-type	response	true
+etag	response	true
+expires	response	true
+last-modified	response	true
+location	response	true
+pragma	response	true
+vary	response	true
+x-content-type-options	response	true
+x-frame-options	response	true
+set-cookie	response	false
+server	response	false
+connection	response	false
+keep-alive	response	false
+transfer-encoding	response	false
+x-adempiere-handoff-ticket	response	false

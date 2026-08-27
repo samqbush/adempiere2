@@ -102,7 +102,12 @@ tasks.register('verifyTestClassification') {
             file('org.adempiere.test/src/test/java'),
             file('org.adempiere.webservice/src/test/java'),
             file('install/src/test/java'),
-            file('serverRoot/src/test/server/org/compiere/ldap')
+            file('serverRoot/src/test/server/org/compiere/ldap'),
+            // Phase 5e. Both cohort test source sets are classified, so a new
+            // test cannot join the routing closure without declaring whether it
+            // needs a database.
+            file('org.adempiere.cohort/src/test/java'),
+            file('org.adempiere.cohort/src/bridgeTest/java')
         ]
         def failures = []
         roots.each { root ->
@@ -295,6 +300,7 @@ apply from: 'gradle/phase5/browser-contract.gradle'
 apply from: 'gradle/phase5/legacy-web-artifact.gradle'
 apply from: 'gradle/phase5/zk-compile-closure.gradle'
 apply from: 'gradle/phase5/zk-functional-slice.gradle'
+apply from: 'gradle/phase5/cohort-routing.gradle'
 
 tasks.withType(Javadoc) {
 	failOnError false

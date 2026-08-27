@@ -188,7 +188,7 @@ necessarily block merges.
 | R1 | Core | Phase 2 smoke and Phase 3 DB-backed metadata validation protect selected runtime and dictionary seams; broader business behavior remains | Phase 5 | Expand representative document, accounting, and UI behavior coverage. |
 | R2 | Swing/POS | Closed for the Phase 2 Garden World login/role/menu/process slice; broader operator workflows remain outside this phase | Closed in Phase 2; broader coverage Phase 5 | The semantic Xvfb smoke is now gated; expand coverage during the ZK/client modernization. |
 | R3 | Background jobs | Exact-once scheduler execution and context/transaction cleanup are proven; production discovery breadth and observability remain | Phase 6 | Expand processor discovery and add operational metrics/alerts. |
-| R4 | Web UI | Phase 5d replaces the 503 marker with a functional modern slice and crosses the Testability Milestone: two fixture-isolated modern captures, a self-diff, and an eleven-fact plus zero-write comparison with the frozen legacy baseline at matching capture ordinals. Residuals that remain: production customizations are still unknown; 13 legacy entries remain non-reproducible; the four `/*` filter vectors remain honestly `context-reachability-only`; the modern slice serves only the walking-skeleton routes, so DSP/timeline/JSP/TLD/non-ZK routes are untested on ZK CE; JasperReports' interactive web viewer is excluded from the modern runtime (residual R4-5d-1); and the modern slice's visual parity is unreviewed - only its semantic facts are | Phase 5e for session defects and cohort routing; Phase 5f for non-ZK routes, DSP/JSP/TLD assets and the timeline; Phase 5g for report parity and screen-level visual parity; Phase 7 for full artifact reproducibility | Production owners validate custom overlays. Do not read the eleven matched semantic facts as screen-level parity, and do not treat the browser context requests as direct filter-effect proof. |
+| R4 | Web UI | Phase 5d replaces the 503 marker with a functional modern slice and crosses the Testability Milestone: two fixture-isolated modern captures, a self-diff, and an eleven-fact plus zero-write comparison with the frozen legacy baseline at matching capture ordinals. Phase 5e adds proven fail-closed cohort routing, concurrent identity isolation, and logout/timeout/container cleanup through the public origin. Residuals that remain: production customizations are still unknown; 13 legacy entries remain non-reproducible; the four `/*` filter vectors remain honestly `context-reachability-only`; the modern slice serves only the walking-skeleton routes, so DSP/timeline/JSP/TLD/non-ZK routes are untested on ZK CE; JasperReports' interactive web viewer is excluded from the modern runtime (residual R4-5d-1); and the modern slice's visual parity is unreviewed - only its semantic facts are | Phase 5f for non-ZK routes, DSP/JSP/TLD assets and the timeline; Phase 5g for report parity and screen-level visual parity; Phase 7 for full artifact reproducibility | Production owners validate custom overlays. Do not read the eleven matched semantic facts as screen-level parity, and do not treat the browser context requests as direct filter-effect proof. |
 | R5 | SOAP/servlets | Unknown consumers and undocumented route classes may break | Phase 4 | Inventory consumers, freeze WSDL/HTTP fixtures, and run parallel replay. |
 | R6 | Database | Production size, custom schema, supported engines, and rollback windows are unknown | Phase 6 | Approve customer-specific migration runbook and rehearse on a sanitized copy. |
 | R7 | Extension metadata | The fail-closed validator names 16 pre-existing active `AD_Process` bindings with absent or incompatible classes | Phase 7 | Obtain usage evidence, then correct or retire every row in `gradle/phase3/metadata-quarantine.tsv`; additions and stale quarantine rows fail CI. |
@@ -973,8 +973,10 @@ Jakarta-compatible stack through vertical slices.
 **Status:** Phase 5 is an umbrella milestone delivered through sequential
 `phase-5a-*` through `phase-5h-*` branches. Each increment merges to `develop`
 before the next begins. Phase 5a merged as `dc7e84f68`; Phase 5b merged as
-`cac0efdcaa13464e069291992214880cd0239ec5`; Phase 5c merged as `3154ced80`.
-Phase 5d is in progress on `phase-5d-zk-functional-slice`.
+`cac0efdcaa13464e069291992214880cd0239ec5`; Phase 5c merged as `3154ced80`;
+Phase 5d merged as PR #9 at `b47464d2763694c093ed22470000e00f2b6aee73`.
+Phase 5e is implemented and its database-neutral and database-backed gates are
+executed and green on `phase-5e-cohort-routing`.
 
 **Regime:** Legacy ZK/Tomcat 9 remains lit; the modern ZK/Tomcat 10.1 slice
 crossed from dark to lit at Phase 5d and now expands.
@@ -993,7 +995,7 @@ crossed from dark to lit at Phase 5d and now expands.
 | 5b | Freeze the installed Tomcat 9 route/UI oracle and publish checksum-pinned legacy web artifacts before the source crossing | Oracle | 5a |
 | 5c | Add the reproducible Jakarta packaging beachhead, verified browser tooling, and binding ingress/session-affinity ADR | Build/runtime | 5b |
 | 5d | Migrate the complete ZK compile closure and cross the Testability Milestone at login -> role -> menu -> read-only window | Web UI | 5c |
-| 5e | Prove concurrent client/org/role/user/language/session cleanup and add fail-closed cohort routing | Security/session | 5d |
+| 5e | Prove concurrent client/org/role/user/language/session cleanup and add fail-closed cohort routing | Security/session | 5d (**implemented and verified**; see "Phase 5e decisions and findings") |
 | 5f | Migrate non-ZK servlets, JSP/Jakarta Tags/TLD assets, and inherited routes by independently reversible context | Web routes | 5e |
 | 5g | Complete read/write UI, process, report, upload/download, POS, dashboard, server-push, and extension parity | Web UI/extensions | 5f |
 | 5h | Finish source-native Jakarta, preserve both historical SOAP paths on final ingress, then remove the router, Tomcat 9, transformer, and ZK 3.6 | Runtime/source | 5g |
@@ -1242,6 +1244,212 @@ Canonical Phase 5d gates:
 ./gradlew phase5dModernWebSmoke -Pphase3DbSystemPassword='<password>' \
   --dependency-verification=strict
 ```
+
+#### Phase 5e decisions and findings
+
+Phase 5e is a lit, **L3** security and session increment. It routes selected
+sessions to the Phase 5d slice through the public Tomcat 9 `/webui` ingress and
+proves concurrent isolation. It adds no business screen and migrates no Phase 5f
+or 5g route.
+
+**Cohort configuration.** Three system-level (`AD_Client_ID=0, AD_Org_ID=0`)
+`AD_SysConfig` rows: `MODERN_WEB_UI_ENABLED` (exact `Y`),
+`MODERN_WEB_UI_USER_IDS` and `MODERN_WEB_UI_ROLE_IDS` (strict
+`|[1-9][0-9]{0,8}(,[1-9][0-9]{0,8})*`). Each key permits exactly one active
+system row. Duplicate, malformed, null-valued or unreadable rows invalidate the
+**complete** configuration and keep every new session legacy; an invalid
+configuration exposes no allowlist at all. Client- and organisation-scoped rows
+are ignored and reported. The three rows are loaded atomically through a
+dedicated repository, not `MSysConfig.getValue`, whose first-row and cache
+behaviour cannot prove duplicate absence. Because the grammar requires a
+positive identifier, the System user and the System Administrator role can never
+be allowlisted.
+
+**Decision point.** A ZK 3.6 `EventInterceptor` takes the decision once, on the
+first event after which the session context carries a *completed role
+selection* - a state (`#AD_User_ID`, `#AD_Role_ID`, `#AD_Client_ID`,
+`#AD_Org_ID`, `#AD_Language`, `#M_Warehouse_ID` all present), not an event name.
+The role allowlist is matched against the **selected** `AD_Role_ID`, never
+against the roles the user is merely entitled to; the routed matrix carries a
+negative row for a role the acting user holds but does not select. The decision
+is sticky per session; configuration changes never move an active session. It is
+recorded as the runtime's *name*, so a container that persists sessions can
+write it, and a session decided modern whose affinity is absent is refused with
+503 rather than treated as undecided. Sticky per session is not sticky per
+browser: a routed logout destroys the session on both runtimes, so the next
+login is decided again from the current configuration. A request-filter backstop
+reports a fully authenticated session that reached the router with no recorded
+decision, which is exactly the shape an interceptor-removing mutation produces.
+
+**Concurrency and persistence of the affinity.** `ModernSessionAffinity.admit()`
+is one synchronized check-and-transition and the only way a caller may learn the
+phase in order to act on it, so exactly one concurrent request rotates the
+session identifier and exactly one holds the ticket. A loser is refused with 503
+and, unlike a failure, does not poison the session the winner is still
+establishing. The affinity, decision and identity are `Serializable` because a
+session-persisting container silently drops what it cannot write; the bearer
+ticket is `transient`, so a restored `ROTATING`, `AWAITING_BOOTSTRAP` or
+`BOOTSTRAPPING` affinity becomes `FAILED`/`affinity-not-restorable` rather than
+resuming a handoff whose secret is gone.
+
+**Ending a routed session.** A routed session exists on two runtimes and only
+one observes the Log Out click. `AdempiereWebUI.logout()` marks the modern
+session ended; `CohortHandoffFilter` destroys it on the next routed request,
+before the chain runs, and answers `205` carrying the reserved
+`X-ADempiere-Handoff-End` header; the proxy reads that header before writing a
+byte to the public response; and the router invalidates its own Tomcat 9 session
+- destroying affinity and decision together - and redirects to the public
+context root. A terminally `FAILED` session is deliberately not ended this way:
+recycling it would create an undecided session and serve the legacy login form,
+which is the fallback this phase forbids.
+
+**Topology.** Tomcat 9 stays the only public ingress. `webui-modern.war` keeps
+its artifact name and is mounted on loopback Tomcat 10.1.59 at the **internal**
+context path `/webui` through `conf/Catalina/localhost/webui.xml`. Public and
+internal application paths are therefore identical, which is why the router
+never rewrites HTML, JavaScript, CSS or ZK asynchronous-update bodies. The
+installed product and both 394LTS archives stage that archive at
+`tomcat10-api/phase5e/webui-modern.war`, which is the path the `Context`
+descriptor's `docBase` resolves to, and remove the superseded Phase 5c/5d
+auto-deployed `tomcat10-api/webapps/webui-modern.war` and its manifest, so
+exactly one modern UI context exists in the shipped product. The overlay gate
+resolves the `docBase` and requires the file to be present in the installed tree
+and in both archives. The Phase 5d direct lane boots its own Tomcat from the
+build output and remains an independent regression gate.
+
+**Handoff.** A selected session rotates its Tomcat 9 session identifier exactly
+once - the session-fixation protection - and receives a versioned,
+HMAC-SHA-256, single-use, 30-second, loopback-only ticket carrying a 256-bit
+nonce, both timestamps, the rotated session binding and the complete identity.
+It is sent once in a reserved internal header and never reaches the browser. The
+router refuses, rather than strips, any browser request in that namespace.
+Validation checks the MAC first and consumes the nonce last, so a malformed or
+expired ticket cannot burn a nonce. The replay cache holds 4096 entries - 6.6x
+the 620 live nonces the documented 20 logins/second ceiling implies - and
+refuses rather than evicts when full. The bootstrap seeds the six identity
+values and runs ADempiere's own `Login.validateLogin` and
+`Login.loadPreferences`; it copies no password and no legacy desktop state.
+
+**Cookies and tracking.** One public `JSESSIONID` on `/webui`, `HttpOnly`,
+`SameSite=Lax`, `Secure` when the public request is HTTPS. Both contexts are
+cookie-only and the modern `Context` sets `disableURLRewriting="true"`. The
+modern runtime's `Set-Cookie` is consumed by the router and only its identifier
+is retained server-side. The derived legacy descriptor keeps `version="2.4"`:
+raising it to 3.0 would additionally enable web-fragment and annotation scanning
+for an archive frozen without them.
+
+**Failure policy.** An established modern session never falls back to legacy. An
+unknown route, a ticket failure, a missing affinity or an unavailable backend
+produces an explicit status.
+
+**Derived artifact.** The deployed Tomcat 9 `webui.war` is the frozen Phase 5b
+artifact plus exactly three reviewed entries - the two descriptors and the
+bridge overlay jar - derived deterministically and recomputed rather than
+trusted. `lib/webuiOriginal.war` stays pristine and is both the rollback
+material and the installer's `setupWLib` merge input. Rollback therefore
+**deletes** it rather than restoring a derived copy, restores the deployed
+Tomcat 9 `webapps/webui.war` and removes its exploded expansion, and the
+rehearsal re-runs the merge afterwards to prove the overlay cannot be
+resurrected. The rehearsal runs the **real** `setupWLib` and
+`backupWebuiOriginal` bodies, read out of `install/Adempiere/build.xml` at run
+time, under Ant, with real merge inputs whose marker entries must appear in the
+rebuilt archive - so a rehearsal that had degraded into an identity unzip/rezip
+fails rather than passes. It records two observed installer properties a
+hand-written re-zip could not have shown: a site `WEB-INF/web.xml` wins over the
+one inside `lib/webuiOriginal.war` under Ant's `duplicate="preserve"`, and the
+merge legitimately drops `META-INF/MANIFEST.MF` because the installer's own
+`manifest.exclude` patternset names it. The allowed-drop set is read from
+`install/Adempiere/build.xml` at run time, so any other dropped entry fails.
+
+**Session and context defects fixed.** ZK's `Locales` thread local was never
+cleared (a cross-identity locale leak on pooled request threads);
+`setContextForSession` installed a `null` context; `isValidContext` threw on a
+removed context and answered `true` when it was absent;
+`SessionManager.getApplication(String)` dereferenced an absent entry inside the
+destruction path; `sessionDestroyed` invalidated a session the container was
+already destroying; `SessionTimeoutFilter` returned an empty HTTP 200 for an
+unregistered session and continued into `chain.doFilter` after invalidating.
+`CohortHandoff.seed` cached user preferences under the empty-string key because
+`SessionManager.loadUserPreference(Integer)` reads its key from a thread context
+that does not exist before ZK creates an execution, which made the first routed
+desktop throw; the cohort bootstrap marker survived logout and short-circuited a
+logged-out session straight to the desktop; and the router's abandoned-session
+cleanup ran context-dependent `SessionManager` calls with no `ServerContext`, so
+it silently did nothing. All are fixed in the modern tree only; the frozen
+archive is unchanged.
+
+**Capture defects fixed.** The `role-allowlisted` fixture allowlisted
+`AD_Role_ID` 103 while the acting `GardenAdmin` login selects 102, so the row
+could only have passed by accident; the concurrency row read
+`document.documentElement.lang`, which neither ZK version renders, and never
+selected a language, so it compared two empty strings from two `en_US` sessions;
+and the lifecycle rows compared a pre-insertion creation reading with a
+post-removal destruction reading and "destroyed" a session with
+`BrowserContext.clearCookies()`, which does not touch a container session. The
+fixture now allowlists 102 and carries a `role-unselected` negative row, the
+browser asserts the role its session actually runs as, each identity is driven
+to an explicit language and compared on the `AD_Message` `Logout` label
+ADempiere renders in the session's own language against that identity's own solo
+capture, and every lifecycle row anchors both readings to a recorded log offset,
+drives a mechanism the product itself owns, and requires a recorded destruction
+on each runtime that must have one.
+
+The census parser behind those rows was a third capture defect. A routed Tomcat
+9 session is unregistered by the rotation, so the frozen listener records its
+destruction with **no** cache lines; a parser that scanned on to the next
+`Destroyed Session Id` therefore absorbed the seven **pre-insertion** lines of
+whichever `sessionCreated` followed, and reported the destruction *absent* when
+none did. Each block is now bounded at its own `Invalidate Session : <id>`, the
+modern census line for the same session, or the next `Create Session Id` /
+`Destroyed Session Id`; a cache-line-less block is a recorded destruction with
+no census; each reading carries its provenance; the mark reads the same class of
+evidence as the observation; and each runtime is judged on evidence the routed
+session owns - the unconditional census on the modern runtime, the destruction
+record on the public one, whose rotation-time cleanup is covered by
+`CohortRoutingFilterTest`. Reviewed `catalina.out` fixtures under
+`scripts/phase5/fixtures/session-cache-census/` reproduce both faults and are
+gated by `verifyPhase5eSessionCensusParser`.
+
+**Hazards.** H1, H2, H3 (topology), H4, H6 and H8 fired and are closed as
+recorded in `docs/modernization/phase-5e-evidence.md`. H3 (runtime major), H5 and
+H7 were checked and cleared. The internal handoff is registered as transitional
+state **T5e-1**, closing in Phase 5h.
+
+Canonical Phase 5e gates:
+
+```bash
+./gradlew phase5eFinalVerification --dependency-verification=strict
+./gradlew phase5eCohortRoutingSmoke -Pphase3DbSystemPassword='<password>' \
+  --dependency-verification=strict
+```
+
+Both `phase5eFinalVerification` and `phase5eCohortRoutingSmoke` are executed and
+green. The database-backed run used the marker-owned disposable PostgreSQL
+database and recorded all 23 public-origin matrix rows, including concurrency,
+logout, timeout, container destruction, Phase 4 SOAP coexistence, and secret
+hygiene, as passing in `build/phase5e/evidence/cohort-matrix.tsv`.
+
+**Byte caps.** The proxy's 8 MiB request and 64 MiB response caps are enforced
+by transport-neutral code (`org.adempiere.web.route.BoundedTransfer`) and are
+asserted one byte on either side of the limit, including that nothing past the
+limit reaches the destination and that an oversized declared `Content-Length` is
+refused before the body is opened. A cap that could only be exercised by pushing
+an oversized body through a live container would never be run, and an unrun cap
+is indistinguishable from a missing one.
+
+**Mutation proof.** Sixteen reviewed mutations are scored, and only behaviour is
+scored: each mutant is compiled first, a mutant that does not compile fails the
+gate with a distinct message rather than counting as a detection, and detection
+is read from the named test class's own JUnit report - which must exist, must
+have executed a test, and must record a failure. A non-zero build status is
+never sufficient on its own.
+
+**Where the ticket rules are proved.** A browser cannot present a ticket: the
+router refuses the whole reserved header namespace before it routes. Expiry,
+tampering, wrong-session binding, partial identity and single-use replay are
+therefore asserted directly against the codec in the database-neutral gate, and
+the routed browser matrix asserts only what a browser can observe. The routed
+evidence gate fails if a duplicate ticket row reappears in the runtime matrix.
 
 #### Verification & Exit Criteria (Definition of Done)
 

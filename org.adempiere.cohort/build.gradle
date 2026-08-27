@@ -1,0 +1,303 @@
+// Phase 5e: the cohort routing protocol and the isolated Javax/ZK 3.6 bridge.
+//
+// Three deliberately separate compile closures live here, and none of them can
+// see the others' framework:
+//
+//   main         Transport-neutral. Plain Java SE only - no servlet API of
+//                either namespace, no ZK, no ADempiere. It is the one body of
+//                code both runtimes execute, so it is also the one body of code
+//                that can be unit tested once and trusted on both sides.
+//
+//   bridge       Javax Servlet 4 and ZK 3.6, compiled against classes extracted
+//                from the *materialised frozen* Phase 5b WAR and pinned by
+//                SHA-512 in gradle/phase5/bridge-classpath.tsv. ZK 3.6 is never
+//                added to the reproducible repository resolution and never
+//                reaches the modern runtime: it is a file dependency on an
+//                artifact this build produced from a recorded commit.
+//
+//   bridgeTest   Unit tests for the bridge, on the same pinned closure.
+//
+// The modern Jakarta side is NOT here. It lives in :zkwebui, which is the only
+// project that compiles against Jakarta and ZK CE 10, and it consumes `main`
+// as an ordinary project dependency.
+plugins {
+	id 'java-library'
+}
+
+sourceSets {
+	bridge {
+		java {
+			srcDirs = ['src/bridge/java']
+		}
+	}
+	bridgeTest {
+		java {
+			srcDirs = ['src/bridgeTest/java']
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The pinned ZK 3.6 / javax bridge classpath
+// ---------------------------------------------------------------------------
+//
+// The frozen WAR is produced by scripts/phase5/materialize-legacy-webui-war.sh
+// from the exact Phase 5b source commit. Extracting the compile inputs from it,
+// rather than restoring a second ZK 3.6 source tree or adding a ZK 3.6
+// repository, is what keeps H1 (incomplete quarantine) and H2 (framework-major
+// mechanics) closed: there is exactly one ZK 3.6 artifact in the repository and
+// this compile reads it.
+
+def phase5eLegacyWar = rootProject.layout.buildDirectory
+	.file('phase5d/legacy-webui/webui.war')
+def phase5eBridgeClasspathDir = layout.buildDirectory.dir('phase5e/bridge-classpath')
+def phase5eBridgeContract = rootProject.file('gradle/phase5/bridge-classpath.tsv')
+
+tasks.register('extractPhase5eBridgeClasspath') {
+	group = 'build'
+	description = 'Extracts and SHA-512 pins the ZK 3.6 compile inputs from the frozen legacy WAR'
+	dependsOn rootProject.tasks.named('materializePhase5dLegacyWebArtifacts')
+	inputs.file phase5eBridgeContract
+	outputs.dir phase5eBridgeClasspathDir
+	doLast {
+		def war = phase5eLegacyWar.get().asFile
+		if (!war.isFile()) {
+			throw new GradleException(
+				"The frozen legacy WAR ${war} is missing; run " +
+				'materializePhase5dLegacyWebArtifacts first')
+		}
+		def expected = [:]
+		phase5eBridgeContract.readLines('UTF-8')
+			.findAll { !it.trim().isEmpty() && !it.startsWith('#') }
+			.each { line ->
+				def fields = line.split('\t', -1)
+				expected[fields[0]] = fields[1]
+			}
+		if (expected.isEmpty()) {
+			throw new GradleException("${phase5eBridgeContract} pins no entry")
+		}
+		def target = phase5eBridgeClasspathDir.get().asFile
+		project.delete(target)
+		target.mkdirs()
+		def digest = { byte[] content ->
+			java.security.MessageDigest.getInstance('SHA-512')
+				.digest(content).encodeHex().toString()
+		}
+		def problems = []
+		def seen = [] as TreeSet
+		new java.util.zip.ZipFile(war).withCloseable { zip ->
+			expected.each { entryName, pinned ->
+				if (entryName.endsWith('/')) {
+					// Directory pins are trees, handled below. zip.getEntry would
+					// return the zero-byte directory record and silently pin
+					// nothing at all.
+					return
+				}
+				def entry = zip.getEntry(entryName)
+				if (entry == null) {
+					problems << "the frozen WAR has no entry ${entryName}"
+					return
+				}
+				def content = zip.getInputStream(entry).withCloseable {
+					it.readAllBytes()
+				}
+				def actual = digest(content)
+				if (actual != pinned) {
+					problems << "${entryName} is ${actual}, pinned ${pinned}"
+					return
+				}
+				def file = new File(target, entryName.substring(
+					entryName.lastIndexOf('/') + 1))
+				file.bytes = content
+				seen << file.name
+			}
+			// WEB-INF/classes is a tree rather than one archive entry. Its pin is
+			// therefore a LOGICAL digest over the sorted (name, content-digest)
+			// pairs, not the digest of a jar envelope: two archives built by two
+			// deflate implementations from identical content are not
+			// byte-identical, and a pin that depended on that would be a pin on
+			// the tool rather than on the code.
+			def classesJar = new File(target, 'legacy-webui-classes.jar')
+			def logical = new StringBuilder()
+			def buffer = new ByteArrayOutputStream()
+			new java.util.zip.ZipOutputStream(buffer).withCloseable { out ->
+				zip.entries().toList()
+					.findAll { !it.directory && it.name.startsWith('WEB-INF/classes/') }
+					.sort { it.name }
+					.each { entry ->
+						def content = zip.getInputStream(entry).withCloseable {
+							it.readAllBytes()
+						}
+						def relative = entry.name.substring('WEB-INF/classes/'.length())
+						logical.append(relative).append('\0')
+							.append(digest(content)).append('\n')
+						def copied = new java.util.zip.ZipEntry(relative)
+						copied.time = 0L
+						out.putNextEntry(copied)
+						out.write(content)
+						out.closeEntry()
+					}
+			}
+			classesJar.bytes = buffer.toByteArray()
+			def classesDigest =
+				digest(logical.toString().getBytes('UTF-8'))
+			def pinnedClasses = expected['WEB-INF/classes/']
+			if (pinnedClasses == null) {
+				problems << 'the contract does not pin WEB-INF/classes/'
+			} else if (pinnedClasses != classesDigest) {
+				problems << "WEB-INF/classes/ is ${classesDigest}, pinned ${pinnedClasses}"
+			}
+			seen << classesJar.name
+		}
+		if (!problems.isEmpty()) {
+			throw new GradleException(
+				"The Phase 5e bridge compile classpath does not match its pins:\n  - " +
+				problems.join('\n  - '))
+		}
+		logger.lifecycle(
+			"Phase 5e bridge classpath: ${seen.size()} pinned artifacts extracted " +
+			'from the frozen legacy WAR')
+	}
+}
+
+// The extracted jars, not the directory that holds them: javac reads a
+// directory as a class root and would silently ignore every jar inside it.
+def phase5eBridgeClasspath = files({
+	def directory = phase5eBridgeClasspathDir.get().asFile
+	def jars = directory.listFiles({ File file ->
+		file.name.endsWith('.jar')
+	} as java.io.FileFilter)
+	jars == null ? [] : jars.sort { it.name }
+}).builtBy(tasks.named('extractPhase5eBridgeClasspath'))
+
+dependencies {
+	testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+	testImplementation 'org.junit.jupiter:junit-jupiter-params:5.7.0'
+	testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+
+	// The bridge sees the neutral protocol, the pinned ZK 3.6 closure and the
+	// legacy servlet API. It sees ADempiere only as compileOnly: at runtime the
+	// installed product supplies Adempiere.jar from the shared Tomcat library,
+	// and packaging a second copy inside the overlay would put two lineages of
+	// org.compiere.util.DB on one classpath.
+	bridgeImplementation sourceSets.main.output
+	bridgeCompileOnly 'javax.servlet:javax.servlet-api:4.0.1'
+	bridgeCompileOnly phase5eBridgeClasspath
+	bridgeCompileOnly project(':base')
+
+	bridgeTestImplementation sourceSets.main.output
+	bridgeTestImplementation sourceSets.bridge.output
+	bridgeTestImplementation 'javax.servlet:javax.servlet-api:4.0.1'
+	bridgeTestImplementation phase5eBridgeClasspath
+	bridgeTestImplementation project(':base')
+	bridgeTestImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+	bridgeTestImplementation 'org.junit.jupiter:junit-jupiter-params:5.7.0'
+	bridgeTestImplementation 'org.mockito:mockito-junit-jupiter:4.11.0'
+	bridgeTestRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+}
+
+version = System.getenv('ADEMPIERE_LIBRARY_VERSION') ?: 'local-1.0.0'
+
+jar {
+	manifest {
+		attributes(
+			'Implementation-Title': 'ADempiere Phase 5e Cohort Routing Protocol',
+			'Implementation-Version': version,
+			'EntityType': 'D')
+	}
+}
+
+tasks.named('test') {
+	useJUnitPlatform {
+		includeTags 'UnitTest'
+	}
+	reports.junitXml.required = true
+	testLogging {
+		events 'passed', 'skipped', 'failed'
+	}
+}
+
+tasks.register('bridgeTest', Test) {
+	group = 'verification'
+	description = 'Runs the Javax/ZK 3.6 bridge unit tests on the pinned frozen closure'
+	testClassesDirs = sourceSets.bridgeTest.output.classesDirs
+	classpath = sourceSets.bridgeTest.runtimeClasspath
+	useJUnitPlatform {
+		includeTags 'UnitTest'
+	}
+	reports.junitXml.required = true
+	reports.junitXml.outputLocation = layout.buildDirectory.dir('test-results/bridgeTest')
+	reports.html.required = true
+	reports.html.outputLocation = layout.buildDirectory.dir('reports/tests/bridgeTest')
+	testLogging {
+		events 'passed', 'skipped', 'failed'
+	}
+}
+
+/**
+ * The overlay jar that is merged into the derived Tomcat 9 webui.war.
+ *
+ * It carries the neutral protocol and the bridge, and deliberately nothing
+ * else: no ZK 3.6 class, no ADempiere class, no servlet API. Everything it
+ * links against already exists on the legacy webapp classpath, so the overlay
+ * cannot introduce a second copy of anything.
+ */
+tasks.register('bridgeOverlayJar', Jar) {
+	group = 'build'
+	description = 'Packages the Phase 5e cohort bridge for the derived legacy WAR'
+	archiveFileName = 'webui-cohort-bridge.jar'
+	destinationDirectory = layout.buildDirectory.dir('phase5e')
+	reproducibleFileOrder = true
+	preserveFileTimestamps = false
+	duplicatesStrategy = DuplicatesStrategy.FAIL
+	from sourceSets.main.output
+	from sourceSets.bridge.output
+	manifest {
+		attributes(
+			'Implementation-Title': 'ADempiere Phase 5e Cohort Bridge',
+			'Implementation-Version': version,
+			'EntityType': 'D')
+	}
+}
+
+/**
+ * The protocol-only jar the modern Jakarta WAR ships.
+ *
+ * It is the SAME `main` output the bridge carries, packaged under a different
+ * name so the two archives can never be confused in a WEB-INF/lib listing. It
+ * must not contain a single bridge class: a javax.servlet reference inside the
+ * Jakarta runtime is exactly the mixed-namespace defect Phase 5e exists to
+ * avoid, and verifyPhase5eDerivedLegacyWar re-derives that claim from the bytes.
+ */
+tasks.register('protocolJar', Jar) {
+	group = 'build'
+	description = 'Packages the transport-neutral cohort protocol for the modern Jakarta WAR'
+	archiveFileName = 'webui-cohort-protocol.jar'
+	destinationDirectory = layout.buildDirectory.dir('phase5e')
+	reproducibleFileOrder = true
+	preserveFileTimestamps = false
+	duplicatesStrategy = DuplicatesStrategy.FAIL
+	from sourceSets.main.output
+	manifest {
+		attributes(
+			'Implementation-Title': 'ADempiere Phase 5e Cohort Protocol',
+			'Implementation-Version': version,
+			'EntityType': 'D')
+	}
+}
+
+configurations {
+	phase5eProtocol {
+		canBeConsumed = true
+		canBeResolved = false
+	}
+	phase5eBridge {
+		canBeConsumed = true
+		canBeResolved = false
+	}
+}
+
+artifacts {
+	phase5eProtocol tasks.named('protocolJar')
+	phase5eBridge tasks.named('bridgeOverlayJar')
+}

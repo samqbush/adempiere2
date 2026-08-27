@@ -204,7 +204,12 @@ public class SessionManager {
     }
 
     public static IWebClient getApplication(String sessionId) {
-        return applicationCache.get(sessionId).get();
+        // Phase 5e: an absent key and a collected weak reference are both
+        // ordinary states during session destruction, and both used to throw
+        // NullPointerException here - inside the destruction path, so the
+        // remaining caches were never cleaned.
+        WeakReference<IWebClient> applicationReference = applicationCache.get(sessionId);
+        return applicationReference == null ? null : applicationReference.get();
     }
 
     public static IWebClient getApplication() {
@@ -300,7 +305,24 @@ public class SessionManager {
     }
 
     public static void loadUserPreference(Integer authenticatedUserId) {
-        String sessionId = Env.getContext(Env.getCtx(), SERVLET_SESSION_ID);
+        loadUserPreference(Env.getContext(Env.getCtx(), SERVLET_SESSION_ID), authenticatedUserId);
+    }
+
+    /**
+     * Loads a user's preferences under an explicit session key.
+     *
+     * <p>Phase 5e: the single-argument form derives the key from the thread's
+     * {@code ServerContext}, which only exists inside a ZK execution. A caller
+     * that runs earlier in the request - the cohort handoff filter creates the
+     * session before ZK ever sees it - would otherwise cache the preferences
+     * under the empty string, and {@code getUserPreference(sessionId)} would
+     * then answer {@code null} for the session that actually owns them.
+     */
+    public static void loadUserPreference(String sessionId, Integer authenticatedUserId) {
+        if (sessionId == null || sessionId.isEmpty()) {
+            throw new AdempiereException(
+                    "User preferences cannot be cached without a session identifier");
+        }
         UserPreference userPreference = new UserPreference();
         userPreference.loadPreference(authenticatedUserId);
         sessionUserPreferenceCache.put(sessionId, userPreference);
@@ -364,4 +386,5 @@ public class SessionManager {
         removeSessionContext(sessionId);
         removeUserAuthentication(sessionId);
     }
+
 }

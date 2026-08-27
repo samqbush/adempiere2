@@ -13,6 +13,11 @@ base/xdoclet-build.xml	javax.servlet	jakarta-web	base	migrate	5f
 gradle/verification-metadata.xml	javax.servlet	jakarta-web	gradle	migrate	5f
 org.adempiere.asset/src/main/java/base/org/compiere/asset/model/MAssetDelivery.java	javax.servlet	jakarta-web	org.adempiere.asset	migrate	5f
 org.adempiere.asset/src/main/java/base/org/compiere/asset/model/MRegistration.java	javax.servlet	jakarta-web	org.adempiere.asset	migrate	5f
+org.adempiere.cohort/src/bridge/java/org/adempiere/web/bridge/CohortBridgeStartupListener.java	javax.servlet	jakarta-web	org.adempiere.cohort	frozen-zk36-bridge	5h
+org.adempiere.cohort/src/bridge/java/org/adempiere/web/bridge/CohortDecisionInterceptor.java	javax.servlet	jakarta-web	org.adempiere.cohort	frozen-zk36-bridge	5h
+org.adempiere.cohort/src/bridge/java/org/adempiere/web/bridge/CohortRoutingFilter.java	javax.servlet	jakarta-web	org.adempiere.cohort	frozen-zk36-bridge	5h
+org.adempiere.cohort/src/bridge/java/org/adempiere/web/bridge/ModernBackendProxy.java	javax.servlet	jakarta-web	org.adempiere.cohort	frozen-zk36-bridge	5h
+org.adempiere.cohort/src/bridgeTest/java/org/adempiere/web/bridge/CohortRoutingFilterTest.java	javax.servlet	jakarta-web	org.adempiere.cohort	frozen-zk36-bridge	5h
 org.adempiere.pos/.idea/libraries/SBT__javax_servlet_servlet_api_2_4_jar.xml	javax.servlet	jakarta-web	org.adempiere.pos	migrate	5f
 org.adempiere.webservice/src/router/java/org/adempiere/webservice/router/SoapCompatibilityRouter.java	javax.servlet	jakarta-web	org.adempiere.webservice	migrate	5f
 org.compiere.mobile/WEB-INF/src/org/compiere/mobile/LoginDynUpdate.java	javax.servlet	jakarta-web	org.compiere.mobile	migrate	5f
@@ -674,6 +679,8 @@ jbossfacet/src/org/adempiere/as/jboss/JBoss.java	javax.naming	java-se	jbossfacet
 serverRoot/src/main/server/org/compiere/ldap/LdapConnectionHandler.java	javax.naming	java-se	serverRoot	retain	never
 serverRoot/src/main/servlet/org/compiere/web/StatusInfo.java	javax.naming	java-se	serverRoot	retain	never
 base/src/org/compiere/util/Secure.java	javax.crypto	java-se	base	retain	never
+org.adempiere.cohort/src/main/java/org/adempiere/web/handoff/HandoffTicketCodec.java	javax.crypto	java-se	org.adempiere.cohort	retain	never
+org.adempiere.cohort/src/test/java/org/adempiere/web/handoff/HandoffTicketCodecTest.java	javax.crypto	java-se	org.adempiere.cohort	retain	never
 base/src/org/compiere/model/MImage.java	javax.imageio	java-se	base	retain	never
 base/src/org/compiere/print/layout/ImageElement.java	javax.imageio	java-se	base	retain	never
 client/src/org/compiere/apps/ScreenShot.java	javax.imageio	java-se	client	retain	never

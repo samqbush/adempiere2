@@ -67,6 +67,34 @@ public class SessionManagerListener extends HttpSessionListener {
         }
         log.info(" ");
         SessionManager.createSession(httpSession);
+        log.info(census("after-create", httpSession.getId()));
+    }
+
+    /**
+     * One machine-readable line naming every {@code SessionManager} cache size,
+     * emitted at the SAME point in the lifecycle on both ends.
+     *
+     * <p>The historical per-cache log lines above are written <em>before</em>
+     * {@code createSession} inserts anything and <em>after</em> the destruction
+     * path has removed it, so a "before" reading taken from a creation and an
+     * "after" reading taken from a destruction are not the same measurement:
+     * comparing them compared two different points in the lifecycle and could
+     * report a leak as balanced, or balance as a leak. This line is written
+     * after the mutation in both cases, so the two readings are comparable, and
+     * it carries the session identifier so a capture can prove which session's
+     * end it is reading rather than reading whichever event happened last.
+     */
+    static String census(String point, String sessionId) {
+        return "SessionManager cache census"
+                + " point=" + point
+                + " session=" + sessionId
+                + " Session-Cache=" + SessionManager.getSessionCache().size()
+                + " Session-Context-Cache=" + SessionManager.getSessionContextCache().size()
+                + " Application-Cache=" + SessionManager.getAppicationCache().size()
+                + " Desktop-Cache=" + SessionManager.getDesktopCache().size()
+                + " Execution-CarryOver-Cache=" + SessionManager.getExecutionCarryOverCache().size()
+                + " User-Preference-Cache=" + SessionManager.getSessionUserPreferenceCache().size()
+                + " User-Authentication-Cache=" + SessionManager.getUserAuthenticationCache().size();
     }
 
     public void sessionDestroyed(HttpSessionEvent httpSessionEvent) {
@@ -89,8 +117,18 @@ public class SessionManagerListener extends HttpSessionListener {
             log.info("    User Preference Cache : " + SessionManager.getSessionUserPreferenceCache().size());
             log.info("User Authentication Cache : " + SessionManager.getUserAuthenticationCache().size());
         }
-        log.info("       Invalidate Session : " + httpSession.getId());
         log.info("------------------------------------------------");
-        httpSession.invalidate();
+        // Phase 5e: sessionDestroyed is the container telling us the session is
+        // already being destroyed. Calling invalidate() here re-enters
+        // destruction on some containers and throws IllegalStateException on the
+        // rest, which aborts this listener before the caches above are reported
+        // and leaves the next listener in the chain unrun. The container owns
+        // the invalidation; this listener owns the caches.
+        //
+        // The census is written unconditionally and after the cleanup, so a
+        // lifecycle capture can find this exact session's end even when the
+        // session was never registered, and can compare it with an after-create
+        // census taken at the equivalent point.
+        log.info(census("after-destroy", httpSession.getId()));
     }
 }

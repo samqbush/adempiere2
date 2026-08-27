@@ -35,6 +35,7 @@ install	installer	:install	shared
 looks	embedded-base	-	ant-embedded
 glassfishfacet	embedded-base	-	ant-embedded
 jbossfacet	-	-	phase3-quarantined
+org.adempiere.cohort	-	:org.adempiere.cohort	gradle-only
 org.adempiere.crm	-	:org.adempiere.crm	gradle-only
 org.adempiere.project	-	:org.adempiere.project	gradle-only
 org.adempiere.request	-	:org.adempiere.request	gradle-only

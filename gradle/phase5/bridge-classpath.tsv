@@ -1,0 +1,18 @@
+# Phase 5e bridge compile classpath, pinned against the frozen Phase 5b WAR.
+#
+# Every entry is extracted from build/phase5d/legacy-webui/webui.war, which
+# scripts/phase5/materialize-legacy-webui-war.sh rebuilds from the source
+# commit recorded in contracts/legacy-web-v1/capture-environment.tsv. Nothing
+# here is resolved from a repository, so ZK 3.6 never enters reproducible
+# dependency resolution and never reaches the modern runtime.
+#
+# WEB-INF/classes/ is a tree. Its pin is a SHA-512 over the sorted
+# "<relative-name>\0<sha512-of-content>\n" records of every class entry, so it
+# is a digest of the code rather than of a particular zip encoder.
+#
+# entry	sha512
+WEB-INF/lib/zk.jar	d7bfab5e9034915f5b7b815e64b1893666aabaa51ecdfc1a0a38493127b7c4e5231f167c8e8727f8eea2cc5c7cb600bde7677ab3e9b0c4f57711b257198f42d4
+WEB-INF/lib/zcommon.jar	a077de2081e488199a750a1a8716a5a9581bd7f1b768ff462b39d1920fc690e5168f91877710d5e00fd474f9a3afcaaabe5c65e8a8fc718eb97d559c302a4b15
+WEB-INF/lib/zweb.jar	ee4525bcb8b632fe9a8c348ae2faf1482bd51d3ffc0cef3faff2f38546de395c3b54bb2ba7be26fb9bc9a0ee8b6859f98d3b141f20eea12d249fbc758fb77c51
+WEB-INF/lib/zul.jar	2f39facc73cc1115c7043284701d843f19f03c761565f8b2d05412d0e3693d5b6ee3c54498ed79385c756cc4c6fba3ff92e7943468242a06f0806b8090fd75c9
+WEB-INF/classes/	1db3bfa6147f883e8cb4b6404be5d5422c3ddefdf6fc684d0f7b10f78e994870eed512e4c908a2c8a890fc89c9300bbc9981f8b51aad0e09c099e87da46960fb

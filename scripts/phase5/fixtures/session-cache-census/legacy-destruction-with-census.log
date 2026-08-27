@@ -1,0 +1,26 @@
+10:41:02.118 SessionManagerListener.sessionCreated:         Create Session Id : LEGACYSESSIONAAAA1111
+10:41:02.118 SessionManagerListener.sessionCreated: ------------------------------------------------
+10:41:02.119 SessionManagerListener.sessionCreated:              Event Source : org.apache.catalina.session.StandardSession@1a2b3c
+10:41:02.119 SessionManagerListener.sessionCreated:             Session Cache : 3
+10:41:02.119 SessionManagerListener.sessionCreated:     Session Context Cache : 3
+10:41:02.119 SessionManagerListener.sessionCreated:         Application Cache : 1
+10:41:02.120 SessionManagerListener.sessionCreated:             Desktop Cache : 3
+10:41:02.120 SessionManagerListener.sessionCreated: Execution CarryOver Cache : 0
+10:41:02.120 SessionManagerListener.sessionCreated:     User Preference Cache : 3
+10:41:02.120 SessionManagerListener.sessionCreated: User Authentication Cache : 3
+10:41:02.120 SessionManagerListener.sessionCreated: ------------------------------------------------
+10:41:02.121 SessionManagerListener.sessionCreated:  
+10:41:02.121 SessionManagerListener.sessionCreated:  Max Inactive Interval : 1800
+10:41:02.121 SessionManagerListener.sessionCreated:  
+10:44:37.902 SessionManagerListener.sessionDestroyed:  Destroyed Session Id : LEGACYSESSIONAAAA1111
+10:44:37.902 SessionManagerListener.sessionDestroyed: ------------------------------------------------
+10:44:37.940 SessionManagerListener.sessionDestroyed:              Event Source : org.apache.catalina.session.StandardSession@1a2b3c
+10:44:37.940 SessionManagerListener.sessionDestroyed:             Session Cache : 2
+10:44:37.940 SessionManagerListener.sessionDestroyed:     Session Context Cache : 2
+10:44:37.941 SessionManagerListener.sessionDestroyed:         Application Cache : 1
+10:44:37.941 SessionManagerListener.sessionDestroyed:             Desktop Cache : 2
+10:44:37.941 SessionManagerListener.sessionDestroyed: Execution CarryOver Cache : 0
+10:44:37.941 SessionManagerListener.sessionDestroyed:     User Preference Cache : 2
+10:44:37.942 SessionManagerListener.sessionDestroyed: User Authentication Cache : 2
+10:44:37.942 SessionManagerListener.sessionDestroyed:        Invalidate Session : LEGACYSESSIONAAAA1111
+10:44:37.942 SessionManagerListener.sessionDestroyed: ------------------------------------------------

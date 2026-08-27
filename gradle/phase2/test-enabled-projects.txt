@@ -1,4 +1,5 @@
 :base
 :install
+:org.adempiere.cohort
 :org.adempiere.webservice
 :serverRoot

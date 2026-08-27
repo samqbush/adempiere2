@@ -1,0 +1,18 @@
+10:57:44.310 SessionManagerListener.sessionDestroyed:  Destroyed Session Id : ROUTEDROTATEDBBBB2299
+10:57:44.310 SessionManagerListener.sessionDestroyed: ------------------------------------------------
+10:57:44.311 SessionManagerListener.sessionDestroyed:        Invalidate Session : ROUTEDROTATEDBBBB2299
+10:57:44.311 SessionManagerListener.sessionDestroyed: ------------------------------------------------
+10:57:45.880 SessionManagerListener.sessionCreated:         Create Session Id : NEXTLOGINCCCC3333
+10:57:45.880 SessionManagerListener.sessionCreated: ------------------------------------------------
+10:57:45.881 SessionManagerListener.sessionCreated:              Event Source : org.apache.catalina.session.StandardSession@7a8b9c
+10:57:45.881 SessionManagerListener.sessionCreated:             Session Cache : 9
+10:57:45.881 SessionManagerListener.sessionCreated:     Session Context Cache : 9
+10:57:45.881 SessionManagerListener.sessionCreated:         Application Cache : 1
+10:57:45.882 SessionManagerListener.sessionCreated:             Desktop Cache : 9
+10:57:45.882 SessionManagerListener.sessionCreated: Execution CarryOver Cache : 4
+10:57:45.882 SessionManagerListener.sessionCreated:     User Preference Cache : 9
+10:57:45.882 SessionManagerListener.sessionCreated: User Authentication Cache : 9
+10:57:45.882 SessionManagerListener.sessionCreated: ------------------------------------------------
+10:57:45.883 SessionManagerListener.sessionCreated:  
+10:57:45.883 SessionManagerListener.sessionCreated:  Max Inactive Interval : 1800
+10:57:45.883 SessionManagerListener.sessionCreated:  

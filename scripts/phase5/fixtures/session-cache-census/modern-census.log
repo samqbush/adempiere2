@@ -1,0 +1,27 @@
+11:02:00.100 SessionManagerListener.sessionCreated:         Create Session Id : MODERNSESSIONDDDD4444
+11:02:00.100 SessionManagerListener.sessionCreated: ------------------------------------------------
+11:02:00.101 SessionManagerListener.sessionCreated:              Event Source : org.apache.catalina.session.StandardSession@2b3c4d
+11:02:00.101 SessionManagerListener.sessionCreated:             Session Cache : 0
+11:02:00.101 SessionManagerListener.sessionCreated:     Session Context Cache : 0
+11:02:00.101 SessionManagerListener.sessionCreated:         Application Cache : 0
+11:02:00.102 SessionManagerListener.sessionCreated:             Desktop Cache : 0
+11:02:00.102 SessionManagerListener.sessionCreated: Execution CarryOver Cache : 0
+11:02:00.102 SessionManagerListener.sessionCreated:     User Preference Cache : 0
+11:02:00.102 SessionManagerListener.sessionCreated: User Authentication Cache : 0
+11:02:00.102 SessionManagerListener.sessionCreated: ------------------------------------------------
+11:02:00.103 SessionManagerListener.sessionCreated:  
+11:02:00.103 SessionManagerListener.sessionCreated:  Max Inactive Interval : 1800
+11:02:00.103 SessionManagerListener.sessionCreated:  
+11:02:00.104 SessionManagerListener.sessionCreated: SessionManager cache census point=after-create session=MODERNSESSIONDDDD4444 Session-Cache=1 Session-Context-Cache=1 Application-Cache=0 Desktop-Cache=0 Execution-CarryOver-Cache=0 User-Preference-Cache=0 User-Authentication-Cache=0
+11:09:31.700 SessionManagerListener.sessionDestroyed:  Destroyed Session Id : MODERNSESSIONDDDD4444
+11:09:31.700 SessionManagerListener.sessionDestroyed: ------------------------------------------------
+11:09:31.744 SessionManagerListener.sessionDestroyed:              Event Source : org.apache.catalina.session.StandardSession@2b3c4d
+11:09:31.744 SessionManagerListener.sessionDestroyed:             Session Cache : 0
+11:09:31.744 SessionManagerListener.sessionDestroyed:     Session Context Cache : 0
+11:09:31.745 SessionManagerListener.sessionDestroyed:         Application Cache : 0
+11:09:31.745 SessionManagerListener.sessionDestroyed:             Desktop Cache : 0
+11:09:31.745 SessionManagerListener.sessionDestroyed: Execution CarryOver Cache : 0
+11:09:31.745 SessionManagerListener.sessionDestroyed:     User Preference Cache : 0
+11:09:31.746 SessionManagerListener.sessionDestroyed: User Authentication Cache : 0
+11:09:31.746 SessionManagerListener.sessionDestroyed: ------------------------------------------------
+11:09:31.746 SessionManagerListener.sessionDestroyed: SessionManager cache census point=after-destroy session=MODERNSESSIONDDDD4444 Session-Cache=0 Session-Context-Cache=0 Application-Cache=0 Desktop-Cache=0 Execution-CarryOver-Cache=0 User-Preference-Cache=0 User-Authentication-Cache=0

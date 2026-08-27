@@ -1,0 +1,14 @@
+11:30:00.500 SessionManagerListener.sessionCreated:         Create Session Id : FRESHSESSIONGGGG7777
+11:30:00.500 SessionManagerListener.sessionCreated: ------------------------------------------------
+11:30:00.501 SessionManagerListener.sessionCreated:              Event Source : org.apache.catalina.session.StandardSession@0a1b2c
+11:30:00.501 SessionManagerListener.sessionCreated:             Session Cache : 6
+11:30:00.501 SessionManagerListener.sessionCreated:     Session Context Cache : 6
+11:30:00.501 SessionManagerListener.sessionCreated:         Application Cache : 1
+11:30:00.502 SessionManagerListener.sessionCreated:             Desktop Cache : 6
+11:30:00.502 SessionManagerListener.sessionCreated: Execution CarryOver Cache : 2
+11:30:00.502 SessionManagerListener.sessionCreated:     User Preference Cache : 6
+11:30:00.502 SessionManagerListener.sessionCreated: User Authentication Cache : 6
+11:30:00.502 SessionManagerListener.sessionCreated: ------------------------------------------------
+11:30:00.503 SessionManagerListener.sessionCreated:  
+11:30:00.503 SessionManagerListener.sessionCreated:  Max Inactive Interval : 1800
+11:30:00.503 SessionManagerListener.sessionCreated:  

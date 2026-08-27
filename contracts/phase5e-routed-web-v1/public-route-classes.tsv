@@ -1,0 +1,41 @@
+# The reviewed Phase 5e public affinity unit.
+#
+# Every row is asserted against org.adempiere.web.route.PublicRouteClassifier by
+# verifyPhase5eCohortContracts. Rows with proxyable=false are as important as the
+# rest: they are what makes the affinity unit closed rather than open-ended, and
+# they are the reason Phase 5f's non-ZK contexts cannot be pulled into Phase 5e
+# by accident.
+#
+# method	path_within_context	route_class	proxyable
+GET	/	CONTEXT_ROOT	true
+HEAD	/	CONTEXT_ROOT	true
+GET	/index.zul	ZK_PAGE	true
+GET	/timeout.zul	ZK_PAGE	true
+HEAD	/index.zul	ZK_PAGE	true
+GET	/page.zhtml	ZK_PAGE	true
+POST	/index.zul	ZK_PUBLIC_FORM	true
+GET	/zkau	ZK_AU	true
+POST	/zkau	ZK_AU	true
+POST	/zkau/upload	ZK_AU	true
+GET	/zkau/web/js/zk.wpd	ZK_RESOURCE	true
+GET	/zkau/web/zul/css/zk.wcs	ZK_RESOURCE	true
+GET	/zkau/view/z_a1/image.png	STATIC_ASSET	true
+GET	/css/phase5d-modern.css	STATIC_ASSET	true
+GET	/js/token.js	STATIC_ASSET	true
+GET	/images/logo.png	STATIC_ASSET	true
+GET	/theme/default/css/zk.wcs	STATIC_ASSET	true
+GET	/favicon.ico	STATIC_ASSET	true
+GET	/theme.dsp	UNKNOWN	false
+GET	/timeline	UNKNOWN	false
+POST	/timeline	UNKNOWN	false
+HEAD	/timeline	UNKNOWN	false
+PUT	/index.zul	UNKNOWN	false
+DELETE	/index.zul	UNKNOWN	false
+OPTIONS	/	UNKNOWN	false
+TRACE	/	UNKNOWN	false
+PATCH	/zkau	UNKNOWN	false
+POST	/page.zhtml	UNKNOWN	false
+POST	/zkau/web/js/zk.wpd	UNKNOWN	false
+POST	/favicon.ico	UNKNOWN	false
+GET	/WEB-INF/web.xml	UNKNOWN	false
+GET	/index.zul;jsessionid=ABC	UNKNOWN	false

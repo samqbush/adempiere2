@@ -79,6 +79,24 @@ sourceSets {
 			srcDirs = ['src/transformerFixture/resources']
 		}
 	}
+	// Phase 5e: the reviewed public-origin contract, asserted without a
+	// database or a browser, and the Playwright matrix that needs both.
+	routedContract {
+		java {
+			srcDirs = ['src/routedContract/java']
+		}
+		resources {
+			srcDirs = [rootProject.file('contracts/phase5e-routed-web-v1')]
+		}
+	}
+	routedBrowserTest {
+		java {
+			srcDirs = ['src/routedBrowserTest/java']
+		}
+		resources {
+			srcDirs = [rootProject.file('contracts/legacy-web-browser-v1')]
+		}
+	}
 }
 
 configurations {
@@ -89,6 +107,10 @@ configurations {
 	browserTestRuntimeOnly.extendsFrom testRuntimeOnly
 	modernBrowserTestImplementation.extendsFrom testImplementation
 	modernBrowserTestRuntimeOnly.extendsFrom testRuntimeOnly
+	routedContractImplementation.extendsFrom testImplementation
+	routedContractRuntimeOnly.extendsFrom testRuntimeOnly
+	routedBrowserTestImplementation.extendsFrom testImplementation
+	routedBrowserTestRuntimeOnly.extendsFrom testRuntimeOnly
 	modernUiElements {
 		canBeConsumed = true
 		canBeResolved = false
@@ -98,6 +120,8 @@ configurations {
 	// resolved separately from modernUiRuntimeClasspath so the archive cannot
 	// inherit an ADempiere project jar or a compile-only artifact by accident.
 	modernWebZk
+	// Phase 5e: the transport-neutral cohort protocol jar.
+	modernWebCohort
 }
 
 dependencies {
@@ -115,6 +139,20 @@ dependencies {
 	modernBrowserTestRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
 	transformerFixtureCompileOnly 'javax.servlet:javax.servlet-api:4.0.1'
 
+	// Phase 5e. routedContract asserts the reviewed contract against the SAME
+	// neutral protocol classes both runtimes execute, so a contract row and the
+	// code cannot drift.
+	routedContractImplementation project(path: ':org.adempiere.cohort')
+	routedContractImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+	routedContractImplementation 'org.junit.jupiter:junit-jupiter-params:5.7.0'
+	routedContractRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+	routedBrowserTestImplementation sourceSets.browserContract.output
+	routedBrowserTestImplementation sourceSets.routedContract.output
+	routedBrowserTestImplementation project(path: ':org.adempiere.cohort')
+	routedBrowserTestImplementation "com.microsoft.playwright:playwright:${playwrightVersion}"
+	routedBrowserTestImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+	routedBrowserTestRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+
 	modernWebZk "org.zkoss.zk:zk:${zkVersion}"
 	modernWebZk "org.zkoss.zk:zul:${zkVersion}"
 	modernWebZk "org.zkoss.zk:zkplus:${zkVersion}"
@@ -127,11 +165,20 @@ dependencies {
 	// produces one log rather than two.
 	modernWebZk 'org.slf4j:slf4j-jdk14:2.0.7'
 
+	// Phase 5e: the protocol jar is resolved through its own configuration for
+	// exactly the reason modernWebZk exists - so the archive cannot inherit an
+	// ADempiere project jar or a compile-only artifact by accident.
+	modernWebCohort project(path: ':org.adempiere.cohort', configuration: 'phase5eProtocol')
+
 	// Phase 5d: the real ZK web client compiled against locked ZK CE Jakarta
 	modernUiImplementation "org.zkoss.zk:zk:${zkVersion}"
 	modernUiImplementation "org.zkoss.zk:zul:${zkVersion}"
 	modernUiImplementation "org.zkoss.zk:zkplus:${zkVersion}"
 	modernUiImplementation "org.zkoss.zk:zhtml:${zkVersion}"
+	// Phase 5e: the transport-neutral cohort/handoff protocol. It is the same
+	// code the Tomcat 9 bridge carries, compiled once and shipped to both, so
+	// the two ends of the handoff cannot disagree about the wire format.
+	modernUiImplementation project(path: ':org.adempiere.cohort')
 	modernUiImplementation project(path: ':base')
 	modernUiImplementation project(path: ':client')
 	modernUiImplementation project(path: ':JasperReports')
@@ -487,6 +534,7 @@ tasks.named('war') {
 		from tasks.named('modernWebCoreJar').flatMap { it.archiveFile }
 		from tasks.named('modernWebPackagesJar').flatMap { it.archiveFile }
 		from tasks.named('modernWebSharedRuntimeJar').flatMap { it.archiveFile }
+		from configurations.modernWebCohort
 	}
 	into('META-INF') {
 		from tasks.named('generatePhase5dModernWebProvenance')
@@ -578,6 +626,9 @@ tasks.register('verifyPhase5dModernWebWar') {
 			'WEB-INF/classes/org/adempiere/webui/session/SessionManagerListener.class',
 			'WEB-INF/classes/org/adempiere/webui/session/SessionContextListener.class',
 			'WEB-INF/classes/org/adempiere/webui/session/SessionTimeoutFilter.class',
+			'WEB-INF/classes/org/adempiere/webui/session/CohortHandoffFilter.class',
+			'WEB-INF/classes/org/adempiere/webui/session/CohortHandoff.class',
+			'WEB-INF/lib/webui-cohort-protocol.jar',
 			'WEB-INF/classes/org/adempiere/webui/panel/LoginPanel.class',
 			'WEB-INF/classes/org/adempiere/webui/panel/RolePanel.class',
 			'WEB-INF/classes/org/adempiere/webui/panel/MenuPanel.class',
@@ -625,6 +676,10 @@ tasks.register('verifyPhase5dModernWebWar') {
 			'org.adempiere.webui.session.SessionTimeoutFilter': 'the ADempiere session filter',
 			'org.adempiere.webui.session.SessionManagerListener': 'the ADempiere session listener',
 			'<absolute-ordering/>'                       : 'the empty absolute ordering',
+			// Phase 5e session and handoff contract.
+			'org.adempiere.webui.session.CohortHandoffFilter': 'the Phase 5e handoff filter',
+			'<tracking-mode>COOKIE</tracking-mode>'      : 'cookie-only session tracking',
+			'<http-only>true</http-only>'                : 'the HttpOnly session cookie',
 		].each { needle, reason ->
 			if (!descriptor.contains(needle)) {
 				problems << "WEB-INF/web.xml does not declare ${reason}"
@@ -1009,6 +1064,134 @@ tasks.register('browserTest', Test) {
 			.get().asFile.absolutePath
 	environment 'PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD', '1'
 	doFirst {
+		if (!rootProject.layout.buildDirectory
+				.file('phase5c/playwright-browsers/verified-artifacts.tsv')
+				.get().asFile.isFile()) {
+			throw new GradleException(
+				'The verified Phase 5c browser installation is missing')
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5e
+// ---------------------------------------------------------------------------
+
+tasks.register('routedContractTest', Test) {
+	group = 'verification'
+	description = 'Asserts the reviewed Phase 5e public contract against the neutral protocol classes'
+	testClassesDirs = sourceSets.routedContract.output.classesDirs
+	classpath = sourceSets.routedContract.runtimeClasspath
+	useJUnitPlatform {
+		includeTags 'UnitTest'
+	}
+	reports.junitXml.required = true
+	reports.junitXml.outputLocation =
+		layout.buildDirectory.dir('test-results/routedContractTest')
+	reports.html.required = true
+	reports.html.outputLocation =
+		layout.buildDirectory.dir('reports/tests/routedContractTest')
+	testLogging {
+		events 'passed', 'skipped', 'failed'
+	}
+}
+
+tasks.register('routedBrowserTest', Test) {
+	group = 'verification'
+	description = 'Drives the Phase 5e public-origin cohort matrix through the Tomcat 9 ingress'
+	testClassesDirs = sourceSets.routedBrowserTest.output.classesDirs
+	classpath = sourceSets.routedBrowserTest.runtimeClasspath
+	useJUnitPlatform()
+	reports.junitXml.required = true
+	reports.junitXml.outputLocation =
+		layout.buildDirectory.dir('test-results/routedBrowserTest')
+	reports.html.required = true
+	reports.html.outputLocation =
+		layout.buildDirectory.dir('reports/tests/routedBrowserTest')
+	outputs.upToDateWhen { false }
+	outputs.cacheIf { false }
+	testLogging {
+		events 'passed', 'skipped', 'failed'
+		showStandardStreams = true
+	}
+	// The browser MUST use the public Tomcat 9 origin. The loopback modern port
+	// is supplied only so RoutedCohortMatrixTest can abort any direct request.
+	systemProperty 'phase5e.public.baseUrl',
+		providers.gradleProperty('phase5ePublicBaseUrl')
+			.getOrElse('http://127.0.0.1:8888')
+	systemProperty 'phase5e.modern.baseUrl',
+		providers.gradleProperty('phase5eModernBaseUrl')
+			.getOrElse('http://127.0.0.1:8890')
+	systemProperty 'phase5e.public.contextPath', '/webui'
+	systemProperty 'phase5e.evidenceDir',
+		rootProject.layout.buildDirectory.dir('phase5e/evidence')
+			.get().asFile.absolutePath
+	systemProperty 'phase5e.publicLog',
+		rootProject.layout.buildDirectory
+			.file('phase3/runtime/Adempiere/tomcat/logs/catalina.out')
+			.get().asFile.absolutePath
+	systemProperty 'phase5e.cohortScript',
+		rootProject.file('scripts/phase5/reset-cohort-config.sh').absolutePath
+	// The SAME marker-guarded oracle fixture the frozen legacy capture uses.
+	// Sharing it is what keeps the Phase 5e captures at the ordinal the Phase 5b
+	// oracle was frozen at instead of drifting one login at a time.
+	systemProperty 'phase5e.fixtureScript',
+		rootProject.file('scripts/phase5/reset-oracle-fixture.sh').absolutePath
+	systemProperty 'phase5e.laneScript',
+		rootProject.file('scripts/phase5/capture-routed-lane.sh').absolutePath
+	systemProperty 'phase5e.soapFixtureScript',
+		rootProject.file('scripts/phase4/prepare-operation-scenarios.sh').absolutePath
+	systemProperty 'phase5e.userA',
+		providers.gradleProperty('phase5eUserA').getOrElse('GardenAdmin')
+	systemProperty 'phase5e.passwordA',
+		providers.gradleProperty('phase5ePasswordA').getOrElse('GardenAdmin')
+	// The AD_Language the primary identity is explicitly driven to, and the
+	// label ADempiere's own org.compiere.util.Language list renders for it. Both
+	// are needed: the fixture allowlists identifiers, and the login combobox is
+	// driven by label.
+	systemProperty 'phase5e.languageA',
+		providers.gradleProperty('phase5eLanguageA').getOrElse('en_US')
+	systemProperty 'phase5e.languageLabelA',
+		providers.gradleProperty('phase5eLanguageLabelA').getOrElse('English')
+	// The AD_Role the primary login actually runs as. reset-cohort-config.sh
+	// allowlists AD_Role_ID 102 for the role-allowlisted preset, and the browser
+	// asserts the role it selected is this one, so a fixture that allowlists a
+	// role the login never selects fails loudly.
+	systemProperty 'phase5e.roleA',
+		providers.gradleProperty('phase5eRoleA').getOrElse('GardenWorld Admin')
+	systemProperty 'phase5e.userB',
+		providers.gradleProperty('phase5eUserB').getOrElse('GardenUser')
+	systemProperty 'phase5e.passwordB',
+		providers.gradleProperty('phase5ePasswordB').getOrElse('GardenUser')
+	// es_MX is the only non-base AD_Language the seed marks IsSystemLanguage=Y,
+	// so it is the only second language the login form actually offers - and it
+	// carries AD_Message translations, which is what makes the concurrency
+	// capture's language axis an ADempiere-owned fact rather than a browser one.
+	systemProperty 'phase5e.languageB',
+		providers.gradleProperty('phase5eLanguageB').getOrElse('es_MX')
+	systemProperty 'phase5e.languageLabelB',
+		providers.gradleProperty('phase5eLanguageLabelB').getOrElse('Espa\u00f1ol (MX)')
+	systemProperty 'phase5e.roleB',
+		providers.gradleProperty('phase5eRoleB').getOrElse('GardenWorld User')
+	systemProperty 'phase5e.dbHost',
+		rootProject.providers.gradleProperty('phase3DbHost').getOrElse('127.0.0.1')
+	systemProperty 'phase5e.dbPort',
+		rootProject.providers.gradleProperty('phase3DbPort').getOrElse('5432')
+	systemProperty 'phase5e.dbName',
+		rootProject.providers.gradleProperty('phase3DbName')
+			.getOrElse('adempiere_phase3_ci')
+	systemProperty 'phase5e.dbUser',
+		rootProject.providers.gradleProperty('phase3DbUser')
+			.getOrElse('adempiere_phase3_ci')
+	systemProperty 'phase5e.dbMarker', 'ADempiere Phase 3 disposable database'
+	environment 'ADEMPIERE_PHASE5D_DB_PASSWORD',
+		rootProject.providers.gradleProperty('phase3DbPassword')
+			.getOrElse('adempiere_phase3_ci')
+	environment 'ADEMPIERE_PHASE5E_DB_PASSWORD',
+		rootProject.providers.gradleProperty('phase3DbPassword')
+			.getOrElse('adempiere_phase3_ci')
+	doFirst {
+		delete layout.buildDirectory.dir('test-results/routedBrowserTest')
 		if (!rootProject.layout.buildDirectory
 				.file('phase5c/playwright-browsers/verified-artifacts.tsv')
 				.get().asFile.isFile()) {

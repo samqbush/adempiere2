@@ -23,6 +23,12 @@ tasks.register('generatePhase5Inventories', Exec) {
 		include '**/*.zhtml'
 		include '**/*.dsp'
 		include '**/web.xml'
+		// Phase 5e: the namespace and asset scans read every *.xml, not only
+		// descriptors named web.xml. Tracking only web.xml meant a new XML file
+		// could change the generated inventory while Gradle still reported the
+		// generator UP-TO-DATE, which is a stale inventory that looks green.
+		include 'gradle/phase5/*.xml'
+		include '**/zk.xml'
 		include 'zkwebui/WEB-INF/lib/*.jar'
 		exclude 'build/**'
 		exclude '**/build/**'
@@ -59,14 +65,33 @@ tasks.register('verifyPhase5Inventories') {
 		// ADempiere-owned ZK CE compatibility sources under
 		// zkwebui/WEB-INF/src/org/adempiere/webui/compat/ (plus the CE
 		// Keylistener, Div and Hbox replacements), which replace the ZK 3.x
-		// add-on and commercial APIs the migration removed. The count is pinned
-		// absolutely rather than allowed to grow: a new ZK source has to be a
-		// reviewed decision, not an accident.
+		// add-on and commercial APIs the migration removed. Phase 5e added one:
+		// the Javax/ZK 3.6 CohortDecisionInterceptor, which is deliberately NOT
+		// a migration candidate and carries the frozen-zk36-bridge disposition.
+		// The count is pinned absolutely rather than allowed to grow: a new ZK
+		// source has to be a reviewed decision, not an accident.
 		def sourceRows = new File(phase5ReviewedDir, 'zk-sources.tsv').readLines()
 			.findAll { it && !it.startsWith('#') }
-		if (sourceRows.size() != 310) {
+		if (sourceRows.size() != 311) {
 			throw new GradleException(
-				"Expected 310 current ZK source files, got ${sourceRows.size()}")
+				"Expected 311 current ZK source files, got ${sourceRows.size()}")
+		}
+		// Every frozen-zk36-bridge row must live in the isolated bridge project.
+		// If one ever appears under a migrated tree it means ZK 3.6 leaked back
+		// into the modern closure with a disposition that hides it.
+		def bridgeRows = sourceRows.collect { it.split('\t', -1) }
+			.findAll { it.length > 6 && it[6] == 'frozen-zk36-bridge' }
+		if (bridgeRows.isEmpty()) {
+			throw new GradleException(
+				'No Phase 5e ZK 3.6 bridge source is inventoried')
+		}
+		def strayBridgeRows = bridgeRows.findAll {
+			!it[0].startsWith('org.adempiere.cohort/src/bridge')
+		}
+		if (!strayBridgeRows.isEmpty()) {
+			throw new GradleException(
+				"ZK 3.6 bridge sources outside the isolated bridge project: " +
+				"${strayBridgeRows.collect { it[0] }}")
 		}
 		def baselineSourceRows =
 			new File(phase5ReviewedDir, 'zk-sources-phase5a.tsv').readLines()

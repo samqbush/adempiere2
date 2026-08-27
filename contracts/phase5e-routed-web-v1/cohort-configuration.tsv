@@ -1,0 +1,46 @@
+# The reviewed Phase 5e cohort configuration and handoff parameters.
+#
+# Every value here is asserted against the implementation by
+# verifyPhase5eCohortContracts, so the documented parameters and the executed
+# parameters cannot drift.
+#
+# key	value	rationale
+identifier_grammar	|[1-9][0-9]{0,8}(,[1-9][0-9]{0,8})*	Empty, or positive decimal identifiers with no sign, whitespace, leading zero or repetition. Because the grammar requires a POSITIVE value, the System user (AD_User_ID 0) and the System Administrator role (AD_Role_ID 0) can never be allowlisted.
+master_enable_key	MODERN_WEB_UI_ENABLED	Exact value Y enables modern routing; absent or any other value selects legacy.
+user_allowlist_key	MODERN_WEB_UI_USER_IDS	Strict comma-separated positive decimal AD_User_ID values.
+role_allowlist_key	MODERN_WEB_UI_ROLE_IDS	Strict comma-separated positive decimal AD_Role_ID values.
+scope	AD_Client_ID=0,AD_Org_ID=0	Only system-level rows are read. Client and organisation rows are ignored and reported.
+rows_per_key	1	A second active system-level row for the same key invalidates the complete configuration.
+precedence	invalid,master,user,role	Evaluated strictly in that order. Nothing else can select the modern runtime.
+role_allowlist_subject	selected-role	The allowlist is matched against the AD_Role_ID the session is actually running as after role selection, never against the roles the user is merely entitled to. The routed matrix therefore asserts the role its login selected and carries a negative row for a held-but-unselected role.
+decision_lifetime	sticky-per-session	Taken once after role selection. A configuration change never moves an active session - and never outlives it: the decision is destroyed with the session, so the next login is decided again from the current configuration.
+routed_session_end	destroys-both-runtimes	A routed logout ends the session on the modern runtime AND the public Tomcat 9 session that holds the affinity and the decision. The modern runtime signals the end on the reserved response header and the router invalidates its own session, so no cohort decision can be inherited by a later login on the same browser.
+session_end_header	X-ADempiere-Handoff-End	Inside the reserved namespace, so it is refused inbound from a browser and never forwarded outbound to one. Read before any byte of the public response is written, because the router still has to invalidate and redirect.
+decided_without_affinity	fail-closed	A session whose recorded decision is MODERN but whose affinity is absent is refused with 503. It is NOT treated as undecided: a container that dropped or failed to restore the affinity must not be able to hand a logged-in modern user the legacy application.
+decision_marker_form	runtime-name	The decision is recorded on the session as the runtime's name - a String every container can persist - rather than as the affinity object, so the fail-closed rule above survives a restart that the affinity does not.
+affinity_persistence	serializable-ticket-transient	The affinity is Serializable so a session-persisting container does not silently drop it. The ticket is transient because it is a bearer credential; any phase that depends on holding one is restored as FAILED with affinity-not-restorable rather than resumed.
+handoff_admission	single-atomic-transition	Rotation and bootstrap are claimed by one synchronized check-and-transition. Exactly one concurrent request may rotate and exactly one may hold the ticket; the losers are refused with 503 and, unlike a failure, do not poison the session the winner is establishing.
+lifecycle_observation	post-mutation-census	Session-cache readings are taken only from records written AFTER the corresponding cache mutation, and only from log lines after a recorded mark, so a creation-time reading is never compared with a destruction-time one and a destruction is proved rather than assumed.
+session_inactivity_source	EphemeralSessionMaxInactiveInterval	The routed lane shortens session lifetime through ADempiere's own configuration property, which SessionManagerListener already applies to every session it creates. Phase 5e adds no endpoint that can end a session on demand.
+configuration_cache_ttl_millis	15000	Short enough that an operator change takes effect within a login or two. A failed read is never cached.
+operator_error_interval_millis	60000	One operator error per unreadable-configuration burst, not one per login attempt.
+ticket_ttl_millis	30000	Far longer than a loopback request, far shorter than any human interaction.
+ticket_clock_skew_millis	1000	Both runtimes share one host and therefore one clock; this absorbs the ordering of two JVM reads, not cross-machine drift.
+ticket_nonce_bits	256	SecureRandom material, base64url encoded without padding.
+ticket_algorithm	HmacSHA256	javax.crypto is Java SE and is identical on both runtimes; it is deliberately not subject to the javax-to-jakarta rename.
+ticket_mac_comparison	MessageDigest.isEqual	Constant time.
+max_accepted_login_rate_per_second	20	The documented ceiling the replay-cache capacity is derived from. An ADempiere login opens a database connection, reads the role tree and writes an AD_Session row, so the real ceiling is an order of magnitude lower.
+replay_cache_capacity	4096	31s live window x 20 logins/s = 620 live nonces; 4096 is 6.6x that, and refuses rather than evicts when full.
+replay_cache_exhaustion	fail-closed	A full cache of live entries refuses a new nonce. Evicting would make replay possible exactly under the load an attacker would create.
+reserved_header_namespace	X-ADempiere-Handoff-	Rejected on every browser request and accepted only from loopback.
+handoff_key_minimum_bytes	32	HMAC-SHA-256 keys shorter than the digest add nothing.
+handoff_key_mode	0600	Owner read/write only, on a regular file that is not a symbolic link.
+handoff_key_location	outside ADEMPIERE_HOME archives	Never packaged, never generated with a placeholder value, never logged.
+handoff_key_absent_tomcat9	legacy-only	Routing is impossible; every new session stays legacy and one rate-limited operator error is emitted.
+handoff_key_invalid_tomcat10	deployment-failure	The modern context refuses to start rather than serving an unverifiable UI.
+public_cookie_count	1	One JSESSIONID on the public /webui path, HttpOnly, SameSite=Lax, Secure when the public request is HTTPS.
+internal_cookie_visibility	none	The modern Set-Cookie is consumed by the router; only its identifier is retained server-side.
+session_rotation	modern-assignment-only	The Tomcat 9 session identifier is rotated exactly once, when the session is assigned to the modern cohort. The legacy cohort is unchanged.
+modern_fallback	forbidden	An established modern session never returns to the legacy runtime, whatever fails.
+max_request_bytes	8388608	Hard stop on bytes streamed from the browser to the modern runtime, enforced by BoundedTransfer for both a declared Content-Length and a chunked body. Phase 5e ships no upload route; Phase 5g owns the one that will exist.
+max_response_bytes	67108864	Hard stop on bytes streamed back. Large enough for the ZK client bundles and small enough that one wedged response cannot exhaust the public ingress.

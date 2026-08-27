@@ -28,6 +28,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
 
@@ -45,36 +46,65 @@ public class SessionTimeoutFilter implements Filter {
         HttpServletRequest httpServletRequest = (HttpServletRequest) request;
         Map<String, String[]> param = httpServletRequest.getParameterMap();
         HttpSession httpSession = httpServletRequest.getSession();
-        if (SessionManager.existsSession(httpSession.getId())) {
-            boolean isRealRequest = true;
-            for (Object key : param.keySet()) {
-                if (key.toString().startsWith("cmd")
-                        && "onTimer".equals(((String[]) param.get(key))[0])) {
-                    // not real request
-                    isRealRequest = false;
-                    // try get last real request time
-                    Long lastRealRequest = (Long) httpSession.getAttribute("LAST_REAL_REQUEST");
-                    if (lastRealRequest == null) {
-                        // init if no previous real request
-                        lastRealRequest = System.currentTimeMillis();
-                        httpSession.setAttribute("LAST_REAL_REQUEST", lastRealRequest);
-                        //logger.info("Update last real request : " +  new Timestamp(lastRealRequest));
-                    } else if ((System.currentTimeMillis() - lastRealRequest) > 20000) {
-                        // invalidate session if only poll request for a long time
-                        logger.info("Invalidate Session : " +  httpSession.getId());
-                        httpSession.invalidate();
+        if (!SessionManager.existsSession(httpSession.getId())) {
+            // Phase 5e: this branch used to fall off the end of doFilter without
+            // calling the chain, so the client received an empty HTTP 200 and
+            // no log line. The refusal is deliberate - an unregistered session
+            // means SessionManagerListener did not run and no ADempiere context
+            // exists - but it has to be visible, so it is now an explicit status
+            // instead of a silent success.
+            logger.warning("Refusing a request whose session was never registered: "
+                    + httpSession.getId());
+            if (response instanceof HttpServletResponse) {
+                ((HttpServletResponse) response).sendError(
+                        HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+            }
+            return;
+        }
+
+        boolean isRealRequest = true;
+        for (Object key : param.keySet()) {
+            if (key.toString().startsWith("cmd")
+                    && "onTimer".equals(((String[]) param.get(key))[0])) {
+                // not real request
+                isRealRequest = false;
+                // try get last real request time
+                Long lastRealRequest = (Long) httpSession.getAttribute("LAST_REAL_REQUEST");
+                if (lastRealRequest == null) {
+                    // init if no previous real request
+                    lastRealRequest = System.currentTimeMillis();
+                    httpSession.setAttribute("LAST_REAL_REQUEST", lastRealRequest);
+                } else if ((System.currentTimeMillis() - lastRealRequest) > 20000) {
+                    // invalidate session if only poll request for a long time
+                    logger.info("Invalidate Session : " +  httpSession.getId());
+                    httpSession.invalidate();
+                    // Phase 5e: the original code invalidated and then carried on
+                    // into chain.doFilter and setAttribute on the very session it
+                    // had just destroyed, which throws IllegalStateException on
+                    // the way out and hides the timeout behind a stack trace.
+                    if (response instanceof HttpServletResponse) {
+                        ((HttpServletResponse) response).sendError(
+                                HttpServletResponse.SC_REQUEST_TIMEOUT);
                     }
+                    return;
                 }
             }
+        }
 
-            // process request
-            chain.doFilter(request, response);
+        // process request
+        chain.doFilter(request, response);
 
-            // update LAST_REAL_REQUEST if this is a real request
-            if (isRealRequest) {
-                // record last real request time
-                long now = System.currentTimeMillis();
+        // update LAST_REAL_REQUEST if this is a real request
+        if (isRealRequest) {
+            // record last real request time
+            long now = System.currentTimeMillis();
+            try {
                 httpSession.setAttribute("LAST_REAL_REQUEST", now);
+            } catch (IllegalStateException destroyed) {
+                // The request itself logged the user out. Recording the time of
+                // a session that no longer exists is not an error worth failing
+                // an otherwise successful response for.
+                logger.fine("Session " + "was destroyed during its own request");
             }
         }
     }

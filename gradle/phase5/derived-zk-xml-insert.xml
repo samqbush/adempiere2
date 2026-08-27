@@ -1,0 +1,20 @@
+	<!--
+	  Phase 5e: the cohort decision interceptor.
+
+	  It is a ZK 3.6 EventInterceptor rather than a servlet filter because the
+	  decision needs the completed ADempiere role context, and that context only
+	  exists inside a ZK execution. It observes STATE - a fully populated
+	  client/org/role/user/language/warehouse context - not an event name, so it
+	  is equally correct for the ordinary login flow, an external authentication
+	  callback and a role change.
+
+	  CohortBridgeStartupListener refuses to deploy this context if this element
+	  is missing, and CohortRoutingFilter's backstop reports a fully
+	  authenticated session that reached the router with no decision. Removing
+	  this block therefore fails loudly instead of quietly routing nobody.
+	-->
+	<listener>
+		<description>ADempiere Phase 5e cohort decision</description>
+		<listener-class>org.adempiere.web.bridge.CohortDecisionInterceptor
+		</listener-class>
+	</listener>
