@@ -88,6 +88,27 @@
 		<url-pattern>/zkau/*</url-pattern>
 	</servlet-mapping>
 
+	<!--
+	  Phase 5e: the cohort handoff filter is declared BEFORE requestFilter, so it
+	  is the first thing a request meets. That ordering is the contract: the
+	  session-timeout filter refuses a request whose session was never
+	  registered, and in the routed lane the handoff filter is what causes the
+	  session to exist in the first place.
+
+	  It is inert unless a handoff key is configured, so the Phase 5d direct
+	  /webui-modern lane behaves exactly as before. When a key IS configured it
+	  is the only way a session can be created here, and an unusable key fails
+	  context deployment rather than serving an unverifiable modern UI.
+	-->
+	<filter>
+		<filter-name>cohortHandoffFilter</filter-name>
+		<filter-class>org.adempiere.webui.session.CohortHandoffFilter</filter-class>
+	</filter>
+	<filter-mapping>
+		<filter-name>cohortHandoffFilter</filter-name>
+		<url-pattern>/*</url-pattern>
+	</filter-mapping>
+
 	<filter>
 		<filter-name>requestFilter</filter-name>
 		<filter-class>org.adempiere.webui.session.SessionTimeoutFilter</filter-class>
@@ -97,8 +118,30 @@
 		<url-pattern>/*</url-pattern>
 	</filter-mapping>
 
+	<!--
+	  Phase 5e session tracking.
+
+	  COOKIE is declared alone, so the container may never encode a session
+	  identifier into a URL. Behind the Phase 5e router the public origin and the
+	  internal origin serve the same paths, and a URL-encoded identifier would be
+	  an internal Tomcat 10 session identifier written into a page the browser
+	  can read. The Tomcat Context descriptor sets disableURLRewriting="true" as
+	  well, so the rule holds even if this descriptor is replaced by a site
+	  customisation.
+
+	  The cookie is HttpOnly. It is NOT marked Secure here: the same archive is
+	  deployed on a loopback HTTP connector in the gates and behind the public
+	  ingress in production, and a hard-coded Secure attribute would silently
+	  break the former. The router sets Secure on the one public cookie whenever
+	  the public request arrived over HTTPS, which is where that decision can
+	  actually be made correctly.
+	-->
 	<session-config>
-		<session-timeout>60</session-timeout>
+		<session-timeout>2</session-timeout>
+		<tracking-mode>COOKIE</tracking-mode>
+		<cookie-config>
+			<http-only>true</http-only>
+		</cookie-config>
 	</session-config>
 
 	<welcome-file-list>

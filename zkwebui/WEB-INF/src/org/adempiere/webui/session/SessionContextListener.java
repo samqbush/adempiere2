@@ -76,7 +76,7 @@ public class SessionContextListener implements ExecutionInit,
      * @see ExecutionCleanup#cleanup(Execution, Execution, List)
      */
     public void cleanup(Execution executionCleanup, Execution parentCleanup, List errors) {
-        ServerContext.dispose();
+        disposeThreadState();
     }
 
     /**
@@ -164,7 +164,7 @@ public class SessionContextListener implements ExecutionInit,
      * @see EventThreadCleanup#cleanup(Component, Event, List)
      */
     public void cleanup(Component component, Event event, List errors) throws Exception {
-        ServerContext.dispose();
+        disposeThreadState();
     }
 
     /**
@@ -191,7 +191,7 @@ public class SessionContextListener implements ExecutionInit,
      */
     @Override
     public void cleanup(Desktop desktopClean) throws Exception {
-        ServerContext.dispose();
+        disposeThreadState();
     }
 
     /**
@@ -207,7 +207,7 @@ public class SessionContextListener implements ExecutionInit,
             if (serverPush == null || !serverPush.isActive()) {
                 setContextForSession(desktop.getExecution());
             } else
-                ServerContext.dispose();
+                disposeThreadState();
         });
     }
 
@@ -233,7 +233,13 @@ public class SessionContextListener implements ExecutionInit,
             return false;
         }
 
-        Optional<Properties> maybeSessionContext = Optional.of(SessionManager.getSessionContext(httpSession.getId()));
+        // Phase 5e: Optional.of threw NullPointerException for a session whose
+        // context had already been removed, which is exactly the state a
+        // concurrently destroyed session is in. An absent context is not a valid
+        // context, so it answers false rather than throwing or defaulting to
+        // true.
+        Optional<Properties> maybeSessionContext =
+                Optional.ofNullable(SessionManager.getSessionContext(httpSession.getId()));
         return maybeSessionContext.map(sessionContext -> {
             if (Env.getAD_Client_ID(sessionContext) != Env.getAD_Client_ID(ctx)) {
                 return false;
@@ -245,7 +251,7 @@ public class SessionContextListener implements ExecutionInit,
                 return false;
             }
             return true;
-        }).orElse(true);
+        }).orElse(false);
     }
 
     /**
@@ -256,7 +262,37 @@ public class SessionContextListener implements ExecutionInit,
     public synchronized static void setContextForSession(Execution execution) {
         Session session = execution.getDesktop().getSession();
         HttpSession httpSession = (HttpSession) session.getNativeSession();
-        ServerContext.setCurrentInstance(SessionManager.getSessionContext(httpSession.getId()));
-        Locales.setThreadLocal(Env.getLanguage(ServerContext.getCurrentInstance()).getLocale());
+        Properties sessionContext = SessionManager.getSessionContext(httpSession.getId());
+        if (sessionContext == null) {
+            // Phase 5e: a request that reaches a ZK lifecycle callback after its
+            // session context was removed used to install a null context on the
+            // request thread and then dereference it. The thread is left with no
+            // ADempiere identity at all instead, which is what every caller
+            // already handles.
+            log.warning("No session context for " + httpSession.getId()
+                    + "; the thread is left without an ADempiere identity");
+            disposeThreadState();
+            return;
+        }
+        ServerContext.setCurrentInstance(sessionContext);
+        Locales.setThreadLocal(Env.getLanguage(sessionContext).getLocale());
+    }
+
+    /**
+     * Clears every piece of ADempiere and ZK state this listener installs on a
+     * request thread.
+     *
+     * <p>Phase 5e: {@code ServerContext.dispose()} alone was not enough.
+     * {@link #setContextForSession} also writes ZK's {@code Locales} thread
+     * local, and nothing ever cleared it. Request threads are pooled, so the
+     * locale of whoever used the thread last survived into the next request and
+     * decided how that request rendered dates, numbers and messages until the
+     * next successful {@code setContextForSession} overwrote it. Under
+     * concurrent sessions in different languages that is a cross-identity leak,
+     * and it is invisible in any test that uses one language.
+     */
+    static void disposeThreadState() {
+        ServerContext.dispose();
+        Locales.setThreadLocal(null);
     }
 }

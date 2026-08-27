@@ -1,0 +1,18 @@
+# Phase 5e derived legacy artifact diff contract.
+#
+# The routed Tomcat 9 webui.war is the FROZEN Phase 5b artifact plus exactly the
+# rows below. verifyPhase5eDerivedLegacyWar proves every other entry is
+# byte-identical, recomputes both replaced descriptors from the frozen text plus
+# gradle/phase5/derived-web-xml-insert.xml, derived-web-xml-session-config.xml
+# and derived-zk-xml-insert.xml, and inspects the overlay jar's class list.
+#
+# Digests are deliberately NOT pinned here. The overlay jar is compiled output:
+# pinning its bytes would make every ordinary source change a contract edit, and
+# a contract that is edited on every change stops being reviewed. What IS pinned
+# is the shape of the difference - which entries may differ, and how - plus the
+# recomputed descriptor text and the overlay's package closure.
+#
+# entry	disposition	rationale
+WEB-INF/web.xml	replaced	registers the public cohort router, the deployment-completeness listener and cookie-only session tracking
+WEB-INF/zk.xml	replaced	registers the state-based ZK 3.6 cohort decision interceptor
+WEB-INF/lib/webui-cohort-bridge.jar	added	the isolated Javax/ZK 3.6 bridge and the transport-neutral cohort protocol

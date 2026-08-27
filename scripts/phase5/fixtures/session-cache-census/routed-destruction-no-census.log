@@ -1,0 +1,19 @@
+10:52:10.004 SessionManagerListener.sessionCreated:         Create Session Id : ROUTEDPRESSIONBBBB2222
+10:52:10.004 SessionManagerListener.sessionCreated: ------------------------------------------------
+10:52:10.005 SessionManagerListener.sessionCreated:              Event Source : org.apache.catalina.session.StandardSession@4d5e6f
+10:52:10.005 SessionManagerListener.sessionCreated:             Session Cache : 5
+10:52:10.005 SessionManagerListener.sessionCreated:     Session Context Cache : 5
+10:52:10.005 SessionManagerListener.sessionCreated:         Application Cache : 1
+10:52:10.006 SessionManagerListener.sessionCreated:             Desktop Cache : 5
+10:52:10.006 SessionManagerListener.sessionCreated: Execution CarryOver Cache : 0
+10:52:10.006 SessionManagerListener.sessionCreated:     User Preference Cache : 5
+10:52:10.006 SessionManagerListener.sessionCreated: User Authentication Cache : 5
+10:52:10.006 SessionManagerListener.sessionCreated: ------------------------------------------------
+10:52:10.007 SessionManagerListener.sessionCreated:  
+10:52:11.551 CohortRoutingFilter.rotateAndTicket: Phase 5e cohort decision recorded: MODERN
+10:52:11.612 CohortRoutingFilter.discardLegacySessionState: The abandoned legacy session state was discarded
+10:57:44.310 SessionManagerListener.sessionDestroyed:  Destroyed Session Id : ROUTEDROTATEDBBBB2299
+10:57:44.310 SessionManagerListener.sessionDestroyed: ------------------------------------------------
+10:57:44.311 SessionManagerListener.sessionDestroyed:        Invalidate Session : ROUTEDROTATEDBBBB2299
+10:57:44.311 SessionManagerListener.sessionDestroyed: ------------------------------------------------
+10:57:44.402 CohortRoutingFilter.doFilter: Phase 5e routed session ended on both runtimes

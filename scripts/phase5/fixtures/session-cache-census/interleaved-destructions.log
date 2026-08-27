@@ -1,0 +1,15 @@
+11:20:05.010 SessionManagerListener.sessionDestroyed:  Destroyed Session Id : ROUTEDROTATEDEEEE5555
+11:20:05.010 SessionManagerListener.sessionDestroyed: ------------------------------------------------
+11:20:05.011 SessionManagerListener.sessionDestroyed:  Destroyed Session Id : LEGACYSESSIONFFFF6666
+11:20:05.011 SessionManagerListener.sessionDestroyed: ------------------------------------------------
+11:20:05.030 SessionManagerListener.sessionDestroyed:              Event Source : org.apache.catalina.session.StandardSession@8e9f0a
+11:20:05.030 SessionManagerListener.sessionDestroyed:             Session Cache : 1
+11:20:05.030 SessionManagerListener.sessionDestroyed:     Session Context Cache : 1
+11:20:05.031 SessionManagerListener.sessionDestroyed:        Invalidate Session : ROUTEDROTATEDEEEE5555
+11:20:05.031 SessionManagerListener.sessionDestroyed:         Application Cache : 1
+11:20:05.031 SessionManagerListener.sessionDestroyed:             Desktop Cache : 1
+11:20:05.031 SessionManagerListener.sessionDestroyed: Execution CarryOver Cache : 0
+11:20:05.032 SessionManagerListener.sessionDestroyed:     User Preference Cache : 1
+11:20:05.032 SessionManagerListener.sessionDestroyed: User Authentication Cache : 1
+11:20:05.032 SessionManagerListener.sessionDestroyed:        Invalidate Session : LEGACYSESSIONFFFF6666
+11:20:05.033 SessionManagerListener.sessionDestroyed: ------------------------------------------------

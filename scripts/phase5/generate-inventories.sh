@@ -79,6 +79,20 @@ tree_grep_count() {
 			if tree_grep_q 'org\.zkoss\.zk|org\.zkoss\.zul|org\.zkoss\.zhtml|org\.zkoss\.util' "$path"; then
 				families=${families:+$families,}ce-core
 			fi
+			# Phase 5e: the isolated Javax/ZK 3.6 bridge is NOT a migration
+			# candidate. It exists to run inside the frozen Tomcat 9 archive and
+			# is compiled against classes extracted from that archive, so it
+			# targets ZK 3.6 deliberately and is removed with Tomcat 9 in Phase
+			# 5h. Recording it as "migrate-source ... 5g" would put it on the ZK
+			# CE migration list and make the inventory describe the opposite of
+			# the decision.
+			case "$path" in
+				org.adempiere.cohort/src/bridge/*|org.adempiere.cohort/src/bridgeTest/*)
+					printf '%s\t%s\t%s\t%s\t5e\t5h\tfrozen-zk36-bridge\n' \
+						"$path" "$(owner_for "$path")" "$count" "${families:-other}"
+					continue
+					;;
+			esac
 			printf '%s\t%s\t%s\t%s\t5d\t5g\tmigrate-source\n' \
 				"$path" "$(owner_for "$path")" "$count" "${families:-other}"
 		done
@@ -126,6 +140,15 @@ tree_grep_count() {
 						classification=jakarta-web
 						disposition=migrate
 						gate=5f
+						case "$path" in
+							org.adempiere.cohort/src/bridge/*|org.adempiere.cohort/src/bridgeTest/*)
+								# Phase 5e: the bridge targets the frozen Tomcat 9
+								# archive on purpose. It is not migrated to
+								# Jakarta; it is deleted with Tomcat 9 in 5h.
+								disposition=frozen-zk36-bridge
+								gate=5h
+								;;
+						esac
 						;;
 					*)
 						classification=non-web-jakarta

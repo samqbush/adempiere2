@@ -141,6 +141,48 @@ removed. The Phase 5c assertions that remain true - the transformer determinism
 and corpus report, the ingress/session ADR, the installed/release overlay, and
 the artifact rollback - are depended on individually.
 
+Phase 5e routes selected sessions to that slice through the public Tomcat 9
+`/webui` ingress, and proves concurrent isolation:
+
+```bash
+./gradlew phase5eFinalVerification --dependency-verification=strict
+./gradlew phase5eCohortRoutingSmoke -Pphase3DbSystemPassword='<password>' \
+  --dependency-verification=strict
+```
+
+New sessions are selected after ordinary authentication and role selection from
+three strict, fail-closed, system-level `AD_SysConfig` rows
+(`MODERN_WEB_UI_ENABLED`, `MODERN_WEB_UI_USER_IDS`, `MODERN_WEB_UI_ROLE_IDS`).
+A duplicate, malformed or unreadable row invalidates the complete configuration
+and keeps every new session legacy. The decision is taken once, is sticky for the
+life of the session, and never moves an active session.
+
+A selected session rotates its Tomcat 9 session identifier exactly once and is
+handed to Tomcat 10 with a versioned, HMAC-SHA-256, single-use, 30-second,
+loopback-only ticket that never reaches the browser. The modern application is
+mounted internally at the same `/webui` path it is served on publicly, so the
+router forwards HTML, JavaScript, CSS and ZK asynchronous-update bodies
+verbatim. The browser holds exactly one public cookie and never sees an internal
+session identifier. An established modern session never falls back to the legacy
+runtime.
+
+Before running the database-backed gate, provision the shared handoff key:
+
+```bash
+./gradlew provisionPhase5eHandoffKey
+```
+
+It generates at least 32 bytes from the OS CSPRNG at mode `0600`, outside every
+archive under `ADEMPIERE_HOME`. The repository ships no key and no placeholder.
+
+`phase5eFinalVerification` chains `phase5dFinalVerification`, so the direct
+`/webui-modern` lane remains an independent regression gate.
+
+Both Phase 5e gates are executed and green. The database-backed smoke records
+all 23 public-origin cohort, isolation, lifecycle, SOAP-coexistence, and
+secret-hygiene rows as passing; see
+`docs/modernization/phase-5e-evidence.md`.
+
 The Tomcat smoke requires HTTP 2xx/3xx from each deployed context except
 `ADInterface`, whose unrouted base path is explicitly expected to return 404;
 SOAP behavior remains a Phase 4 contract gate.

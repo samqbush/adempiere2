@@ -11,7 +11,7 @@ component is testable. The plan-wide reproducible-CI Milestone is Phase 1, when
 the existing Ant unit-test baseline is recorded and Gradle must become
 reproducible and execute meaningful tests instead of `NO-SOURCE`.
 
-Phases 1-4, Phase 5a, Phase 5b, and Phase 5c are merged to `develop`; Phase 4 completed as
+Phases 1-4, Phase 5a, Phase 5b, Phase 5c, and Phase 5d are merged to `develop`; Phase 4 completed as
 `8c0ca4c1d6b35a5f366d6dd2150ed3bb27bc2a89`. All 33 XFire
 operation baselines and 11 additional scenarios now pass on the isolated CXF
 4.1.8/Jakarta EE 10 runtime on Tomcat 10.1.59/JDK 21. A Tomcat 9 compatibility
@@ -31,7 +31,36 @@ it passes ordinary login, role selection, desktop/menu and the read-only "Error
 Message" window while reproducing all eleven comparable frozen legacy semantic
 facts and the zero-write database effect. The modern web component is therefore
 lit at L3, not dark at L1. The Phase 5c 503 marker no longer exists; its
-historical evidence lives in `docs/modernization/phase-5c-evidence.md`.
+historical evidence lives in `docs/modernization/phase-5c-evidence.md`. Phase 5d
+merged to `develop` as PR #9 at
+`b47464d2763694c093ed22470000e00f2b6aee73`.
+
+**Phase 5e routes selected sessions to that slice through the public Tomcat 9
+`/webui` ingress.** It is a lit, L3 security and session increment. New sessions
+are selected after ordinary authentication and role selection from three strict,
+fail-closed, system-level `AD_SysConfig` rows (`MODERN_WEB_UI_ENABLED`,
+`MODERN_WEB_UI_USER_IDS`, `MODERN_WEB_UI_ROLE_IDS`); a duplicate, malformed or
+unreadable row invalidates the complete configuration and keeps every new
+session legacy. The decision is taken once, is sticky, and never moves an active
+session. A selected session rotates its Tomcat 9 session identifier exactly once
+and is handed to Tomcat 10 with a versioned, HMAC-SHA-256, single-use,
+30-second, loopback-only ticket that never reaches the browser. The modern
+application is mounted internally at the same `/webui` path it is served on
+publicly, so no response body is rewritten. The browser holds exactly one public
+cookie, both contexts are cookie-only, and an established modern session never
+falls back to the legacy runtime. The routed `webui.war` is the frozen Phase 5b
+artifact plus exactly three reviewed entries, derived deterministically. The
+installed product and both release archives stage the modern archive at
+`tomcat10-api/phase5e/webui-modern.war` - the path the `Context` descriptor's
+`docBase` resolves to - and remove the superseded auto-deployed
+`tomcat10-api/webapps/webui-modern.war`, so exactly one modern UI context is
+shipped. The internal handoff is registered as transitional state **T5e-1**,
+closing in Phase 5h (`docs/modernization/phase-5e-cohort-routing-adr.md`,
+`docs/modernization/phase-5e-transitional-state.md`).
+
+Both Phase 5e gates are executed and green. The database-backed smoke records
+all 23 public-origin cohort, isolation, lifecycle, SOAP-coexistence, and
+secret-hygiene rows as passing.
 
 The accepted target is ZK CE `10.3.0.1-jakarta` from the public ZK repository.
 Do not introduce evaluation artifacts or commercial repository credentials.
@@ -59,6 +88,9 @@ by a phase become canonical only after that phase's exit criteria prove them.
 | Phase 5c browser and rollback | `./gradlew phase5cRollbackRehearsal -Pphase3DbSystemPassword='<password>' --dependency-verification=strict` | Marker-owned PostgreSQL gate for the Phase 5b replay plus two fixture-isolated semantic Playwright captures using only checksum-verified browser artifacts |
 | Phase 5d functional slice | `./gradlew phase5dFinalVerification --dependency-verification=strict` | Database-neutral gate for the functional ZK CE 10 `/webui-modern` WAR, the ZK compile closure, the current ZK source and namespace inventories, the frozen legacy artifact and source crossing, the installed/release overlay, artifact rollback, Phase 4 preservation, and the still-valid Phase 5b/5c assertions. Does **not** chain `phase5cFinalVerification` |
 | Phase 5d modern web smoke | `./gradlew phase5dModernWebSmoke -Pphase3DbSystemPassword='<password>' --dependency-verification=strict` | Marker-owned PostgreSQL gate that boots the modern ZK slice beside the unchanged Phase 4 CXF WAR in one loopback Tomcat 10.1.59 JVM, captures the login/role/menu/read-only-window flow twice with a fixture reset, compares eleven semantic facts and the zero-write effect with the frozen legacy baseline, and replays the complete Phase 4 SOAP corpus while a modern ZK session is authenticated |
+| Phase 5e cohort routing gate | `./gradlew phase5eFinalVerification --dependency-verification=strict` | Database-neutral gate for the fail-closed cohort model and handoff protocol, the isolated Javax/ZK 3.6 bridge closure pinned against the frozen Phase 5b WAR, the deterministic derived routed `webui.war` and its three-entry diff contract, the reviewed public route/header/cookie/audit contracts, sixteen mutation proofs (each mutant is compiled before it is scored, and detection is read from the named test's own JUnit report so a compile or infrastructure failure can never count), the enforced 8 MiB/64 MiB proxy byte caps, the session-cache census parser tests over the reviewed `catalina.out` fixtures, the installed and release routing overlay including the resolved modern `docBase`, and rollback that survives the **real** Ant `setupWLib` run with real merge inputs. **Chains** `phase5dFinalVerification` |
+| Phase 5e cohort routing smoke | `./gradlew phase5eCohortRoutingSmoke -Pphase3DbSystemPassword='<password>' --dependency-verification=strict` | Executed, green marker-owned PostgreSQL gate that boots the routed public Tomcat 9 ingress and the loopback modern runtime, drives the complete public-origin cohort matrix through a browser that can only reach the public origin, proves concurrent client/org/role/user/language isolation by comparing each interleaved capture with that identity's solo capture, proves that logout, the product's session-inactivity timeout and container-side destruction each record a real session destruction on every runtime that must have one and return every `SessionManager` cache a runtime reports for that session to its marked baseline, proves a logged-out browser is decided again rather than inheriting its previous cohort, and replays the complete Phase 4 SOAP corpus while routed modern sessions are authenticated. All 23 matrix rows pass |
+| Phase 5e handoff key | `./gradlew provisionPhase5eHandoffKey` | Generates the shared >=32-byte 0600 key from the OS CSPRNG, outside every archive under `ADEMPIERE_HOME`. The repository ships no key and no placeholder |
 | Full product build, no DB restore | `ant build -Dnodbrestore=true` | Authoritative underlying Ant reactor; prefer the guarded Phase 3 lifecycle for CI |
 | Full product build with DB restore/migrations | `ant build -Dnodbrestore=false` | Database-affecting underlying reactor; run only against an approved disposable environment |
 | Gradle module build | `./gradlew build --dependency-verification=strict` | Reproducible Phase 2 gate on JDK 21 with Java 21 bytecode; omits quarantined Ant-only deployables |
@@ -76,11 +108,18 @@ by a phase become canonical only after that phase's exit criteria prove them.
 | Typecheck | Java compilation through the applicable Ant/Gradle build | No separate typecheck command |
 | End-to-end/contract | None currently canonical | Introduced incrementally in Phases 2-5 |
 
-Existing CI lives under `.github/workflows/`. Phase 4 currently includes 29
-Gradle projects after promoting the XFire-free web-service seam. From Phase 5d
+Existing CI lives under `.github/workflows/`. Phase 5e includes 31 Gradle
+projects: Phase 4 promoted the XFire-free web-service seam, and Phase 5e added
+the Gradle-only `:org.adempiere.cohort` routing project. That project has no Ant
+reactor entry, because its bridge source set compiles against classes extracted
+from the materialized frozen Phase 5b WAR rather than against anything the Ant
+reactor builds. From Phase 5d
 the Ant reactor no longer compiles the migrated ZK trees: the legacy `webui.war`
 and the five ZK package jars are materialized from the frozen Phase 5b commit in
-an isolated worktree, and Gradle owns the modern `/webui-modern` WAR. Phase 3 preserved all 32
+an isolated worktree, and Gradle owns the modern `/webui-modern` WAR. From Phase
+5e the deployed Tomcat 9 `webui.war` is *derived* from that frozen artifact by
+`derivePhase5eLegacyWebWar`; the pristine copy remains `lib/webuiOriginal.war`
+and is the rollback material. Phase 3 preserved all 32
 Ant reactor entries and added explicit no-database and
 installed-product lanes, and retains the three-test disposable runtime smoke.
 The `jbossfacet` surface is explicitly quarantined because its checked-in JBoss

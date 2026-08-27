@@ -1,0 +1,55 @@
+<!--
+  Phase 5e derived legacy WEB-INF/web.xml insert.
+
+  This block is added verbatim to the frozen Phase 5b descriptor, immediately
+  before its <filter> declaration of requestFilter. Nothing else in that
+  descriptor is touched, so the derived archive's descriptor is provably
+  "the frozen text plus exactly this block" - which is what
+  verifyPhase5eDerivedLegacyWar recomputes rather than trusts.
+
+  Why here, and not appended:
+
+    * Filter order in a deployment descriptor is declaration order, and the
+      Phase 5e router must run BEFORE SessionTimeoutFilter. That filter refuses
+      a request whose session was never registered, and the router has to see -
+      and reject - a forged internal header even on such a request.
+    * The Servlet 2.4 schema models <web-app> as an unbounded choice, so element
+      order is free; inserting at the existing filter position is chosen for
+      readability of the resulting descriptor, not for validity.
+
+  Session tracking is pinned to cookies by REPLACING the frozen <session-config>
+  element (see gradle/phase5/derived-web-xml-session-config.xml), not by adding
+  a second one: two <session-config> elements are accepted by the Servlet 2.4
+  choice model but their merge behaviour is container-specific, and a descriptor
+  whose meaning depends on the container is not a contract.
+
+  One honest caveat about <tracking-mode> in a version="2.4" descriptor: the
+  element was introduced by Servlet 3.0, so it is not in the 2.4 schema. Tomcat
+  registers its digester rule for session-config/tracking-mode unconditionally
+  rather than per descriptor version, and runs with xmlValidation="false" by
+  default, so the element IS honoured here. The descriptor version is
+  deliberately left at 2.4: raising it to 3.0 would additionally enable
+  web-fragment and annotation scanning for the frozen archive, which is a far
+  larger behavioural change than the one being made. verifyPhase5eDerivedLegacyWar
+  asserts the version did not move.
+-->
+	<listener>
+		<description>
+			Phase 5e: initialises the cohort bridge and refuses to deploy a
+			partially registered Phase 5e overlay.
+		</description>
+		<display-name>ADempiere Phase 5e Cohort Bridge</display-name>
+		<listener-class>
+			org.adempiere.web.bridge.CohortBridgeStartupListener
+		</listener-class>
+	</listener>
+
+	<filter>
+		<filter-name>phase5eCohortRouter</filter-name>
+		<filter-class>org.adempiere.web.bridge.CohortRoutingFilter</filter-class>
+	</filter>
+	<filter-mapping>
+		<filter-name>phase5eCohortRouter</filter-name>
+		<url-pattern>/*</url-pattern>
+	</filter-mapping>
+

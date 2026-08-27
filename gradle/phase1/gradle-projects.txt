@@ -6,6 +6,7 @@
 :install
 :migration
 :org.adempiere.asset
+:org.adempiere.cohort
 :org.adempiere.crm
 :org.adempiere.pos
 :org.adempiere.production

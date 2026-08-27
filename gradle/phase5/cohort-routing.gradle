@@ -1,0 +1,1338 @@
+// Phase 5e: the derived legacy WAR, the routed runtime lane, the installed and
+// release overlays, and the two canonical gates.
+//
+// Two gates, split the way Phase 5b and Phase 5d split theirs:
+//
+//   phase5eCohortRoutingSmoke   database-backed. Boots the derived Tomcat 9
+//                               public ingress and the modern Tomcat 10 lane
+//                               against one marker-owned PostgreSQL, drives the
+//                               complete public-origin cohort matrix through a
+//                               browser, proves concurrent identity isolation
+//                               and lifecycle cleanup, and replays the Phase 4
+//                               SOAP corpus while modern sessions are
+//                               authenticated.
+//
+//   phase5eFinalVerification    database-neutral. Cohort and handoff unit
+//                               tests, the isolated bridge closure, the derived
+//                               artifact diff contract, the public route
+//                               contract, the installed and release overlays,
+//                               rollback that survives setupWLib, and every
+//                               still-valid Phase 4 / 5b / 5c / 5d assertion.
+//
+// phase5dFinalVerification IS chained: Phase 5d's direct /webui-modern lane
+// remains a regression gate in its own right, and Phase 5e's changes to the
+// modern WAR (the handoff filter, cookie-only tracking, the protocol jar) have
+// to leave it green.
+
+def phase5ePristineWar = rootProject.layout.buildDirectory
+	.file('phase5d/legacy-webui/webui.war')
+def phase5eModernWar = rootProject.layout.projectDirectory
+	.file('zkwebui/build/libs/webui-modern.war')
+def phase5eDerivedDir = rootProject.layout.buildDirectory.dir('phase5e/legacy-webui')
+def phase5eDerivedWar = phase5eDerivedDir.map { it.file('webui.war') }
+def phase5eEvidenceDir = rootProject.layout.buildDirectory.dir('phase5e/evidence')
+def phase5eInstalledHome =
+	rootProject.layout.buildDirectory.dir('phase3/runtime/Adempiere')
+def phase5eReleaseHome =
+	rootProject.layout.projectDirectory.dir('install/build/Adempiere')
+def phase5eContractDir = rootProject.file('contracts/phase5e-routed-web-v1')
+
+def phase5eWebXmlInsert = rootProject.file('gradle/phase5/derived-web-xml-insert.xml')
+def phase5eSessionConfig =
+	rootProject.file('gradle/phase5/derived-web-xml-session-config.xml')
+def phase5eZkXmlInsert = rootProject.file('gradle/phase5/derived-zk-xml-insert.xml')
+
+def phase5eBridgeJarEntry = 'WEB-INF/lib/webui-cohort-bridge.jar'
+def phase5eWebXmlEntry = 'WEB-INF/web.xml'
+def phase5eZkXmlEntry = 'WEB-INF/zk.xml'
+
+// The exact anchors the derivation edits. They are declared here rather than
+// discovered so a frozen descriptor that no longer contains them fails loudly
+// instead of producing an archive with a silently unregistered router.
+def phase5eFilterAnchor = '\t<filter>\n\t\t<filter-name>requestFilter</filter-name>'
+def phase5eSessionAnchor =
+	'\t<session-config>\n\t\t<session-timeout>60</session-timeout>\n\t</session-config>'
+def phase5eZkAnchor = '\t<log>'
+
+def phase5eDbHost = providers.gradleProperty('phase3DbHost').orElse('127.0.0.1')
+def phase5eDbPort = providers.gradleProperty('phase3DbPort').orElse('5432')
+def phase5eDbName = providers.gradleProperty('phase3DbName')
+	.orElse('adempiere_phase3_ci')
+def phase5eDbUser = providers.gradleProperty('phase3DbUser')
+	.orElse('adempiere_phase3_ci')
+def phase5eDbPassword = providers.gradleProperty('phase3DbPassword')
+	.orElse('adempiere_phase3_ci')
+def phase5eDatabaseMarker = 'ADempiere Phase 3 disposable database'
+
+def phase5eSha512 = { byte[] content ->
+	java.security.MessageDigest.getInstance('SHA-512')
+		.digest(content).encodeHex().toString()
+}
+
+def phase5eReadRows = { File file ->
+	if (!file.isFile()) {
+		throw new GradleException("Missing Phase 5e contract ${file}")
+	}
+	file.readLines('UTF-8')
+		.findAll { !it.trim().isEmpty() && !it.startsWith('#') }
+		.collect { it.split('\t', -1) }
+}
+
+/** Reads every entry of an archive as name -> bytes, in archive order. */
+def phase5eEntries = { File archive ->
+	def entries = new LinkedHashMap<String, byte[]>()
+	new java.util.zip.ZipFile(archive).withCloseable { zip ->
+		zip.entries().each { entry ->
+			if (!entry.directory) {
+				entries[entry.name] = zip.getInputStream(entry).withCloseable {
+					it.readAllBytes()
+				}
+			}
+		}
+	}
+	entries
+}
+
+/**
+ * The derived descriptors, computed from the frozen text and the reviewed
+ * insert files.
+ *
+ * <p>Both the derivation and its verification call this, so "the derived
+ * descriptor is the frozen descriptor plus exactly these blocks" is recomputed
+ * rather than asserted.
+ */
+def phase5eDeriveWebXml = { String frozen ->
+	if (!frozen.contains(phase5eFilterAnchor)) {
+		throw new GradleException(
+			'The frozen WEB-INF/web.xml no longer declares requestFilter where ' +
+			'the Phase 5e overlay inserts the router')
+	}
+	if (!frozen.contains(phase5eSessionAnchor)) {
+		throw new GradleException(
+			'The frozen WEB-INF/web.xml no longer declares the 60 minute ' +
+			'session-config the Phase 5e overlay replaces')
+	}
+	frozen
+		.replace(phase5eFilterAnchor,
+			phase5eWebXmlInsert.getText('UTF-8') + phase5eFilterAnchor)
+		.replace(phase5eSessionAnchor,
+			phase5eSessionConfig.getText('UTF-8').replaceFirst(/\n$/, ''))
+}
+
+def phase5eDeriveZkXml = { String frozen ->
+	if (!frozen.contains(phase5eZkAnchor)) {
+		throw new GradleException(
+			'The frozen WEB-INF/zk.xml no longer contains the <log> element the ' +
+			'Phase 5e overlay anchors on')
+	}
+	frozen.replace(phase5eZkAnchor,
+		phase5eZkXmlInsert.getText('UTF-8') + '\n' + phase5eZkAnchor)
+}
+
+// ---------------------------------------------------------------------------
+// Derived legacy artifact
+// ---------------------------------------------------------------------------
+
+/**
+ * Writes the derived archive.
+ *
+ * Deterministic by construction: entries are sorted by name, every timestamp is
+ * fixed at the epoch, and the compression level is fixed. The installed product
+ * and both release archives pin this artifact's digest, so "the same inputs
+ * produce the same bytes" has to be a property of the derivation rather than of
+ * the machine that ran it.
+ */
+ext.phase5eDeriveArchive = { File pristine, File bridgeJar, File target ->
+	if (!pristine.isFile()) {
+		throw new GradleException("The frozen legacy WAR ${pristine} is missing")
+	}
+	def entries = phase5eEntries(pristine)
+	if (entries.containsKey(phase5eBridgeJarEntry)) {
+		throw new GradleException(
+			"The frozen legacy WAR already contains ${phase5eBridgeJarEntry}")
+	}
+	def derived = new LinkedHashMap<String, byte[]>(entries)
+	derived[phase5eWebXmlEntry] = phase5eDeriveWebXml(
+		new String(entries[phase5eWebXmlEntry], 'UTF-8')).getBytes('UTF-8')
+	derived[phase5eZkXmlEntry] = phase5eDeriveZkXml(
+		new String(entries[phase5eZkXmlEntry], 'UTF-8')).getBytes('UTF-8')
+	derived[phase5eBridgeJarEntry] = bridgeJar.bytes
+
+	target.parentFile.mkdirs()
+	def temporary = new File(target.parentFile, target.name + '.tmp')
+	new java.util.zip.ZipOutputStream(
+			new java.io.BufferedOutputStream(
+				new java.io.FileOutputStream(temporary))).withCloseable { out ->
+		out.setLevel(java.util.zip.Deflater.BEST_COMPRESSION)
+		derived.keySet().sort().each { name ->
+			def entry = new java.util.zip.ZipEntry(name)
+			entry.setTime(0L)
+			out.putNextEntry(entry)
+			out.write(derived[name])
+			out.closeEntry()
+		}
+	}
+	if (target.exists()) {
+		target.delete()
+	}
+	if (!temporary.renameTo(target)) {
+		throw new GradleException("Could not write the derived WAR ${target}")
+	}
+	[frozen: entries, derived: derived]
+}
+
+tasks.register('derivePhase5eLegacyWebWar') {
+	group = 'build'
+	description = 'Derives the routed Tomcat 9 webui.war from the frozen Phase 5b artifact'
+	dependsOn(
+		tasks.named('materializePhase5dLegacyWebArtifacts'),
+		':org.adempiere.cohort:bridgeOverlayJar')
+	inputs.file phase5ePristineWar
+	inputs.files(phase5eWebXmlInsert, phase5eSessionConfig, phase5eZkXmlInsert)
+	inputs.file project(':org.adempiere.cohort').tasks
+		.named('bridgeOverlayJar').flatMap { it.archiveFile }
+	outputs.file phase5eDerivedWar
+	outputs.file phase5eDerivedDir.map { it.file('derived-provenance.tsv') }
+	doLast {
+		def pristine = phase5ePristineWar.get().asFile
+		def bridgeJar = project(':org.adempiere.cohort').tasks
+			.named('bridgeOverlayJar').get().archiveFile.get().asFile
+		def target = phase5eDerivedWar.get().asFile
+		def result = project.phase5eDeriveArchive(pristine, bridgeJar, target)
+
+		def provenance = new File(target.parentFile, 'derived-provenance.tsv')
+		provenance.withWriter('UTF-8') { writer ->
+			writer.writeLine('# Phase 5e derived legacy web artifact')
+			writer.writeLine('# key\tvalue')
+			writer.writeLine("pristine_sha512\t${phase5eSha512(pristine.bytes)}")
+			writer.writeLine("derived_sha512\t${phase5eSha512(target.bytes)}")
+			writer.writeLine("bridge_sha512\t${phase5eSha512(bridgeJar.bytes)}")
+			writer.writeLine("pristine_entries\t${result.frozen.size()}")
+			writer.writeLine("derived_entries\t${result.derived.size()}")
+		}
+		logger.lifecycle(
+			"Phase 5e derived legacy WAR: ${result.derived.size()} entries " +
+			"(${result.derived.size() - result.frozen.size()} added, 2 descriptors replaced)")
+	}
+}
+
+tasks.register('verifyPhase5eDerivedLegacyWar') {
+	group = 'verification'
+	description = 'Proves the derived legacy WAR differs from the frozen one by exactly the reviewed set'
+	dependsOn tasks.named('derivePhase5eLegacyWebWar')
+	inputs.file phase5eDerivedWar
+	inputs.file new File(phase5eContractDir, 'derived-artifact-diff.tsv')
+	outputs.file rootProject.layout.buildDirectory
+		.file('phase5/evidence/phase5e-derived-artifact.tsv')
+	doLast {
+		def pristine = phase5eEntries(phase5ePristineWar.get().asFile)
+		def derived = phase5eEntries(phase5eDerivedWar.get().asFile)
+		def contract = [:]
+		phase5eReadRows(new File(phase5eContractDir, 'derived-artifact-diff.tsv'))
+			.each { row -> contract[row[0]] = row[1] }
+		def problems = []
+
+		// 1. Nothing outside the reviewed diff may change, in either direction.
+		(pristine.keySet() + derived.keySet()).sort().each { name ->
+			def disposition = contract[name]
+			def before = pristine[name]
+			def after = derived[name]
+			if (disposition == null) {
+				if (before == null) {
+					problems << "${name} was added without a reviewed disposition"
+				} else if (after == null) {
+					problems << "${name} was removed without a reviewed disposition"
+				} else if (!java.util.Arrays.equals(before, after)) {
+					problems << "${name} changed without a reviewed disposition"
+				}
+				return
+			}
+			switch (disposition) {
+				case 'added':
+					if (before != null) {
+						problems << "${name} is declared added but exists in the frozen WAR"
+					}
+					if (after == null) {
+						problems << "${name} is declared added but is not in the derived WAR"
+					}
+					break
+				case 'replaced':
+					if (before == null || after == null) {
+						problems << "${name} is declared replaced but is missing on one side"
+					} else if (java.util.Arrays.equals(before, after)) {
+						problems << "${name} is declared replaced but is unchanged"
+					}
+					break
+				default:
+					problems << "${name} carries the unknown disposition ${disposition}"
+			}
+		}
+
+		// 2. The replaced descriptors must be exactly the frozen text plus the
+		//    reviewed inserts, recomputed here rather than trusted.
+		if (pristine[phase5eWebXmlEntry] != null && derived[phase5eWebXmlEntry] != null) {
+			def expected = phase5eDeriveWebXml(
+				new String(pristine[phase5eWebXmlEntry], 'UTF-8'))
+			if (new String(derived[phase5eWebXmlEntry], 'UTF-8') != expected) {
+				problems << 'the derived WEB-INF/web.xml is not the frozen ' +
+					'descriptor plus gradle/phase5/derived-web-xml-insert.xml'
+			}
+		}
+		if (pristine[phase5eZkXmlEntry] != null && derived[phase5eZkXmlEntry] != null) {
+			def expected = phase5eDeriveZkXml(
+				new String(pristine[phase5eZkXmlEntry], 'UTF-8'))
+			if (new String(derived[phase5eZkXmlEntry], 'UTF-8') != expected) {
+				problems << 'the derived WEB-INF/zk.xml is not the frozen ' +
+					'descriptor plus gradle/phase5/derived-zk-xml-insert.xml'
+			}
+		}
+
+		// 3. Both Phase 5e registrations must actually be present.
+		def webXml = new String(derived[phase5eWebXmlEntry] ?: new byte[0], 'UTF-8')
+		[
+			'org.adempiere.web.bridge.CohortRoutingFilter': 'the public cohort router',
+			'org.adempiere.web.bridge.CohortBridgeStartupListener':
+				'the deployment-completeness listener',
+			'phase5eCohortRouter'                        : 'the router filter name',
+			'<tracking-mode>COOKIE</tracking-mode>'      : 'cookie-only session tracking',
+		].each { needle, reason ->
+			if (!webXml.contains(needle)) {
+				problems << "the derived WEB-INF/web.xml does not declare ${reason}"
+			}
+		}
+		// The frozen descriptor's schema version must NOT move. Raising it to
+		// 3.0 would enable web-fragment and annotation scanning for an archive
+		// that was frozen without them, which is a far larger behavioural change
+		// than any Phase 5e makes deliberately.
+		if (!webXml.contains('version="2.4"')) {
+			problems << 'the derived WEB-INF/web.xml no longer declares the frozen ' +
+				'Servlet 2.4 descriptor version'
+		}
+		if (webXml.contains('metadata-complete')) {
+			problems << 'the derived WEB-INF/web.xml introduced a metadata-complete ' +
+				'attribute the frozen descriptor never had'
+		}
+		def zkXml = new String(derived[phase5eZkXmlEntry] ?: new byte[0], 'UTF-8')
+		if (!zkXml.contains('org.adempiere.web.bridge.CohortDecisionInterceptor')) {
+			problems << 'the derived WEB-INF/zk.xml does not register the cohort ' +
+				'decision interceptor'
+		}
+
+		// 4. The overlay jar carries the bridge and the protocol and nothing
+		//    else. A ZK, servlet or ADempiere class inside it would be a second
+		//    copy of something the legacy classpath already provides.
+		def overlay = derived[phase5eBridgeJarEntry]
+		if (overlay == null) {
+			problems << "the derived WAR does not carry ${phase5eBridgeJarEntry}"
+		} else {
+			def classes = [] as TreeSet
+			new java.util.zip.ZipInputStream(
+					new ByteArrayInputStream(overlay)).withCloseable { zip ->
+				for (def entry = zip.nextEntry; entry != null; entry = zip.nextEntry) {
+					if (!entry.directory && entry.name.endsWith('.class')) {
+						classes << entry.name
+					}
+				}
+			}
+			if (classes.isEmpty()) {
+				problems << 'the Phase 5e overlay jar carries no class'
+			}
+			def foreign = classes.findAll {
+				!it.startsWith('org/adempiere/web/')
+			}
+			if (!foreign.isEmpty()) {
+				problems << "the Phase 5e overlay jar carries foreign classes: " +
+					"${foreign.take(10)}"
+			}
+			[
+				'org/adempiere/web/bridge/CohortRoutingFilter.class',
+				'org/adempiere/web/bridge/CohortDecisionInterceptor.class',
+				'org/adempiere/web/bridge/CohortBridgeStartupListener.class',
+				'org/adempiere/web/cohort/CohortSelector.class',
+				'org/adempiere/web/handoff/HandoffTicketCodec.class',
+				'org/adempiere/web/route/PublicRouteClassifier.class',
+			].each { required ->
+				if (!classes.contains(required)) {
+					problems << "the Phase 5e overlay jar is missing ${required}"
+				}
+			}
+		}
+
+		// 5. No key material, and no placeholder for one, may ship.
+		derived.each { name, content ->
+			if (name.toLowerCase(Locale.ROOT).contains('handoff')
+					&& (name.endsWith('.key') || name.endsWith('.secret'))) {
+				problems << "${name} looks like packaged key material"
+			}
+		}
+
+		if (!problems.isEmpty()) {
+			throw new GradleException(
+				"The Phase 5e derived legacy artifact is not the reviewed derivation:\n  - " +
+				problems.join('\n  - '))
+		}
+
+		def evidence = rootProject.layout.buildDirectory
+			.file('phase5/evidence/phase5e-derived-artifact.tsv').get().asFile
+		evidence.parentFile.mkdirs()
+		evidence.withWriter('UTF-8') { writer ->
+			writer.writeLine('# entry\tdisposition\tsha512')
+			contract.keySet().sort().each { name ->
+				writer.writeLine("${name}\t${contract[name]}\t" +
+					"${phase5eSha512(derived[name])}")
+			}
+			writer.writeLine("# unchanged_entries\t${pristine.size() - contract.count { it.value == 'replaced' }}")
+		}
+		logger.lifecycle(
+			"Phase 5e derived artifact: ${contract.size()} reviewed differences, " +
+			"${pristine.size()} frozen entries otherwise byte-identical")
+	}
+}
+
+/**
+ * Determinism.
+ *
+ * The derived WAR is what the installed product and both release archives pin,
+ * so "the same inputs produce the same bytes" has to be a measurement. This
+ * derives the archive a second time into a separate file and compares the two.
+ */
+tasks.register('verifyPhase5eDerivedDeterminism') {
+	group = 'verification'
+	description = 'Derives the routed legacy WAR twice and proves the bytes are identical'
+	dependsOn tasks.named('verifyPhase5eDerivedLegacyWar')
+	outputs.file rootProject.layout.buildDirectory
+		.file('phase5/evidence/phase5e-determinism.tsv')
+	doLast {
+		def target = phase5eDerivedWar.get().asFile
+		def first = phase5eSha512(target.bytes)
+		def rederived = new File(target.parentFile, 'webui-determinism-check.war')
+		project.phase5eDeriveArchive(
+			phase5ePristineWar.get().asFile,
+			project(':org.adempiere.cohort').tasks.named('bridgeOverlayJar')
+				.get().archiveFile.get().asFile,
+			rederived)
+		def second = phase5eSha512(rederived.bytes)
+		if (first != second) {
+			throw new GradleException(
+				"The Phase 5e derivation is not deterministic: ${first} then ${second}")
+		}
+		rederived.delete()
+		def evidence = rootProject.layout.buildDirectory
+			.file('phase5/evidence/phase5e-determinism.tsv').get().asFile
+		evidence.parentFile.mkdirs()
+		evidence.text = "derived_sha512\t${first}\nrederived_sha512\t${second}\n"
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Public route, cohort, cookie and audit contracts
+// ---------------------------------------------------------------------------
+
+tasks.register('verifyPhase5eCohortContracts') {
+	group = 'verification'
+	description = 'Proves the reviewed Phase 5e route, header, cookie and audit contracts match the code'
+	dependsOn ':org.adempiere.cohort:jar'
+	inputs.dir phase5eContractDir
+	outputs.file rootProject.layout.buildDirectory
+		.file('phase5/evidence/phase5e-public-routes.tsv')
+	doLast {
+		def classpath = project(':org.adempiere.cohort').sourceSets.main
+			.runtimeClasspath.files.collect { it.toURI().toURL() } as URL[]
+		def loader = new URLClassLoader(classpath, null as ClassLoader)
+		def problems = []
+		try {
+			def classifier = loader.loadClass(
+				'org.adempiere.web.route.PublicRouteClassifier')
+			def headerPolicy = loader.loadClass(
+				'org.adempiere.web.route.ProxyHeaderPolicy')
+			def audit = loader.loadClass('org.adempiere.web.route.RoutingAudit')
+			def parser = loader.loadClass(
+				'org.adempiere.web.cohort.CohortConfigurationParser')
+			def protocol = loader.loadClass(
+				'org.adempiere.web.handoff.HandoffProtocol')
+			def replay = loader.loadClass('org.adempiere.web.handoff.ReplayCache')
+
+			// 1. Every reviewed public route row must classify exactly as the
+			//    contract says, including the rows that must NOT be proxyable.
+			def routes = phase5eReadRows(
+				new File(phase5eContractDir, 'public-route-classes.tsv'))
+			routes.each { row ->
+				def actual = classifier.getMethod('classify', String, String)
+					.invoke(null, row[0], row[1])
+				if (actual.toString() != row[2]) {
+					problems << "${row[0]} ${row[1]} classifies as ${actual}, " +
+						"the contract says ${row[2]}"
+				}
+				def proxyable = actual.getClass().getMethod('proxyable')
+					.invoke(actual)
+				if (proxyable.toString() != row[3]) {
+					problems << "${row[0]} ${row[1]} proxyable=${proxyable}, " +
+						"the contract says ${row[3]}"
+				}
+			}
+			if (routes.count { it[3] == 'false' } == 0) {
+				problems << 'the public route contract records no refused route, ' +
+					'so "the affinity unit is closed" would be vacuously true'
+			}
+
+			// 2. The header allowlists.
+			def headers = phase5eReadRows(
+				new File(phase5eContractDir, 'proxy-header-policy.tsv'))
+			headers.each { row ->
+				def method = row[1] == 'request'
+					? 'forwardRequestHeader'
+					: 'forwardResponseHeader'
+				def forwarded = headerPolicy.getMethod(method, String)
+					.invoke(null, row[0])
+				if (forwarded.toString() != row[2]) {
+					problems << "${row[1]} header ${row[0]} forwarded=${forwarded}, " +
+						"the contract says ${row[2]}"
+				}
+			}
+			['cookie', 'authorization', 'host'].each { denied ->
+				if (!headers.any { it[0] == denied && it[2] == 'false' }) {
+					problems << "the header contract does not record that ${denied} " +
+						'is never forwarded'
+				}
+			}
+
+			// 3. The audit policy must refuse to write anything it forbids.
+			def forbidden = audit.getMethod('forbidden').invoke(null)
+			forbidden.each { needle ->
+				try {
+					audit.getMethod('sanitised', String)
+						.invoke(null, "x ${needle} y".toString())
+					problems << "the audit policy accepted a line containing ${needle}"
+				} catch (java.lang.reflect.InvocationTargetException expected) {
+					if (!(expected.cause instanceof IllegalStateException)) {
+						problems << "the audit policy failed unexpectedly on ${needle}"
+					}
+				}
+			}
+
+			// 4. The documented grammar and the implemented grammar are one
+			//    string, not two.
+			def grammar = parser.getMethod('identifierGrammar').invoke(null)
+			def documented = phase5eReadRows(
+				new File(phase5eContractDir, 'cohort-configuration.tsv'))
+				.find { it[0] == 'identifier_grammar' }
+			if (documented == null || documented[1] != grammar.toString()) {
+				problems << "the documented identifier grammar " +
+					"${documented == null ? '(absent)' : documented[1]} is not the " +
+					"implemented one ${grammar}"
+			}
+
+			// 5. The ticket TTL, the reserved namespace and the replay capacity
+			//    are the values the ADR justifies.
+			def ttl = protocol.getField('TTL_MILLIS').getLong(null)
+			def skew = protocol.getField('CLOCK_SKEW_MILLIS').getLong(null)
+			def capacity = replay.getField('DEFAULT_CAPACITY').getInt(null)
+			def documentedRate = phase5eReadRows(
+				new File(phase5eContractDir, 'cohort-configuration.tsv'))
+				.find { it[0] == 'max_accepted_login_rate_per_second' }
+			if (documentedRate == null) {
+				problems << 'the contract does not document the maximum accepted ' +
+					'login rate the replay capacity is derived from'
+			} else {
+				def ceiling = ((ttl + skew) / 1000L) * Long.parseLong(documentedRate[1])
+				if (capacity <= ceiling) {
+					problems << "the replay cache capacity ${capacity} does not " +
+						"exceed the documented ceiling ${ceiling}"
+				}
+			}
+			if (ttl != 30_000L) {
+				problems << "the ticket TTL is ${ttl}ms, the ADR fixes it at 30000ms"
+			}
+			def reserved = protocol.getField('RESERVED_HEADER_PREFIX').get(null)
+			if (reserved != 'X-ADempiere-Handoff-') {
+				problems << "the reserved internal namespace is ${reserved}"
+			}
+
+			// 6. The documented byte caps are the enforced byte caps, and the
+			//    enforcement is exercised rather than read off a constant.
+			def limits = loader.loadClass('org.adempiere.web.route.ProxyLimits')
+			def transfer = loader.loadClass(
+				'org.adempiere.web.route.BoundedTransfer')
+			def configuration = [:]
+			phase5eReadRows(
+				new File(phase5eContractDir, 'cohort-configuration.tsv'))
+				.each { configuration[it[0]] = it[1] }
+			[
+				max_request_bytes: 'MAX_REQUEST_BYTES',
+				max_response_bytes: 'MAX_RESPONSE_BYTES',
+			].each { key, field ->
+				def enforced = limits.getField(field).getLong(null)
+				if (configuration[key] == null) {
+					problems << "the contract does not document ${key}"
+				} else if (Long.parseLong(configuration[key]) != enforced) {
+					problems << "the contract documents ${key}=${configuration[key]} " +
+						"but ${field} is ${enforced}"
+				}
+			}
+			def sink = new java.io.ByteArrayOutputStream()
+			def copied = transfer.getMethod(
+					'copy', InputStream, OutputStream, long.class)
+				.invoke(null, new java.io.ByteArrayInputStream(new byte[9 * 1024]),
+					sink, 8L * 1024)
+			if (copied) {
+				problems << 'the streaming byte cap did not stop an oversized body'
+			}
+			if (sink.size() > 8 * 1024) {
+				problems << "the streaming byte cap forwarded ${sink.size()} bytes " +
+					'past its 8192 byte limit'
+			}
+			def declared = transfer.getMethod(
+					'declaredWithin', long.class, long.class)
+				.invoke(null, 8L * 1024 + 1, 8L * 1024)
+			if (declared) {
+				problems << 'an oversized declared Content-Length was accepted'
+			}
+		} finally {
+			loader.close()
+		}
+
+		if (!problems.isEmpty()) {
+			throw new GradleException(
+				"The Phase 5e cohort and routing contracts do not match the code:\n  - " +
+				problems.join('\n  - '))
+		}
+
+		def evidence = rootProject.layout.buildDirectory
+			.file('phase5/evidence/phase5e-public-routes.tsv').get().asFile
+		evidence.parentFile.mkdirs()
+		evidence.text = new File(
+			phase5eContractDir, 'public-route-classes.tsv').text
+		logger.lifecycle('Phase 5e route, header, audit, cohort and ticket ' +
+			'contracts match the implementation')
+	}
+}
+
+/**
+ * Mutation proof.
+ *
+ * A contract that no mutation can break is a description, not a gate. This
+ * applies five reviewed mutations to the built classes and requires that a
+ * named assertion fails for each. It runs the mutations against copies; the
+ * checked-out sources are never modified.
+ */
+tasks.register('verifyPhase5eMutationProof', Exec) {
+	group = 'verification'
+	description = 'Proves a named Phase 5e assertion fails for each reviewed mutation'
+	dependsOn(':org.adempiere.cohort:test', ':org.adempiere.cohort:bridgeTest')
+	inputs.file rootProject.file('scripts/phase5/verify-cohort-mutation-proof.sh')
+	// The mutated sources AND the tests that must notice them are inputs. Only
+	// the script was declared before, so an ordinary change to a mutated class
+	// or to the assertion that catches it left this task UP-TO-DATE and the
+	// previous run's TSV standing as evidence for code it had never seen - a
+	// gate reporting a pass it did not execute, which is precisely what the
+	// phase-gating rules forbid.
+	inputs.dir rootProject.file('org.adempiere.cohort/src/main/java')
+	inputs.dir rootProject.file('org.adempiere.cohort/src/bridge/java')
+	inputs.dir rootProject.file('org.adempiere.cohort/src/test/java')
+	inputs.dir rootProject.file('org.adempiere.cohort/src/bridgeTest/java')
+	outputs.file rootProject.layout.buildDirectory
+		.file('phase5/evidence/phase5e-mutation-proof.tsv')
+	commandLine(
+		'bash',
+		rootProject.file('scripts/phase5/verify-cohort-mutation-proof.sh'),
+		rootProject.projectDir,
+		rootProject.layout.buildDirectory
+			.file('phase5/evidence/phase5e-mutation-proof.tsv').get().asFile)
+}
+
+/**
+ * The lifecycle capture's own parser.
+ *
+ * The routed lane's session-cleanup evidence is only as good as the parser that
+ * reads it out of `catalina.out`, and that parser has already been wrong twice
+ * in ways that made the lifecycle rows report a pass they had not earned. It is
+ * therefore gated here, in the database-neutral lane, against fixtures in the
+ * exact shape `CLogFormatter` writes - including the cache-line-less routed
+ * Tomcat 9 destruction block that the frozen listener produces for a session the
+ * rotation already unregistered.
+ */
+tasks.register('verifyPhase5eSessionCensusParser', Exec) {
+	group = 'verification'
+	description = 'Runs the session-cache census parser tests against the reviewed log fixtures'
+	inputs.file rootProject.file('scripts/phase5/session-cache-census.py')
+	inputs.file rootProject.file('scripts/phase5/session_cache_census_test.py')
+	inputs.dir rootProject.file('scripts/phase5/fixtures/session-cache-census')
+	outputs.file rootProject.layout.buildDirectory
+		.file('phase5/evidence/phase5e-session-census-parser.txt')
+	def report = rootProject.layout.buildDirectory
+		.file('phase5/evidence/phase5e-session-census-parser.txt')
+	doFirst {
+		report.get().asFile.parentFile.mkdirs()
+		standardOutput = new java.io.FileOutputStream(report.get().asFile)
+		errorOutput = standardOutput
+	}
+	commandLine(
+		'python3',
+		rootProject.file('scripts/phase5/session_cache_census_test.py'))
+}
+
+// ---------------------------------------------------------------------------
+// Installed product and release archives
+// ---------------------------------------------------------------------------
+
+tasks.register('stagePhase5eInstalledRouting') {
+	group = 'verification'
+	description = 'Stages the routed legacy WAR, modern archive, Context descriptor and key contract on the installed runtime'
+	dependsOn(
+		tasks.named('verifyPhase5eDerivedLegacyWar'),
+		tasks.named('stagePhase5cInstalledWeb'))
+	// preparePhase4InstalledApi rebuilds tomcat10-api from scratch, and
+	// verifyPhase4InstalledApi re-runs it. Staging before that happens would
+	// leave the Context descriptor in a directory that is about to be recreated,
+	// which is precisely the "it worked on the first run" defect.
+	mustRunAfter tasks.named('verifyPhase4InstalledApi')
+	// Phase 5e REMOVES the Phase 5c/5d additive overlay it supersedes, so the
+	// Phase 5c gates that own that overlay have to make their assertions first.
+	// Without this the two phases would race and whichever ran second would
+	// report on a tree the other had already changed.
+	mustRunAfter(
+		tasks.named('verifyPhase5cWebOverlay'),
+		tasks.named('verifyPhase5cRollbackArtifacts'))
+	inputs.file phase5eDerivedWar
+	inputs.file phase5eModernWar
+	// The staging routine also repairs state this task cannot declare as an
+	// output because it only exists once the lane has run: the deployed
+	// tomcat/webapps/webui.war and its expansion. stop-routed-lane.sh restores
+	// the PRISTINE archive there, so a skipped staging step would leave
+	// verifyPhase5eRoutedOverlay inspecting a deployment the previous run put
+	// back. Re-running is cheap next to being wrong about what the product
+	// serves.
+	outputs.upToDateWhen { false }
+	outputs.files(
+		phase5eInstalledHome.map { it.file('lib/webui.war') },
+		phase5eInstalledHome.map { it.file('lib/webuiOriginal.war') },
+		phase5eInstalledHome.map {
+			it.file('tomcat10-api/phase5e/webui-modern.war')
+		},
+		phase5eInstalledHome.map {
+			it.file('tomcat10-api/conf/Catalina/localhost/webui.xml')
+		},
+		phase5eInstalledHome.map { it.file('config/phase5e-routing.sha256') })
+	doLast {
+		project.stagePhase5eRouting(phase5eInstalledHome.get().asFile)
+	}
+}
+
+tasks.register('stagePhase5eReleaseRouting') {
+	group = 'verification'
+	description = 'Stages the routed legacy WAR, modern archive, Context descriptor and key contract in the release tree'
+	dependsOn(
+		tasks.named('verifyPhase5eDerivedLegacyWar'),
+		tasks.named('stagePhase5cReleaseWeb'))
+	mustRunAfter tasks.named('verifyPhase4InstalledApi')
+	mustRunAfter(
+		tasks.named('verifyPhase5cWebOverlay'),
+		tasks.named('verifyPhase5cRollbackArtifacts'))
+	inputs.file phase5eDerivedWar
+	inputs.file phase5eModernWar
+	outputs.upToDateWhen { false }
+	outputs.files(
+		new File(phase5eReleaseHome.asFile, 'lib/webui.war'),
+		new File(phase5eReleaseHome.asFile, 'lib/webuiOriginal.war'),
+		new File(phase5eReleaseHome.asFile,
+			'tomcat10-api/phase5e/webui-modern.war'),
+		new File(phase5eReleaseHome.asFile,
+			'tomcat10-api/conf/Catalina/localhost/webui.xml'),
+		new File(phase5eReleaseHome.asFile, 'config/phase5e-routing.sha256'))
+	doLast {
+		project.stagePhase5eRouting(phase5eReleaseHome.asFile)
+	}
+}
+
+tasks.register('packagePhase5eReleaseRouting', Exec) {
+	group = 'verification'
+	description = 'Rebuilds the 394LTS release archives with the Phase 5e routing overlay'
+	dependsOn tasks.named('stagePhase5eReleaseRouting')
+	// The Phase 5c packaging step rebuilds the same two archives. Running after
+	// it means the archives end with BOTH overlays rather than whichever task
+	// happened to run last.
+	mustRunAfter tasks.named('packagePhase5cReleaseWeb')
+	commandLine(
+		'bash',
+		rootProject.file('scripts/phase4/package-installed-api.sh'),
+		rootProject.projectDir,
+		phase5eReleaseHome.asFile,
+		'394LTS')
+}
+
+tasks.register('verifyPhase5eRoutedOverlay', Exec) {
+	group = 'verification'
+	description = 'Verifies the routed overlay in the installed product and both release archives'
+	dependsOn(
+		tasks.named('stagePhase5eInstalledRouting'),
+		tasks.named('packagePhase5eReleaseRouting'),
+		tasks.named('verifyPhase5cWebOverlay'))
+	commandLine(
+		'bash',
+		rootProject.file('scripts/phase5/verify-routed-overlay.sh'),
+		phase5eInstalledHome.get().asFile,
+		phase5eReleaseHome.asFile,
+		rootProject.file('install/build/Adempiere_394LTS.zip'),
+		rootProject.file('install/build/Adempiere_394LTS.tar.gz'),
+		phase5eDerivedWar.get().asFile,
+		phase5ePristineWar.get().asFile,
+		phase5eModernWar.asFile)
+}
+
+tasks.register('verifyPhase5eRollback', Exec) {
+	group = 'verification'
+	description = 'Rehearses Phase 5e rollback and proves it survives a real installer setupWLib'
+	dependsOn tasks.named('verifyPhase5eRoutedOverlay')
+	commandLine(
+		'bash',
+		rootProject.file('scripts/phase5/verify-routed-rollback.sh'),
+		rootProject.projectDir,
+		phase5eInstalledHome.get().asFile,
+		rootProject.file('install/build/Adempiere_394LTS.zip'),
+		rootProject.file('install/build/Adempiere_394LTS.tar.gz'),
+		phase5ePristineWar.get().asFile,
+		rootProject.layout.buildDirectory.dir('phase5e/rollback').get().asFile,
+		phase5eModernWar.asFile)
+}
+
+// ---------------------------------------------------------------------------
+// Routed runtime lane
+// ---------------------------------------------------------------------------
+
+tasks.register('provisionPhase5eHandoffKey', Exec) {
+	group = 'verification'
+	description = 'Generates the 0600 same-user handoff key outside every archive'
+	inputs.file rootProject.file('scripts/phase5/provision-handoff-key.sh')
+	outputs.file rootProject.layout.buildDirectory.file('phase5e/keys/handoff.key')
+	commandLine(
+		'bash',
+		rootProject.file('scripts/phase5/provision-handoff-key.sh'),
+		rootProject.layout.buildDirectory.file('phase5e/keys/handoff.key')
+			.get().asFile)
+}
+
+tasks.register('startPhase5eRoutedLane', Exec) {
+	group = 'verification'
+	description = 'Starts the routed public Tomcat 9 ingress and the loopback modern runtime'
+	dependsOn(
+		tasks.named('provisionPhase5eHandoffKey'),
+		tasks.named('stagePhase5eInstalledRouting'),
+		tasks.named('phase3AntDatabaseBuild'),
+		tasks.named('phase4ModernSoapRuntime'),
+		':zkwebui:verifyPhase5dModernWebWar')
+	commandLine(
+		'bash',
+		rootProject.file('scripts/phase5/start-routed-lane.sh'),
+		rootProject.projectDir,
+		phase5eInstalledHome.get().asFile,
+		rootProject.layout.buildDirectory.file('phase5e/keys/handoff.key')
+			.get().asFile)
+}
+
+tasks.register('stopPhase5eRoutedLane', Exec) {
+	group = 'verification'
+	description = 'Stops the routed lane and restores the installed legacy artifact'
+	commandLine(
+		'bash',
+		rootProject.file('scripts/phase5/stop-routed-lane.sh'),
+		rootProject.projectDir,
+		phase5eInstalledHome.get().asFile)
+}
+
+tasks.register('verifyPhase5eRoutedEvidence') {
+	group = 'verification'
+	description = 'Fails when the routed lane did not record cohort, isolation and lifecycle evidence'
+	mustRunAfter ':zkwebui:routedBrowserTest'
+	doLast {
+		def evidence = phase5eEvidenceDir.get().asFile
+		def problems = []
+		def read = { String name ->
+			def file = new File(evidence, name)
+			if (!file.isFile()) {
+				problems << "missing ${rootProject.relativePath(file)}"
+				return [:]
+			}
+			def values = [:].withDefault { [] }
+			file.readLines('UTF-8').findAll { it && !it.startsWith('#') }.each {
+				def fields = it.split('\t', -1)
+				values[fields[0]] << (fields.length > 1 ? fields[1] : '')
+			}
+			values
+		}
+
+		def lane = read('routed-lane.tsv')
+		if (lane['public_webui'] != ['200']) {
+			problems << "the public /webui ingress did not answer 200: ${lane['public_webui']}"
+		}
+		// The modern context records the status it actually returned. 403 is the
+		// healthy armed state - it refuses an unbootstrapped session that
+		// presents no ticket - and 200 is the healthy unarmed state. Anything
+		// else is a failure, and neither is rewritten into the other.
+		if (!(lane['modern_internal'] in [['200'], ['403']])) {
+			problems << 'the internal modern /webui context answered ' +
+				"${lane['modern_internal']}; only 200 (unarmed) or 403 " +
+				'(armed and fail-closed) are healthy'
+		}
+		if (lane['modern_api'] != ['200']) {
+			problems << "the modern SOAP endpoint did not answer 200: ${lane['modern_api']}"
+		}
+		// The listeners are read from the running process, so this is a
+		// statement about the socket rather than about the configuration file
+		// that was supposed to produce it.
+		def modernListeners = lane['modern_listener']
+		if (modernListeners.isEmpty()) {
+			problems << 'no bound listener was observed for the modern runtime'
+		} else {
+			def offHost = modernListeners.findAll { listener ->
+				!(listener.startsWith('127.0.0.1:') || listener.startsWith('[::1]:')
+					|| listener.startsWith('localhost:'))
+			}
+			if (!offHost.isEmpty()) {
+				problems << "the modern runtime is not loopback-only: ${offHost}"
+			}
+			def expected = lane['modern_expected_port'].isEmpty()
+				? null
+				: lane['modern_expected_port'][0]
+			if (expected != null && !modernListeners.any { it.endsWith(':' + expected) }) {
+				problems << "the modern runtime is not listening on ${expected}: " +
+					"${modernListeners}"
+			}
+		}
+		if (lane['public_listener'].isEmpty()) {
+			problems << 'no bound listener was observed for the public ingress'
+		}
+		if (lane['modern_default_context'] != ['absent']) {
+			problems << 'the routed lane still deploys the default /webui-modern ' +
+				'context, so more than one modern UI context exists'
+		}
+		if (lane['handoff_key_mode'] != ['600']) {
+			problems << "the handoff key is not mode 0600: ${lane['handoff_key_mode']}"
+		}
+		if (lane['handoff_key_in_archive'] != ['no']) {
+			problems << 'the handoff key is inside an archive under ADEMPIERE_HOME'
+		}
+		if (lane['handoff_key_search'].isEmpty()
+				|| !lane['handoff_key_search'][0].contains('zip(')) {
+			problems << 'the handoff key search did not inspect archive entries, ' +
+				'so its "absent" answer covers only the filesystem'
+		}
+
+		def matrix = read('cohort-matrix.tsv')
+		[
+			'master-off', 'user-allowlisted', 'role-allowlisted', 'not-allowlisted',
+			'config-duplicate', 'config-malformed', 'config-unreadable',
+			'config-client-scoped', 'bootstrap-single-use', 'role-unselected',
+			'cohort-reentry-after-logout',
+			'client-supplied-internal-header', 'missing-affinity',
+			'backend-unavailable', 'interceptor-mutation',
+			'concurrent-identity-isolation', 'logout-baseline', 'timeout-baseline',
+			'container-destruction-baseline',
+		].each { required ->
+			if (matrix[required].isEmpty()) {
+				problems << "the public-origin cohort matrix records no ${required} case"
+			} else if (matrix[required] != ['pass']) {
+				problems << "${required} did not pass: ${matrix[required]}"
+			}
+		}
+		// The ticket expiry, tamper, wrong-session and partial-identity rules are		// owned by HandoffTicketCodecTest in the database-neutral gate. A browser
+		// cannot present a ticket, so a matrix row claiming to test them here
+		// could only be a second reserved-header rejection under another name.
+		// Fail if one reappears rather than let the matrix regrow duplicates.
+		[
+			'ticket-expired', 'ticket-tampered', 'ticket-wrong-session',
+			'ticket-partial-identity', 'ticket-replay',
+		].each { duplicate ->
+			if (!matrix[duplicate].isEmpty()) {
+				problems << "${duplicate} is recorded as a runtime case, but a " +
+					'browser cannot present a ticket; that rule belongs to ' +
+					'HandoffTicketCodecTest'
+			}
+		}
+
+		// Lifecycle evidence completeness. Each row records a mark and an
+		// observation per runtime, and each of those has to say where its
+		// reading came from - `census-line`, `destruction-block` or `none`, the
+		// last meaning a destruction this action owns that the frozen Tomcat 9
+		// listener recorded with no cache lines because the rotation had already
+		// unregistered the session. `absent` means no post-mutation record was
+		// found at all and is never a healthy state; a missing provenance row
+		// means the reading cannot be interpreted at all, which is how a
+		// borrowed reading used to pass unnoticed.
+		['logout', 'timeout', 'destruction'].each { kind ->
+			['before', 'after'].each { end ->
+				def name = "session-caches-${kind}-${end}.tsv"
+				def file = new File(evidence, name)
+				if (!file.isFile()) {
+					problems << "missing ${rootProject.relativePath(file)}"
+					return
+				}
+				def sources = [:]
+				file.readLines('UTF-8').each { line ->
+					def fields = line.split('\t', -1)
+					if (fields.length == 3 && fields[1] == 'census') {
+						sources[fields[0]] = fields[2]
+					}
+				}
+				['public', 'modern'].each { runtime ->
+					if (!sources.containsKey(runtime)) {
+						problems << "${name} records no census provenance for " +
+							"the ${runtime} runtime, so its cache reading " +
+							'cannot be interpreted'
+					} else if (sources[runtime] == 'absent') {
+						problems << "${name} found no post-mutation record at " +
+							"all for the ${runtime} runtime"
+					} else if (!(sources[runtime] in
+							['census-line', 'destruction-block', 'none'])) {
+						problems << "${name} records an unknown census " +
+							"provenance for ${runtime}: ${sources[runtime]}"
+					}
+				}
+			}
+		}
+
+		if (!problems.isEmpty()) {
+			throw new GradleException(
+				"The Phase 5e routed runtime evidence is incomplete:\n  - " +
+				problems.join('\n  - '))
+		}
+		logger.lifecycle(
+			"Phase 5e routed evidence: " +
+			"${matrix.count { key, outcomes -> !outcomes.isEmpty() }} " +
+			'public-origin matrix cases recorded, all passed')
+	}
+}
+
+tasks.register('phase5eCohortRoutingSmoke') {
+	group = 'verification'
+	description =
+		'Canonical Phase 5e gate: public-origin cohort routing, concurrent isolation, lifecycle cleanup and Phase 4 SOAP coexistence'
+	dependsOn(
+		tasks.named('verifyPhase5dBrowserContractManifest'),
+		// A broken census parser makes every lifecycle row unreadable, so it is
+		// proved before the lane is booted rather than after.
+		tasks.named('verifyPhase5eSessionCensusParser'),
+		tasks.named('startPhase5eRoutedLane'),
+		':zkwebui:routedBrowserTest',
+		tasks.named('verifyPhase5eRoutedEvidence'))
+}
+
+// ---------------------------------------------------------------------------
+// Database-neutral final gate
+// ---------------------------------------------------------------------------
+
+tasks.register('phase5eFinalVerification') {
+	group = 'verification'
+	description =
+		'Runs the database-neutral Phase 5e cohort, bridge, derived-artifact, overlay, rollback and preservation gates'
+	dependsOn(
+		// Phase 5e's own work
+		':org.adempiere.cohort:test',
+		':org.adempiere.cohort:bridgeTest',
+		tasks.named('verifyPhase5eCohortContracts'),
+		tasks.named('verifyPhase5eDerivedLegacyWar'),
+		tasks.named('verifyPhase5eDerivedDeterminism'),
+		tasks.named('verifyPhase5eMutationProof'),
+		tasks.named('verifyPhase5eSessionCensusParser'),
+		tasks.named('verifyPhase5eBridgeIsolation'),
+		':zkwebui:routedContractTest',
+		// Installed and release packaging, and rollback that survives setupWLib.
+		tasks.named('verifyPhase5eRoutedOverlay'),
+		tasks.named('verifyPhase5eRollback'),
+		// Phase 5d remains an independent regression gate: the direct
+		// /webui-modern lane must stay green with the Phase 5e handoff filter,
+		// cookie-only tracking and protocol jar in the same archive.
+		tasks.named('phase5dFinalVerification'))
+}
+
+/**
+ * Isolation.
+ *
+ * The bridge must not leak into the modern closure and the modern closure must
+ * not leak into the bridge. This is the H1/H2 mitigation expressed as a check
+ * over the built artifacts rather than as a convention.
+ */
+tasks.register('verifyPhase5eBridgeIsolation') {
+	group = 'verification'
+	description = 'Proves the ZK 3.6 bridge and the Jakarta modern WAR share only the neutral protocol'
+	dependsOn(
+		':org.adempiere.cohort:bridgeOverlayJar',
+		':org.adempiere.cohort:protocolJar',
+		':zkwebui:verifyPhase5dModernWebWar')
+	outputs.file rootProject.layout.buildDirectory
+		.file('phase5/evidence/phase5e-bridge-isolation.tsv')
+	doLast {
+		def problems = []
+		def cohort = project(':org.adempiere.cohort')
+		def bridgeJar = cohort.tasks.named('bridgeOverlayJar').get()
+			.archiveFile.get().asFile
+		def protocolJar = cohort.tasks.named('protocolJar').get()
+			.archiveFile.get().asFile
+		def modernWar = rootProject.file('zkwebui/build/libs/webui-modern.war')
+
+		def namesOf = { File archive ->
+			def names = [] as TreeSet
+			new java.util.zip.ZipFile(archive).withCloseable { zip ->
+				zip.entries().findAll { !it.directory }.each { names << it.name }
+			}
+			names
+		}
+		def bridgeNames = namesOf(bridgeJar)
+		def protocolNames = namesOf(protocolJar)
+
+		// 1. The protocol jar is a strict subset of the bridge jar: the same
+		//    compiled code, shipped to both runtimes.
+		def missing = protocolNames.findAll {
+			it.endsWith('.class') && !bridgeNames.contains(it)
+		}
+		if (!missing.isEmpty()) {
+			problems << "the protocol jar carries classes the bridge jar does not: " +
+				"${missing.take(5)}"
+		}
+
+		// 2. The protocol jar carries no bridge class and therefore no javax
+		//    servlet reference. This is the claim that keeps the Jakarta runtime
+		//    free of the legacy namespace.
+		def bridgeClassesInProtocol = protocolNames.findAll {
+			it.startsWith('org/adempiere/web/bridge/')
+		}
+		if (!bridgeClassesInProtocol.isEmpty()) {
+			problems << "the protocol jar carries bridge classes: " +
+				"${bridgeClassesInProtocol}"
+		}
+
+		// 3. The modern WAR carries the protocol jar and no bridge class
+		//    anywhere, in WEB-INF/classes or in any packaged library.
+		if (modernWar.isFile()) {
+			def warNames = namesOf(modernWar)
+			if (!warNames.contains('WEB-INF/lib/webui-cohort-protocol.jar')) {
+				problems << 'the modern WAR does not carry the neutral protocol jar'
+			}
+			if (warNames.any { it.contains('webui-cohort-bridge') }) {
+				problems << 'the modern WAR carries the Javax/ZK 3.6 bridge jar'
+			}
+			new java.util.zip.ZipFile(modernWar).withCloseable { zip ->
+				zip.entries().findAll {
+					!it.directory && it.name.startsWith('WEB-INF/lib/')
+						&& it.name.endsWith('.jar')
+				}.each { entry ->
+					def bytes = zip.getInputStream(entry).withCloseable {
+						it.readAllBytes()
+					}
+					new java.util.zip.ZipInputStream(
+							new ByteArrayInputStream(bytes)).withCloseable { inner ->
+						for (def nested = inner.nextEntry; nested != null;
+								nested = inner.nextEntry) {
+							if (nested.name.startsWith('org/adempiere/web/bridge/')) {
+								problems << "${entry.name} carries the bridge class " +
+									nested.name
+							}
+						}
+					}
+				}
+			}
+		} else {
+			problems << 'the modern WAR has not been built'
+		}
+
+		if (!problems.isEmpty()) {
+			throw new GradleException(
+				"The Phase 5e compile closures are not isolated:\n  - " +
+				problems.join('\n  - '))
+		}
+		def evidence = rootProject.layout.buildDirectory
+			.file('phase5/evidence/phase5e-bridge-isolation.tsv').get().asFile
+		evidence.parentFile.mkdirs()
+		evidence.withWriter('UTF-8') { writer ->
+			writer.writeLine('# artifact\tclasses\tdisposition')
+			writer.writeLine("webui-cohort-bridge.jar\t" +
+				"${bridgeNames.count { it.endsWith('.class') }}\ttomcat9-javax-zk36")
+			writer.writeLine("webui-cohort-protocol.jar\t" +
+				"${protocolNames.count { it.endsWith('.class') }}\tneutral-both-runtimes")
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Shared staging routine
+// ---------------------------------------------------------------------------
+
+/**
+ * Stages every Phase 5e routing artifact into an ADEMPIERE_HOME-shaped tree.
+ *
+ * Five things are staged or removed, and each of them has to be here rather
+ * than somewhere more convenient:
+ *
+ *   lib/webui.war                 the routed artifact the installer deploys
+ *   lib/webuiOriginal.war         the rollback material setupWLib merges FROM
+ *   tomcat10-api/phase5e/webui-modern.war
+ *                                 the modern archive the Context descriptor
+ *                                 resolves to. It is staged OUTSIDE webapps on
+ *                                 purpose: an archive under webapps is
+ *                                 auto-deployed as well as mounted, which is
+ *                                 how one application acquires two context
+ *                                 paths, two cookie paths and two session sets.
+ *   tomcat10-api/conf/Catalina/localhost/webui.xml
+ *                                 the modern Context descriptor, which is what
+ *                                 mounts webui-modern.war at the internal
+ *                                 /webui path with URL rewriting disabled
+ *   config/phase5e-routing.sha256 the manifest both verifiers check
+ *
+ * and the Phase 5c/5d additive overlay - tomcat10-api/webapps/webui-modern.war,
+ * its exploded context and its own manifest - is REMOVED. Phase 5e supersedes
+ * that deployment location rather than adding to it. Leaving both would ship a
+ * product with two modern UI contexts, and leaving the Phase 5c manifest behind
+ * would ship a checksum file that names a path the product no longer has.
+ */
+ext.stagePhase5eRouting = { File home ->
+	def derived = phase5eDerivedWar.get().asFile
+	def pristine = phase5ePristineWar.get().asFile
+	def modern = phase5eModernWar.asFile
+	if (!modern.isFile()) {
+		throw new GradleException(
+			"The Phase 5d modern WAR ${modern} has not been built")
+	}
+	def remove
+	remove = { File victim ->
+		if (!victim.exists()) {
+			return
+		}
+		if (victim.isDirectory()) {
+			victim.listFiles().each { remove(it) }
+		}
+		if (!victim.delete()) {
+			throw new GradleException("Could not remove ${victim}")
+		}
+	}
+	def lib = new File(home, 'lib')
+	lib.mkdirs()
+	// The pristine artifact is the rollback material AND the installer's merge
+	// input. Writing it first means a later setupWLib rebuilds the routed
+	// archive from the frozen base rather than from an already-derived one.
+	new File(lib, 'webuiOriginal.war').bytes = pristine.bytes
+	new File(lib, 'webui.war').bytes = derived.bytes
+
+	def routedModern = new File(home, 'tomcat10-api/phase5e/webui-modern.war')
+	routedModern.parentFile.mkdirs()
+	routedModern.bytes = modern.bytes
+
+	// Exactly one modern UI context. The auto-deployed archive, any expansion of
+	// it, and the Phase 5c manifest that names it all go.
+	remove(new File(home, 'tomcat10-api/webapps/webui-modern.war'))
+	remove(new File(home, 'tomcat10-api/webapps/webui-modern'))
+	remove(new File(home, 'config/phase5c-web-overlay.sha256'))
+
+	// The Tomcat 9 deployment is derived from lib/webui.war, so a stale routed
+	// or pristine expansion left in webapps would decide what the next start
+	// actually serves.
+	def publicWebapps = new File(home, 'tomcat/webapps')
+	if (publicWebapps.isDirectory()) {
+		remove(new File(publicWebapps, 'webui'))
+		if (new File(publicWebapps, 'webui.war').isFile()) {
+			new File(publicWebapps, 'webui.war').bytes = derived.bytes
+		}
+	}
+
+	def config = new File(home, 'config')
+	config.mkdirs()
+	def digest = { File file ->
+		java.security.MessageDigest.getInstance('SHA-256')
+			.digest(file.bytes).encodeHex().toString()
+	}
+	def contexts = new File(home, 'tomcat10-api/conf/Catalina/localhost')
+	contexts.mkdirs()
+	new File(contexts, 'webui.xml').text = project.phase5eContextDescriptor()
+
+	new File(config, 'phase5e-routing.sha256').text =
+		"${digest(new File(lib, 'webui.war'))}  lib/webui.war\n" +
+		"${digest(new File(lib, 'webuiOriginal.war'))}  lib/webuiOriginal.war\n" +
+		"${digest(routedModern)}  tomcat10-api/phase5e/webui-modern.war\n" +
+		"${digest(new File(contexts, 'webui.xml'))}  " +
+		"tomcat10-api/conf/Catalina/localhost/webui.xml\n"
+}
+
+/**
+ * The Tomcat 10 Context descriptor that mounts the modern WAR at /webui.
+ *
+ * The context path comes from the file name, so this file is what makes the
+ * public path and the internal path identical - which is in turn what lets the
+ * router forward bodies verbatim instead of rewriting HTML, JavaScript, CSS and
+ * ZK asynchronous-update payloads.
+ */
+ext.phase5eContextDescriptor = { ->
+	'''<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Phase 5e: mounts the Phase 5d modern ZK CE 10 archive at the INTERNAL context
+  path /webui.
+
+  The context path is taken from this file's name, so the modern application
+  answers on exactly the same path publicly and internally. That identity is
+  the reason the Phase 5e router never rewrites a response body: every URL the
+  modern application emits is already correct for the public origin.
+
+  The routed lane deploys this descriptor INSTEAD OF webapps/webui-modern.war,
+  so exactly one modern UI context exists. Deploying both would give the same
+  application two context paths, two cookie paths and two sets of sessions.
+
+  disableURLRewriting is set here as well as in the archive's own
+  <tracking-mode>COOKIE</tracking-mode>: a site customisation can replace the
+  descriptor inside a WAR, and cannot replace this file without the operator
+  noticing.
+-->
+<Context docBase="${catalina.base}/phase5e/webui-modern.war"
+         disableURLRewriting="true"
+         sessionCookiePath="/webui"
+         sessionCookiePathUsesTrailingSlash="false"
+         crossContext="false"
+         useHttpOnly="true"
+         privileged="false"
+         reloadable="false"/>
+'''
+}
+
+tasks.register('verifyPhase5eContractManifest', Exec) {
+	group = 'verification'
+	description = 'Verifies the Phase 5e reviewed contract file manifest'
+	inputs.dir phase5eContractDir
+	workingDir phase5eContractDir
+	commandLine 'shasum', '-a', '256', '--check', 'manifest.sha256'
+}
+
+tasks.named('verifyPhase5eCohortContracts') {
+	dependsOn tasks.named('verifyPhase5eContractManifest')
+}
+
+// ---------------------------------------------------------------------------
+// Lane lifecycle
+// ---------------------------------------------------------------------------
+//
+// The routed lane owns two Tomcats and one installed webapps directory, so it
+// has to be stopped and the installed deployment restored whatever happens -
+// including when the browser matrix fails, which is exactly when a left-running
+// lane makes the next run impossible to interpret.
+gradle.projectsEvaluated {
+	def routedBrowserTest = project(':zkwebui').tasks.named('routedBrowserTest')
+	def startLane = tasks.named('startPhase5eRoutedLane')
+	def stopLane = tasks.named('stopPhase5eRoutedLane')
+	routedBrowserTest.configure {
+		dependsOn(
+			tasks.named('installPhase5cBrowser'),
+			startLane)
+		finalizedBy stopLane
+	}
+	startLane.configure { finalizedBy stopLane }
+	stopLane.configure {
+		mustRunAfter(
+			project(':zkwebui').tasks.named('compileRoutedBrowserTestJava'),
+			routedBrowserTest,
+			tasks.named('verifyPhase5eRoutedEvidence'))
+	}
+	// The disposable database must outlive every Phase 5e task that reads it.
+	tasks.named('cleanupPhase3Database') {
+		mustRunAfter(
+			tasks.named('phase5eCohortRoutingSmoke'),
+			tasks.named('verifyPhase5eRoutedEvidence'),
+			routedBrowserTest,
+			startLane,
+			stopLane)
+	}
+}

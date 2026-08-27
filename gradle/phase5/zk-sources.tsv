@@ -1,6 +1,7 @@
 # path	owner	reference_count	api_families	compile_gate	behavior_gate	disposition
 base/src/org/adempiere/pipo/PackOut.java	base	1	ce-core	5d	5g	migrate-source
 base/src/org/compiere/process/MigrationToXML.java	base	1	ce-core	5d	5g	migrate-source
+org.adempiere.cohort/src/bridge/java/org/adempiere/web/bridge/CohortDecisionInterceptor.java	org.adempiere.cohort	5	ce-core	5e	5h	frozen-zk36-bridge
 org.adempiere.pos/src/main/java/ui/zk/org/adempiere/pos/POSNumberBox.java	org.adempiere.pos	10	ce-core	5d	5g	migrate-source
 org.adempiere.pos/src/main/java/ui/zk/org/adempiere/pos/WCollect.java	org.adempiere.pos	6	ce-core	5d	5g	migrate-source
 org.adempiere.pos/src/main/java/ui/zk/org/adempiere/pos/WCollectDetail.java	org.adempiere.pos	9	ce-core	5d	5g	migrate-source

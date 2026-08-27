@@ -1,0 +1,13 @@
+	<session-config>
+		<session-timeout>2</session-timeout>
+		<!--
+		  Phase 5e: the public /webui origin serves the same paths as the
+		  internal modern origin, so a URL-encoded session identifier would be a
+		  session identifier written into a page the browser can read and a
+		  proxy can log. COOKIE is declared alone, which forbids the container
+		  from ever encoding one. The frozen application never depended on URL
+		  rewriting - the Phase 5b oracle was captured with cookies - so this
+		  changes the descriptor without changing an observable legacy response.
+		-->
+		<tracking-mode>COOKIE</tracking-mode>
+	</session-config>

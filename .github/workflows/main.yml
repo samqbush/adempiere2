@@ -348,3 +348,82 @@ jobs:
             build/phase3/runtime/Adempiere/tomcat/logs/
             zkwebui/build/test-results/modernBrowserTest/
             zkwebui/build/reports/tests/modernBrowserTest/
+
+  phase-5e-cohort-routing:
+    name: Phase 5e cohort routing contracts
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Verify the Phase 5e cohort model, bridge, derived artifact, overlay and rollback
+        uses: ./.github/actions/adempiere-build
+        with:
+          task: phase5eFinalVerification
+      - name: Upload Phase 5e contract, mutation and rollback evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase5e-cohort-routing-evidence
+          if-no-files-found: warn
+          # build/phase5e/rollback/ holds two fully extracted 394LTS trees and
+          # the two rebuilt archives - roughly a gigabyte per run, none of which
+          # is evidence. Only the recorded outcome and the installer merge log
+          # are uploaded; the digests inside them are what a reviewer reads.
+          path: |
+            build/phase5/evidence/
+            build/phase5e/legacy-webui/derived-provenance.tsv
+            build/phase5e/rollback/rollback-evidence.txt
+            build/phase5e/rollback/setupwlib-ant.log
+            org.adempiere.cohort/build/test-results/
+            org.adempiere.cohort/build/reports/tests/
+            zkwebui/build/test-results/routedContractTest/
+            zkwebui/build/reports/tests/routedContractTest/
+
+  phase-5e-public-origin:
+    name: Phase 5e public-origin cohort matrix
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:14.6
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      ADEMPIERE_PHASE2_DB_SYSTEM_PASSWORD: postgres
+      ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Run the Phase 5e public-origin cohort, isolation and lifecycle matrix
+        uses: ./.github/actions/adempiere-build
+        with:
+          task: phase5eCohortRoutingSmoke
+      # The handoff key is generated into build/phase5e/keys and is deliberately
+      # NOT in any upload path below. A CI artifact is a published archive, and a
+      # published archive is exactly where a shared secret must never be.
+      - name: Upload Phase 5e cohort matrix, isolation and lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase5e-public-origin-evidence
+          if-no-files-found: warn
+          path: |
+            build/phase5e/evidence/
+            build/phase3/runtime/Adempiere/tomcat/logs/
+            build/phase5e/tomcat10/logs/
+            zkwebui/build/test-results/routedBrowserTest/
+            zkwebui/build/reports/tests/routedBrowserTest/

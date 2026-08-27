@@ -24,6 +24,7 @@ import org.adempiere.webui.component.ZoomCommand;
 import org.adempiere.webui.desktop.DefaultDesktop;
 import org.adempiere.webui.desktop.IDesktop;
 import org.adempiere.webui.event.TokenEvent;
+import org.adempiere.webui.session.CohortHandoff;
 import org.adempiere.webui.session.ServerContext;
 import org.adempiere.webui.session.SessionContextListener;
 import org.adempiere.webui.session.SessionManager;
@@ -121,6 +122,23 @@ public class AdempiereWebUI extends Window implements EventListener, IWebClient
 		if (externalAuthentication())
 			userId = Env.getAD_User_ID(Env.getCtx());
 		
+		// Phase 5e: a session the verified cohort handoff seeded already carries
+		// the completed client/org/role/user/language/warehouse context, so it
+		// goes straight to the desktop. It must not take the branch below: that
+		// one re-opens the role panel, which would ask a user who has already
+		// selected a role on Tomcat 9 to select it a second time.
+		//
+		// The bootstrap marker records how the SESSION was created and therefore
+		// survives logout - the routed lane needs it to keep serving the session
+		// after the user logs out, because the router cannot mint a second
+		// ticket for a session it has already bootstrapped. So the short-circuit
+		// is gated on the identity as well: a logged-out bootstrapped session
+		// has an empty context and must be shown the login form like any other.
+		if (CohortHandoff.bootstrapped(httpSession)
+				&& SessionManager.isUserLoggedIn(Env.getCtx())) {
+			loginCompleted();
+			return;
+		}
 		if (userId > 0 && !SessionManager.existsExecutionCarryOver(httpSession.getId())) {
 			onChangeRole(userId);
 			return;
@@ -363,6 +381,13 @@ public class AdempiereWebUI extends Window implements EventListener, IWebClient
 		Env.setCtx(context);
 		Env.setContext(Env.getCtx(), SessionContextListener.SERVLET_SESSION_ID, httpSession.getId());
 		langSession = Env.getContext(Env.getCtx(), Env.LANGUAGE);
+		// Phase 5e: forget the identity a verified handoff ticket seeded and mark
+		// a routed session as ended. The bootstrap marker itself stays (see
+		// CohortHandoff.loggedOut), so the routed lane can still serve the
+		// redirect below; CohortHandoffFilter destroys the session on the
+		// request that redirect produces, and signals the router to destroy its
+		// own. Invalidating here would abort the redirect ZK is about to send.
+		CohortHandoff.loggedOut(httpSession);
 		SessionManager.clearSession(httpSession.getId());
 		SessionManager.removeExecutionCarryOver(httpSession.getId());
 		SessionManager.removeDestop(httpSession.getId());
