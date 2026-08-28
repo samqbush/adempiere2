@@ -305,8 +305,8 @@ tasks.register('preparePhase5fJakartaSources') {
 								'String regionName = JspExpression.evaluate(m_regionName_el, String.class, pageContext);',
 							'info = (String)ExpressionUtil.evalNotNull ("workflow", "activityID",':
 								'info = JspExpression.evaluate(m_activityID_el, String.class, pageContext);',
-							'String info = (String)ExpressionUtil.evalNotNull ("requestOrder", "bpartnerID",':
-								'String info = JspExpression.evaluate(m_bpartnerID_el, String.class, pageContext);',
+								'String info = (String)ExpressionUtil.evalNotNull ("requestOrder", "bpartnerID",':
+									'String info = JspExpression.evaluate(m_bpartnerID_el, String.class, pageContext);',
 						]
 						def hit = replacements.find { from, to -> migrated.contains(from) }
 						if (hit != null) {
@@ -320,6 +320,20 @@ tasks.register('preparePhase5fJakartaSources') {
 				}
 			}
 		}
+		def adRedirector = output.get().file(
+			'ROOT/org/compiere/cm/AdRedirector.java').asFile
+		def legacyAdError =
+			'response.sendError(500,"Unknown or illegal Ad set, can\'t handle request...");'
+		def modernAdError =
+			'response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Unknown or illegal Ad set, can\'t handle request...");'
+		def adRedirectorText = adRedirector.getText('UTF-8')
+		if (adRedirectorText.count(legacyAdError) != 1) {
+			throw new GradleException(
+				'The generated AdRedirector source no longer has exactly one '
+					+ 'reviewed legacy missing-input response')
+		}
+		adRedirector.setText(
+			adRedirectorText.replace(legacyAdError, modernAdError), 'UTF-8')
 		def helper = output.get().file(
 			'wstore/org/compiere/wstore/JspExpression.java').asFile
 		helper.parentFile.mkdirs()

@@ -59,8 +59,7 @@ public class AdRedirector extends HttpServletCM
 				response.sendError(500, "Internal Error while processing Ad Redirect...");
 			}
 		} else {
-			response.sendError(HttpServletResponse.SC_BAD_REQUEST,
-				"Unknown or illegal Ad set, can't handle request...");
+			response.sendError(500,"Unknown or illegal Ad set, can't handle request...");
 		}
 	}
 
