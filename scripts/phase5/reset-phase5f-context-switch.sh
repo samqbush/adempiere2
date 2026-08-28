@@ -20,7 +20,7 @@ case "$context" in
 esac
 
 psql_cmd=(psql -X -v ON_ERROR_STOP=1 -h "$host" -p "$port" -d "$database" -U "$user" -At)
-actual=$("${psql_cmd[@]}" -c "SELECT coalesce(obj_description(oid, 'pg_database'),'') FROM pg_database WHERE datname=current_database()")
+actual=$("${psql_cmd[@]}" -c "SELECT coalesce(shobj_description(oid, 'pg_database'),'') FROM pg_database WHERE datname=current_database()")
 [[ "$actual" == "$marker" ]] || {
   echo "Refusing Phase 5f switch mutation: database marker mismatch" >&2
   exit 65

@@ -11,6 +11,7 @@ import json
 import os
 import ssl
 import subprocess
+import sys
 import urllib.error
 import urllib.request
 from collections import defaultdict
@@ -33,10 +34,15 @@ CONTRACT_OWNERS = {
 
 
 def run(command: list[str], *, env: dict[str, str] | None = None) -> str:
-    result = subprocess.run(
-        command, check=True, text=True, stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE, env=env
-    )
+    try:
+        result = subprocess.run(
+            command, check=True, text=True, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, env=env
+        )
+    except subprocess.CalledProcessError as error:
+        if error.stderr:
+            print(error.stderr, end="", file=sys.stderr)
+        raise
     return result.stdout
 
 
