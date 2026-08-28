@@ -1175,7 +1175,9 @@ tasks.register('phase4InstalledApi', Exec) {
 gradle.projectsEvaluated {
 	project(':org.adempiere.webservice')
 		.tasks.named('compileLegacyWebService') {
-			mustRunAfter tasks.named('phase3AntNoDatabaseBuild')
+			mustRunAfter(
+				tasks.named('phase3AntNoDatabaseBuild'),
+				tasks.named('phase3AntDatabaseBuild'))
 		}
 	[
 		'compileCxfJava',
