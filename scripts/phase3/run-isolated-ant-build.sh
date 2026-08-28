@@ -91,3 +91,14 @@ if [[ ! -d "$release_output/Adempiere" ]]; then
   echo "The isolated release archive contains no Adempiere product root" >&2
   exit 1
 fi
+
+# The Ant ZIP records these tracked launchers without their executable mode.
+# Restore the source contract before later phases rebuild the release archives.
+for launcher in RUN_API.sh RUN_API_Stop.sh; do
+  release_launcher="$release_output/Adempiere/utils/$launcher"
+  if [[ ! -f "$release_launcher" ]]; then
+    echo "The isolated release archive is missing utils/$launcher" >&2
+    exit 1
+  fi
+  chmod +x "$release_launcher"
+done

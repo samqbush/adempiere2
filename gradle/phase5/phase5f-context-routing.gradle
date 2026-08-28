@@ -555,7 +555,7 @@ def phase5fShardTasks = []
 			rootProject.file('scripts/phase5/reset-phase5f-context-switch.sh'))
 		outputs.dir phase5fSmokeEvidence.map { it.dir(name.toString()) }
 		outputs.upToDateWhen { false }
-		environment 'ADEMPIERE_PHASE5F_DB_PASSWORD', phase5fDbPassword
+		environment 'ADEMPIERE_PHASE5F_DB_PASSWORD', phase5fDbPassword.get()
 		doFirst {
 			if (!phase5fDbSystemPassword.isPresent()) {
 				throw new GradleException(
