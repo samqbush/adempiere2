@@ -108,8 +108,9 @@ The canonical current commands remain those in the architecture inventory
 | Run desktop | `./utils/RUN_Adempiere.sh` | Not run; requires installed product and database configuration. |
 | Run server | `./utils/RUN_Server2.sh` | Not run; requires installed product, database, and external app server. |
 
-CI enforcement remains **[UNVERIFIED]** because required checks and branch
-protection are remote repository settings, not files in this checkout.
+CI enforcement remains a **manual repository-administrator action** because
+required checks and branch protection are remote repository settings, not files
+an implementation branch can enforce.
 
 ## 3. Feasibility spike result and strategy
 
@@ -188,7 +189,7 @@ necessarily block merges.
 | R1 | Core | Phase 2 smoke and Phase 3 DB-backed metadata validation protect selected runtime and dictionary seams; broader business behavior remains | Phase 5 | Expand representative document, accounting, and UI behavior coverage. |
 | R2 | Swing/POS | Closed for the Phase 2 Garden World login/role/menu/process slice; broader operator workflows remain outside this phase | Closed in Phase 2; broader coverage Phase 5 | The semantic Xvfb smoke is now gated; expand coverage during the ZK/client modernization. |
 | R3 | Background jobs | Exact-once scheduler execution and context/transaction cleanup are proven; production discovery breadth and observability remain | Phase 6 | Expand processor discovery and add operational metrics/alerts. |
-| R4 | Web UI | Phase 5d replaces the 503 marker with a functional modern slice and crosses the Testability Milestone: two fixture-isolated modern captures, a self-diff, and an eleven-fact plus zero-write comparison with the frozen legacy baseline at matching capture ordinals. Phase 5e adds proven fail-closed cohort routing, concurrent identity isolation, and logout/timeout/container cleanup through the public origin. Residuals that remain: production customizations are still unknown; 13 legacy entries remain non-reproducible; the four `/*` filter vectors remain honestly `context-reachability-only`; the modern slice serves only the walking-skeleton routes, so DSP/timeline/JSP/TLD/non-ZK routes are untested on ZK CE; JasperReports' interactive web viewer is excluded from the modern runtime (residual R4-5d-1); and the modern slice's visual parity is unreviewed - only its semantic facts are | Phase 5f for non-ZK routes, DSP/JSP/TLD assets and the timeline; Phase 5g for report parity and screen-level visual parity; Phase 7 for full artifact reproducibility | Production owners validate custom overlays. Do not read the eleven matched semantic facts as screen-level parity, and do not treat the browser context requests as direct filter-effect proof. |
+| R4 | Web UI | Phase 5d replaces the 503 marker with a functional modern slice and crosses the Testability Milestone. Phase 5e adds proven fail-closed `/webui` cohort routing, concurrent identity isolation, and logout/timeout/container cleanup. Phase 5f now builds isolated generated Jakarta source/web trees, five source-native context WARs, the source-native `/timeline` route and exact static DSP compatibility resource, and independently reversible context routing for the closed 82-deployed/30-non-deployed scope. Its database-neutral gate is green twice, but the six-shard database-backed route replay is not executed because `phase3DbSystemPassword` is unavailable. Production customizations, 13 non-reproducible legacy entries, the four `/*` reachability-only vectors, disabled `/mobile` and `/adempiere`, unowned `/admin`, JasperReports interactive web, and screen-level visual parity remain residuals. | Phase 5f database-backed gate for route/effect observations; Phase 5g for disabled contexts, reports and screen-level parity; Phase 7 for full artifact reproducibility | Do not treat implemented packaging or database-neutral contracts as runtime route parity. Production owners must validate custom overlays, and Phase 5f must not be called complete until the database-backed gate and PR gate are green. |
 | R5 | SOAP/servlets | Unknown consumers and undocumented route classes may break | Phase 4 | Inventory consumers, freeze WSDL/HTTP fixtures, and run parallel replay. |
 | R6 | Database | Production size, custom schema, supported engines, and rollback windows are unknown | Phase 6 | Approve customer-specific migration runbook and rehearse on a sanitized copy. |
 | R7 | Extension metadata | The fail-closed validator names 16 pre-existing active `AD_Process` bindings with absent or incompatible classes | Phase 7 | Obtain usage evidence, then correct or retire every row in `gradle/phase3/metadata-quarantine.tsv`; additions and stale quarantine rows fail CI. |
@@ -987,8 +988,13 @@ Jakarta-compatible stack through vertical slices.
 before the next begins. Phase 5a merged as `dc7e84f68`; Phase 5b merged as
 `cac0efdcaa13464e069291992214880cd0239ec5`; Phase 5c merged as `3154ced80`;
 Phase 5d merged as PR #9 at `b47464d2763694c093ed22470000e00f2b6aee73`.
-Phase 5e is implemented and its database-neutral and database-backed gates are
-executed and green on `phase-5e-cohort-routing`.
+Phase 5e merged to `develop` at `6eda2bc8`; its database-neutral and
+database-backed gates are executed and green. Phase 5f is implemented and active
+on `phase-5f-jakarta-web-routes`, but is **not complete or merged**. Its
+database-neutral `phase5fFinalVerification` gate has been executed green twice.
+Its database-backed `phase5fJakartaWebRoutesSmoke` gate and six context shards
+are implemented but have not been executed because `phase3DbSystemPassword` is
+unavailable.
 
 **Regime:** Legacy ZK/Tomcat 9 remains lit; the modern ZK/Tomcat 10.1 slice
 crossed from dark to lit at Phase 5d and now expands.
@@ -1007,8 +1013,8 @@ crossed from dark to lit at Phase 5d and now expands.
 | 5b | Freeze the installed Tomcat 9 route/UI oracle and publish checksum-pinned legacy web artifacts before the source crossing | Oracle | 5a |
 | 5c | Add the reproducible Jakarta packaging beachhead, verified browser tooling, and binding ingress/session-affinity ADR | Build/runtime | 5b |
 | 5d | Migrate the complete ZK compile closure and cross the Testability Milestone at login -> role -> menu -> read-only window | Web UI | 5c |
-| 5e | Prove concurrent client/org/role/user/language/session cleanup and add fail-closed cohort routing | Security/session | 5d (**implemented and verified**; see "Phase 5e decisions and findings") |
-| 5f | Migrate non-ZK servlets, JSP/Jakarta Tags/TLD assets, and inherited routes by independently reversible context | Web routes | 5e |
+| 5e | Prove concurrent client/org/role/user/language/session cleanup and add fail-closed cohort routing | Security/session | 5d (**merged and verified** at `6eda2bc8`; see "Phase 5e decisions and findings") |
+| 5f | Migrate all 82 deployed non-SOAP mappings by independently reversible context; disposition all 30 non-deployed mappings; build isolated generated Jakarta trees and five modern context WARs; preserve `/webui` while adding source-native `/timeline` and the exact static DSP compatibility resource | Web routes | 5e (**implemented/active, not complete or merged**; database-neutral gate green twice, six-shard database smoke not run) |
 | 5g | Complete read/write UI, process, report, upload/download, POS, dashboard, server-push, and extension parity | Web UI/extensions | 5f |
 | 5h | Finish source-native Jakarta, preserve both historical SOAP paths on final ingress, then remove the router, Tomcat 9, transformer, and ZK 3.6 | Runtime/source | 5g |
 
@@ -1441,6 +1447,79 @@ database and recorded all 23 public-origin matrix rows, including concurrency,
 logout, timeout, container destruction, Phase 4 SOAP coexistence, and secret
 hygiene, as passing in `build/phase5e/evidence/cohort-matrix.tsv`.
 
+#### Phase 5f implemented state and active scope
+
+Phase 5f is a lit, **L3** non-SOAP route increment. Its accepted governance is
+recorded in
+`docs/modernization/phase-5f-jakarta-web-routes-adr.md`,
+`docs/modernization/phase-5f-transitional-state.md`, and
+`contracts/phase5f-jakarta-web-v1/`.
+
+- The implementation is active on `phase-5f-jakarta-web-routes`; Phase 5f is
+  **not complete and not merged**.
+- The deployed scope is closed at **82 mappings**: `/webui` 6, `/admin` 4,
+  `/` 8, `/mobile` 14, `/adempiere` 21, and `/wstore` 29.
+- The 30 non-deployed mappings have fixed dispositions: drop eight JBoss HTTP
+  invoker mappings, drop twenty mappings from the superseded non-deployed
+  `serverApps/src/etc/WEB-INF/web.xml`, and defer both JasperReports
+  `GetMD5File` mappings to Phase 5g.
+- Routing is context-wide, fail-closed, same-path, and independently reversible.
+  Sessionless requests do not gain a session merely for routing; existing
+  sessions stay pinned; a modern failure never falls back.
+- Headers, cookies, TLS, byte limits, timeouts, database effects, rollback, and
+  enable state are independent per-context contracts. `/webui` policy is not a
+  default for another context; all literal policy values are frozen and
+  database-neutrally gate-enforced.
+- Gradle creates isolated generated Jakarta source and web-asset trees under
+  `build/phase5f/jakarta-web/`; the legacy source/assets are not rewritten.
+  Five deterministic source-native WARs are built for `/admin`, `/`, `/mobile`,
+  `/adempiere`, and `/wstore`. The existing Phase 5e `webui-modern.war` remains
+  the sixth modern application.
+- Four frozen legacy 500s are corrected through reviewed deviation rows:
+  AdRedirector 400, Community 400, missing XML resource 404, and plain GET
+  payment 405.
+- `/webui/timeline` is now a source-native Jakarta read-only servlet. The
+  historical theme DSP URL is served as reviewed static Phase 5d CSS for
+  GET/HEAD; all other DSP paths are 404. The DSP interpreter and five vendor
+  TLDs are absent.
+- `/mobile` and `/adempiere` are packaged and replayed but remain disabled until
+  Phase 5g. `/admin` remains legacy without named consumer ownership.
+- The installed product and both 394LTS release archives preserve the Phase 4
+  CXF WAR and Phase 5e `/webui` topology, stage exactly one copy of each of the
+  five Phase 5f WARs under `tomcat10-api/phase5f/`, install same-path Context
+  descriptors, retain pristine `*Original.war` rollback material, and reject
+  stale exploded or auto-deployed modern contexts. Rollback removes the five
+  modern contexts and restores every pristine Tomcat 9 WAR.
+- T5e-1 stays open. T5f-1 registers multi-context proxying and forwarded secure
+  state, bounded to loopback and closing in Phase 5h.
+- H1, H2, H3-topology, H4, H6, and H8 fire; H5 engine-major and H7 are cleared
+  only under their recorded controls.
+
+Canonical Phase 5f gates:
+
+```bash
+./gradlew phase5fFinalVerification --dependency-verification=strict
+./gradlew phase5fJakartaWebRoutesSmoke \
+  -Pphase3DbSystemPassword='<password>' \
+  --dependency-verification=strict
+```
+
+`phase5fFinalVerification` is implemented and was executed green twice. It
+validates the frozen 82/30 contracts and mutation proofs, routing-core/bridge
+isolation, generated Jakarta source and asset closures, five deterministic WARs,
+all 25 retained JSPs through Tomcat 10.1 Jasper, Servlet 6 descriptors and
+discovery absence, `/timeline` and DSP behavior contracts, installed/release
+topology, per-context rollback, current inventories, and the Phase 4/5d/5e
+regressions.
+
+`phase5fJakartaWebRoutesSmoke` is implemented as six public-origin shards
+(`/webui`, `/admin`, `/`, `/mobile`, `/adempiere`, `/wstore`) plus complete
+Phase 4 SOAP coexistence and exact runtime-evidence validation. It has **not
+been executed** because `phase3DbSystemPassword` is unavailable. Therefore all
+82 route observations and route-specific database effects remain pending, and
+Phase 5f must not be described as complete. See
+`docs/modernization/phase-5f-evidence.md`.
+
 **Byte caps.** The proxy's 8 MiB request and 64 MiB response caps are enforced
 by transport-neutral code (`org.adempiere.web.route.BoundedTransfer`) and are
 asserted one byte on either side of the limit, including that nothing past the
@@ -1683,7 +1762,8 @@ No insecure transition is approved by default.
 
 | ID | State | Why needed | Scope | Closes | Residual risk |
 |---|---|---|---|---|---|
-| T0 | None currently approved | - | - | - | Any proposed permit-all, CSRF disable, open metrics endpoint, placeholder secret, or disabled scanner must add a row before merge. |
+| T5e-1 | Internal authenticated handoff between public Tomcat 9 and loopback Tomcat 10 | Avoid a second login while `/webui` is split across runtimes | `/webui`; signed single-use 30-second ticket and shared 0600 key | Phase 5h | Remains open; a process with host-account/key access and loopback reach could forge a modern identity, without widening the existing host trust boundary. |
+| T5f-1 | Multi-context proxying and forwarded secure state | Migrate whole non-SOAP contexts independently while Tomcat 9 remains the only public ingress | `/admin`, `/`, `/mobile`, `/adempiere`, `/wstore`; forwarded secure metadata only for four confidential `/wstore` paths | Phase 5h | A classifier/header-boundary defect could expose an undeclared route, trust spoofed secure state, leak loopback coordinates, or fall back incorrectly. Database-neutral controls are green; runtime observation awaits the unexecuted Phase 5f smoke. |
 
 If a phase adds a temporary security weakening, the row must state the exact
 route/service, compensating control, scanner waiver, owner, and closing task.

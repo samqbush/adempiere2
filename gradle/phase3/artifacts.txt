@@ -1,8 +1,8 @@
 # Required Phase 3 product outputs. Paths are relative to the repository root.
-install/build/Adempiere_*.zip
-install/build/Adempiere_*.tar.gz
-install/build/Adempiere_*.zip.MD5
-install/build/Adempiere_*.tar.gz.MD5
+build/phase3/release/Adempiere_*.zip
+build/phase3/release/Adempiere_*.tar.gz
+build/phase3/release/Adempiere_*.zip.MD5
+build/phase3/release/Adempiere_*.tar.gz.MD5
 build/phase3/runtime/Adempiere/lib/Adempiere.jar
 build/phase3/runtime/Adempiere/lib/CInstall.jar
 build/phase3/runtime/Adempiere/lib/CCTools.jar

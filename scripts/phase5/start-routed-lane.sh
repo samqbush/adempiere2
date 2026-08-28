@@ -33,14 +33,16 @@ file_mode() {
   fi
 }
 
+lane_phase=${ADEMPIERE_ROUTED_LANE_PHASE:-phase5e}
 public_port=${PHASE5E_PUBLIC_PORT:-8888}
+public_https_port=${PHASE5F_PUBLIC_HTTPS_PORT:-8444}
 properties_file="$repo_root/gradle/phase4/runtime.properties"
 api_port=$(awk -F= '$1 == "api.port" {sub(/^[^=]*=/, ""); print; exit}' \
   "$properties_file")
-tomcat10_dir="$repo_root/build/phase5e/tomcat10"
+tomcat10_dir="$repo_root/build/$lane_phase/tomcat10"
 api_war="$repo_root/org.adempiere.webservice/build/libs/ADInterface-Modern-1.0.war"
-evidence_dir="$repo_root/build/phase5e/evidence"
-pid_file="$repo_root/build/phase5e/tomcat10-routed.pid"
+evidence_dir="$repo_root/build/$lane_phase/evidence"
+pid_file="$repo_root/build/$lane_phase/tomcat10-routed.pid"
 
 mkdir -p "$evidence_dir" "$(dirname "$pid_file")"
 
@@ -84,6 +86,21 @@ rm -rf "$tomcat10_dir/webapps/webui-modern"
 sed "s#\${catalina.base}#$tomcat10_dir#g" \
   "$adempiere_home/tomcat10-api/conf/Catalina/localhost/webui.xml" \
   >"$tomcat10_dir/conf/Catalina/localhost/webui.xml"
+
+if [[ "$lane_phase" == phase5f ]]; then
+  mkdir -p "$tomcat10_dir/phase5f"
+  for modern in "$adempiere_home"/tomcat10-api/phase5f/*-modern.war; do
+    [[ -f "$modern" ]] || continue
+    cp "$modern" "$tomcat10_dir/phase5f/$(basename "$modern")"
+  done
+  for descriptor in "$adempiere_home"/tomcat10-api/conf/Catalina/localhost/*.xml; do
+    [[ -f "$descriptor" ]] || continue
+    name=$(basename "$descriptor")
+    [[ "$name" == webui.xml ]] && continue
+    sed "s#\${catalina.base}#$tomcat10_dir#g" "$descriptor" \
+      >"$tomcat10_dir/conf/Catalina/localhost/$name"
+  done
+fi
 
 grep -Fq 'address="127.0.0.1"' "$tomcat10_dir/conf/server.xml"
 grep -Fq '<Server port="-1"' "$tomcat10_dir/conf/server.xml"
@@ -144,10 +161,63 @@ source "$env_script" nosave
 set -u
 
 export CATALINA_BASE="$catalina_base"
-export CATALINA_PID="$catalina_base/temp/phase5e-public.pid"
+export CATALINA_PID="$catalina_base/temp/${lane_phase}-public.pid"
 export CATALINA_TMPDIR="$catalina_base/temp"
-export CATALINA_OPTS="$ADEMPIERE_JAVA_OPTIONS -Duser.timezone=UTC -Duser.language=en -Duser.country=US -Dadempiere.phase5e.handoffKey=$handoff_key -Dadempiere.phase5e.modernBackend=http://127.0.0.1:$api_port -Dadempiere.phase5e.configurationTtlMillis=0"
+export CATALINA_OPTS="$ADEMPIERE_JAVA_OPTIONS -Duser.timezone=UTC -Duser.language=en -Duser.country=US -Dadempiere.phase5e.handoffKey=$handoff_key -Dadempiere.phase5e.modernBackend=http://127.0.0.1:$api_port -Dadempiere.phase5e.configurationTtlMillis=0 -Dadempiere.phase5f.modernBackend=http://127.0.0.1:$api_port"
 mkdir -p "$CATALINA_TMPDIR"
+
+if [[ "$lane_phase" == phase5f ]]; then
+  tls_dir="$repo_root/build/phase5f/public-https"
+  server_backup="$tls_dir/server.xml.original"
+  keystore="$tls_dir/public-ingress.p12"
+  password_file="$tls_dir/keystore.password"
+  mkdir -p "$tls_dir"
+  chmod 700 "$tls_dir"
+  if [[ -f "$server_backup" ]]; then
+    cp "$server_backup" "$catalina_base/conf/server.xml"
+  else
+    cp "$catalina_base/conf/server.xml" "$server_backup"
+  fi
+  openssl rand -hex 16 >"$password_file"
+  chmod 600 "$password_file"
+  keystore_password=$(cat "$password_file")
+  rm -f "$keystore"
+  "$JAVA_HOME/bin/keytool" -genkeypair -noprompt \
+    -alias phase5f-public-ingress -keyalg RSA -keysize 2048 \
+    -validity 2 -storetype PKCS12 -keystore "$keystore" \
+    -storepass "$keystore_password" -keypass "$keystore_password" \
+    -dname "CN=localhost,OU=Phase5f,O=ADempiere,L=Test,ST=Test,C=US" \
+    -ext "SAN=IP:127.0.0.1,DNS:localhost" >/dev/null
+  python3 - "$catalina_base/conf/server.xml" "$keystore" \
+      "$keystore_password" "$public_https_port" <<'PY'
+import sys
+from pathlib import Path
+from xml.sax.saxutils import quoteattr
+
+server = Path(sys.argv[1])
+keystore, password, port = sys.argv[2:]
+text = server.read_text(encoding="utf-8")
+connector = f"""
+    <!-- Phase 5f isolated smoke-only public HTTPS ingress. -->
+    <Connector address="127.0.0.1" port={quoteattr(port)}
+               protocol="org.apache.coyote.http11.Http11NioProtocol"
+               SSLEnabled="true" scheme="https" secure="true"
+               maxThreads="50">
+      <SSLHostConfig>
+        <Certificate certificateKeystoreFile={quoteattr(keystore)}
+                     certificateKeystorePassword={quoteattr(password)}
+                     certificateKeystoreType="PKCS12" type="RSA" />
+      </SSLHostConfig>
+    </Connector>
+"""
+if "</Service>" not in text:
+    raise SystemExit("Tomcat 9 server.xml has no Service close tag")
+server.write_text(text.replace("</Service>", connector + "  </Service>", 1),
+                  encoding="utf-8")
+PY
+  CATALINA_OPTS="$CATALINA_OPTS -Dadempiere.phase5f.publicHttpsPort=$public_https_port"
+  export CATALINA_OPTS
+fi
 
 if curl -sS -o /dev/null "http://127.0.0.1:$public_port/" 2>/dev/null; then
   echo "Port $public_port is already serving HTTP; refusing to reuse an unknown lane" >&2
@@ -166,6 +236,24 @@ for _ in $(seq 1 180); do
   fi
   sleep 1
 done
+
+if [[ "$lane_phase" == phase5f ]]; then
+  https_ready=no
+  for _ in $(seq 1 180); do
+    https_status=$(curl -ksS -o /dev/null -w '%{http_code}' \
+      "https://127.0.0.1:$public_https_port/webui/" 2>/dev/null || true)
+    if [[ "$https_status" == 200 ]]; then
+      https_ready=yes
+      break
+    fi
+    sleep 1
+  done
+  if [[ "$https_ready" != yes ]]; then
+    echo "The Phase 5f public HTTPS ingress did not become ready (${https_status:-none})" >&2
+    "$repo_root/scripts/phase5/stop-routed-lane.sh" "$repo_root" "$adempiere_home" || true
+    exit 70
+  fi
+fi
 
 if [[ "$public_ready" != yes ]]; then
   echo "The Phase 5e public /webui ingress did not become ready (${public_status:-none})" >&2
@@ -279,6 +367,11 @@ fi
   printf 'configuration_cache_ttl_millis\t0\n'
   printf 'modern_pid\t%s\n' "$modern_pid"
   printf 'public_pid\t%s\n' "${public_pid:-unknown}"
+  if [[ "$lane_phase" == phase5f ]]; then
+    printf 'public_https_listener\t127.0.0.1:%s\n' "$public_https_port"
+    printf 'public_https_certificate_sha256\t%s\n' \
+      "$(shasum -a 256 "$keystore" | awk '{print $1}')"
+  fi
   printf 'catalina_base_public\t%s\n' "$catalina_base"
   printf 'catalina_home_modern\t%s\n' "$tomcat10_dir"
 } >"$evidence_dir/routed-lane.tsv"

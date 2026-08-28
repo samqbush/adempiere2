@@ -25,6 +25,8 @@ import org.adempiere.web.route.ModernSessionAffinity;
 import org.adempiere.web.route.PublicRouteClass;
 import org.adempiere.web.route.PublicRouteClassifier;
 import org.adempiere.web.route.RoutingAudit;
+import org.adempiere.web.route.RoutingCore;
+import org.adempiere.web.route.RoutingLifecycle;
 import org.adempiere.web.route.SessionPathParameters;
 import org.adempiere.webui.session.ServerContext;
 import org.adempiere.webui.session.SessionManager;
@@ -121,6 +123,13 @@ public class CohortRoutingFilter implements Filter {
 			response.sendError(HttpServletResponse.SC_BAD_REQUEST);
 			return;
 		}
+		if (SessionPathParameters.carriesSessionParameter(
+				request.getRequestURI())) {
+			log.severe(RoutingAudit.line(CohortRuntime.LEGACY,
+					PublicRouteClass.UNKNOWN, "url-rewritten-session"));
+			response.sendError(HttpServletResponse.SC_BAD_REQUEST);
+			return;
+		}
 
 		HttpSession session = request.getSession(false);
 		ModernSessionAffinity affinity = session == null
@@ -129,6 +138,8 @@ public class CohortRoutingFilter implements Filter {
 						ModernSessionAffinity.ATTRIBUTE);
 
 		if (affinity == null) {
+			RoutingCore.Plan plan = RoutingCore.withoutAffinity(
+					CohortDecisionInterceptor.decidedModern(session));
 			// A session that was decided modern and has no affinity is NOT an
 			// undecided session. It is a session whose affinity the container
 			// dropped or refused to restore, and handing it to the legacy
@@ -136,8 +147,8 @@ public class CohortRoutingFilter implements Filter {
 			// already logged in to this one. Fail closed instead.
 			if (CohortDecisionInterceptor.decidedModern(session)) {
 				log.severe(RoutingAudit.line(CohortRuntime.MODERN,
-						PublicRouteClass.UNKNOWN, "decided-modern-without-affinity"));
-				response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+						plan.routeClass(), plan.reason()));
+				response.sendError(plan.status());
 				return;
 			}
 			backstop(request, session);
@@ -181,53 +192,33 @@ public class CohortRoutingFilter implements Filter {
 			HttpSession session,
 			ModernSessionAffinity affinity) throws IOException {
 		CohortBridge bridge = CohortBridge.current();
-		if (bridge == null || !bridge.routingPossible()) {
-			fail(response, affinity, PublicRouteClass.UNKNOWN,
-					"handoff-unavailable", HttpServletResponse.SC_SERVICE_UNAVAILABLE);
-			return;
-		}
-		if (!affinity.usable()) {
-			fail(response, affinity, PublicRouteClass.UNKNOWN,
-					affinity.failureReason() == null
-							? "affinity-failed"
-							: affinity.failureReason(),
-					HttpServletResponse.SC_SERVICE_UNAVAILABLE);
-			return;
-		}
-
 		String rawPath = pathInside(request);
-		boolean rewritten = SessionPathParameters.carriesSessionParameter(rawPath);
-		String pathInside = SessionPathParameters.strip(rawPath);
-		PublicRouteClass routeClass =
-				PublicRouteClassifier.classify(request.getMethod(), pathInside);
-		if (rewritten) {
-			// Both contexts are cookie-only, so an inbound URL-rewritten
-			// identifier can only be an attempt to fix or smuggle a session.
-			fail(response, affinity, routeClass, "url-rewritten-session",
-					HttpServletResponse.SC_BAD_REQUEST);
-			return;
-		}
-		if (!routeClass.proxyable()) {
-			// Not a fallback: an established modern session asking for a route
-			// Phase 5e does not own gets a 404 from the runtime that owns it.
-			log.info(RoutingAudit.line(
-					CohortRuntime.MODERN, routeClass, "route-not-owned"));
-			response.sendError(HttpServletResponse.SC_NOT_FOUND);
-			return;
-		}
-
-		if (affinity.phase() == ModernSessionAffinity.Phase.PENDING_ROTATION
-				&& (!"GET".equalsIgnoreCase(request.getMethod())
-						|| routeClass != PublicRouteClass.CONTEXT_ROOT)) {
-			if ("GET".equalsIgnoreCase(request.getMethod())
-					&& routeClass == PublicRouteClass.ZK_RESOURCE
-					&& pathInside.endsWith("/zul/keylistener.js")) {
+		RoutingCore.Plan plan = RoutingCore.preflight(
+				bridge != null && bridge.routingPossible(),
+				affinity, request.getMethod(), rawPath);
+		PublicRouteClass routeClass = plan.routeClass();
+		String pathInside = plan.pathInside();
+		switch (plan.action()) {
+			case FAIL:
+				fail(response, affinity, routeClass, plan.reason(), plan.status());
+				return;
+			case NOT_FOUND:
+				log.info(RoutingAudit.line(
+						CohortRuntime.MODERN, routeClass, plan.reason()));
+				response.sendError(plan.status());
+				return;
+			case TRANSITION:
 				sendTransitionScript(request, response, routeClass);
-			} else {
-				refuse(response, routeClass, "awaiting-context-root",
-						HttpServletResponse.SC_SERVICE_UNAVAILABLE);
-			}
-			return;
+				return;
+			case REFUSE:
+				refuse(response, routeClass, plan.reason(), plan.status());
+				return;
+			case ROUTE:
+				break;
+			case LEGACY:
+			default:
+				throw new IllegalStateException(
+						"A modern affinity produced " + plan.action());
 		}
 
 		String ticket = null;
@@ -267,34 +258,30 @@ public class CohortRoutingFilter implements Filter {
 				return;
 		}
 
-		if (!request.getSession(false).getId()
-				.equals(affinity.boundLegacySessionId())) {
-			fail(response, affinity, routeClass, "affinity-session-mismatch",
-					HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+		RoutingCore.Plan binding = RoutingCore.validateBinding(
+				affinity, routeClass, request.getSession(false).getId());
+		if (binding.action() == RoutingCore.Action.FAIL) {
+			fail(response, affinity, routeClass,
+					binding.reason(), binding.status());
 			return;
 		}
 
-		ModernBackendProxy.Result result = backendProxy(bridge.backend())
+		try (ModernBackendProxy.Result result = backendProxy(bridge.backend())
 				.proxy(request, response, routeClass, pathInside,
 						affinity.modernSessionId(), ticket,
-						affinity.boundLegacySessionId());
-		if (result.sessionEnded()) {
-			endRoutedSession(request, response, session, routeClass);
-			return;
-		}
-		if (!result.completed()) {
-			fail(response, affinity, routeClass, result.failure(),
-					HttpServletResponse.SC_BAD_GATEWAY);
-			return;
-		}
-		if (result.modernSessionId() != null) {
-			if (ticket != null) {
-				affinity.bootstrapped(result.modernSessionId());
+						affinity.boundLegacySessionId())) {
+			RoutingLifecycle.Outcome lifecycle = RoutingLifecycle.apply(
+					affinity, ticket != null, result.coreResult());
+			if (result.sessionEnded()) {
+				endRoutedSession(request, response, session, routeClass);
+				return;
 			}
-		} else if (ticket != null) {
-			fail(response, affinity, routeClass, "bootstrap-no-session",
-					HttpServletResponse.SC_BAD_GATEWAY);
-			return;
+			if (lifecycle.action() == RoutingLifecycle.Action.FAIL) {
+				fail(response, affinity, routeClass, lifecycle.failure(),
+						HttpServletResponse.SC_BAD_GATEWAY);
+				return;
+			}
+			result.commitTo(response);
 		}
 		log.fine(RoutingAudit.line(CohortRuntime.MODERN, routeClass, "proxied"));
 	}
@@ -600,6 +587,9 @@ public class CohortRoutingFilter implements Filter {
 
 	private static String pathInside(HttpServletRequest request) {
 		String uri = request.getRequestURI();
+		if (uri == null || uri.isEmpty()) {
+			return "/";
+		}
 		String context = request.getContextPath();
 		String inside = context != null && !context.isEmpty() && uri.startsWith(context)
 				? uri.substring(context.length())

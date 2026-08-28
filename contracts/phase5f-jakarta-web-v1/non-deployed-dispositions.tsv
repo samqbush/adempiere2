@@ -1,0 +1,31 @@
+source_mapping_id	source_descriptor	route_pattern	disposition	reason	closing_gate
+JASPER-DEPLOY-GETMD5	JasperReportsWebApp/deploy/WebApp.ear/webApp.war/WEB-INF/web.xml	/GetMD5File	defer-phase5g-jasper-web	Interactive/report web ownership is Phase 5g; remain absent from shipped Phase 5f descriptors.	phase5g-report-web-gate
+JASPER-SOURCE-GETMD5	JasperReportsWebApp/src/WEB-INF/web.xml	/GetMD5File	defer-phase5g-jasper-web	Interactive/report web ownership is Phase 5g; remain absent from shipped Phase 5f descriptors.	phase5g-report-web-gate
+JBOSS-JNDI	org.adempiere.webservice/deploy/jboss/server/adempiere/deploy/http-invoker.sar/invoker.war/WEB-INF/web.xml	/JNDIFactory/*	drop-jboss-http-invoker	Not installed by Phase 3 and depends on the quarantined JBoss surface.	phase5fFinalVerification
+JBOSS-READONLY-JNDI	org.adempiere.webservice/deploy/jboss/server/adempiere/deploy/http-invoker.sar/invoker.war/WEB-INF/web.xml	/ReadOnlyJNDIFactory/*	drop-jboss-http-invoker	Not installed by Phase 3 and depends on the quarantined JBoss surface.	phase5fFinalVerification
+JBOSS-EJB-INVOKER	org.adempiere.webservice/deploy/jboss/server/adempiere/deploy/http-invoker.sar/invoker.war/WEB-INF/web.xml	/EJBInvokerServlet/*	drop-jboss-http-invoker	Not installed by Phase 3 and depends on the quarantined JBoss surface.	phase5fFinalVerification
+JBOSS-JMX-INVOKER	org.adempiere.webservice/deploy/jboss/server/adempiere/deploy/http-invoker.sar/invoker.war/WEB-INF/web.xml	/JMXInvokerServlet/*	drop-jboss-http-invoker	Not installed by Phase 3 and depends on the quarantined JBoss surface.	phase5fFinalVerification
+JBOSS-READONLY-JMX	org.adempiere.webservice/deploy/jboss/server/adempiere/deploy/http-invoker.sar/invoker.war/WEB-INF/web.xml	/readonly/JMXInvokerServlet/*	drop-jboss-http-invoker	Not installed by Phase 3 and depends on the quarantined JBoss surface.	phase5fFinalVerification
+JBOSS-RESTRICTED-JNDI	org.adempiere.webservice/deploy/jboss/server/adempiere/deploy/http-invoker.sar/invoker.war/WEB-INF/web.xml	/restricted/JNDIFactory/*	drop-jboss-http-invoker	Not installed by Phase 3 and depends on the quarantined JBoss surface.	phase5fFinalVerification
+JBOSS-RESTRICTED-JMX	org.adempiere.webservice/deploy/jboss/server/adempiere/deploy/http-invoker.sar/invoker.war/WEB-INF/web.xml	/restricted/JMXInvokerServlet/*	drop-jboss-http-invoker	Not installed by Phase 3 and depends on the quarantined JBoss surface.	phase5fFinalVerification
+JBOSS-READONLY-FILTER	org.adempiere.webservice/deploy/jboss/server/adempiere/deploy/http-invoker.sar/invoker.war/WEB-INF/web.xml	/readonly/*	drop-jboss-http-invoker	Not installed by Phase 3 and depends on the quarantined JBoss surface.	phase5fFinalVerification
+SERVERAPPS-TEST	serverApps/src/etc/WEB-INF/web.xml	/Test	drop-superseded-descriptor-duplicate	Descriptor is not installed by Phase 3; no modern route is created.	phase5fFinalVerification
+SERVERAPPS-TEST2	serverApps/src/etc/WEB-INF/web.xml	/Test2	drop-superseded-descriptor-duplicate	Descriptor is not installed by Phase 3; no modern route is created.	phase5fFinalVerification
+SERVERAPPS-WACCOUNT	serverApps/src/etc/WEB-INF/web.xml	/WAccount	drop-superseded-descriptor-duplicate	Deployed equivalent remains owned by /adempiere.	phase5fFinalVerification
+SERVERAPPS-WCHAT	serverApps/src/etc/WEB-INF/web.xml	/WChat	drop-superseded-descriptor-duplicate	Deployed equivalent remains owned by /adempiere.	phase5fFinalVerification
+SERVERAPPS-WVALUEPREFERENCE	serverApps/src/etc/WEB-INF/web.xml	/WValuePreference	drop-superseded-descriptor-duplicate	Deployed equivalent remains owned by /adempiere.	phase5fFinalVerification
+SERVERAPPS-WZOOM	serverApps/src/etc/WEB-INF/web.xml	/WZoom	drop-superseded-descriptor-duplicate	Deployed equivalent remains owned by /adempiere.	phase5fFinalVerification
+SERVERAPPS-WCOUNTER	serverApps/src/etc/WEB-INF/web.xml	/WCounter	drop-superseded-descriptor-duplicate	Descriptor is not installed by Phase 3; no modern route is created.	phase5fFinalVerification
+SERVERAPPS-WFIELDUPDATE	serverApps/src/etc/WEB-INF/web.xml	/WFieldUpdate	drop-superseded-descriptor-duplicate	Deployed equivalent remains owned by /adempiere.	phase5fFinalVerification
+SERVERAPPS-WLOCATION	serverApps/src/etc/WEB-INF/web.xml	/WLocation	drop-superseded-descriptor-duplicate	Deployed equivalent remains owned by /adempiere.	phase5fFinalVerification
+SERVERAPPS-WLOGIN	serverApps/src/etc/WEB-INF/web.xml	/WLogin	drop-superseded-descriptor-duplicate	Deployed equivalent remains owned by /adempiere.	phase5fFinalVerification
+SERVERAPPS-WLOOKUP	serverApps/src/etc/WEB-INF/web.xml	/WLookup	drop-superseded-descriptor-duplicate	Deployed equivalent remains owned by /adempiere.	phase5fFinalVerification
+SERVERAPPS-WMENU	serverApps/src/etc/WEB-INF/web.xml	/WMenu	drop-superseded-descriptor-duplicate	Deployed equivalent remains owned by /adempiere.	phase5fFinalVerification
+SERVERAPPS-WPROCESS	serverApps/src/etc/WEB-INF/web.xml	/WProcess	drop-superseded-descriptor-duplicate	Deployed equivalent remains owned by /adempiere.	phase5fFinalVerification
+SERVERAPPS-WREPORT	serverApps/src/etc/WEB-INF/web.xml	/WReport	drop-superseded-descriptor-duplicate	Deployed equivalent remains owned by /adempiere.	phase5fFinalVerification
+SERVERAPPS-WREQUEST	serverApps/src/etc/WEB-INF/web.xml	/WRequest	drop-superseded-descriptor-duplicate	Deployed equivalent remains owned by /adempiere.	phase5fFinalVerification
+SERVERAPPS-WSTART	serverApps/src/etc/WEB-INF/web.xml	/WStart	drop-superseded-descriptor-duplicate	Deployed equivalent remains owned by /adempiere.	phase5fFinalVerification
+SERVERAPPS-WSTATUS	serverApps/src/etc/WEB-INF/web.xml	/WStatus	drop-superseded-descriptor-duplicate	Deployed equivalent remains owned by /adempiere.	phase5fFinalVerification
+SERVERAPPS-WTASK	serverApps/src/etc/WEB-INF/web.xml	/WTask	drop-superseded-descriptor-duplicate	Deployed equivalent remains owned by /adempiere.	phase5fFinalVerification
+SERVERAPPS-WWINDOW	serverApps/src/etc/WEB-INF/web.xml	/WWindow	drop-superseded-descriptor-duplicate	Deployed equivalent remains owned by /adempiere.	phase5fFinalVerification
+SERVERAPPS-WWORKFLOW	serverApps/src/etc/WEB-INF/web.xml	/WWorkflow	drop-superseded-descriptor-duplicate	Deployed equivalent remains owned by /adempiere.	phase5fFinalVerification

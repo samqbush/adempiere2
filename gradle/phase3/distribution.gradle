@@ -10,6 +10,8 @@ def phase3RuntimeRoot = phase3BuildRoot.map { it.dir('runtime') }
 def phase3AdempiereHome = phase3RuntimeRoot.map { it.dir('Adempiere') }
 def phase3InstallDir = phase3BuildRoot.map { it.dir('install') }
 def phase3TomcatHome = phase3BuildRoot.map { it.dir('tomcat') }
+def phase3SourceCopy = phase3BuildRoot.map { it.dir('source-current') }
+def phase3ReleaseDir = phase3BuildRoot.map { it.dir('release') }
 def phase3DbHost = providers.gradleProperty('phase3DbHost')
 	.orElse(providers.environmentVariable('ADEMPIERE_PHASE3_DB_HOST'))
 	.orElse('127.0.0.1')
@@ -284,7 +286,6 @@ def configurePhase3Ant = { Exec task, boolean noDatabaseRestore ->
 	task.dependsOn tasks.named('guardPhase3DisposableRuntime')
 	task.dependsOn tasks.named('preparePhase3Tomcat')
 	task.dependsOn tasks.named('verifyPhase3Topology')
-	task.workingDir rootProject.projectDir
 	task.environment 'ADEMPIERE_HOME', phase3AdempiereHome.get().asFile.absolutePath
 	task.environment 'ADEMPIERE_ROOT', phase3RuntimeRoot.get().asFile.absolutePath
 	task.environment 'ADEMPIERE_INSTALL', phase3InstallDir.get().asFile.absolutePath
@@ -296,8 +297,11 @@ def configurePhase3Ant = { Exec task, boolean noDatabaseRestore ->
 		'JAVA_HOME',
 		phase3JavaLauncher.get().metadata.installationPath.asFile.absolutePath)
 	task.commandLine(
-		'ant',
-		'build',
+		'bash',
+		rootProject.file('scripts/phase3/run-isolated-ant-build.sh'),
+		rootProject.projectDir,
+		phase3SourceCopy.get().asFile,
+		phase3ReleaseDir.get().asFile,
 		"-Dnodbrestore=${noDatabaseRestore}",
 		"-Denv.ADEMPIERE_ROOT=${phase3RuntimeRoot.get().asFile.absolutePath}",
 		"-Denv.ADEMPIERE_HOME=${phase3AdempiereHome.get().asFile.absolutePath}",

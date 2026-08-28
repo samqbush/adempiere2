@@ -1,0 +1,11 @@
+context	cookie	direction	action	path	secure	http_only	same_site	rationale
+/webui	JSESSIONID	both	public-session-only	/webui	if-public-https	true	Lax	Exactly one public Phase 5e session cookie; the modern identifier remains server-side.
+/admin	JSESSIONID	both	public-session-only	/admin	if-public-https	true	Lax	Context-isolated public affinity and application session.
+/	JSESSIONID	both	public-session-only	/	if-public-https	true	Lax	Root-context public affinity; sessionless probes must not create it.
+/mobile	JSESSIONID	both	public-session-only	/mobile	if-public-https	true	Lax	Context-isolated public affinity and application session.
+/mobile	adempiereInfo	both	forward-application-cookie	/mobile	if-public-https	true	Lax	Reviewed mobile locale and login-information cookie.
+/adempiere	JSESSIONID	both	public-session-only	/adempiere	if-public-https	true	Lax	Context-isolated public affinity and application session.
+/adempiere	AdempiereWebUser	both	forward-application-cookie	/adempiere	if-public-https	true	Lax	Reviewed remembered web-user cookie used by the classic application.
+/wstore	JSESSIONID	both	public-session-only	/wstore	if-public-https	true	Lax	Context-isolated public affinity, basket, and account session.
+/wstore	AdempiereWebUser	both	forward-application-cookie	/wstore	if-public-https	true	Lax	Reviewed remembered web-store user cookie.
+*	*	both	drop-unlisted	n/a	n/a	n/a	n/a	No unreviewed cookie crosses either proxy boundary.

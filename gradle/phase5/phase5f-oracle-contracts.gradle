@@ -1,0 +1,84 @@
+def phase5fContractDir =
+	rootProject.layout.projectDirectory.dir('contracts/phase5f-jakarta-web-v1')
+def phase5fGeneratedDir =
+	rootProject.layout.buildDirectory.dir('phase5f/oracle-contracts/generated')
+def phase5fSummary =
+	rootProject.layout.buildDirectory.file('phase5f/oracle-contracts/summary.tsv')
+def phase5fMutationDir =
+	rootProject.layout.buildDirectory.dir('phase5f/oracle-contracts/mutations')
+def phase5fMutationReport =
+	rootProject.layout.buildDirectory.file('phase5f/oracle-contracts/mutation-report.tsv')
+
+tasks.register('generatePhase5fOracleContracts', Exec) {
+	group = 'verification'
+	description = 'Generates deterministic Phase 5f route and database-effect ledgers'
+	inputs.files(
+		phase5fContractDir.file('deployed-routes.tsv'),
+		phase5fContractDir.file('known-deviations.tsv'),
+		rootProject.file('contracts/legacy-web-v1/context-request-vectors.tsv'),
+		rootProject.file('gradle/phase5/route-contracts.tsv'),
+		rootProject.file('scripts/phase5/generate-phase5f-oracle-contracts.py'))
+	outputs.files(
+		phase5fGeneratedDir.map { it.file('route-validation.tsv') },
+		phase5fGeneratedDir.map { it.file('database-effect-ownership.tsv') })
+	commandLine(
+		'python3',
+		rootProject.file('scripts/phase5/generate-phase5f-oracle-contracts.py'),
+		'--repo-root',
+		rootProject.projectDir,
+		'--output-dir',
+		phase5fGeneratedDir.get().asFile)
+}
+
+tasks.register('verifyPhase5fOracleContracts', Exec) {
+	group = 'verification'
+	description = 'Validates the closed database-neutral Phase 5f oracle contract'
+	dependsOn tasks.named('generatePhase5fOracleContracts')
+	inputs.dir phase5fContractDir
+	inputs.files(
+		phase5fGeneratedDir.map { it.file('route-validation.tsv') },
+		phase5fGeneratedDir.map { it.file('database-effect-ownership.tsv') },
+		rootProject.file('gradle/phase5/web-assets.tsv'),
+		rootProject.file('scripts/phase5/validate-phase5f-oracle-contracts.py'))
+	outputs.file phase5fSummary
+	commandLine(
+		'python3',
+		rootProject.file('scripts/phase5/validate-phase5f-oracle-contracts.py'),
+		'--repo-root',
+		rootProject.projectDir,
+		'--contract-dir',
+		phase5fContractDir.asFile,
+		'--generated-dir',
+		phase5fGeneratedDir.get().asFile,
+		'--summary',
+		phase5fSummary.get().asFile)
+}
+
+tasks.register('phase5fOracleContractMutationProof', Exec) {
+	group = 'verification'
+	description = 'Proves all named Phase 5f oracle contract mutations are detected'
+	dependsOn tasks.named('verifyPhase5fOracleContracts')
+	inputs.dir phase5fContractDir
+	inputs.files(
+		phase5fGeneratedDir.map { it.file('route-validation.tsv') },
+		phase5fGeneratedDir.map { it.file('database-effect-ownership.tsv') },
+		rootProject.file('scripts/phase5/verify-phase5f-contract-mutations.py'))
+	outputs.file phase5fMutationReport
+	commandLine(
+		'python3',
+		rootProject.file('scripts/phase5/verify-phase5f-contract-mutations.py'),
+		'--repo-root',
+		rootProject.projectDir,
+		'--generated-dir',
+		phase5fGeneratedDir.get().asFile,
+		'--work-dir',
+		phase5fMutationDir.get().asFile,
+		'--report',
+		phase5fMutationReport.get().asFile)
+}
+
+tasks.register('phase5fOracleContractValidation') {
+	group = 'verification'
+	description = 'Runs the deterministic Phase 5f oracle and mutation contract gate'
+	dependsOn tasks.named('phase5fOracleContractMutationProof')
+}

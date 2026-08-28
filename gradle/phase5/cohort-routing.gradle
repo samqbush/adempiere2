@@ -34,7 +34,7 @@ def phase5eEvidenceDir = rootProject.layout.buildDirectory.dir('phase5e/evidence
 def phase5eInstalledHome =
 	rootProject.layout.buildDirectory.dir('phase3/runtime/Adempiere')
 def phase5eReleaseHome =
-	rootProject.layout.projectDirectory.dir('install/build/Adempiere')
+	rootProject.layout.buildDirectory.dir('phase3/release/Adempiere').get()
 def phase5eContractDir = rootProject.file('contracts/phase5e-routed-web-v1')
 
 def phase5eWebXmlInsert = rootProject.file('gradle/phase5/derived-web-xml-insert.xml')
@@ -351,6 +351,9 @@ tasks.register('verifyPhase5eDerivedLegacyWar') {
 				'org/adempiere/web/cohort/CohortSelector.class',
 				'org/adempiere/web/handoff/HandoffTicketCodec.class',
 				'org/adempiere/web/route/PublicRouteClassifier.class',
+				'org/adempiere/web/route/RoutingCore.class',
+				'org/adempiere/web/route/RoutingLifecycle.class',
+				'org/adempiere/web/route/LoopbackProxy.class',
 			].each { required ->
 				if (!classes.contains(required)) {
 					problems << "the Phase 5e overlay jar is missing ${required}"
@@ -772,8 +775,8 @@ tasks.register('verifyPhase5eRoutedOverlay', Exec) {
 		rootProject.file('scripts/phase5/verify-routed-overlay.sh'),
 		phase5eInstalledHome.get().asFile,
 		phase5eReleaseHome.asFile,
-		rootProject.file('install/build/Adempiere_394LTS.zip'),
-		rootProject.file('install/build/Adempiere_394LTS.tar.gz'),
+		rootProject.file('build/phase3/release/Adempiere_394LTS.zip'),
+		rootProject.file('build/phase3/release/Adempiere_394LTS.tar.gz'),
 		phase5eDerivedWar.get().asFile,
 		phase5ePristineWar.get().asFile,
 		phase5eModernWar.asFile)
@@ -788,8 +791,8 @@ tasks.register('verifyPhase5eRollback', Exec) {
 		rootProject.file('scripts/phase5/verify-routed-rollback.sh'),
 		rootProject.projectDir,
 		phase5eInstalledHome.get().asFile,
-		rootProject.file('install/build/Adempiere_394LTS.zip'),
-		rootProject.file('install/build/Adempiere_394LTS.tar.gz'),
+		rootProject.file('build/phase3/release/Adempiere_394LTS.zip'),
+		rootProject.file('build/phase3/release/Adempiere_394LTS.tar.gz'),
 		phase5ePristineWar.get().asFile,
 		rootProject.layout.buildDirectory.dir('phase5e/rollback').get().asFile,
 		phase5eModernWar.asFile)
@@ -1028,6 +1031,7 @@ tasks.register('phase5eFinalVerification') {
 		// Phase 5e's own work
 		':org.adempiere.cohort:test',
 		':org.adempiere.cohort:bridgeTest',
+		':org.adempiere.cohort:verifyRoutingCoreIsolation',
 		tasks.named('verifyPhase5eCohortContracts'),
 		tasks.named('verifyPhase5eDerivedLegacyWar'),
 		tasks.named('verifyPhase5eDerivedDeterminism'),

@@ -47,7 +47,10 @@ public class CohortBridgeStartupListener implements ServletContextListener {
 				CohortDecisionInterceptor.class.getName(),
 				"org.adempiere.web.cohort.CohortSelector",
 				"org.adempiere.web.handoff.HandoffTicketCodec",
-				"org.adempiere.web.route.PublicRouteClassifier"}) {
+				"org.adempiere.web.route.PublicRouteClassifier",
+				"org.adempiere.web.route.RoutingCore",
+				"org.adempiere.web.route.RoutingLifecycle",
+				"org.adempiere.web.route.LoopbackProxy"}) {
 			try {
 				Class.forName(required, false, getClass().getClassLoader());
 			} catch (ClassNotFoundException | LinkageError missing) {

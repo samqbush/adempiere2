@@ -97,6 +97,14 @@ sourceSets {
 			srcDirs = [rootProject.file('contracts/legacy-web-browser-v1')]
 		}
 	}
+	phase5fWebuiContract {
+		java {
+			srcDirs = ['src/phase5fWebuiContract/java']
+		}
+		resources {
+			srcDirs = [rootProject.file('contracts/phase5f-jakarta-web-v1')]
+		}
+	}
 }
 
 configurations {
@@ -111,6 +119,9 @@ configurations {
 	routedContractRuntimeOnly.extendsFrom testRuntimeOnly
 	routedBrowserTestImplementation.extendsFrom testImplementation
 	routedBrowserTestRuntimeOnly.extendsFrom testRuntimeOnly
+	phase5fWebuiContractImplementation.extendsFrom modernUiTestImplementation
+	phase5fWebuiContractCompileOnly.extendsFrom modernUiCompileOnly
+	phase5fWebuiContractRuntimeOnly.extendsFrom modernUiTestRuntimeOnly
 	modernUiElements {
 		canBeConsumed = true
 		canBeResolved = false
@@ -152,6 +163,8 @@ dependencies {
 	routedBrowserTestImplementation "com.microsoft.playwright:playwright:${playwrightVersion}"
 	routedBrowserTestImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
 	routedBrowserTestRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+	phase5fWebuiContractImplementation sourceSets.modernUi.output
+	phase5fWebuiContractImplementation 'jakarta.servlet:jakarta.servlet-api:6.0.0'
 
 	modernWebZk "org.zkoss.zk:zk:${zkVersion}"
 	modernWebZk "org.zkoss.zk:zul:${zkVersion}"
@@ -508,7 +521,7 @@ tasks.register('generatePhase5dModernWebProvenance') {
 }
 
 tasks.named('war') {
-	description = 'Builds the functional Phase 5d /webui-modern ZK CE Jakarta application'
+	description = 'Builds the functional Phase 5f /webui-modern ZK CE Jakarta application'
 	archiveFileName = 'webui-modern.war'
 	webAppDirectory = file('src/phase5d/webapp')
 	reproducibleFileOrder = true
@@ -540,6 +553,10 @@ tasks.named('war') {
 		from tasks.named('generatePhase5dModernWebProvenance')
 			.map { it.outputs.files.singleFile }
 		rename { 'phase5d-provenance.tsv' }
+	}
+	into('theme/default/css') {
+		from('src/phase5d/webapp/css/phase5d-modern.css')
+		rename { 'theme.css.dsp' }
 	}
 	// Reviewed static web assets. gradle/phase5/modern-web-assets.tsv is the
 	// reviewed ledger; the include set is read from it so an asset cannot join
@@ -660,9 +677,8 @@ tasks.register('verifyPhase5dModernWebWar') {
 		[
 			'PackagingMarkerServlet': 'the Phase 5c marker servlet',
 			'__phase5c'             : 'the Phase 5c marker route',
-			'InterpreterServlet'    : 'the ZK 3.6 DSP interpreter (Phase 5f owns it)',
-			'*.dsp'                 : 'the ZK 3.6 DSP route (Phase 5f owns it)',
-			'TimelineEventFeed'     : 'the timeline feed servlet (Phase 5f owns it)',
+			'InterpreterServlet'    : 'the ZK 3.6 DSP interpreter',
+			'<url-pattern>*.dsp</url-pattern>': 'the wildcard ZK 3.6 DSP route',
 			'javax.servlet'         : 'a legacy servlet namespace',
 		].each { needle, reason ->
 			if (descriptor.contains(needle)) {
@@ -675,6 +691,8 @@ tasks.register('verifyPhase5dModernWebWar') {
 			'org.zkoss.zk.au.http.DHtmlUpdateServlet'    : 'the ZK AU engine',
 			'org.adempiere.webui.session.SessionTimeoutFilter': 'the ADempiere session filter',
 			'org.adempiere.webui.session.SessionManagerListener': 'the ADempiere session listener',
+			'org.adempiere.webui.TimelineEventFeed'       : 'the Phase 5f timeline feed',
+			'<url-pattern>/timeline</url-pattern>'         : 'the exact timeline route',
 			'<absolute-ordering/>'                       : 'the empty absolute ordering',
 			// Phase 5e session and handoff contract.
 			'org.adempiere.webui.session.CohortHandoffFilter': 'the Phase 5e handoff filter',
@@ -707,7 +725,6 @@ tasks.register('verifyPhase5dModernWebWar') {
 			(~/^WEB-INF\/jboss-web\.xml$/)    : 'JBoss deployment descriptor',
 			(~/^WEB-INF\/src\//)              : 'packaged source tree',
 			(~/^WEB-INF\/test\//)             : 'packaged test tree',
-			(~/(?i)\.dsp$/)                   : 'ZK 3.6 DSP theme resource',
 			(~/(?i)\.(java|bak)$/)            : 'source or backup file',
 			(~/(?i)images_old\//)             : 'retired image backup tree',
 			(~/^WEB-INF\/classes\/org\/adempiere\/test\//) : 'packaged test support',
@@ -717,6 +734,21 @@ tasks.register('verifyPhase5dModernWebWar') {
 				if (pattern.matcher(name).find()) {
 					problems << "${name} is a ${reason}"
 				}
+			}
+		}
+		def dspEntries = names.findAll { it.toLowerCase(Locale.ROOT).endsWith('.dsp') }
+		if (dspEntries != ['theme/default/css/theme.css.dsp'] as Set) {
+			problems << "the WAR must carry only the exact Phase 5f DSP compatibility " +
+				"resource, found ${dspEntries}"
+		}
+		if (names.contains('theme/default/css/theme.css.dsp')) {
+			def dspBytes = zipTree(archive).matching {
+				include 'theme/default/css/theme.css.dsp'
+			}.singleFile.bytes
+			def cssBytes = file('src/phase5d/webapp/css/phase5d-modern.css').bytes
+			if (!java.util.Arrays.equals(dspBytes, cssBytes)) {
+				problems << 'the historical theme DSP path is not byte-identical to ' +
+					'the reviewed Phase 5d static CSS'
 			}
 		}
 
@@ -1478,6 +1510,48 @@ tasks.named('check') {
 	dependsOn tasks.named('verifyPhase5cTransformer')
 	dependsOn tasks.named('modernUiTest')
 	dependsOn tasks.named('browserContractTest')
+}
+
+tasks.register('phase5fWebuiContractTest', Test) {
+	group = 'verification'
+	description = 'Runs focused Phase 5f timeline behavior and database-effect tests'
+	dependsOn tasks.named('phase5fWebuiContractClasses')
+	testClassesDirs = sourceSets.phase5fWebuiContract.output.classesDirs
+	classpath = sourceSets.phase5fWebuiContract.runtimeClasspath
+	useJUnitPlatform()
+	reports.junitXml.required = true
+	reports.junitXml.outputLocation =
+		layout.buildDirectory.dir('test-results/phase5fWebuiContractTest')
+	reports.html.required = true
+	reports.html.outputLocation =
+		layout.buildDirectory.dir('reports/tests/phase5fWebuiContractTest')
+	testLogging {
+		events 'passed', 'skipped', 'failed'
+	}
+}
+
+tasks.register('verifyPhase5fWebuiInheritedRoutes', Exec) {
+	group = 'verification'
+	description = 'Verifies and mutation-proves the Phase 5f timeline and DSP WAR contract'
+	dependsOn(
+		tasks.named('verifyPhase5dModernWebWar'),
+		tasks.named('phase5fWebuiContractTest'))
+	inputs.files(
+		tasks.named('war').flatMap { it.archiveFile },
+		file('src/phase5d/webapp/css/phase5d-modern.css'),
+		rootProject.file('scripts/phase5/verify-phase5f-webui-inherited-routes.py'))
+	outputs.file layout.buildDirectory
+		.file('phase5f/webui-inherited-routes/mutation-report.tsv')
+	commandLine(
+		'python3',
+		rootProject.file('scripts/phase5/verify-phase5f-webui-inherited-routes.py'),
+		'--war',
+		tasks.named('war').get().archiveFile.get().asFile,
+		'--css',
+		file('src/phase5d/webapp/css/phase5d-modern.css'),
+		'--report',
+		layout.buildDirectory.file(
+			'phase5f/webui-inherited-routes/mutation-report.tsv').get().asFile)
 }
 
 // The functional WAR repackages Ant-built runtime libraries and therefore has

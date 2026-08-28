@@ -1,12 +1,11 @@
-// Phase 5e: the cohort routing protocol and the isolated Javax/ZK 3.6 bridge.
+// Phase 5e: the reusable routing core and isolated Javax/ZK 3.6 adapter.
 //
 // Three deliberately separate compile closures live here, and none of them can
 // see the others' framework:
 //
-//   main         Transport-neutral. Plain Java SE only - no servlet API of
+//   main         Framework-neutral. Plain Java SE only - no servlet API of
 //                either namespace, no ZK, no ADempiere. It is the one body of
-//                code both runtimes execute, so it is also the one body of code
-//                that can be unit tested once and trusted on both sides.
+//                routing code every public-context adapter can reuse.
 //
 //   bridge       Javax Servlet 4 and ZK 3.6, compiled against classes extracted
 //                from the *materialised frozen* Phase 5b WAR and pinned by
@@ -33,6 +32,16 @@ sourceSets {
 	bridgeTest {
 		java {
 			srcDirs = ['src/bridgeTest/java']
+		}
+	}
+	contextBridge {
+		java {
+			srcDirs = ['src/contextBridge/java']
+		}
+	}
+	contextBridgeTest {
+		java {
+			srcDirs = ['src/contextBridgeTest/java']
 		}
 	}
 }
@@ -194,6 +203,18 @@ dependencies {
 	bridgeTestImplementation 'org.junit.jupiter:junit-jupiter-params:5.7.0'
 	bridgeTestImplementation 'org.mockito:mockito-junit-jupiter:4.11.0'
 	bridgeTestRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+
+	contextBridgeImplementation sourceSets.main.output
+	contextBridgeCompileOnly 'javax.servlet:javax.servlet-api:4.0.1'
+	contextBridgeCompileOnly project(':base')
+
+	contextBridgeTestImplementation sourceSets.main.output
+	contextBridgeTestImplementation sourceSets.contextBridge.output
+	contextBridgeTestImplementation 'javax.servlet:javax.servlet-api:4.0.1'
+	contextBridgeTestImplementation project(':base')
+	contextBridgeTestImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+	contextBridgeTestImplementation 'org.mockito:mockito-junit-jupiter:4.11.0'
+	contextBridgeTestRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
 }
 
 version = System.getenv('ADEMPIERE_LIBRARY_VERSION') ?: 'local-1.0.0'
@@ -211,10 +232,44 @@ tasks.named('test') {
 	useJUnitPlatform {
 		includeTags 'UnitTest'
 	}
+
 	reports.junitXml.required = true
 	testLogging {
 		events 'passed', 'skipped', 'failed'
 	}
+}
+
+tasks.register('verifyRoutingCoreIsolation') {
+	group = 'verification'
+	description = 'Proves the reusable routing core has no Servlet, ZK or legacy ADempiere dependency'
+	inputs.files(fileTree('src/main/java') { include '**/*.java' })
+	doLast {
+		def forbidden = [
+			'javax.servlet',
+			'jakarta.servlet',
+			'org.zkoss',
+			'org.adempiere.webui',
+			'org.compiere',
+		]
+		def problems = []
+		fileTree('src/main/java') { include '**/*.java' }.files.sort().each { file ->
+			def content = file.getText('UTF-8')
+			forbidden.each { namespace ->
+				if (content.contains(namespace)) {
+					problems << "${project.relativePath(file)} references ${namespace}"
+				}
+			}
+		}
+		if (!problems.isEmpty()) {
+			throw new GradleException(
+				"The reusable routing core is not framework-neutral:\n  - " +
+				problems.join('\n  - '))
+		}
+	}
+}
+
+tasks.named('check') {
+	dependsOn tasks.named('verifyRoutingCoreIsolation')
 }
 
 tasks.register('bridgeTest', Test) {
@@ -232,6 +287,48 @@ tasks.register('bridgeTest', Test) {
 	testLogging {
 		events 'passed', 'skipped', 'failed'
 	}
+}
+
+tasks.register('contextBridgeTest', Test) {
+	group = 'verification'
+	description = 'Runs the generic Phase 5f Javax context adapter tests'
+	testClassesDirs = sourceSets.contextBridgeTest.output.classesDirs
+	classpath = sourceSets.contextBridgeTest.runtimeClasspath
+	useJUnitPlatform { includeTags 'UnitTest' }
+	reports.junitXml.required = true
+	reports.junitXml.outputLocation =
+		layout.buildDirectory.dir('test-results/contextBridgeTest')
+	testLogging {
+		events 'passed', 'skipped', 'failed'
+	}
+}
+
+tasks.register('phase5fRollbackCoreTest', Test) {
+	group = 'verification'
+	description = 'Replays the Phase 5f core rollback and affinity contract after product staging'
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+	useJUnitPlatform { includeTags 'UnitTest' }
+	filter {
+		includeTestsMatching 'org.adempiere.web.route.ContextRoutingDecisionTest'
+	}
+	reports.junitXml.required = true
+	reports.junitXml.outputLocation =
+		layout.buildDirectory.dir('test-results/phase5fRollbackCoreTest')
+}
+
+tasks.register('phase5fRollbackBridgeTest', Test) {
+	group = 'verification'
+	description = 'Replays the Phase 5f live-session invalidation contract after product staging'
+	testClassesDirs = sourceSets.contextBridgeTest.output.classesDirs
+	classpath = sourceSets.contextBridgeTest.runtimeClasspath
+	useJUnitPlatform { includeTags 'UnitTest' }
+	filter {
+		includeTestsMatching 'org.adempiere.web.context.ContextRoutingFilterTest'
+	}
+	reports.junitXml.required = true
+	reports.junitXml.outputLocation =
+		layout.buildDirectory.dir('test-results/phase5fRollbackBridgeTest')
 }
 
 /**
@@ -261,7 +358,8 @@ tasks.register('bridgeOverlayJar', Jar) {
 }
 
 /**
- * The protocol-only jar the modern Jakarta WAR ships.
+ * The routing-core jar the modern Jakarta WAR ships under its unchanged
+ * Phase 5e protocol artifact name.
  *
  * It is the SAME `main` output the bridge carries, packaged under a different
  * name so the two archives can never be confused in a WEB-INF/lib listing. It
@@ -284,6 +382,18 @@ tasks.register('protocolJar', Jar) {
 			'Implementation-Version': version,
 			'EntityType': 'D')
 	}
+}
+
+tasks.register('contextBridgeOverlayJar', Jar) {
+	group = 'build'
+	description = 'Packages the generic Phase 5f public-context bridge'
+	archiveFileName = 'phase5f-context-routing-bridge.jar'
+	destinationDirectory = layout.buildDirectory.dir('phase5f')
+	reproducibleFileOrder = true
+	preserveFileTimestamps = false
+	duplicatesStrategy = DuplicatesStrategy.FAIL
+	from sourceSets.main.output
+	from sourceSets.contextBridge.output
 }
 
 configurations {

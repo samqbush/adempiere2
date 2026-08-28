@@ -1,0 +1,7 @@
+enable_state_id	context	phase5f_packaged	phase5f_default_state	enable_condition	residual_owner	closing_gate
+ENABLE-P5F-WEBUI	/webui	true	phase5e-cohort-routing-retained	Existing strict Phase 5e user/role cohort decision remains authoritative.	phase5e/phase5f	phase5fJakartaWebRoutesSmoke
+ENABLE-P5F-ADMIN	/admin	true	legacy-unless-approved	Named infrastructure consumers and owner approval must be recorded before enabling; otherwise remain legacy.	phase5f	phase5fJakartaWebRoutesSmoke
+ENABLE-P5F-ROOT	/	true	eligible-after-phase5f-gates	All eight anonymous routes, three error deviations, no-cookie sessionless behavior, and rollback must pass.	phase5f	phase5fJakartaWebRoutesSmoke
+ENABLE-P5F-MOBILE	/mobile	true	disabled	Phase 5g must prove screen-level parity and report/process behavior before production enablement.	phase5g	phase5g-web-parity-gate
+ENABLE-P5F-ADEMPIERE	/adempiere	true	disabled	Phase 5g must prove report, process, upload/download, and visual parity before production enablement.	phase5g	phase5g-web-parity-gate
+ENABLE-P5F-WSTORE	/wstore	true	eligible-after-phase5f-gates	All 29 routes, 25 retained JSPs, Jakarta Tags, application cookies, TLS rules, body limits, database effects, and rollback must pass.	phase5f	phase5fJakartaWebRoutesSmoke

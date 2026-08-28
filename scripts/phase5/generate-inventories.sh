@@ -141,7 +141,7 @@ tree_grep_count() {
 						disposition=migrate
 						gate=5f
 						case "$path" in
-							org.adempiere.cohort/src/bridge/*|org.adempiere.cohort/src/bridgeTest/*)
+							org.adempiere.cohort/src/bridge/*|org.adempiere.cohort/src/bridgeTest/*|org.adempiere.cohort/src/contextBridge/*|org.adempiere.cohort/src/contextBridgeTest/*)
 								# Phase 5e: the bridge targets the frozen Tomcat 9
 								# archive on purpose. It is not migrated to
 								# Jakarta; it is deleted with Tomcat 9 in 5h.

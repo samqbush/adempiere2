@@ -16,7 +16,11 @@ import static org.mockito.Mockito.when;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.lang.ref.WeakReference;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
@@ -33,6 +37,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 
+import com.sun.net.httpserver.HttpServer;
 import org.adempiere.web.cohort.CohortDecision;
 import org.adempiere.web.cohort.CohortIdentity;
 import org.adempiere.web.cohort.CohortRuntime;
@@ -68,6 +73,211 @@ class CohortRoutingFilterTest {
 
 	private static Enumeration<String> names(String... values) {
 		return new Vector<>(List.of(values)).elements();
+	}
+
+	private static HttpServletRequest proxyRequest() throws Exception {
+		HttpServletRequest request = mock(HttpServletRequest.class);
+		when(request.getMethod()).thenReturn("GET");
+		when(request.getContextPath()).thenReturn("/webui");
+		when(request.getHeaderNames()).thenReturn(names());
+		when(request.getContentLengthLong()).thenReturn(0L);
+		when(request.getInputStream()).thenReturn(
+				new javax.servlet.ServletInputStream() {
+					private final ByteArrayInputStream input =
+							new ByteArrayInputStream(new byte[0]);
+					public int read() { return input.read(); }
+					public boolean isFinished() {
+						return input.available() == 0;
+					}
+					public boolean isReady() { return true; }
+					public void setReadListener(
+							javax.servlet.ReadListener listener) { }
+				});
+		when(request.getScheme()).thenReturn("https");
+		when(request.getServerName()).thenReturn("public.example");
+		when(request.getServerPort()).thenReturn(443);
+		return request;
+	}
+
+	private static javax.servlet.ServletOutputStream servletOutput(
+			ByteArrayOutputStream output) {
+		return new javax.servlet.ServletOutputStream() {
+			public void write(int value) {
+				output.write(value);
+			}
+			public boolean isReady() { return true; }
+			public void setWriteListener(
+					javax.servlet.WriteListener listener) { }
+		};
+	}
+
+	@Test
+	@DisplayName("the Phase 5e proxy commits only a complete bounded response")
+	void proxyDefersPublicCommitUntilBackendResponseCompletes() throws Exception {
+		HttpServer server = HttpServer.create(
+				new InetSocketAddress("127.0.0.1", 0), 0);
+		server.createContext("/webui/index.zul", exchange -> {
+			byte[] body = "complete".getBytes(StandardCharsets.UTF_8);
+			exchange.getResponseHeaders().add("Cache-Control", "no-store");
+			exchange.sendResponseHeaders(201, body.length);
+			exchange.getResponseBody().write(body);
+			exchange.close();
+		});
+		server.start();
+		try {
+			HttpServletResponse response = mock(HttpServletResponse.class);
+			ByteArrayOutputStream body = new ByteArrayOutputStream();
+			when(response.getOutputStream()).thenReturn(servletOutput(body));
+
+			try (ModernBackendProxy.Result result = new ModernBackendProxy(
+						"http://127.0.0.1:" + server.getAddress().getPort(), 32)
+					.proxy(proxyRequest(), response,
+							org.adempiere.web.route.PublicRouteClass.ZK_PAGE,
+							"/index.zul", null, null, null)) {
+				assertTrue(result.completed());
+				verify(response, never()).setStatus(anyInt());
+				result.commitTo(response);
+				verify(response).setStatus(201);
+				verify(response).addHeader(any(), eq("no-store"));
+				assertEquals(
+						"complete", body.toString(StandardCharsets.UTF_8));
+			}
+		} finally {
+			server.stop(0);
+		}
+	}
+
+	@Test
+	@DisplayName("an oversized Phase 5e response cannot commit a truncated success")
+	void oversizedProxyResponseNeverTouchesPublicResponse() throws Exception {
+		HttpServer server = HttpServer.create(
+				new InetSocketAddress("127.0.0.1", 0), 0);
+		server.createContext("/webui/index.zul", exchange -> {
+			byte[] body = "too-large".getBytes(StandardCharsets.UTF_8);
+			exchange.getResponseHeaders().add("X-Unsafe", "discard");
+			exchange.sendResponseHeaders(200, body.length);
+			exchange.getResponseBody().write(body);
+			exchange.close();
+		});
+		server.start();
+		try {
+			HttpServletResponse response = mock(HttpServletResponse.class);
+			try (ModernBackendProxy.Result result = new ModernBackendProxy(
+					"http://127.0.0.1:" + server.getAddress().getPort(), 4)
+					.proxy(proxyRequest(), response,
+							org.adempiere.web.route.PublicRouteClass.ZK_PAGE,
+							"/index.zul", null, null, null)) {
+				assertFalse(result.completed());
+				assertEquals("response-too-large", result.failure());
+				verify(response, never()).setStatus(anyInt());
+				verify(response, never()).addHeader(any(), any());
+				verify(response, never()).getOutputStream();
+			}
+		} finally {
+			server.stop(0);
+		}
+	}
+
+	@Test
+	@DisplayName("an interrupted Phase 5e response cannot commit a partial success")
+	void interruptedProxyResponseNeverTouchesPublicResponse() throws Exception {
+		HttpServer server = HttpServer.create(
+				new InetSocketAddress("127.0.0.1", 0), 0);
+		server.createContext("/webui/index.zul", exchange -> {
+			exchange.sendResponseHeaders(200, 32);
+			exchange.getResponseBody().write(
+					"partial".getBytes(StandardCharsets.UTF_8));
+			exchange.close();
+		});
+		server.start();
+		try {
+			HttpServletResponse response = mock(HttpServletResponse.class);
+			try (ModernBackendProxy.Result result = new ModernBackendProxy(
+					"http://127.0.0.1:" + server.getAddress().getPort(), 64)
+					.proxy(proxyRequest(), response,
+							org.adempiere.web.route.PublicRouteClass.ZK_PAGE,
+							"/index.zul", null, null, null)) {
+				assertFalse(result.completed());
+				assertEquals("backend-stream-interrupted", result.failure());
+				verify(response, never()).setStatus(anyInt());
+				verify(response, never()).getOutputStream();
+			}
+		} finally {
+			server.stop(0);
+		}
+	}
+
+	@Test
+	@DisplayName("the END response remains internal and commits no backend body")
+	void endedProxyResponseIsNotCommitted() throws Exception {
+		HttpServer server = HttpServer.create(
+				new InetSocketAddress("127.0.0.1", 0), 0);
+		server.createContext("/webui/index.zul", exchange -> {
+			byte[] body = "discard".getBytes(StandardCharsets.UTF_8);
+			exchange.getResponseHeaders().add(HandoffProtocol.END_HEADER,
+					HandoffProtocol.END_VALUE);
+			exchange.sendResponseHeaders(200, body.length);
+			exchange.getResponseBody().write(body);
+			exchange.close();
+		});
+		server.start();
+		try {
+			HttpServletResponse response = mock(HttpServletResponse.class);
+			try (ModernBackendProxy.Result result = new ModernBackendProxy(
+					"http://127.0.0.1:" + server.getAddress().getPort(), 32)
+					.proxy(proxyRequest(), response,
+							org.adempiere.web.route.PublicRouteClass.ZK_PAGE,
+							"/index.zul", null, null, null)) {
+				assertTrue(result.sessionEnded());
+				verify(response, never()).setStatus(anyInt());
+				verify(response, never()).getOutputStream();
+			}
+		} finally {
+			server.stop(0);
+		}
+	}
+
+	@Test
+	@DisplayName("bootstrap without a modern session discards the staged response")
+	void missingBootstrapSessionDoesNotCommitBackendSuccess() throws Exception {
+		HttpServer server = HttpServer.create(
+				new InetSocketAddress("127.0.0.1", 0), 0);
+		server.createContext("/webui/", exchange -> {
+			byte[] body = "must-not-commit".getBytes(StandardCharsets.UTF_8);
+			exchange.getResponseHeaders().add("Cache-Control", "no-store");
+			exchange.sendResponseHeaders(201, body.length);
+			exchange.getResponseBody().write(body);
+			exchange.close();
+		});
+		server.start();
+		try {
+			ModernSessionAffinity affinity = new ModernSessionAffinity(
+					new CohortDecision(CohortRuntime.MODERN,
+							CohortDecision.Reason.USER_ALLOWLISTED),
+					IDENTITY);
+			affinity.admit();
+			affinity.ticketed("ROTATED", "v1.payload.mac");
+			HttpSession session = mock(HttpSession.class);
+			when(session.getAttribute(ModernSessionAffinity.ATTRIBUTE))
+					.thenReturn(affinity);
+			when(session.getId()).thenReturn("ROTATED");
+			HttpServletRequest request = proxyRequest();
+			when(request.getSession(false)).thenReturn(session);
+			when(request.getRequestURI()).thenReturn("/webui/");
+			HttpServletResponse response = mock(HttpServletResponse.class);
+
+			CohortRoutingFilter filter = armedFilterAt(
+					"http://127.0.0.1:" + server.getAddress().getPort());
+			filter.doFilter(request, response, mock(FilterChain.class));
+
+			assertEquals("bootstrap-no-session", affinity.failureReason());
+			verify(response).sendError(HttpServletResponse.SC_BAD_GATEWAY);
+			verify(response, never()).setStatus(201);
+			verify(response, never()).addHeader(any(), any());
+			verify(response, never()).getOutputStream();
+		} finally {
+			server.stop(0);
+		}
 	}
 
 	@Test
@@ -150,10 +360,8 @@ class CohortRoutingFilterTest {
 		filter.doFilter(request, response, chain);
 
 		verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST);
+		verify(request, never()).getSession(false);
 		verify(chain, never()).doFilter(any(), any());
-		assertFalse(affinity.usable(), "the session must not stay routable");
-		assertEquals(CohortRuntime.MODERN, affinity.decision().runtime(),
-				"a failed modern session stays modern");
 	}
 
 	@Test
@@ -531,6 +739,11 @@ class CohortRoutingFilterTest {
 		return armedFilter(null);
 	}
 
+	private static CohortRoutingFilter armedFilterAt(String backend)
+			throws Exception {
+		return armedFilter(null, backend);
+	}
+
 	/**
 	 * A filter whose bridge is armed, optionally with a stubbed backend.
 	 *
@@ -540,6 +753,12 @@ class CohortRoutingFilterTest {
 	private static CohortRoutingFilter armedFilter(
 			java.util.function.Function<String, ModernBackendProxy> proxies)
 			throws Exception {
+		return armedFilter(proxies, "http://127.0.0.1:19999");
+	}
+
+	private static CohortRoutingFilter armedFilter(
+			java.util.function.Function<String, ModernBackendProxy> proxies,
+			String backend) throws Exception {
 		byte[] material = new byte[32];
 		for (int index = 0; index < material.length; index++) {
 			material[index] = (byte) (index * 7 + 3);
@@ -551,7 +770,7 @@ class CohortRoutingFilterTest {
 						}),
 				new org.adempiere.web.handoff.HandoffTicketCodec(),
 				org.adempiere.web.handoff.HandoffKey.of(material),
-				"http://127.0.0.1:19999");
+				backend);
 		CohortRoutingFilter filter = proxies == null
 				? new CohortRoutingFilter()
 				: new CohortRoutingFilter() {

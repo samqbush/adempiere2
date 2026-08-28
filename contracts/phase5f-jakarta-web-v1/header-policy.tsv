@@ -1,0 +1,66 @@
+policy_id	context	direction	header	action	rationale
+P5F-HDR-COMMON	*	request	accept	forward	Representation negotiation.
+P5F-HDR-COMMON	*	request	accept-encoding	forward	Content encoding negotiation.
+P5F-HDR-COMMON	*	request	accept-language	forward	Locale selection and reviewed access metadata.
+P5F-HDR-COMMON	*	request	cache-control	forward	Cache revalidation.
+P5F-HDR-COMMON	*	request	content-type	forward	Form and multipart decoding.
+P5F-HDR-COMMON	*	request	if-modified-since	forward	Static and generated resource revalidation.
+P5F-HDR-COMMON	*	request	if-none-match	forward	Static and generated resource revalidation.
+P5F-HDR-COMMON	*	request	pragma	forward	Legacy cache control.
+P5F-HDR-COMMON	*	request	user-agent	forward	Reviewed application behavior and access metadata.
+P5F-HDR-COMMON	*	request	x-requested-with	forward	Ajax request classification.
+P5F-HDR-COMMON	*	response	cache-control	forward	Cache behavior.
+P5F-HDR-COMMON	*	response	content-disposition	forward	Downloads.
+P5F-HDR-COMMON	*	response	content-encoding	forward	Content encoding.
+P5F-HDR-COMMON	*	response	content-language	forward	Locale metadata.
+P5F-HDR-COMMON	*	response	content-length	recompute	Public ingress computes the framed length.
+P5F-HDR-COMMON	*	response	content-type	forward	Representation metadata.
+P5F-HDR-COMMON	*	response	etag	forward	Cache validation.
+P5F-HDR-COMMON	*	response	expires	forward	Cache expiration.
+P5F-HDR-COMMON	*	response	last-modified	forward	Cache validation.
+P5F-HDR-COMMON	*	response	location	rewrite-public-origin	Relative locations remain relative; absolute public-origin locations retain the public authority; loopback authorities fail closed.
+P5F-HDR-COMMON	*	response	pragma	forward	Legacy cache control.
+P5F-HDR-COMMON	*	response	vary	forward	Cache key selection.
+P5F-HDR-COMMON	*	response	x-content-type-options	forward	Response hardening.
+P5F-HDR-COMMON	*	response	x-frame-options	forward	Response hardening.
+P5F-HDR-COMMON	*	request	cookie	parse-policy-only	Only cookies named in cookie-policy.tsv may cross.
+P5F-HDR-COMMON	*	request	host	rebuild-public-contract	Internal request authority is constructed by the proxy and is never trusted from the browser.
+P5F-HDR-COMMON	*	request	connection	drop	Hop-by-hop.
+P5F-HDR-COMMON	*	request	keep-alive	drop	Hop-by-hop.
+P5F-HDR-COMMON	*	request	proxy-authorization	drop	Proxy credential.
+P5F-HDR-COMMON	*	request	te	drop	Hop-by-hop.
+P5F-HDR-COMMON	*	request	trailer	drop	Hop-by-hop.
+P5F-HDR-COMMON	*	request	transfer-encoding	drop	Hop-by-hop.
+P5F-HDR-COMMON	*	request	upgrade	drop	Hop-by-hop.
+P5F-HDR-COMMON	*	request	x-forwarded-for	drop	Browser-supplied forwarding metadata is untrusted.
+P5F-HDR-COMMON	*	request	x-forwarded-host	drop	Browser-supplied forwarding metadata is untrusted.
+P5F-HDR-COMMON	*	request	x-forwarded-port	drop	Browser-supplied forwarding metadata is untrusted.
+P5F-HDR-COMMON	*	request	x-forwarded-proto	drop	Browser-supplied forwarding metadata is untrusted.
+P5F-HDR-COMMON	*	request	x-adempiere-handoff-*	drop-reserved	Reserved internal namespace.
+P5F-HDR-COMMON	*	response	set-cookie	parse-policy-only	Only cookies named in cookie-policy.tsv may reach the browser.
+P5F-HDR-COMMON	*	response	server	drop	Do not disclose the internal runtime.
+P5F-HDR-COMMON	*	response	connection	drop	Hop-by-hop.
+P5F-HDR-COMMON	*	response	keep-alive	drop	Hop-by-hop.
+P5F-HDR-COMMON	*	response	transfer-encoding	drop	Hop-by-hop.
+P5F-HDR-COMMON	*	response	x-adempiere-handoff-*	drop-reserved	Reserved internal namespace.
+P5F-HDR-WEBUI	/webui	request	origin	drop	Phase 5e policy remains unchanged.
+P5F-HDR-WEBUI	/webui	request	referer	drop	Phase 5e policy remains unchanged.
+P5F-HDR-WEBUI	/webui	request	authorization	drop	No browser credentials cross this boundary.
+P5F-HDR-ADMIN	/admin	request	authorization	forward	AdempiereMonitorFilter enforces HTTP Basic credentials.
+P5F-HDR-ADMIN	/admin	response	www-authenticate	forward	Required for the monitor Basic challenge.
+P5F-HDR-ADMIN	/admin	request	origin	drop	No cross-origin form contract.
+P5F-HDR-ADMIN	/admin	request	referer	drop	Not consumed by this context.
+P5F-HDR-ROOT	/	request	referer	forward	AccessLogger records the public referrer.
+P5F-HDR-ROOT	/	request	origin	drop	No cross-origin form contract.
+P5F-HDR-ROOT	/	request	authorization	drop	No HTTP authorization contract.
+P5F-HDR-MOBILE	/mobile	request	referer	forward	Retain same-origin navigation metadata.
+P5F-HDR-MOBILE	/mobile	request	origin	same-public-origin-only	Permit same-origin form submissions only.
+P5F-HDR-MOBILE	/mobile	request	authorization	drop	Authentication is application-session based.
+P5F-HDR-ADEMPIERE	/adempiere	request	referer	forward	Retain same-origin navigation and upload metadata.
+P5F-HDR-ADEMPIERE	/adempiere	request	origin	same-public-origin-only	Permit same-origin forms and uploads only.
+P5F-HDR-ADEMPIERE	/adempiere	request	authorization	drop	Authentication is application-session based.
+P5F-HDR-ADEMPIERE	/adempiere	response	content-location	forward	Attachment/download handlers may name the public resource.
+P5F-HDR-WSTORE	/wstore	request	referer	forward	Click, Counter, and RequestServlet consume the public referrer.
+P5F-HDR-WSTORE	/wstore	request	origin	same-public-origin-only	Permit same-origin basket, checkout, and account forms only.
+P5F-HDR-WSTORE	/wstore	request	authorization	drop	Authentication is application-session based.
+P5F-HDR-WSTORE	/wstore	response	content-location	forward	Asset downloads name their public resource.
