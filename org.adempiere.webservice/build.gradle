@@ -190,7 +190,8 @@ def phase3SharedLibrary =
 		rootProject.file('build/phase3/runtime/Adempiere/lib/AdempiereSLib.jar')
 def phase3PackagesLibrary =
 		rootProject.file('build/phase3/runtime/Adempiere/lib/packages.jar')
-def adempiereCoreLibrary = rootProject.file('lib/Adempiere.jar')
+def adempiereCoreLibrary =
+		rootProject.file('build/phase3/source-current/lib/Adempiere.jar')
 
 tasks.register('modernAdempiereCoreJar', Jar) {
 	description = 'Builds the servlet-free ADempiere core for the modern SOAP runtime'

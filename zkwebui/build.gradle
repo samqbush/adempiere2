@@ -268,7 +268,8 @@ tasks.register('modernUiTest', Test) {
 //                        that would register ZK's own DHtmlLayoutServlet instead
 //                        of ADempiere's WebUIServlet.
 //
-//   ADempiere core       repackaged from the Ant-built lib/Adempiere.jar, using
+//   ADempiere core       repackaged from the isolated Ant-built
+//                        build/phase3/source-current/lib/Adempiere.jar, using
 //                        the Phase 4 pattern in
 //                        org.adempiere.webservice/build.gradle: strip the code
 //                        signature, then drop the seven classes that link
@@ -292,7 +293,8 @@ tasks.register('modernUiTest', Test) {
 // class that survives.
 // ---------------------------------------------------------------------------
 
-def phase5dAntCoreLibrary = rootProject.file('lib/Adempiere.jar')
+def phase5dAntCoreLibrary =
+	rootProject.file('build/phase3/source-current/lib/Adempiere.jar')
 def phase5dInstalledLibDir =
 	rootProject.file('build/phase3/runtime/Adempiere/lib')
 def phase5dSharedLibrary = new File(phase5dInstalledLibDir, 'AdempiereSLib.jar')
@@ -356,10 +358,11 @@ def phase5dServletLinkedPackageClasses = [
  * install/Adempiere/build.xml:213-227 rebuilds Adempiere.jar as
  * customization.jar + packages.jar + patches.jar + AdempiereOriginal.jar with
  * duplicate="preserve", so on a collision the packages copy wins and the base
- * copy never reaches the installed classpath. lib/Adempiere.jar in the source
- * tree is the pre-install reactor output and still carries the base copy. Taking
- * both jars verbatim would therefore ship two different bytecodes for the same
- * name; dropping the base copy reproduces the installed precedence exactly.
+ * copy never reaches the installed classpath. The isolated source copy's
+ * lib/Adempiere.jar is the pre-install reactor output and still carries the base
+ * copy. Taking both jars verbatim would therefore ship two different bytecodes
+ * for the same name; dropping the base copy reproduces the installed precedence
+ * exactly.
  */
 def phase5dPackagesOverride = { ->
 	if (project.ext.has('phase5dPackagesOverrideNames')) {
