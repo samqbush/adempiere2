@@ -9,6 +9,7 @@ import hashlib
 import http.cookiejar
 import json
 import os
+import re
 import ssl
 import subprocess
 import sys
@@ -232,8 +233,34 @@ def main() -> None:
             "public_origin_only": "true" if public_origin_only else "false",
         }
         if row["status"] != expected_status:
+            # A status mismatch is the only signal this smoke emits, so report
+            # the response itself. Without it the failure cannot be attributed
+            # to the servlet, the container error page or the routing proxy,
+            # and a fix can only be guessed at.
+            #
+            # This message reaches public CI logs, so it stays inside the
+            # Phase 5e secret-hygiene perimeter: session cookies, credentials
+            # and handoff tickets are redacted by name, and any session id
+            # embedded in the body preview is scrubbed.
+            redacted = ("set-cookie", "cookie", "authorization")
+            detail = "\n".join(
+                f"  {name}: "
+                + ("<redacted>"
+                   if name.lower() in redacted
+                   or name.lower().startswith("x-adempiere-handoff")
+                   else value)
+                for name, value in headers
+            )
+            preview = re.sub(
+                r"(?i)(jsessionid=)[^\s\"'&;<]+", r"\1<redacted>",
+                body[:2048].decode("utf-8", "replace"))
             raise SystemExit(
-                f"{route['route_id']} {mode}: status {status} != {expected_status}"
+                f"{route['route_id']} {mode}: status {status} != "
+                f"{expected_status}\n"
+                f"request: {route['method']} "
+                f"{origin.rstrip('/') + route['path']}\n"
+                f"response headers:\n{detail}\n"
+                f"response body (first 2048 bytes):\n{preview}"
             )
         observations.append(row)
         return row
