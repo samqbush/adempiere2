@@ -1263,7 +1263,7 @@ ext.stagePhase5eRouting = { File home ->
  * ZK asynchronous-update payloads.
  */
 ext.phase5eContextDescriptor = { ->
-	'''<?xml version="1.0" encoding="UTF-8"?>
+	"""<?xml version="1.0" encoding="UTF-8"?>
 <!--
   Phase 5e: mounts the Phase 5d modern ZK CE 10 archive at the INTERNAL context
   path /webui.
@@ -1282,15 +1282,17 @@ ext.phase5eContextDescriptor = { ->
   descriptor inside a WAR, and cannot replace this file without the operator
   noticing.
 -->
-<Context docBase="${catalina.base}/phase5e/webui-modern.war"
+<Context docBase="\${catalina.base}/phase5e/webui-modern.war"
          disableURLRewriting="true"
          sessionCookiePath="/webui"
          sessionCookiePathUsesTrailingSlash="false"
          crossContext="false"
          useHttpOnly="true"
          privileged="false"
-         reloadable="false"/>
-'''
+         reloadable="false">
+${project.phase5fJarScannerElement('webui')}
+</Context>
+"""
 }
 
 tasks.register('verifyPhase5eContractManifest', Exec) {

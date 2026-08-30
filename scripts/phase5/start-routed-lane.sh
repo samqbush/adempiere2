@@ -33,6 +33,41 @@ file_mode() {
   fi
 }
 
+# Failure diagnostics.
+#
+# Every redirection below writes to stderr, and the ORDER matters. The previous
+# form was `tail -200 file 2>/dev/null >&2`, which silently discarded the whole
+# dump: redirections apply left to right, so `2>/dev/null` points fd2 at
+# /dev/null and the following `>&2` then points fd1 at the SAME /dev/null. Every
+# failing lane therefore printed a three-line banner and no evidence at all,
+# which is precisely the information needed to diagnose it.
+dump_runtime_diagnostics() {
+  local label=$1 logs_dir=$2 dump_pid=${3:-}
+  # A stack dump is the only evidence that separates "still working" from
+  # "deadlocked". Both are indistinguishable from a probe that keeps returning
+  # 000, and a lane only fails once per CI round, so the first failing round
+  # must already carry it.
+  if [[ -n "$dump_pid" ]] && kill -0 "$dump_pid" 2>/dev/null; then
+    echo "--- $label thread dump (pid $dump_pid) ---" >&2
+    jcmd "$dump_pid" Thread.print >&2 2>/dev/null || true
+  fi
+  echo "--- $label deployment timings ---" >&2
+  # Tomcat logs one of these per context, so a lane that failed because it was
+  # still deploying is distinguishable from one that failed because a context
+  # threw. A lane that produced none was still in its first deployment.
+  if [[ -f "$logs_dir/catalina.out" ]]; then
+    grep -E 'HostConfig\.(deployDescriptor|deployWAR)' \
+      "$logs_dir/catalina.out" >&2 2>/dev/null || true
+  fi
+  local log
+  for log in "$logs_dir/catalina.out" "$logs_dir"/catalina.*.log \
+      "$logs_dir"/localhost.*.log; do
+    [[ -f "$log" ]] || continue
+    echo "--- $label $(basename "$log") (last 200 lines) ---" >&2
+    tail -200 "$log" >&2 2>/dev/null || true
+  done
+}
+
 lane_phase=${ADEMPIERE_ROUTED_LANE_PHASE:-phase5e}
 public_port=${PHASE5E_PUBLIC_PORT:-8888}
 public_https_port=${PHASE5F_PUBLIC_HTTPS_PORT:-8444}
@@ -48,14 +83,21 @@ public_https_port=${PHASE5F_PUBLIC_HTTPS_PORT:-8444}
 # diagnostics unreachable.
 #
 # The wait is a wall-clock deadline rather than an iteration count, because an
-# iteration count is only a time budget when every iteration is bounded. The
-# default budget accommodates a full six-context Phase 5f deploy, which is
-# dominated by @HandlesTypes class-hierarchy scanning and signed-JAR signature
-# verification and is far slower than a single-context lane.
+# iteration count is only a time budget when every iteration is bounded.
+#
 # The budget is for the whole lane, not per probe loop. Per-loop budgets would
 # multiply: three sequential loops each granted the full budget can wait three
 # times as long as the stated timeout before the lane finally fails.
-readiness_timeout=${ADEMPIERE_ROUTED_LANE_READY_TIMEOUT:-3600}
+#
+# 900s is measured, not guessed. Before the reviewed JarScanFilter
+# (gradle/phase5/jar-scan-policy.tsv) each Phase 5f context spent 13-15 minutes
+# walking its 124-127 WEB-INF/lib JARs and the API WAR spent roughly 21, so the
+# former 3600s budget could not be met and run 33290776432 timed out with both
+# probes still reporting 000. With the filter installed, a local boot of the
+# same seven contexts reached "Server startup" in 4,910 ms. 900s therefore
+# leaves two orders of magnitude of margin for the legacy Tomcat 9 ingress and
+# a slow runner, while still failing fast enough to iterate.
+readiness_timeout=${ADEMPIERE_ROUTED_LANE_READY_TIMEOUT:-900}
 probe_connect_timeout=${ADEMPIERE_ROUTED_LANE_PROBE_CONNECT_TIMEOUT:-5}
 probe_max_time=${ADEMPIERE_ROUTED_LANE_PROBE_MAX_TIME:-15}
 properties_file="$repo_root/gradle/phase4/runtime.properties"
@@ -171,7 +213,8 @@ if [[ "$modern_ready" != yes ]]; then
   echo "  waited            -> ${readiness_timeout}s" >&2
   echo "  internal /webui/ -> ${status:-none}" >&2
   echo "  /ADInterface     -> ${api_status:-none}" >&2
-  tail -200 "$tomcat10_dir/logs/catalina.out" 2>/dev/null >&2 || true
+  dump_runtime_diagnostics 'modern runtime' "$tomcat10_dir/logs" \
+    "$(cat "$pid_file" 2>/dev/null || true)"
   "$repo_root/scripts/phase5/stop-routed-lane.sh" "$repo_root" "$adempiere_home" || true
   exit 70
 fi
@@ -276,6 +319,12 @@ while (( SECONDS < public_deadline )); do
     public_ready=yes
     break
   fi
+  # Without this the loop waits out the whole lane budget after a Tomcat 9 JVM
+  # that died during startup, and reports a timeout instead of the crash.
+  if [[ -f "$CATALINA_PID" ]] && ! kill -0 "$(cat "$CATALINA_PID")" 2>/dev/null; then
+    echo "The public Tomcat 9 runtime exited during startup" >&2
+    break
+  fi
   sleep 1
 done
 
@@ -290,10 +339,17 @@ if [[ "$lane_phase" == phase5f ]]; then
       https_ready=yes
       break
     fi
+    if [[ -f "$CATALINA_PID" ]] &&
+        ! kill -0 "$(cat "$CATALINA_PID")" 2>/dev/null; then
+      echo "The public Tomcat 9 runtime exited during startup" >&2
+      break
+    fi
     sleep 1
   done
   if [[ "$https_ready" != yes ]]; then
     echo "The Phase 5f public HTTPS ingress did not become ready (${https_status:-none})" >&2
+    dump_runtime_diagnostics 'public ingress' "$catalina_base/logs" \
+    "$(cat "$CATALINA_PID" 2>/dev/null || true)"
     "$repo_root/scripts/phase5/stop-routed-lane.sh" "$repo_root" "$adempiere_home" || true
     exit 70
   fi
@@ -301,7 +357,8 @@ fi
 
 if [[ "$public_ready" != yes ]]; then
   echo "The Phase 5e public /webui ingress did not become ready (${public_status:-none})" >&2
-  tail -200 "$catalina_base/logs/catalina.out" 2>/dev/null >&2 || true
+  dump_runtime_diagnostics 'public ingress' "$catalina_base/logs" \
+    "$(cat "$CATALINA_PID" 2>/dev/null || true)"
   "$repo_root/scripts/phase5/stop-routed-lane.sh" "$repo_root" "$adempiere_home" || true
   exit 70
 fi

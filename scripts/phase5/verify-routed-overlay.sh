@@ -28,6 +28,50 @@
 set -euo pipefail
 
 installed_home=${1:?installed home is required}
+
+# ---------------------------------------------------------------------------
+# Exact JAR scan filter assertion.
+#
+# The <JarScanner> element is performance-critical, not cosmetic: without it
+# every context spends 13-15 minutes walking its 124-127 WEB-INF/lib JARs for
+# tag libraries and web fragments, which is what made run 33290776432 exceed
+# its readiness budget before any route shard ran. Nothing else in this file
+# would notice the element being dropped during generation, staging, datasource
+# mutation or installation, because the surrounding checks are substring
+# greps. The expected allowlist is read from the reviewed policy file rather
+# than duplicated here, so the descriptor and the policy cannot drift.
+# ---------------------------------------------------------------------------
+jar_scan_policy_file=$(cd "$(dirname "$0")/../.." && pwd)/gradle/phase5/jar-scan-policy.tsv
+
+assert_jar_scan_filter() {
+  local label=$1 descriptor=$2 context=$3 expected filter want
+  if [[ ! -f "$jar_scan_policy_file" ]]; then
+    echo "$label cannot read $jar_scan_policy_file" >&2
+    exit 1
+  fi
+  expected=$(awk -F'\t' -v c="$context" \
+    '$1 == c && $3 == "tld" { print $2 }' "$jar_scan_policy_file" |
+    sort | paste -sd, -)
+  filter=$(tr '\n' ' ' <"$descriptor" | tr -s ' ' |
+    sed -n 's|.*\(<JarScanner[^>]*> *<JarScanFilter[^>]*/> *</JarScanner>\).*|\1|p')
+  if [[ -z "$filter" ]]; then
+    echo "$label $descriptor has no <JarScanner><JarScanFilter/> element" >&2
+    exit 1
+  fi
+  # scanClassPath="false" is asserted, not merely tolerated: with the class
+  # path still scanned, tldSkip="*.jar" would also suppress tag libraries in
+  # $CATALINA_BASE/lib, which no gate inspects.
+  if [[ -n "$expected" ]]; then
+    want="<JarScanner scanClassPath=\"false\"> <JarScanFilter tldSkip=\"*.jar\" tldScan=\"$expected\" pluggabilitySkip=\"*.jar\"/> </JarScanner>"
+  else
+    want="<JarScanner scanClassPath=\"false\"> <JarScanFilter tldSkip=\"*.jar\" pluggabilitySkip=\"*.jar\"/> </JarScanner>"
+  fi
+  if [[ "$filter" != "$want" ]]; then
+    echo "$label $descriptor declares $filter, expected $want" >&2
+    exit 1
+  fi
+}
+
 release_home=${2:?release home is required}
 zip_archive=${3:?release ZIP is required}
 tar_archive=${4:?release TAR is required}
@@ -64,6 +108,7 @@ verify_home() {
   fi
   grep -Fq 'disableURLRewriting="true"' "$home/$context_path"
   grep -Fq 'sessionCookiePath="/webui"' "$home/$context_path"
+  assert_jar_scan_filter "$label" "$home/$context_path" webui
 
   # The docBase is RESOLVED, not merely inspected. ${catalina.base} for the
   # modern runtime in an installed tree is <ADEMPIERE_HOME>/tomcat10-api, which

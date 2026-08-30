@@ -1,0 +1,45 @@
+# Reviewed Tomcat JarScanFilter policy for every deployed Phase 5e/5f context.
+#
+# WHY THIS FILE EXISTS
+#
+# Tomcat walks every WEB-INF/lib JAR of every context twice at startup: once for
+# Jasper's TLD scan and once for the Servlet pluggability fragment pass. The six
+# routed contexts carry 124-127 JARs each (66,100-68,064 nested entries) and the
+# API WAR carries 37. In run 33290776432 that cost 13-15 minutes per context and
+# roughly 21 minutes for ADInterface, deployed serially, so
+# :startPhase5fRoutedLane never became ready inside any usable budget.
+#
+# The reviewed <JarScanFilter> on each context descriptor suppresses both walks.
+# Suppression is only safe while the archives genuinely contain nothing a scan
+# would have found, so this file records the exception set and
+# verifyPhase5fJarScanPolicy proves it against the built WARs. A JAR that starts
+# shipping a TLD, a web-fragment.xml, a ServletContainerInitializer service
+# entry or META-INF/resources/** fails that gate rather than silently losing the
+# behaviour at runtime.
+#
+# SEMANTICS (verified against StandardJarScanFilter.check in the shipped
+# tomcat-util-scan.jar of Tomcat 10.1.59, not assumed):
+#
+#   defaultTldScan is true, so for a TLD scan Tomcat returns
+#   matchName(tldScanSet, jar) when matchName(tldSkipSet, jar) is true, and true
+#   otherwise. With tldSkip="*.jar" the allowlist below is therefore the exact
+#   and complete set of JARs still scanned for tag libraries.
+#
+#   The same branch governs PLUGGABILITY. With pluggabilitySkip="*.jar" and an
+#   empty pluggabilityScan, no application JAR is opened for fragments at all.
+#
+# Setting tldScan REPLACES the container default
+# (tomcat.util.scan.StandardJarScanFilter.jarsToScan, which lists only log4j and
+# slf4j taglib JARs). None of those are present in any deployed WAR, so the
+# replacement removes nothing.
+#
+# NOT COVERED BY tldSkip: a TLD outside a JAR. /wstore ships
+# WEB-INF/webStore.tld, which Tomcat finds through its /WEB-INF walk regardless
+# of this filter. It is recorded here so the omission cannot be mistaken for an
+# oversight.
+#
+# Columns: context, jar, scan_type, reason
+# The generated <JarScanner> sets scanClassPath="false", so this file is
+# the complete allowlist for every JAR the filter can reach.
+context	jar	scan_type	reason
+wstore	jakarta.servlet.jsp.jstl-3.0.1.jar	tld	The only JAR in any deployed WAR that ships META-INF TLDs; the 25 precompiled /wstore JSPs instantiate its tag handlers

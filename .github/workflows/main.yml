@@ -59,6 +59,10 @@ jobs:
     # 24.04 is required: this graph includes the Phase 5c/5d browser contract
     # tasks, whose pinned browser artifacts are built against that image.
     runs-on: ubuntu-24.04
+    # Contracts is database-neutral and completes in roughly half an hour. A run
+    # that exceeds this is hung, not slow, and must not hold a runner for the
+    # six-hour default.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -164,6 +168,13 @@ jobs:
   current-phase-smoke:
     name: Current-phase database smoke
     runs-on: ubuntu-24.04
+    # Without this, a runtime that never becomes ready holds a runner for the
+    # six-hour default. Run 33290776432 burned 1h16m before the lane's own
+    # readiness budget expired. The step-level budget in start-routed-lane.sh
+    # is the real bound; this is the backstop for a hang that outlives it, and
+    # is deliberately loose enough that the always() evidence upload and the
+    # marker-guarded database cleanup still run.
+    timeout-minutes: 90
     services:
       postgres:
         image: postgres:14.6
@@ -219,6 +230,7 @@ jobs:
     name: Regression matrix (${{ matrix.gate }})
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
     strategy:
       # One phase failing must not hide the state of the others.
       fail-fast: false

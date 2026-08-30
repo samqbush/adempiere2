@@ -305,6 +305,9 @@ apply from: 'gradle/phase5/cohort-routing.gradle'
 apply from: 'gradle/phase5/phase5f-oracle-contracts.gradle'
 apply from: 'gradle/phase5/jakarta-web-foundation.gradle'
 apply from: 'gradle/phase5/phase5f-context-routing.gradle'
+// Applied last: it registers a task that depends on phase5fJakartaWebWars and
+// on the zkwebui/webservice archives declared above.
+apply from: 'gradle/phase5/jar-scan.gradle'
 
 tasks.withType(Javadoc) {
 	failOnError false

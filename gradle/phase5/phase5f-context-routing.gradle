@@ -258,6 +258,7 @@ ext.phase5fModernContextDescriptor = { String name, Map spec ->
          useHttpOnly="true"
          privileged="false"
          reloadable="false">
+${project.phase5fJarScannerElement(name.toString())}
   <Valve className="org.apache.catalina.valves.RemoteIpValve"
          internalProxies="127\\.0\\.0\\.1|::1"
          protocolHeader="x-forwarded-proto"
