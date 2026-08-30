@@ -88,8 +88,10 @@ accident.
   database-neutrally enforced. Runtime observations remain pending until the
   six-shard database-backed smoke executes.
 - `phase5fFinalVerification` is implemented and green twice. The implemented
-  `phase5fJakartaWebRoutesSmoke` has not run because
-  `phase3DbSystemPassword` is unavailable, so Phase 5f is not complete.
+  `phase5fJakartaWebRoutesSmoke` has been executed in CI and has never passed;
+  it currently fails in `:startPhase5fRoutedLane` before any shard runs, and
+  `/webui` and `/wstore` have never been observed, so Phase 5f is not
+  complete.
 - The installed product and both 394LTS archives stage exactly one copy of each
   of the five Phase 5f WARs under `tomcat10-api/phase5f/`, preserve Phase 4 CXF
   and Phase 5e `/webui`, retain pristine rollback WARs, and reject stale

@@ -67,24 +67,28 @@ jobs:
           java-version: '21'
           cache: gradle
 
-      # One invocation, one task graph. phase5eFinalVerification transitively
+      # One invocation, one task graph. phase5fFinalVerification transitively
       # covers phase3NoDatabaseDistribution, phase4FinalVerification and the
-      # Phase 5a/5b/5c/5d gates; phase5cFinalVerification contributes only
+      # Phase 5a/5b/5c/5d/5e gates; phase5cFinalVerification contributes only
       # :zkwebui:check, which is not on that chain.
       - name: Verify every database-neutral phase gate
         uses: ./.github/actions/adempiere-build
         with:
-          task: phase5eFinalVerification phase5cFinalVerification
+          task: phase5fFinalVerification phase5cFinalVerification
 
       # if-no-files-found: error is satisfied by any one matching path, so an
       # upload block that also matches an evidence directory cannot detect a
       # missing archive. Assert the archives explicitly.
+      #
+      # scripts/phase3/run-isolated-ant-build.sh rsync-excludes /install/build/
+      # and stages the archives into build/phase3/release/. install/build/ is an
+      # internal reactor scratch directory, not a stable handoff.
       - name: Assert the distribution archives were staged
         run: |
           set -euo pipefail
           for archive in \
-            install/build/Adempiere_394LTS.zip \
-            install/build/Adempiere_394LTS.tar.gz
+            build/phase3/release/Adempiere_394LTS.zip \
+            build/phase3/release/Adempiere_394LTS.tar.gz
           do
             if [[ ! -s "$archive" ]]; then
               echo "Distribution archive missing or empty: $archive" >&2
@@ -124,7 +128,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: contract-evidence
-          # Necessarily 'warn': this is the union of the paths produced by six
+          # Necessarily 'warn': this is the union of the paths produced by seven
           # former jobs, and no single gate produces all of them. The archives,
           # which are the outputs worth failing over, are asserted with test -s
           # above rather than left to this action.
@@ -139,19 +143,24 @@ jobs:
             build/phase5e/legacy-webui/derived-provenance.tsv
             build/phase5e/rollback/rollback-evidence.txt
             build/phase5e/rollback/setupwlib-ant.log
-            install/build/Adempiere_394LTS.zip
-            install/build/Adempiere_394LTS.tar.gz
+            build/phase5f/
+            build/phase3/release/Adempiere_394LTS.zip
+            build/phase3/release/Adempiere_394LTS.tar.gz
+            serverRoot/build/phase5f-wars/
+            serverRoot/build/test-results/
             org.adempiere.cohort/build/test-results/
             org.adempiere.cohort/build/reports/tests/
+            zkwebui/build/test-results/
+            zkwebui/build/reports/tests/
             zkwebui/build/phase5c/transformer/
             zkwebui/build/phase5d/
             zkwebui/build/libs/webui-modern.war
-            zkwebui/build/test-results/
-            zkwebui/build/reports/tests/
 
-  # The runtime gate for the phase under active development. Phase 5e is the
-  # newest phase merged to develop; PR #11 advances this to
-  # phase5fJakartaWebRoutesSmoke when Phase 5f lands.
+  # The runtime gate for the phase under active development. This slot holds
+  # phase5fJakartaWebRoutesSmoke. It is currently RED: the gate fails in
+  # :startPhase5fRoutedLane before any route shard runs. That is deliberate -
+  # this job is meant to reflect the state of the phase under development.
+  # See docs/modernization/phase-5f-evidence.md.
   current-phase-smoke:
     name: Current-phase database smoke
     runs-on: ubuntu-24.04
@@ -180,7 +189,7 @@ jobs:
       - name: Run the current phase public-origin runtime gate
         uses: ./.github/actions/adempiere-build
         with:
-          task: phase5eCohortRoutingSmoke
+          task: phase5fJakartaWebRoutesSmoke
       # build/phase5e/keys holds the generated handoff secret and is excluded
       # from every path below. A CI artifact is a published archive.
       - name: Upload current-phase runtime evidence
@@ -190,6 +199,8 @@ jobs:
           name: current-phase-smoke-evidence
           if-no-files-found: warn
           path: |
+            build/phase5f/runtime-evidence/
+            build/phase5f/tomcat10/logs/
             build/phase5e/evidence/
             build/phase3/runtime/Adempiere/tomcat/logs/
             build/phase5e/tomcat10/logs/
@@ -218,6 +229,7 @@ jobs:
           - phase5bLegacyWebOracleSmoke
           - phase5cRollbackRehearsal
           - phase5dModernWebSmoke
+          - phase5eCohortRoutingSmoke
     services:
       postgres:
         image: postgres:14.6
@@ -249,8 +261,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: regression-${{ matrix.gate }}-evidence
-          # Necessarily 'warn': this path block is the union across five gates
+          # Necessarily 'warn': this path block is the union across six gates
           # and each produces only its own subset.
+          #
+          # build/phase5e/ is listed by specific subpath, never wholesale:
+          # phase5eCohortRoutingSmoke generates the shared handoff secret into
+          # build/phase5e/keys, and a CI artifact is a published archive.
           if-no-files-found: warn
           path: |
             build/phase3/evidence/
@@ -258,6 +274,8 @@ jobs:
             build/phase5b/replay/
             build/phase5c/rollback/rollback-evidence.txt
             build/phase5d/
+            build/phase5e/evidence/
+            build/phase5e/tomcat10/logs/
             build/phase3/runtime/Adempiere/tomcat/logs/
             base/build/phase2/evidence/
             base/build/phase3/evidence/

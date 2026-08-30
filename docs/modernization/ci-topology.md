@@ -26,6 +26,7 @@ phase3NoDatabaseDistribution
         │           └── phase5cFinalVerification (gradle/phase5/beachhead.gradle:200)
         └── phase5dFinalVerification     (gradle/phase5/zk-functional-slice.gradle:388-395)
               └── phase5eFinalVerification   (gradle/phase5/cohort-routing.gradle:1048)
+                    └── phase5fFinalVerification (gradle/phase5/phase5f-context-routing.gradle:749-751)
 ```
 
 Running each gate as its own CI job therefore re-executes work another job is
@@ -48,11 +49,16 @@ on `develop` at `6eda2bc8c`:
 | Phase 5b frozen web oracle and artifact pins | `phase5bFinalVerification` | 57 |
 | Phase 5c Jakarta web packaging beachhead | `phase5cFinalVerification` | 130 |
 | Phase 5d functional ZK CE 10 slice | `phase5dFinalVerification` | 164 |
-| Phase 5e cohort routing contracts | `phase5eFinalVerification` | 195 |
-| **Sum across the 6 separate jobs** | | **600** |
-| **`Contracts`, one invocation** | `phase5eFinalVerification phase5cFinalVerification` | **201** |
+| Phase 5e cohort routing contracts | `phase5eFinalVerification` | 196 |
+| Phase 5f Jakarta web contracts and topology | `phase5fFinalVerification` | 281 |
+| **Sum across the 7 separate jobs** | | **882** |
+| **`Contracts`, one invocation** | `phase5fFinalVerification phase5cFinalVerification` | **287** |
 
-**399 of 600 task executions per pull request were redundant (66.5%).**
+**595 of 882 task executions per pull request were redundant (67.5%).**
+
+The measurement above was re-taken on `phase-5f-jakarta-web-routes` after the
+lane advanced to Phase 5f. The original `develop` measurement, with 6 jobs, was
+600 against 201 merged - the same 66-67% redundancy.
 
 ### Coverage proof
 
@@ -61,20 +67,21 @@ Set equality was verified, not assumed:
 ```bash
 for t in phase3NoDatabaseDistribution phase4FinalVerification \
          phase5bFinalVerification phase5cFinalVerification \
-         phase5dFinalVerification phase5eFinalVerification; do
+         phase5dFinalVerification phase5eFinalVerification \
+         phase5fFinalVerification; do
   ./gradlew $t --dry-run --dependency-verification=strict \
     | grep SKIPPED | sed 's/ SKIPPED//'
 done | sort -u > union.txt
 
-./gradlew phase5eFinalVerification phase5cFinalVerification \
+./gradlew phase5fFinalVerification phase5cFinalVerification \
   --dry-run --dependency-verification=strict \
   | grep SKIPPED | sed 's/ SKIPPED//' | sort -u > merged.txt
 
 comm -23 union.txt merged.txt   # must print nothing
 ```
 
-Result: union 201 tasks, merged 201 tasks, `comm -23` empty. The merged
-invocation schedules **exactly** the same task set as the six jobs combined.
+Result: union 287 tasks, merged 287 tasks, `comm -23` empty. The merged
+invocation schedules **exactly** the same task set as the seven jobs combined.
 
 Re-run this whenever the `Contracts` task arguments change.
 
@@ -170,6 +177,23 @@ It is recorded rather than fixed here because raising a timeout inside a phase
 contract is a phase change, not a CI change. If it recurs, the fix belongs in
 the Phase 5e test's own wait configuration.
 
+`phase5eCohortRoutingSmoke` has since moved to the regression matrix, because
+the current-phase slot now belongs to `phase5fJakartaWebRoutesSmoke`. The flake
+therefore no longer blocks a pull request, but it still gates the post-merge
+lane and is still worth fixing.
+
+## The current-phase smoke is red on this branch
+
+`Current-phase database smoke` runs `phase5fJakartaWebRoutesSmoke`, which **has
+never passed.** It currently fails in `:startPhase5fRoutedLane` with `The Phase
+5e modern runtime did not become ready`, before any route shard executes.
+
+This is deliberate and must not be worked around by pointing the job back at a
+green Phase 5e task. The blocking gate is supposed to reflect the state of the
+phase under development, and the state of Phase 5f is red. See
+`docs/modernization/phase-5f-evidence.md` for both observed failure modes and
+for the fact that `/webui` and `/wstore` have never been observed.
+
 ## Concurrency
 
 Concurrency groups are repository-wide, not scoped to a workflow. Both
@@ -228,7 +252,11 @@ When a phase merges, change only the task arguments:
 - `Current-phase database smoke` → the new phase's database-backed smoke
 - `Regression matrix` → add the previous phase's smoke to the matrix
 
-Then re-run the coverage proof above. Note for Phase 5f specifically: it
-relocates the distribution archives out of `install/build/` into
-`build/phase3/release/` via `scripts/phase3/run-isolated-ant-build.sh`, so the
-archive assertion paths in the `Contracts` job must move with it.
+Then re-run the coverage proof above, and check whether the phase moves any
+asserted output path.
+
+This has already been done once, for Phase 5f: it relocates the distribution
+archives out of `install/build/` into `build/phase3/release/` via
+`scripts/phase3/run-isolated-ant-build.sh`, and the archive assertion paths in
+the `Contracts` job moved with it. `install/build/` is an internal reactor
+scratch directory, not a stable handoff.

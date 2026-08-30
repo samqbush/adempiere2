@@ -73,8 +73,12 @@ Installed and release topology preserves Phase 4 CXF and Phase 5e `/webui`,
 stages one Phase 5f WAR per context under `tomcat10-api/phase5f/`, and retains
 pristine per-context rollback.
 
-The implemented `phase5fJakartaWebRoutesSmoke` has six public-origin shards but
-has **not been executed** because `phase3DbSystemPassword` is unavailable.
+The implemented `phase5fJakartaWebRoutesSmoke` has six public-origin shards and
+**has been executed in CI, which supplies `phase3DbSystemPassword`. It has never
+passed.** The current run fails in `:startPhase5fRoutedLane` with `The Phase 5e
+modern runtime did not become ready`, so no shard runs at all. Because the
+shards are fail-fast and `/` runs fourth, **`/webui` and `/wstore` have never
+been observed in any run.**
 Never present its 82 runtime observations or route-specific database effects as
 green. `/mobile` and `/adempiere` remain disabled until Phase 5g; `/admin`
 remains legacy pending named consumer ownership; `/` and `/wstore` await that
@@ -110,7 +114,7 @@ by a phase become canonical only after that phase's exit criteria prove them.
 | Phase 5e cohort routing smoke | `./gradlew phase5eCohortRoutingSmoke -Pphase3DbSystemPassword='<password>' --dependency-verification=strict` | Executed, green marker-owned PostgreSQL gate that boots the routed public Tomcat 9 ingress and the loopback modern runtime, drives the complete public-origin cohort matrix through a browser that can only reach the public origin, proves concurrent client/org/role/user/language isolation by comparing each interleaved capture with that identity's solo capture, proves that logout, the product's session-inactivity timeout and container-side destruction each record a real session destruction on every runtime that must have one and return every `SessionManager` cache a runtime reports for that session to its marked baseline, proves a logged-out browser is decided again rather than inheriting its previous cohort, and replays the complete Phase 4 SOAP corpus while routed modern sessions are authenticated. All 23 matrix rows pass |
 | Phase 5e handoff key | `./gradlew provisionPhase5eHandoffKey` | Generates the shared >=32-byte 0600 key from the OS CSPRNG, outside every archive under `ADEMPIERE_HOME`. The repository ships no key and no placeholder |
 | Phase 5f Jakarta route contracts and topology | `./gradlew phase5fFinalVerification --dependency-verification=strict` | Implemented and executed green twice. Verifies the 82 deployed/30 non-deployed contract and mutations, isolated generated Jakarta closures, five deterministic modern context WARs, 25 JSP precompiles, Servlet 6/discovery rules, `/timeline` and static DSP contracts, independent routing policies, installed/release topology, rollback, inventories, and Phase 4/5d/5e regressions. Does **not** prove runtime route/database-effect parity |
-| Phase 5f Jakarta route smoke | `./gradlew phase5fJakartaWebRoutesSmoke -Pphase3DbSystemPassword='<password>' --dependency-verification=strict` | Implemented six-shard, marker-owned PostgreSQL public-origin replay for `/webui`, `/admin`, `/`, `/mobile`, `/adempiere`, and `/wstore`, plus exact 82-row effect validation and Phase 4 SOAP coexistence. **Not executed because the system password is unavailable; Phase 5f is not complete** |
+| Phase 5f Jakarta route smoke | `./gradlew phase5fJakartaWebRoutesSmoke -Pphase3DbSystemPassword='<password>' --dependency-verification=strict` | Implemented six-shard, marker-owned PostgreSQL public-origin replay for `/webui`, `/admin`, `/`, `/mobile`, `/adempiere`, and `/wstore`, plus exact 82-row effect validation and Phase 4 SOAP coexistence. **Executed in CI and never passed; currently fails in `:startPhase5fRoutedLane` before any shard. Phase 5f is not complete** |
 | Full product build, no DB restore | `ant build -Dnodbrestore=true` | Authoritative underlying Ant reactor; prefer the guarded Phase 3 lifecycle for CI |
 | Full product build with DB restore/migrations | `ant build -Dnodbrestore=false` | Database-affecting underlying reactor; run only against an approved disposable environment |
 | Gradle module build | `./gradlew build --dependency-verification=strict` | Reproducible Phase 2 gate on JDK 21 with Java 21 bytecode; omits quarantined Ant-only deployables |
@@ -161,8 +165,9 @@ checks to mark required are `Contracts` and `Current-phase database smoke`.
 `docs/modernization/ci-topology.md`. Every pull request runs `Contracts` - a
 single Gradle invocation of the head of the phase-gate chain plus
 `phase5cFinalVerification`, which together schedule exactly the same task set as
-the former six per-phase jobs - and `Current-phase database smoke`, the runtime
-gate for the phase under active development. The remaining database-backed
+the former seven per-phase jobs (287 tasks, versus 882 across those jobs) - and
+`Current-phase database smoke`, the runtime gate for the phase under active
+development, currently `phase5fJakartaWebRoutesSmoke`, which is red. The remaining database-backed
 smokes run post-merge on `push` to `develop`, nightly, and on demand as
 `Regression matrix`.
 

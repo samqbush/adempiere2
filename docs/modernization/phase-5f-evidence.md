@@ -31,8 +31,8 @@ The normative files are under `contracts/phase5f-jakarta-web-v1/`.
 |---|---|
 | Phase 5e regression after routing-core extraction | **Executed and green through both Phase 5f final-gate runs.** |
 | `phase5fFinalVerification` | **Implemented; executed and green twice** on 2026-08-27. Local logs: `build/phase5f-final-rebuild.log` and `build/phase5f-final-validation.log`. |
-| `phase5fJakartaWebRoutesSmoke` | **Implemented; not executed.** `phase3DbSystemPassword` is unavailable. |
-| Per-context smoke shards | **Six implemented; not executed:** `/webui`, `/admin`, `/`, `/mobile`, `/adempiere`, `/wstore`. |
+| `phase5fJakartaWebRoutesSmoke` | **Implemented; executed in CI; never passed.** See "Runtime gate failures" below. |
+| Per-context smoke shards | **Six implemented. `/adempiere`, `/admin` and `/mobile` have passed once. `/` has failed. `/webui` and `/wstore` have never been observed.** |
 | Installed product/release overlay proof | **Executed and green** through `phase5fFinalVerification`. |
 | Per-context rollback rehearsal | **Executed and green** through `phase5fFinalVerification`. |
 
@@ -45,9 +45,62 @@ Canonical commands:
   --dependency-verification=strict
 ```
 
+## Runtime gate failures
+
+`phase5fJakartaWebRoutesSmoke` runs in CI, which supplies `phase3DbSystemPassword`
+as the `postgres` service password. The earlier claim in this document that the
+gate was "not executed" because that password was unavailable was wrong: the gate
+has been executed repeatedly and has never passed. The two failures observed so
+far are distinct, and the second is not a regression of the first - it occurs
+strictly earlier.
+
+### Current failure: the routed lane never starts
+
+Latest run: `:startPhase5fRoutedLane` exits 70 after roughly 65 minutes with:
+
+```
+The Phase 5e modern runtime did not become ready
+```
+
+No shard executes, so **zero of the 82 route observations are collected**. The
+long wall-clock is the readiness loop retrying until it gives up; it is the
+main reason Phase 5f CI runs are slow.
+
+### Earlier failure: the ROOT context does not initialize
+
+A previous run reached the shards and recorded:
+
+```
+/adempiere: 21 observations  PASS
+/admin:      4 observations  PASS
+/mobile:    14 observations  PASS
+/::AdRedirector::/AdRedirector modern-public: status 500 != 400
+  jakarta.servlet.ServletException: Broadcast.init
+    at org.compiere.cm.HttpServletCM.init(HttpServletCM.java:165)
+```
+
+`webCM/src/main/servlet/org/compiere/cm/HttpServletCM.java:163-165`:
+
+```java
+super.init (config);
+if (!WebEnv.initWeb (config))
+    throw new ServletException ("Broadcast.init");
+```
+
+`WebEnv.initWeb(config)` returns `false` inside the generated Jakarta ROOT (`/`)
+WAR, so `AdRedirector` never initializes and Tomcat answers 500 where the
+contract requires 400. This is an environment-bootstrap failure in the migrated
+`/` context, not a route-contract mismatch.
+
+### Unobserved routes
+
+The shards are fail-fast and `/` runs fourth of six. **`/webui` and `/wstore`
+have never been observed in any run.** Any statement about their conformance is
+unproven, and Phase 5f cannot be called complete on the strength of the
+database-neutral gate alone.
+
 The two successful database-neutral executions completed in 25 seconds and 22
 seconds respectively. They validate:
-
 - the exact 82 deployed mappings and 30 non-deployed dispositions;
 - the isolated generated Jakarta source/web trees without modifying legacy
   sources or assets;

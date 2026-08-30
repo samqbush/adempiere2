@@ -37,6 +37,7 @@ bypass, public Tomcat 10 connector, or silent fallback.
 The database-neutral controls, topology and rollback are implemented and were
 executed green twice through `phase5fFinalVerification`. The six-shard
 public-origin and database-effect observations remain **unverified** because
-`phase5fJakartaWebRoutesSmoke` has not been executed:
-`phase3DbSystemPassword` is unavailable. T5f-1 remains open and closes only in
+`phase5fJakartaWebRoutesSmoke`, although executed in CI, has never passed. It
+currently fails in `:startPhase5fRoutedLane` before any shard runs, and
+`/webui` and `/wstore` have never been observed in any run. T5f-1 remains open and closes only in
 Phase 5h; Phase 5f is not complete or merged.
