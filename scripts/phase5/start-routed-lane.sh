@@ -36,6 +36,28 @@ file_mode() {
 lane_phase=${ADEMPIERE_ROUTED_LANE_PHASE:-phase5e}
 public_port=${PHASE5E_PUBLIC_PORT:-8888}
 public_https_port=${PHASE5F_PUBLIC_HTTPS_PORT:-8444}
+
+# Readiness probing.
+#
+# Every readiness probe MUST be individually bounded. A Tomcat connector binds
+# its port during init, before any context has deployed, so the kernel completes
+# the TCP handshake and queues the request in the accept backlog while the
+# container is still single-threadedly deploying contexts. An unbounded curl
+# therefore blocks forever against a listening-but-unserviced socket, which
+# silently converts the wait below into a deadlock and makes the failure
+# diagnostics unreachable.
+#
+# The wait is a wall-clock deadline rather than an iteration count, because an
+# iteration count is only a time budget when every iteration is bounded. The
+# default budget accommodates a full six-context Phase 5f deploy, which is
+# dominated by @HandlesTypes class-hierarchy scanning and signed-JAR signature
+# verification and is far slower than a single-context lane.
+# The budget is for the whole lane, not per probe loop. Per-loop budgets would
+# multiply: three sequential loops each granted the full budget can wait three
+# times as long as the stated timeout before the lane finally fails.
+readiness_timeout=${ADEMPIERE_ROUTED_LANE_READY_TIMEOUT:-3600}
+probe_connect_timeout=${ADEMPIERE_ROUTED_LANE_PROBE_CONNECT_TIMEOUT:-5}
+probe_max_time=${ADEMPIERE_ROUTED_LANE_PROBE_MAX_TIME:-15}
 properties_file="$repo_root/gradle/phase4/runtime.properties"
 api_port=$(awk -F= '$1 == "api.port" {sub(/^[^=]*=/, ""); print; exit}' \
   "$properties_file")
@@ -100,6 +122,17 @@ if [[ "$lane_phase" == phase5f ]]; then
     sed "s#\${catalina.base}#$tomcat10_dir#g" "$descriptor" \
       >"$tomcat10_dir/conf/Catalina/localhost/$name"
   done
+  shared_runtime="$adempiere_home/tomcat/lib/AdempiereSLib.jar"
+  if [[ ! -f "$shared_runtime" ]]; then
+    echo "The installed shared datasource runtime is missing: $shared_runtime" >&2
+    exit 66
+  fi
+  cp "$shared_runtime" "$tomcat10_dir/lib/AdempiereSLib.jar"
+  python3 "$repo_root/scripts/phase5/configure-phase5f-tomcat10-datasources.py" \
+    --source-server "$adempiere_home/tomcat/conf/server.xml" \
+    --source-context "$adempiere_home/tomcat/conf/context.xml" \
+    --target-server "$tomcat10_dir/conf/server.xml" \
+    --target-context-dir "$tomcat10_dir/conf/Catalina/localhost"
 fi
 
 grep -Fq 'address="127.0.0.1"' "$tomcat10_dir/conf/server.xml"
@@ -111,10 +144,14 @@ rm -f "$pid_file"
 "$tomcat10_dir/bin/catalina.sh" start >/dev/null 2>&1
 
 modern_ready=no
-for _ in $(seq 1 180); do
+lane_deadline=$(( SECONDS + readiness_timeout ))
+modern_deadline=$lane_deadline
+while (( SECONDS < modern_deadline )); do
   status=$(curl -sS -o /dev/null -w '%{http_code}' \
+    --connect-timeout "$probe_connect_timeout" --max-time "$probe_max_time" \
     "http://127.0.0.1:$api_port/webui/" 2>/dev/null || true)
   api_status=$(curl -sS -o /dev/null -w '%{http_code}' \
+    --connect-timeout "$probe_connect_timeout" --max-time "$probe_max_time" \
     "http://127.0.0.1:$api_port/ADInterface/services/ADService?wsdl" \
     2>/dev/null || true)
   # 403 is a healthy armed modern context: it refuses an unbootstrapped session
@@ -131,6 +168,7 @@ done
 
 if [[ "$modern_ready" != yes ]]; then
   echo "The Phase 5e modern runtime did not become ready" >&2
+  echo "  waited            -> ${readiness_timeout}s" >&2
   echo "  internal /webui/ -> ${status:-none}" >&2
   echo "  /ADInterface     -> ${api_status:-none}" >&2
   tail -200 "$tomcat10_dir/logs/catalina.out" 2>/dev/null >&2 || true
@@ -191,6 +229,7 @@ if [[ "$lane_phase" == phase5f ]]; then
   python3 - "$catalina_base/conf/server.xml" "$keystore" \
       "$keystore_password" "$public_https_port" <<'PY'
 import sys
+import re
 from pathlib import Path
 from xml.sax.saxutils import quoteattr
 
@@ -219,7 +258,8 @@ PY
   export CATALINA_OPTS
 fi
 
-if curl -sS -o /dev/null "http://127.0.0.1:$public_port/" 2>/dev/null; then
+if curl -sS -o /dev/null --connect-timeout 2 --max-time 5 \
+  "http://127.0.0.1:$public_port/" 2>/dev/null; then
   echo "Port $public_port is already serving HTTP; refusing to reuse an unknown lane" >&2
   "$repo_root/scripts/phase5/stop-routed-lane.sh" "$repo_root" "$adempiere_home" || true
   exit 70
@@ -227,8 +267,10 @@ fi
 
 "$CATALINA_HOME/bin/startup.sh" >/dev/null
 public_ready=no
-for _ in $(seq 1 180); do
+public_deadline=$lane_deadline
+while (( SECONDS < public_deadline )); do
   public_status=$(curl -sS -o /dev/null -w '%{http_code}' \
+    --connect-timeout "$probe_connect_timeout" --max-time "$probe_max_time" \
     "http://127.0.0.1:$public_port/webui/" 2>/dev/null || true)
   if [[ "$public_status" == 200 ]]; then
     public_ready=yes
@@ -239,8 +281,10 @@ done
 
 if [[ "$lane_phase" == phase5f ]]; then
   https_ready=no
-  for _ in $(seq 1 180); do
+  https_deadline=$lane_deadline
+  while (( SECONDS < https_deadline )); do
     https_status=$(curl -ksS -o /dev/null -w '%{http_code}' \
+      --connect-timeout "$probe_connect_timeout" --max-time "$probe_max_time" \
       "https://127.0.0.1:$public_https_port/webui/" 2>/dev/null || true)
     if [[ "$https_status" == 200 ]]; then
       https_ready=yes
