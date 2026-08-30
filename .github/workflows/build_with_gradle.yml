@@ -4,25 +4,28 @@
 
 name: ADempiere Reproducible Gradle Gate
 
-# Controls when the action will run. 
+# Controls when the action will run.
+#
+# push and pull_request previously listed the same six branch patterns, so a
+# pull request opened from a branch matching one of them triggered this
+# workflow twice for the same commit. push is now limited to the long-lived
+# branches, where it records trunk state; every other branch is covered by its
+# pull request.
 on:
-  # Triggers the workflow on push or pull request events but only for the develop branch
   push:
-   branches:
-        - master
-        - develop
-        - bugfix/**
-        - feature/**
-        - hotfix/**
-        - test/**
+    branches:
+      - master
+      - develop
   pull_request:
     branches:
-        - master
-        - develop
-        - bugfix/**
-        - feature/**
-        - hotfix/**
-        - test/**
+      - master
+      - develop
+
+# Namespaced by workflow identity: concurrency groups are repository-wide, so
+# an un-namespaced ref-based group would let this workflow cancel main.yml.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:

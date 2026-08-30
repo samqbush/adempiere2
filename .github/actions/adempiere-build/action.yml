@@ -1,9 +1,14 @@
-name: ADempiere Phase 3 Build
-description: Runs the same guarded Phase 3 Gradle lifecycle used by local builds
+name: ADempiere guarded Gradle gate
+description: >-
+  Runs one or more ADempiere modernization Gradle gates through the same guarded
+  lifecycle used by local builds.
 author: ADempiere
 inputs:
   task:
-    description: Phase 3 Gradle lifecycle task
+    description: >-
+      One or more Gradle lifecycle tasks, space separated. Multiple tasks are
+      run in a single invocation so they share one task graph and Gradle
+      de-duplicates the work they have in common.
     required: false
     default: ''
   nodbrestore:
@@ -13,9 +18,10 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Run Phase 3 lifecycle
+    - name: Run the requested Gradle gate
       shell: bash
       run: |
+        set -euo pipefail
         task='${{ inputs.task }}'
         if [[ -z "$task" ]]; then
           if [[ '${{ inputs.nodbrestore }}' == 'false' ]]; then
@@ -24,4 +30,7 @@ runs:
             task=phase3NoDatabaseDistribution
           fi
         fi
-        xvfb-run -a ./gradlew "$task" --dependency-verification=strict
+        # Deliberately unquoted: $task may name several tasks, and they must
+        # reach Gradle as separate arguments so they share one task graph.
+        # shellcheck disable=SC2086
+        xvfb-run -a ./gradlew $task --dependency-verification=strict
