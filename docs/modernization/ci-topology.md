@@ -136,6 +136,22 @@ its own aggregate only, so any task scheduled after that aggregate — including
 `:zkwebui:check` — is outside its window. The CI-level postcondition covers the
 invocation regardless of ordering.
 
+Two tracked binaries are excluded from that check: the Ant reactor regenerates
+`lib/ADInterface-1.0.war` and `lib/mysql-connector-java-5.1.13-bin.jar` in
+place on every run. This postcondition is what first made that side effect
+visible — it is a pre-existing repository condition, not something the
+consolidation introduced. Both files are build outputs that happen to be
+tracked, and it is the same pair Phase 5f pins with
+`verifyPhase5fTrackedInputImmutability`, which corroborates that the phase
+authors already knew about it.
+
+They are excluded rather than tolerated silently: the step still prints
+`git diff --stat` for the pair, so a change in *which* files the build rewrites
+stays observable, while any mutation of any other tracked file fails the job.
+Cleaning this up — either by untracking both artifacts or by making the reactor
+write them to a build directory — is repository hygiene owned by Phase 7, not
+by this CI change.
+
 ## Concurrency
 
 Concurrency groups are repository-wide, not scoped to a workflow. Both

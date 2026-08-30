@@ -96,8 +96,28 @@ jobs:
       # The Phase 5f tracked-input immutability finalizer only guards the tasks
       # inside its own aggregate, so any task scheduled after it is unchecked.
       # This postcondition covers the whole invocation regardless of ordering.
+      #
+      # Two tracked binaries are excluded: the Ant reactor regenerates
+      # lib/ADInterface-1.0.war and lib/mysql-connector-java-5.1.13-bin.jar in
+      # place as a build side effect. That is a pre-existing repository
+      # condition - they are build outputs that happen to be tracked - and is
+      # exactly why Phase 5f pins that same pair. Everything else must come out
+      # byte-identical.
       - name: Assert the verification did not mutate tracked files
-        run: git diff --exit-code
+        run: |
+          set -euo pipefail
+          if ! git diff --exit-code -- . \
+            ':(exclude)lib/ADInterface-1.0.war' \
+            ':(exclude)lib/mysql-connector-java-5.1.13-bin.jar'
+          then
+            echo "::error::The verification mutated tracked files outside the two known regenerated build artifacts"
+            exit 1
+          fi
+          # Keep the known side effect visible rather than silent.
+          echo 'Known regenerated build artifacts (not a failure):'
+          git diff --stat -- \
+            lib/ADInterface-1.0.war \
+            lib/mysql-connector-java-5.1.13-bin.jar
 
       - name: Upload contract and distribution evidence
         if: always()
