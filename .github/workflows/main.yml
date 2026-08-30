@@ -1,217 +1,63 @@
-name: ADempiere Phase 3 Build
+# ADempiere modernization gates
+#
+# Two lanes, per MODERNIZATION_PLAN.md item 3.7:
+#
+#   Lane 1 (pull_request, blocking)
+#     * Contracts                    - every database-neutral phase gate
+#     * Current-phase database smoke - the runtime gate for the phase under
+#                                      active development
+#
+#   Lane 2 (push:develop, nightly, manual; non-blocking)
+#     * Regression matrix            - the database-backed smokes for phases
+#                                      already merged
+#
+# The Contracts job runs the head of the Gradle gate chain plus the one gate
+# that is not on it. Every earlier database-neutral gate is reached
+# transitively, so running them as separate jobs only re-executes work. See
+# docs/modernization/ci-topology.md for the measured task counts.
+name: ADempiere modernization gates
 
 on:
-  push:
-    branches:
-      - master
-      - develop
-      - bugfix/**
-      - feature/**
-      - hotfix/**
-      - test/**
   pull_request:
     branches:
       - master
       - develop
-      - bugfix/**
-      - feature/**
-      - hotfix/**
-      - test/**
+  push:
+    branches:
+      - master
+      - develop
+  schedule:
+    # Off the hour: scheduled runs queued at :00 are the most likely to be
+    # delayed or dropped by GitHub under load.
+    - cron: '37 6 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+# Concurrency groups are repository-wide, not scoped to a workflow, so the
+# group is namespaced by workflow identity. Without that, this workflow would
+# cancel runs of build_with_gradle.yml on the same ref.
+#
+# Only pull-request runs are cancelled in progress. A push, nightly or manual
+# run is a regression record; cancelling it midway would leave the phases it
+# covers unverified with no indication that anything was skipped.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  no-database-distribution:
-    name: Full product without database
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: gradle
-      - name: Build complete Phase 3 distribution
-        uses: ./.github/actions/adempiere-build
-        with:
-          task: phase3NoDatabaseDistribution
-      - name: Upload distribution evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: phase3-no-database-evidence
-          if-no-files-found: error
-          path: |
-            build/phase3/evidence/
-            install/build/Adempiere_*.zip
-            install/build/Adempiere_*.tar.gz
+  # --------------------------------------------------------------------------
+  # Lane 1: the blocking pull-request gate.
+  # --------------------------------------------------------------------------
 
-  installed-product:
-    name: PostgreSQL 14.6 and Tomcat 9 installed product
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:14.6
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      ADEMPIERE_PHASE2_DB_SYSTEM_PASSWORD: postgres
-      ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD: postgres
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: gradle
-      - name: Run installed-product gate
-        uses: ./.github/actions/adempiere-build
-        with:
-          task: phase3InstalledProduct
-      - name: Upload installed-product evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: phase3-installed-product-evidence
-          if-no-files-found: error
-          path: |
-            build/phase3/evidence/
-            base/build/phase2/evidence/
-            base/build/phase3/evidence/
-            base/build/test-results/
-            base/build/reports/tests/
-
-  phase-4-contracts:
-    name: Phase 4 final contract and removal gates
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: gradle
-      - name: Verify frozen contracts and XFire removal
-        uses: ./.github/actions/adempiere-build
-        with:
-          task: phase4FinalVerification
-      - name: Upload Phase 4 contract evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: phase4-final-contract-evidence
-          if-no-files-found: error
-          path: |
-            build/phase4/evidence/
-
-  phase-4-installed-api:
-    name: Phase 4 installed XFire-free API
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:14.6
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD: postgres
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: gradle
-      - name: Verify the installed XFire-free SOAP API
-        uses: ./.github/actions/adempiere-build
-        with:
-          task: phase4InstalledApi
-      - name: Upload installed Phase 4 API evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: phase4-installed-api-evidence
-          if-no-files-found: error
-          path: |
-            build/phase4/evidence/
-
-  phase-5b-oracle-contracts:
-    name: Phase 5b frozen web oracle and artifact pins
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: gradle
-      - name: Verify the frozen legacy web oracle, coverage and pins
-        uses: ./.github/actions/adempiere-build
-        with:
-          task: phase5bFinalVerification
-      - name: Upload Phase 5b contract evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: phase5b-oracle-contract-evidence
-          if-no-files-found: error
-          path: |
-            build/phase5/evidence/
-
-  phase-5b-web-oracle:
-    name: Phase 5b installed Tomcat 9 web oracle replay
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:14.6
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      ADEMPIERE_PHASE2_DB_SYSTEM_PASSWORD: postgres
-      ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD: postgres
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: gradle
-      - name: Replay the frozen legacy web oracle against the installed product
-        uses: ./.github/actions/adempiere-build
-        with:
-          task: phase5bLegacyWebOracleSmoke
-      - name: Upload Phase 5b oracle replay evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: phase5b-web-oracle-evidence
-          if-no-files-found: error
-          path: |
-            build/phase5b/replay/
-
-  phase-5c-packaging:
-    name: Phase 5c Jakarta web packaging beachhead
+  # Deliberately phase-neutral name. Branch protection references a check by
+  # name, so the name must not move when the current phase advances; only the
+  # Gradle task arguments below change from one phase to the next.
+  contracts:
+    name: Contracts
+    # 24.04 is required: this graph includes the Phase 5c/5d browser contract
+    # tasks, whose pinned browser artifacts are built against that image.
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -220,171 +66,94 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: gradle
-      - name: Verify packaging, transformer, overlay and loopback runtime
-        uses: ./.github/actions/adempiere-build
-        with:
-          task: phase5cFinalVerification
-      - name: Upload Phase 5c packaging evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: phase5c-packaging-evidence
-          if-no-files-found: error
-          path: |
-            build/phase5c/
-            zkwebui/build/phase5c/transformer/
-            zkwebui/build/libs/webui-modern.war
 
-  phase-5c-browser-oracle:
-    name: Phase 5c semantic browser oracle replay
-    runs-on: ubuntu-24.04
-    services:
-      postgres:
-        image: postgres:14.6
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      ADEMPIERE_PHASE2_DB_SYSTEM_PASSWORD: postgres
-      ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD: postgres
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: gradle
-      - name: Replay browser oracles and rehearse Phase 5c rollback
+      # One invocation, one task graph. phase5eFinalVerification transitively
+      # covers phase3NoDatabaseDistribution, phase4FinalVerification and the
+      # Phase 5a/5b/5c/5d gates; phase5cFinalVerification contributes only
+      # :zkwebui:check, which is not on that chain.
+      - name: Verify every database-neutral phase gate
         uses: ./.github/actions/adempiere-build
         with:
-          task: phase5cRollbackRehearsal
-      - name: Upload Phase 5c browser evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: phase5c-browser-oracle-evidence
-          if-no-files-found: error
-          path: |
-            zkwebui/build/phase5c/browser/
-            zkwebui/build/test-results/browserTest/
-            zkwebui/build/reports/tests/browserTest/
-            build/phase3/runtime/Adempiere/tomcat/logs/
-            build/phase5b/replay/
-            build/phase5c/rollback/rollback-evidence.txt
+          task: phase5eFinalVerification phase5cFinalVerification
 
-  phase-5d-functional-slice:
-    name: Phase 5d functional ZK CE 10 slice
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: gradle
-      - name: Verify the Phase 5d compile closure, WAR, overlays and rollback
-        uses: ./.github/actions/adempiere-build
-        with:
-          task: phase5dFinalVerification
-      - name: Upload Phase 5d functional-slice evidence
+      # if-no-files-found: error is satisfied by any one matching path, so an
+      # upload block that also matches an evidence directory cannot detect a
+      # missing archive. Assert the archives explicitly.
+      - name: Assert the distribution archives were staged
+        run: |
+          set -euo pipefail
+          for archive in \
+            install/build/Adempiere_394LTS.zip \
+            install/build/Adempiere_394LTS.tar.gz
+          do
+            if [[ ! -s "$archive" ]]; then
+              echo "Distribution archive missing or empty: $archive" >&2
+              exit 1
+            fi
+            echo "ok  $archive  $(wc -c < "$archive") bytes"
+          done
+
+      # The Phase 5f tracked-input immutability finalizer only guards the tasks
+      # inside its own aggregate, so any task scheduled after it is unchecked.
+      # This postcondition covers the whole invocation regardless of ordering.
+      #
+      # Two tracked binaries are excluded: the Ant reactor regenerates
+      # lib/ADInterface-1.0.war and lib/mysql-connector-java-5.1.13-bin.jar in
+      # place as a build side effect. That is a pre-existing repository
+      # condition - they are build outputs that happen to be tracked - and is
+      # exactly why Phase 5f pins that same pair. Everything else must come out
+      # byte-identical.
+      - name: Assert the verification did not mutate tracked files
+        run: |
+          set -euo pipefail
+          if ! git diff --exit-code -- . \
+            ':(exclude)lib/ADInterface-1.0.war' \
+            ':(exclude)lib/mysql-connector-java-5.1.13-bin.jar'
+          then
+            echo "::error::The verification mutated tracked files outside the two known regenerated build artifacts"
+            exit 1
+          fi
+          # Keep the known side effect visible rather than silent.
+          echo 'Known regenerated build artifacts (not a failure):'
+          git diff --stat -- \
+            lib/ADInterface-1.0.war \
+            lib/mysql-connector-java-5.1.13-bin.jar
+
+      - name: Upload contract and distribution evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: phase5d-functional-slice-evidence
+          name: contract-evidence
+          # Necessarily 'warn': this is the union of the paths produced by six
+          # former jobs, and no single gate produces all of them. The archives,
+          # which are the outputs worth failing over, are asserted with test -s
+          # above rather than left to this action.
           if-no-files-found: warn
           path: |
+            build/phase3/evidence/
+            build/phase4/evidence/
             build/phase5/evidence/
             build/phase5/generated/
             build/phase5c/
             build/phase5d/
-            zkwebui/build/phase5d/
-            zkwebui/build/test-results/modernUiTest/
-            zkwebui/build/reports/tests/modernUiTest/
-            zkwebui/build/libs/webui-modern.war
-
-  phase-5d-modern-web:
-    name: Phase 5d modern web milestone
-    runs-on: ubuntu-24.04
-    services:
-      postgres:
-        image: postgres:14.6
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      ADEMPIERE_PHASE2_DB_SYSTEM_PASSWORD: postgres
-      ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD: postgres
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: gradle
-      - name: Run the Phase 5d modern browser and coexistence milestone
-        uses: ./.github/actions/adempiere-build
-        with:
-          task: phase5dModernWebSmoke
-      - name: Upload Phase 5d browser, database and coexistence evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: phase5d-modern-web-evidence
-          if-no-files-found: warn
-          path: |
-            build/phase5d/
-            build/phase3/runtime/Adempiere/tomcat/logs/
-            zkwebui/build/test-results/modernBrowserTest/
-            zkwebui/build/reports/tests/modernBrowserTest/
-
-  phase-5e-cohort-routing:
-    name: Phase 5e cohort routing contracts
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: gradle
-      - name: Verify the Phase 5e cohort model, bridge, derived artifact, overlay and rollback
-        uses: ./.github/actions/adempiere-build
-        with:
-          task: phase5eFinalVerification
-      - name: Upload Phase 5e contract, mutation and rollback evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: phase5e-cohort-routing-evidence
-          if-no-files-found: warn
-          # build/phase5e/rollback/ holds two fully extracted 394LTS trees and
-          # the two rebuilt archives - roughly a gigabyte per run, none of which
-          # is evidence. Only the recorded outcome and the installer merge log
-          # are uploaded; the digests inside them are what a reviewer reads.
-          path: |
-            build/phase5/evidence/
             build/phase5e/legacy-webui/derived-provenance.tsv
             build/phase5e/rollback/rollback-evidence.txt
             build/phase5e/rollback/setupwlib-ant.log
+            install/build/Adempiere_394LTS.zip
+            install/build/Adempiere_394LTS.tar.gz
             org.adempiere.cohort/build/test-results/
             org.adempiere.cohort/build/reports/tests/
-            zkwebui/build/test-results/routedContractTest/
-            zkwebui/build/reports/tests/routedContractTest/
+            zkwebui/build/phase5c/transformer/
+            zkwebui/build/phase5d/
+            zkwebui/build/libs/webui-modern.war
+            zkwebui/build/test-results/
+            zkwebui/build/reports/tests/
 
-  phase-5e-public-origin:
-    name: Phase 5e public-origin cohort matrix
+  # The runtime gate for the phase under active development. Phase 5e is the
+  # newest phase merged to develop; PR #11 advances this to
+  # phase5fJakartaWebRoutesSmoke when Phase 5f lands.
+  current-phase-smoke:
+    name: Current-phase database smoke
     runs-on: ubuntu-24.04
     services:
       postgres:
@@ -408,18 +177,17 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: gradle
-      - name: Run the Phase 5e public-origin cohort, isolation and lifecycle matrix
+      - name: Run the current phase public-origin runtime gate
         uses: ./.github/actions/adempiere-build
         with:
           task: phase5eCohortRoutingSmoke
-      # The handoff key is generated into build/phase5e/keys and is deliberately
-      # NOT in any upload path below. A CI artifact is a published archive, and a
-      # published archive is exactly where a shared secret must never be.
-      - name: Upload Phase 5e cohort matrix, isolation and lifecycle evidence
+      # build/phase5e/keys holds the generated handoff secret and is excluded
+      # from every path below. A CI artifact is a published archive.
+      - name: Upload current-phase runtime evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: phase5e-public-origin-evidence
+          name: current-phase-smoke-evidence
           if-no-files-found: warn
           path: |
             build/phase5e/evidence/
@@ -427,3 +195,74 @@ jobs:
             build/phase5e/tomcat10/logs/
             zkwebui/build/test-results/routedBrowserTest/
             zkwebui/build/reports/tests/routedBrowserTest/
+
+  # --------------------------------------------------------------------------
+  # Lane 2: post-merge regression matrix. Non-blocking by design.
+  #
+  # These smokes cover phases already merged. Moving them off the pull-request
+  # gate is a deliberate reduction in pre-merge coverage, recorded as a
+  # residual risk in MODERNIZATION_PLAN.md and docs/modernization/ci-topology.md.
+  # A red run here must be treated as a stop-the-line event, not a warning.
+  # --------------------------------------------------------------------------
+  regression-matrix:
+    name: Regression matrix (${{ matrix.gate }})
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    strategy:
+      # One phase failing must not hide the state of the others.
+      fail-fast: false
+      matrix:
+        gate:
+          - phase3InstalledProduct
+          - phase4InstalledApi
+          - phase5bLegacyWebOracleSmoke
+          - phase5cRollbackRehearsal
+          - phase5dModernWebSmoke
+    services:
+      postgres:
+        image: postgres:14.6
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      ADEMPIERE_PHASE2_DB_SYSTEM_PASSWORD: postgres
+      ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Run ${{ matrix.gate }}
+        uses: ./.github/actions/adempiere-build
+        with:
+          task: ${{ matrix.gate }}
+      - name: Upload ${{ matrix.gate }} evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-${{ matrix.gate }}-evidence
+          # Necessarily 'warn': this path block is the union across five gates
+          # and each produces only its own subset.
+          if-no-files-found: warn
+          path: |
+            build/phase3/evidence/
+            build/phase4/evidence/
+            build/phase5b/replay/
+            build/phase5c/rollback/rollback-evidence.txt
+            build/phase5d/
+            build/phase3/runtime/Adempiere/tomcat/logs/
+            base/build/phase2/evidence/
+            base/build/phase3/evidence/
+            base/build/test-results/
+            base/build/reports/tests/
+            zkwebui/build/phase5c/browser/
+            zkwebui/build/test-results/
+            zkwebui/build/reports/tests/

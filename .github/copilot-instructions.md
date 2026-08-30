@@ -133,7 +133,25 @@ must fail, and Phase 7 owns the usage/retirement decision.
 
 **CI enforcement is manual.** An agent can author workflows, but a GitHub
 administrator must enable branch protection and required status checks for
-`develop`. Until that happens, CI can run without blocking merges.
+`develop`. Until that happens, CI can run without blocking merges. The two
+checks to mark required are `Contracts` and `Current-phase database smoke`.
+
+**CI topology.** `.github/workflows/main.yml` runs two lanes, documented in
+`docs/modernization/ci-topology.md`. Every pull request runs `Contracts` - a
+single Gradle invocation of the head of the phase-gate chain plus
+`phase5cFinalVerification`, which together schedule exactly the same task set as
+the former six per-phase jobs - and `Current-phase database smoke`, the runtime
+gate for the phase under active development. The remaining database-backed
+smokes run post-merge on `push` to `develop`, nightly, and on demand as
+`Regression matrix`.
+
+Do not re-add a per-phase CI job for a database-neutral gate. Those gates are
+already chained inside Gradle, so a separate job only re-executes work the
+`Contracts` job performs. When a phase lands, change the task arguments of the
+two phase-neutral jobs and re-run the coverage proof in the topology document;
+do not rename the jobs, because branch protection references them by name.
+Lane 2 is non-blocking in GitHub but is governed by a stop-the-line containment
+rule (residual risk R10).
 
 ## Phase gating
 

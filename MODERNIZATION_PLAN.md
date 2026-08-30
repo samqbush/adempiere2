@@ -192,8 +192,9 @@ necessarily block merges.
 | R5 | SOAP/servlets | Unknown consumers and undocumented route classes may break | Phase 4 | Inventory consumers, freeze WSDL/HTTP fixtures, and run parallel replay. |
 | R6 | Database | Production size, custom schema, supported engines, and rollback windows are unknown | Phase 6 | Approve customer-specific migration runbook and rehearse on a sanitized copy. |
 | R7 | Extension metadata | The fail-closed validator names 16 pre-existing active `AD_Process` bindings with absent or incompatible classes | Phase 7 | Obtain usage evidence, then correct or retire every row in `gradle/phase3/metadata-quarantine.tsv`; additions and stale quarantine rows fail CI. |
-| R8 | CI governance | Checks may run without blocking merges | Human action after Phase 1 | Enable branch protection and required status checks on `develop`. |
+| R8 | CI governance | Checks may run without blocking merges. The two checks to mark required are now stably named `Contracts` and `Current-phase database smoke` | Human action after Phase 1 | Enable branch protection and required status checks on `develop`. |
 | R9 | JBoss facet | Checked-in `jboss.jar` implements removed JDK API `java.security.acl.Group`, so the unused-by-Phase-3 facet cannot emit Java 21 bytecode | Phase 7 | Establish deployable usage, then replace the dependency or retire the facet; `gradle/phase3/quarantine.txt` must remain explicit meanwhile. |
+| R10 | CI coverage | Five database-backed smokes (`phase3InstalledProduct`, `phase4InstalledApi`, `phase5bLegacyWebOracleSmoke`, `phase5cRollbackRehearsal`, `phase5dModernWebSmoke`) moved off the pull-request gate to the post-merge regression matrix, so a PR can regress the installed product, installed SOAP, the frozen legacy oracle, the 5c browser/rollback lane, or the 5d modern slice while Lane 1 stays green | Ongoing, under the containment rule | A red `Regression matrix` is a stop-the-line event: no further phase work merges until it is green or the failure is triaged and recorded. Owner @samqbush. If the matrix has not run green within a week, treat the affected phases as unverified rather than lit. See `docs/modernization/ci-topology.md`. |
 
 ### 3.6 Oracle decision
 
@@ -730,6 +731,17 @@ final stack are not yet migrated.
 | 3.5 | Run silent setup, produce ZIP/TAR, start the installed product, and exercise health/login/process/database seams | Installer/runtime | 3.2-3.4 |
 | 3.6 | Generate artifact manifests and compare Ant output against an approved baseline | Packaging | 3.5 |
 | 3.7 | Expand CI to run the full no-DB path on every PR and the restore/release-scoped-migration path when migrations/build/runtime inputs change; include `.github/actions/**` as database-gate inputs, not only workflow YAML | CI | 3.3-3.6 |
+
+**3.7 is implemented.** CI runs two lanes. Every pull request runs the complete
+database-neutral path as a single `Contracts` job plus the current phase's
+database-backed smoke; the remaining database-backed smokes run post-merge on
+`push` to `develop`, nightly, and on demand. Because the phase gates are already
+chained inside Gradle, the previous per-phase jobs re-executed one another's
+work: 600 scheduled task executions across six jobs became 201 in one, with
+verified task-set equality. Topology, the coverage proof, the guards, and the
+containment rule for the post-merge lane are in
+`docs/modernization/ci-topology.md`. The reduced pre-merge coverage is
+registered as residual risk R10.
 
 #### Risks & mitigations
 
