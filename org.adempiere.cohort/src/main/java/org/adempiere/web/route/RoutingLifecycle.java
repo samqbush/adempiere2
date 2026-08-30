@@ -14,7 +14,19 @@ public final class RoutingLifecycle {
 		FAIL
 	}
 
-	public record Outcome(Action action, String failure) {
+	/**
+	 * The lifecycle decision.
+	 *
+	 * <p>{@code failure} is the stable reason code that drives affinity and
+	 * the routing contracts. {@code diagnostic} is the same code plus any
+	 * already-sanitized descriptor the proxy recorded; it is for logs and
+	 * evidence only and must never be asserted on or sent to a client.
+	 */
+	public record Outcome(Action action, String failure, String diagnostic) {
+
+		public Outcome(Action action, String failure) {
+			this(action, failure, failure);
+		}
 	}
 
 	private RoutingLifecycle() {
@@ -29,7 +41,8 @@ public final class RoutingLifecycle {
 		}
 		if (!result.completed()) {
 			affinity.failed(result.failure());
-			return new Outcome(Action.FAIL, result.failure());
+			return new Outcome(
+					Action.FAIL, result.failure(), result.diagnostic());
 		}
 		if (result.modernSessionId() != null && bootstrap) {
 			affinity.bootstrapped(result.modernSessionId());

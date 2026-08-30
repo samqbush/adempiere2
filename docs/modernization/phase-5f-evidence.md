@@ -32,7 +32,7 @@ The normative files are under `contracts/phase5f-jakarta-web-v1/`.
 | Phase 5e regression after routing-core extraction | **Executed and green through both Phase 5f final-gate runs.** |
 | `phase5fFinalVerification` | **Implemented; executed and green twice** on 2026-08-27. Local logs: `build/phase5f-final-rebuild.log` and `build/phase5f-final-validation.log`. |
 | `phase5fJakartaWebRoutesSmoke` | **Implemented; executed in CI; never passed.** See "Runtime gate failures" below. |
-| Per-context smoke shards | **Six implemented. `/adempiere`, `/admin` and `/mobile` have passed once. `/` has failed. `/webui` and `/wstore` have never been observed.** |
+| Per-context smoke shards | **Six implemented. `/adempiere`, `/admin` and `/mobile` passed in run 33327217291. `/` failed in that run. `/webui` and `/wstore` have never been observed.** |
 | Installed product/release overlay proof | **Executed and green** through `phase5fFinalVerification`. |
 | Per-context rollback rehearsal | **Executed and green** through `phase5fFinalVerification`. |
 
@@ -50,30 +50,53 @@ Canonical commands:
 `phase5fJakartaWebRoutesSmoke` runs in CI, which supplies `phase3DbSystemPassword`
 as the `postgres` service password. The earlier claim in this document that the
 gate was "not executed" because that password was unavailable was wrong: the gate
-has been executed repeatedly and has never passed. The two failures observed so
-far are distinct, and the second is not a regression of the first - it occurs
-strictly earlier.
+has been executed repeatedly and has never passed. Three distinct failures have
+been observed, and they are not a progression of one another.
 
-### Current failure: the routed lane never starts
+### Current failure: the routing proxy manufactures a 502 on `/`
 
-Latest run: `:startPhase5fRoutedLane` exits 70 after roughly 65 minutes with:
-
-```
-The Phase 5e modern runtime did not become ready
-```
-
-No shard executes, so **zero of the 82 route observations are collected**. The
-long wall-clock is the readiness loop retrying until it gives up; it is the
-main reason Phase 5f CI runs are slow.
-
-### Earlier failure: the ROOT context does not initialize
-
-A previous run reached the shards and recorded:
+Latest run: 33327217291. The lane starts and shards execute:
 
 ```
 /adempiere: 21 observations  PASS
 /admin:      4 observations  PASS
 /mobile:    14 observations  PASS
+:phase5fROOTRoutesSmokeShard  FAIL
+/::Broadcast::/ modern-public: status 502 != 302
+```
+
+The two access logs disagree, and that disagreement is the whole diagnosis:
+
+| Runtime | Access-log entry |
+|---|---|
+| Modern Tomcat 10.1 (backend) | `GET / HTTP/1.1" 302 -` |
+| Public Tomcat 9 (ingress) | `GET / HTTP/1.1" 502 713` |
+
+The modern application answered the contract status correctly. The 502 is
+produced by our own routing proxy: `LoopbackProxy.proxy()` fails the exchange
+closed with `internal-location-leak` when `publicLocation()` cannot map the
+backend `Location` header onto the public origin.
+
+`internal-location-leak` is a Phase 5e isolation guarantee and must not be
+weakened for genuinely foreign loopback origins. The correct fix therefore
+depends on the exact rejected value, which no run has ever recorded. That
+omission is now closed: `RedirectDescriptor` renders a log-safe structured
+descriptor of the value, `ProxyResult` carries it as a non-wire `detail`, both
+routing filters log it at `SEVERE` under the `PHASE5F-PROXY-FAIL` prefix, and
+each shard harvests those lines from the container log into
+`proxy-failures.log` in its own evidence directory.
+
+### Earlier failure: the routed lane never started
+
+An earlier run had `:startPhase5fRoutedLane` exit 70 after roughly 65 minutes
+with `The Phase 5e modern runtime did not become ready`, and no shard executed.
+That is no longer the observed behaviour.
+
+### Earlier failure: the ROOT context did not initialize
+
+An earlier run still recorded:
+
+```
 /::AdRedirector::/AdRedirector modern-public: status 500 != 400
   jakarta.servlet.ServletException: Broadcast.init
     at org.compiere.cm.HttpServletCM.init(HttpServletCM.java:165)
@@ -94,10 +117,31 @@ contract requires 400. This is an environment-bootstrap failure in the migrated
 
 ### Unobserved routes
 
-The shards are fail-fast and `/` runs fourth of six. **`/webui` and `/wstore`
+The shards were fail-fast and `/` did not run first. **`/webui` and `/wstore`
 have never been observed in any run.** Any statement about their conformance is
 unproven, and Phase 5f cannot be called complete on the strength of the
 database-neutral gate alone.
+
+Three changes now make one run report the whole matrix instead of one shard:
+
+- the six shards run in an explicit `mustRunAfter` order - `/`, `/wstore`,
+  `/webui`, `/admin`, `/mobile`, `/adempiere` - so the two contexts that are
+  `ELIGIBLE` for modern routing report first;
+- a failing route vector is recorded to `route-failures.tsv` and the shard
+  continues; only an infrastructure failure aborts. Both ledgers are
+  republished atomically after every vector, so an aborted shard still uploads
+  what it observed;
+- `Current-phase database smoke` passes `--continue`. This weakens nothing:
+  `verifyPhase5fRuntimeEvidence` depends on all six shards, so a failed shard
+  skips the strict aggregate and the build still fails, the lane remains
+  `finalizedBy stopPhase5fRoutedLane`, and the marker-guarded database cleanup
+  finalizer still runs.
+
+`verifyPhase5fRuntimeEvidence` fails if any shard reports a non-zero
+`failure_count` or a non-empty failure ledger, and now compares each shard's
+recorded `git_head` against the checked-out commit so that evidence left by an
+earlier attempt cannot be mistaken for this run's. Both checks carry mutants in
+`verify-phase5f-runtime-evidence-validator.py`.
 
 The two successful database-neutral executions completed in 25 seconds and 22
 seconds respectively. They validate:

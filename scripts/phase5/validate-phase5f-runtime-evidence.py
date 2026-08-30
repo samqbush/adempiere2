@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import subprocess
 from pathlib import Path
 
 
@@ -26,6 +27,14 @@ def confidential(path: str) -> bool:
 def expected_modern_status(value: str) -> str:
     if value.startswith("preserve-legacy-status:"):
         return value.rsplit(":", 1)[1]
+    if value.startswith("public-http="):
+        parts = dict(
+            part.split("=", 1) for part in value.split(";") if "=" in part
+        )
+        if set(parts) != {"public-http", "public-https"} or not all(
+                item.isdigit() for item in parts.values()):
+            raise SystemExit(f"unresolved modern status contract: {value}")
+        return parts["public-https"]
     tail = value.rsplit("=", 1)[-1]
     if tail.isdigit():
         return tail
@@ -167,6 +176,15 @@ def main() -> None:
         ):
             raise SystemExit(
                 f"{route_id}: route/database-effect contract join drift")
+    # Read once, from the tree this validation is running against, so that a
+    # shard's recorded commit is compared with a real value rather than merely
+    # asserted to be present. Stale evidence left by an earlier attempt is
+    # otherwise indistinguishable from evidence this run produced.
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], check=True, capture_output=True,
+        text=True,
+    ).stdout.strip()
+
     seen: set[str] = set()
     total = 0
     for context, count in EXPECTED.items():
@@ -174,6 +192,19 @@ def main() -> None:
         provenance = json.loads((directory / "provenance.json").read_text())
         if provenance != {**provenance, "context": context, "route_count": count, "client": "python-urllib-public-origin"}:
             raise SystemExit(f"{context}: invalid evidence provenance")
+        if provenance.get("git_head") != head:
+            raise SystemExit(
+                f"{context}: evidence was produced at commit "
+                f"{provenance.get('git_head')!r}, not the checked-out {head!r}")
+        if provenance.get("failure_count") != 0:
+            raise SystemExit(
+                f"{context}: shard recorded "
+                f"{provenance.get('failure_count')} route failure(s); see "
+                f"{directory / 'route-failures.tsv'}")
+        failures = directory / "route-failures.tsv"
+        if failures.exists() and failures.read_text(encoding="utf-8").strip():
+            raise SystemExit(
+                f"{context}: route failure ledger is not empty: {failures}")
         if provenance.get("legacy_cookie_isolation") != "fresh-cookie-jar-per-route":
             raise SystemExit(f"{context}: independent legacy vectors reused cookies")
         rows = list(csv.DictReader(
@@ -203,6 +234,10 @@ def main() -> None:
                 public_required=True,
             )
         if context in ELIGIBLE:
+            if provenance.get("modern_cookie_isolation") != (
+                    "fresh-cookie-jar-per-route"):
+                raise SystemExit(
+                    f"{context}: independent modern vectors reused cookies")
             if provenance.get("modern_execution") != (
                 "all-routes-public-http-or-https"
             ):

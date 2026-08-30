@@ -28,12 +28,29 @@ import org.adempiere.web.route.DeferredResponseBuffer;
 import org.adempiere.web.route.LoopbackProxy;
 import org.adempiere.web.route.ProxyResult;
 import org.adempiere.web.route.PublicRouteClass;
+import org.adempiere.web.route.RedirectDescriptor;
 import org.adempiere.web.route.SessionPathParameters;
 
 /**
  * Javax Servlet adapter that switches one complete non-{@code /webui} context.
  */
 public final class ContextRoutingFilter implements Filter {
+
+	private static final java.util.logging.Logger LOG =
+			java.util.logging.Logger.getLogger(
+					ContextRoutingFilter.class.getName());
+
+	/**
+	 * Stable prefix the Phase 5f route smoke harvests out of the Tomcat 9
+	 * container log. A fail-closed proxy answers 502 with no indication of
+	 * why, so without this line a route failure cannot be attributed to the
+	 * servlet, the container error page or the routing decision.
+	 *
+	 * <p>Everything appended here is already sanitized by
+	 * {@link org.adempiere.web.route.RedirectDescriptor} or is a non-secret
+	 * scalar. No header value, cookie, credential or handoff ticket is logged.
+	 */
+	static final String FAILURE_LOG_PREFIX = "PHASE5F-PROXY-FAIL";
 
 	private ContextRoutingPolicy policy;
 
@@ -129,6 +146,11 @@ public final class ContextRoutingFilter implements Filter {
 					sentModernSessionId,
 					null, null, policy);
 			if (!result.completed()) {
+				LOG.severe(FAILURE_LOG_PREFIX
+						+ " context=" + policy.contextPath()
+						+ " method=" + request.getMethod()
+						+ " path=" + RedirectDescriptor.describe(pathInside)
+						+ " reason=" + result.diagnostic());
 				if (affinity != null) {
 					affinity.failed(result.failure());
 				}

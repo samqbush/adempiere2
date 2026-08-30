@@ -11,6 +11,8 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.time.ZonedDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -41,6 +43,10 @@ public final class LoopbackProxy {
 		void header(String name, String value);
 		OutputStream outputStream() throws IOException;
 	}
+
+	private static final Pattern LOOPBACK_ORIGIN = Pattern.compile(
+			"(?i)^(https?)://(127\\.0\\.0\\.1|localhost|\\[::1\\])"
+			+ "(?::([0-9]+))?(?=[/?#]|$)");
 
 	private final String backend;
 
@@ -104,7 +110,10 @@ public final class LoopbackProxy {
 			long declared = request.contentLength();
 			if (!BoundedTransfer.declaredWithin(
 					declared, requestLimit(contextPolicy))) {
-				return ProxyResult.failed("request-too-large");
+				return ProxyResult.failed(
+						"request-too-large",
+						"phase=declared declaredBytes=" + declared
+							+ " limitBytes=" + requestLimit(contextPolicy));
 			}
 			if (declared >= 0) {
 				connection.setFixedLengthStreamingMode(declared);
@@ -115,7 +124,10 @@ public final class LoopbackProxy {
 					OutputStream to = connection.getOutputStream()) {
 				if (!BoundedTransfer.copy(
 						from, to, requestLimit(contextPolicy))) {
-					return ProxyResult.failed("request-too-large");
+					return ProxyResult.failed(
+							"request-too-large",
+							"phase=streamed limitBytes="
+								+ requestLimit(contextPolicy));
 				}
 			}
 		}
@@ -125,7 +137,12 @@ public final class LoopbackProxy {
 			status = connection.getResponseCode();
 		} catch (IOException unreachable) {
 			connection.disconnect();
-			return ProxyResult.failed("backend-unavailable");
+			// The exception message can embed the internal origin, so it is
+			// reported by type only; the backend is described separately.
+			return ProxyResult.failed(
+					"backend-unavailable",
+					"backend=" + RedirectDescriptor.describe(backend)
+						+ " cause=" + unreachable.getClass().getName());
 		}
 		if (HandoffProtocol.END_VALUE.equals(
 				connection.getHeaderField(HandoffProtocol.END_HEADER))) {
@@ -158,14 +175,21 @@ public final class LoopbackProxy {
 									value, contextPolicy, request);
 						} catch (IllegalArgumentException invalid) {
 							connection.disconnect();
+							// The cookie value is a secret; only its name and
+							// the rejection reason are reportable.
 							return ProxyResult.failed(
-									"invalid-application-cookie");
+									"invalid-application-cookie",
+									"cookie="
+										+ contextPolicy.applicationCookie());
 						}
 						if (application != null) {
 							if (applicationCookieSeen) {
 								connection.disconnect();
 								return ProxyResult.failed(
-										"duplicate-application-cookie");
+										"duplicate-application-cookie",
+										"cookie="
+											+ contextPolicy
+												.applicationCookie());
 							}
 							applicationCookieSeen = true;
 							applicationCookies.add(application);
@@ -184,7 +208,12 @@ public final class LoopbackProxy {
 						: value;
 				if (outgoing == null) {
 					connection.disconnect();
-					return ProxyResult.failed("internal-location-leak");
+					return ProxyResult.failed(
+							"internal-location-leak",
+							"header=Location backend="
+								+ RedirectDescriptor.describe(backend)
+								+ " target="
+								+ RedirectDescriptor.describe(value));
 				}
 				response.header(name, outgoing);
 			}
@@ -198,18 +227,33 @@ public final class LoopbackProxy {
 						new CountingOutputStream(response.outputStream())) {
 					if (!BoundedTransfer.copy(
 							from, to, responseLimit(contextPolicy))) {
-						return ProxyResult.failed("response-too-large");
+						return ProxyResult.failed(
+								"response-too-large",
+								"phase=streamed status=" + status
+									+ " limitBytes="
+									+ responseLimit(contextPolicy));
 					}
 					long declared = connection.getContentLengthLong();
 					if (declared >= 0 && to.count() != declared) {
-						return ProxyResult.failed("backend-stream-interrupted");
+						return ProxyResult.failed(
+								"backend-stream-interrupted",
+								"phase=length status=" + status
+									+ " declaredBytes=" + declared
+									+ " copiedBytes=" + to.count());
 					}
 				}
 			}
 		} catch (DeferredResponseBuffer.ResponseLimitExceededException tooLarge) {
-			return ProxyResult.failed("response-too-large");
+			return ProxyResult.failed(
+					"response-too-large",
+					"phase=buffered status=" + status + " limitBytes="
+						+ responseLimit(contextPolicy));
 		} catch (IOException interrupted) {
-			return ProxyResult.failed("backend-stream-interrupted");
+			// The message can embed the internal origin, so report the type.
+			return ProxyResult.failed(
+					"backend-stream-interrupted",
+					"phase=copy status=" + status + " cause="
+						+ interrupted.getClass().getName());
 		} finally {
 			connection.disconnect();
 		}
@@ -278,19 +322,58 @@ public final class LoopbackProxy {
 		}
 	}
 
+	/**
+	 * Reports whether {@code location} begins with {@code origin} and ends that
+	 * origin there.
+	 *
+	 * <p>A bare {@code startsWith} is not an origin test. {@code backend} is
+	 * normalized without a trailing slash, so {@code startsWith} alone also
+	 * accepts a {@code Location} that merely shares a textual prefix with it:
+	 * {@code http://127.0.0.1:8890@evil.example/x} would have its origin
+	 * stripped and the remainder {@code @evil.example/x} appended to the public
+	 * origin, which a browser parses as userinfo and follows to
+	 * {@code evil.example}. That is an open redirect emitted by the ingress
+	 * under its own origin. {@code http://127.0.0.1:88900/x} is the same defect
+	 * without the attacker: it would be rewritten to a spliced port.
+	 *
+	 * <p>Requiring a delimiter or end-of-string means the origin must actually
+	 * end where the prefix does.
+	 */
+	private static boolean startsWithOrigin(String location, String origin) {
+		if (!location.startsWith(origin)) {
+			return false;
+		}
+		if (location.length() == origin.length()) {
+			return true;
+		}
+		char next = location.charAt(origin.length());
+		return next == '/' || next == '?' || next == '#';
+	}
+
 	private String publicLocation(Request request, String location) {
 		if (location == null) {
 			return location;
 		}
 		String path;
-		if (location.startsWith(backend)) {
+		if (startsWithOrigin(location, backend)) {
 			path = location.substring(backend.length());
-		} else if (location.matches(
-				"(?i)https?://(127\\.0\\.0\\.1|localhost|\\[::1\\])"
-				+ "(:[0-9]+)?(/.*)?")) {
-			return null;
 		} else {
-			return location;
+			Matcher target = LOOPBACK_ORIGIN.matcher(location);
+			if (!target.find()) {
+				return location;
+			}
+			Matcher internal = LOOPBACK_ORIGIN.matcher(backend);
+			if (!internal.find()
+					|| !target.group(1).equalsIgnoreCase(internal.group(1))
+					|| !target.group(2).equalsIgnoreCase(internal.group(2))
+					|| (target.group(3) != null
+							&& !target.group(3).equals(internal.group(3)))) {
+				return null;
+			}
+			path = location.substring(target.end());
+		}
+		if (path.isEmpty()) {
+			path = "/";
 		}
 		StringBuilder publicOrigin = new StringBuilder(request.scheme())
 				.append("://")

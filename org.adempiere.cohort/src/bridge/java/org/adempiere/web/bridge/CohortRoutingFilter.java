@@ -81,6 +81,13 @@ public class CohortRoutingFilter implements Filter {
 
 	private static final CLogger log = CLogger.getCLogger(CohortRoutingFilter.class);
 
+	/**
+	 * Stable prefix the Phase 5f route smoke harvests out of the Tomcat 9
+	 * container log, shared with the Phase 5f context filter. Everything
+	 * appended under it is already sanitized or is a non-secret scalar.
+	 */
+	static final String PROXY_FAILURE_LOG_PREFIX = "PHASE5F-PROXY-FAIL";
+
 	/** One operator error per burst of backstop firings. */
 	private static final long BACKSTOP_REPORT_INTERVAL_MILLIS = 60_000L;
 
@@ -278,6 +285,7 @@ public class CohortRoutingFilter implements Filter {
 			}
 			if (lifecycle.action() == RoutingLifecycle.Action.FAIL) {
 				fail(response, affinity, routeClass, lifecycle.failure(),
+						lifecycle.diagnostic(),
 						HttpServletResponse.SC_BAD_GATEWAY);
 				return;
 			}
@@ -547,8 +555,32 @@ public class CohortRoutingFilter implements Filter {
 			PublicRouteClass routeClass,
 			String reason,
 			int status) throws IOException {
+		fail(response, affinity, routeClass, reason, reason, status);
+	}
+
+	/**
+	 * Fails one exchange closed.
+	 *
+	 * <p>{@code reason} is the stable audited reason code. {@code diagnostic}
+	 * adds the already-sanitized descriptor the proxy recorded, under the
+	 * prefix the Phase 5f route smoke harvests from the container log; a 502
+	 * carries no indication of its own cause, so without it a route failure
+	 * cannot be attributed.
+	 */
+	private void fail(
+			HttpServletResponse response,
+			ModernSessionAffinity affinity,
+			PublicRouteClass routeClass,
+			String reason,
+			String diagnostic,
+			int status) throws IOException {
 		affinity.failed(reason);
 		log.severe(RoutingAudit.line(CohortRuntime.MODERN, routeClass, reason));
+		if (diagnostic != null && !diagnostic.equals(reason)) {
+			log.severe(PROXY_FAILURE_LOG_PREFIX
+					+ " routeClass=" + routeClass
+					+ " reason=" + diagnostic);
+		}
 		if (!response.isCommitted()) {
 			response.sendError(status);
 		}

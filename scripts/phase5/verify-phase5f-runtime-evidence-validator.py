@@ -45,6 +45,14 @@ def invoke(
 def expected_modern_status(value: str) -> str:
     if value.startswith("preserve-legacy-status:"):
         return value.rsplit(":", 1)[1]
+    if value.startswith("public-http="):
+        parts = dict(
+            part.split("=", 1) for part in value.split(";") if "=" in part
+        )
+        if set(parts) != {"public-http", "public-https"} or not all(
+                item.isdigit() for item in parts.values()):
+            raise SystemExit(f"unresolved modern status contract: {value}")
+        return parts["public-https"]
     return value.rsplit("=", 1)[-1]
 
 
@@ -185,12 +193,23 @@ def main() -> None:
             )
         (directory / "provenance.json").write_text(json.dumps({
             "context": context, "public_origin": "http://127.0.0.1:8888",
-            "git_head": "validator-fixture-not-runtime-evidence",
+            # The real HEAD: the validator now compares this against the
+            # checked-out commit, so a literal placeholder would make the
+            # baseline fixture unrepresentative of passing evidence.
+            "git_head": subprocess.run(
+                ["git", "rev-parse", "HEAD"], check=True,
+                capture_output=True, text=True,
+            ).stdout.strip(),
+            "failure_count": 0,
             "database_marker": "ADempiere Phase 3 disposable database",
             "route_count": len(selected),
             "observation_count": len(evidence_rows),
             "client": "python-urllib-public-origin",
             "legacy_cookie_isolation": "fresh-cookie-jar-per-route",
+            "modern_cookie_isolation": (
+                "fresh-cookie-jar-per-route"
+                if context in ELIGIBLE else "not-applicable"
+            ),
             "public_https_origin": "https://127.0.0.1:8444",
             "modern_execution": (
                 "all-routes-public-http-or-https"
@@ -255,6 +274,37 @@ def main() -> None:
                 "database_tables_after": '{"c_order":"b"}',
                 "database_changed_tables": "c_order",
             }),
+        # Evidence carried over from an earlier commit is otherwise
+        # indistinguishable from evidence this run produced.
+        "stale-commit-provenance": lambda root: (
+            root / "ROOT/provenance.json"
+        ).write_text(
+            json.dumps({
+                **json.loads((root / "ROOT/provenance.json").read_text()),
+                "git_head": "0" * 40,
+            }, sort_keys=True, indent=2) + "\n",
+            encoding="utf-8",
+        ),
+        # A shard that records failures and continues must not be able to
+        # publish a passing aggregate.
+        "recorded-route-failures": lambda root: (
+            root / "ROOT/provenance.json"
+        ).write_text(
+            json.dumps({
+                **json.loads((root / "ROOT/provenance.json").read_text()),
+                "failure_count": 1,
+            }, sort_keys=True, indent=2) + "\n",
+            encoding="utf-8",
+        ),
+        # The ledger itself is authoritative even if the counter is forged.
+        "unreported-route-failure-ledger": lambda root: (
+            root / "ROOT/route-failures.tsv"
+        ).write_text(
+            "route_id\tmode\tkind\tdetail\n"
+            "/::Broadcast::/\tmodern-public\tstatus-mismatch\t"
+            "expected 302 observed 502\n",
+            encoding="utf-8",
+        ),
         "legacy-cookie-reuse": lambda root: (
             root / "ROOT/provenance.json"
         ).write_text(

@@ -185,14 +185,43 @@ lane and is still worth fixing.
 ## The current-phase smoke is red on this branch
 
 `Current-phase database smoke` runs `phase5fJakartaWebRoutesSmoke`, which **has
-never passed.** It currently fails in `:startPhase5fRoutedLane` with `The Phase
-5e modern runtime did not become ready`, before any route shard executes.
+never passed.** The routed lane does start and route shards do execute. In run
+33327217291 the `/adempiere`, `/admin` and `/mobile` shards passed and the `/`
+shard failed at route `/::Broadcast::/` in `modern-public` mode, expecting 302
+and observing 502; the modern runtime answered 302 and the 502 was manufactured
+by the routing proxy's fail-closed `internal-location-leak` check.
 
 This is deliberate and must not be worked around by pointing the job back at a
 green Phase 5e task. The blocking gate is supposed to reflect the state of the
 phase under development, and the state of Phase 5f is red. See
-`docs/modernization/phase-5f-evidence.md` for both observed failure modes and
-for the fact that `/webui` and `/wstore` have never been observed.
+`docs/modernization/phase-5f-evidence.md` for all three observed failure modes
+and for the fact that `/webui` and `/wstore` have never been observed.
+
+The job carries two deliberate deviations from the other lanes:
+
+- **`--continue`.** At roughly two runner-hours per attempt, a run that stops
+  at the first failing shard yields one data point. `--continue` yields six.
+  It weakens nothing: `verifyPhase5fRuntimeEvidence` depends on all six shards,
+  so a failed shard skips the strict aggregate and the build still fails, and
+  both the lane shutdown and the marker-guarded database cleanup are
+  finalizers.
+- **`timeout-minutes: 180`.** With fail-fast removed a run executes the whole
+  matrix: roughly 22 minutes of setup plus roughly 81 minutes of dump-backed
+  observations. That does not fit in 90. The GitHub-hosted ceiling is 360, and
+  the remaining headroom is deliberate so that the `always()` evidence upload
+  is not cut off by the job timeout.
+
+## Debug dispatch
+
+`workflow_dispatch` takes a `debug_gate` choice. `full` runs the ordinary
+manual matrix. Any other value names a single Phase 5f shard, runs only
+`Current-phase database smoke`, and suppresses `Contracts` and the regression
+matrix - without that suppression, asking for one shard would also launch a
+half-hour contract graph and six historical database-backed smokes.
+
+The input is a typed `choice` over a fixed allowlist rather than free text
+because `.github/actions/adempiere-build` expands its `task` and `args` inputs
+unquoted, so that a multi-task gate shares one Gradle task graph.
 
 ## Concurrency
 

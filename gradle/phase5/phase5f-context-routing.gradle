@@ -172,6 +172,9 @@ tasks.register('derivePhase5fLegacyContextWars') {
 		tasks.named('materializePhase5fPristineContextWars'),
 		':org.adempiere.cohort:contextBridgeOverlayJar')
 	def output = phase5fRoutingDir.map { it.dir('legacy') }
+	inputs.dir phase5fRoutingDir.map { it.dir('pristine') }
+	inputs.file project(':org.adempiere.cohort').tasks
+		.named('contextBridgeOverlayJar').flatMap { it.archiveFile }
 	outputs.dir output
 	doLast {
 		delete output
@@ -195,6 +198,8 @@ tasks.register('verifyPhase5fLegacyContextWars') {
 	description = 'Proves each deterministic legacy derivation changes only its descriptor and bridge'
 	dependsOn tasks.named('derivePhase5fLegacyContextWars')
 	def evidence = phase5fRoutingDir.map { it.file('derived-contexts.tsv') }
+	inputs.dir phase5fRoutingDir.map { it.dir('pristine') }
+	inputs.dir phase5fRoutingDir.map { it.dir('legacy') }
 	outputs.file evidence
 	doLast {
 		def rows = ['context\tpristine_sha256\tderived_sha256\tchanged_entries']
@@ -536,19 +541,69 @@ tasks.register('stopPhase5fRoutedLane', Exec) {
 		phase5fInstalledHome.get().asFile)
 }
 
+// The Tomcat 9 container log is where ContextRoutingFilter and
+// CohortRoutingFilter record PHASE5F-PROXY-FAIL. A fail-closed proxy answers
+// 502 with no indication of why, so each shard harvests it into its evidence.
+def phase5fContainerLog = phase5fInstalledHome.map {
+	it.file('tomcat/logs/catalina.out')
+}
+
+// Declaration order is not execution order: these six shards are independent
+// siblings whose only dependency is the lane, so Gradle may run them in any
+// order and has. The explicit mustRunAfter chain below fixes the order, and
+// it is ordered by risk: only '/' and '/wstore' are ELIGIBLE for modern
+// routing, and '/webui' carries the Phase 5e sticky-session disposition, so
+// those three report before the legacy-observation-only contexts.
+def phase5fSwitchBaselineFile = layout.buildDirectory.file(
+	'phase5f/switch-baseline.tsv')
+
+// AD_SysConfig is shared mutable state that every shard reads. Bracketing the
+// shards with a captured baseline and an equality check turns a leaked or
+// half-applied switch row into an attributed failure of this gate rather than a
+// silent mis-routing of whichever shard happens to run next.
+def phase5fSwitchStateTask = { String taskName, String switchAction, String desc ->
+	tasks.register(taskName, Exec) {
+		group = 'verification'
+		description = desc
+		dependsOn tasks.named('startPhase5fRoutedLane')
+		outputs.upToDateWhen { false }
+		environment 'ADEMPIERE_PHASE5F_DB_PASSWORD', phase5fDbPassword.get()
+		commandLine(
+			'bash',
+			rootProject.file('scripts/phase5/reset-phase5f-context-switch.sh'),
+			phase5fDbHost.get(),
+			phase5fDbPort.get(),
+			phase5fDbName.get(),
+			phase5fDbUser.get(),
+			phase5fDatabaseMarker,
+			'/',
+			switchAction,
+			phase5fSwitchBaselineFile.get().asFile)
+	}
+}
+
+def phase5fCaptureSwitchBaseline = phase5fSwitchStateTask(
+	'capturePhase5fSwitchBaseline', 'baseline',
+	'Captures the pre-shard state of all five Phase 5f context switches')
+def phase5fVerifySwitchBaseline = phase5fSwitchStateTask(
+	'verifyPhase5fSwitchBaseline', 'verify',
+	'Verifies every Phase 5f context switch was restored to its captured state')
+
 def phase5fShardTasks = []
+def phase5fPreviousShard = null
 [
+	ROOT: '/',
+	wstore: '/wstore',
 	webui: '/webui',
 	admin: '/admin',
-	ROOT: '/',
 	mobile: '/mobile',
 	adempiere: '/adempiere',
-	wstore: '/wstore',
 ].each { name, contextPath ->
 	def shard = tasks.register("phase5f${name.toString().capitalize()}RoutesSmokeShard", Exec) {
 		group = 'verification'
 		description = "Replays the ${contextPath} Phase 5f route shard through the public origin"
-		dependsOn tasks.named('startPhase5fRoutedLane')
+		dependsOn tasks.named('startPhase5fRoutedLane'),
+			phase5fCaptureSwitchBaseline
 		inputs.files(
 			phase5fRuntimeContractDir.file('route-validation.tsv'),
 			phase5fRuntimeContractDir.file('database-effect-ownership.tsv'),
@@ -564,7 +619,26 @@ def phase5fShardTasks = []
 						+ 'ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD; no runtime '
 						+ 'observation was recorded')
 			}
-			delete phase5fSmokeEvidence.map { it.dir(name.toString()) }
+			// Deleted by name, not by wiping the directory: the shard now
+			// republishes these ledgers after every vector so that an abort
+			// still uploads what it observed, and a wholesale delete would
+			// discard a previous attempt's evidence before this one has
+			// produced any of its own.
+			delete phase5fSmokeEvidence.get().dir(name.toString())
+				.file('route-observations.tsv').asFile,
+				phase5fSmokeEvidence.get().dir(name.toString())
+					.file('route-observations.tsv.partial').asFile,
+				phase5fSmokeEvidence.get().dir(name.toString())
+					.file('route-failures.tsv').asFile,
+				phase5fSmokeEvidence.get().dir(name.toString())
+					.file('route-failures.tsv.partial').asFile,
+				phase5fSmokeEvidence.get().dir(name.toString())
+					.file('proxy-failures.log').asFile,
+				phase5fSmokeEvidence.get().dir(name.toString())
+					.file('modern-unexecuted.tsv').asFile,
+				phase5fSmokeEvidence.get().dir(name.toString())
+					.file('provenance.json').asFile
+			phase5fSmokeEvidence.get().dir(name.toString()).asFile.mkdirs()
 		}
 		commandLine(
 			'python3',
@@ -583,16 +657,24 @@ def phase5fShardTasks = []
 			'--db-port', phase5fDbPort.get(),
 			'--db-name', phase5fDbName.get(),
 			'--db-user', phase5fDbUser.get(),
-			'--db-marker', phase5fDatabaseMarker)
+			'--db-marker', phase5fDatabaseMarker,
+			'--container-log', phase5fContainerLog.get().asFile)
 	}
+	if (phase5fPreviousShard != null) {
+		def previous = phase5fPreviousShard
+		shard.configure { mustRunAfter previous }
+	}
+	phase5fPreviousShard = shard
 	phase5fShardTasks << shard
 }
+
+phase5fVerifySwitchBaseline.configure { mustRunAfter phase5fShardTasks }
 
 tasks.register('capturePhase5fSoapCoexistence', Exec) {
 	group = 'verification'
 	description = 'Replays the complete Phase 4 SOAP corpus while Phase 5f contexts are active'
-	dependsOn tasks.named('startPhase5fRoutedLane')
-	mustRunAfter phase5fShardTasks
+	dependsOn tasks.named('startPhase5fRoutedLane'), phase5fVerifySwitchBaseline
+	mustRunAfter phase5fShardTasks, phase5fVerifySwitchBaseline
 	commandLine(
 		'bash',
 		rootProject.file('scripts/phase5/capture-phase5f-coexistence.sh'),
@@ -605,8 +687,10 @@ tasks.register('verifyPhase5fRuntimeEvidence', Exec) {
 	description = 'Validates provenance, exact 82-route coverage, effects and coexistence evidence'
 	dependsOn(
 		phase5fShardTasks,
+		phase5fVerifySwitchBaseline,
 		tasks.named('capturePhase5fSoapCoexistence'))
-	mustRunAfter phase5fShardTasks, tasks.named('capturePhase5fSoapCoexistence')
+	mustRunAfter phase5fShardTasks, phase5fVerifySwitchBaseline,
+		tasks.named('capturePhase5fSoapCoexistence')
 	outputs.file phase5fSmokeEvidence.map { it.file('summary.tsv') }
 	commandLine(
 		'python3',

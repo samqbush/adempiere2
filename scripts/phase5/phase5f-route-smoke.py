@@ -50,14 +50,21 @@ def run(command: list[str], *, env: dict[str, str] | None = None) -> str:
 def database_snapshot(args: argparse.Namespace) -> tuple[str, dict[str, str]]:
     env = dict(os.environ)
     env["PGPASSWORD"] = os.environ["ADEMPIERE_PHASE5F_DB_PASSWORD"]
-    content = run(
-        [
-            "pg_dump", "--data-only", "--no-owner", "--no-privileges",
-            "--column-inserts", "-h", args.db_host, "-p", args.db_port,
-            "-U", args.db_user, args.db_name,
-        ],
-        env=env,
-    )
+    try:
+        content = run(
+            [
+                "pg_dump", "--data-only", "--no-owner", "--no-privileges",
+                "--column-inserts", "-h", args.db_host, "-p", args.db_port,
+                "-U", args.db_user, args.db_name,
+            ],
+            env=env,
+        )
+    except (subprocess.CalledProcessError, OSError) as unreadable:
+        # Losing the database invalidates every effect observation that would
+        # follow, so this can never be downgraded to a route failure.
+        raise InfrastructureFailure(
+            f"database snapshot failed: {unreadable}"
+        ) from unreadable
     table_lines: dict[str, list[str]] = defaultdict(list)
     all_lines: list[str] = []
     for line in content.splitlines():
@@ -74,6 +81,82 @@ def database_snapshot(args: argparse.Namespace) -> tuple[str, dict[str, str]]:
             for table, lines in sorted(table_lines.items())
         },
     )
+
+
+# A failure detail reaches public CI logs and the published evidence artifact,
+# so it stays inside the Phase 5e secret-hygiene perimeter: session cookies,
+# credentials and handoff tickets are redacted by name, and any session id
+# embedded in a body preview is scrubbed.
+REDACTED_HEADERS = ("set-cookie", "cookie", "authorization")
+
+
+def redact_headers(headers: list[tuple[str, str]]) -> str:
+    return "\n".join(
+        f"  {name}: "
+        + ("<redacted>"
+           if name.lower() in REDACTED_HEADERS
+           or name.lower().startswith("x-adempiere-handoff")
+           else value)
+        for name, value in headers
+    )
+
+
+def redact_body(body: bytes, limit: int = 2048) -> str:
+    return re.sub(
+        r"(?i)(jsessionid=)[^\s\"'&;<]+", r"\1<redacted>",
+        body[:limit].decode("utf-8", "replace"))
+
+
+# Emitted by ContextRoutingFilter and CohortRoutingFilter when a proxied
+# exchange fails closed. A fail-closed proxy answers 502 with no indication of
+# why, so these lines are the only attribution a route failure has.
+PROXY_FAILURE_PREFIX = "PHASE5F-PROXY-FAIL"
+
+
+def harvest_proxy_failures(args: argparse.Namespace) -> None:
+    """Copies routing-proxy failure lines into this shard's evidence.
+
+    Without this the explanation exists only in a Tomcat log inside a
+    30k-line CI job transcript, which is not reviewable and is not part of the
+    published evidence artifact.
+    """
+    if args.container_log is None or not args.container_log.exists():
+        return
+    try:
+        lines = [
+            line for line in args.container_log.read_text(
+                encoding="utf-8", errors="replace").splitlines()
+            if PROXY_FAILURE_PREFIX in line
+        ]
+    except OSError:
+        return
+    if lines:
+        (args.evidence_dir / "proxy-failures.log").write_text(
+            "\n".join(lines) + "\n", encoding="utf-8")
+
+
+class InfrastructureFailure(Exception):
+    """A lane, database or switch failure that invalidates the whole shard.
+
+    Distinguished from a route assertion: continuing after one of these would
+    produce observations that no longer describe the system under test.
+    """
+
+
+class VectorFailure(Exception):
+    """One route assertion that failed.
+
+    Recorded with full attribution and detail, then survived, so that a single
+    expensive CI run reports every actionable route failure in the shard
+    instead of only the first.
+    """
+
+    def __init__(self, route_id: str, mode: str, kind: str, detail: str):
+        super().__init__(f"{route_id} {mode}: {kind}")
+        self.route_id = route_id
+        self.mode = mode
+        self.kind = kind
+        self.detail = detail
 
 
 def request(
@@ -99,22 +182,42 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 def set_switch(args: argparse.Namespace, action: str) -> None:
     if args.context not in ELIGIBLE:
         return
-    run(
-        [
-            "bash", str(args.switch_script), args.db_host, args.db_port, args.db_name,
-            args.db_user, args.db_marker, args.context, action,
-            str(args.evidence_dir / "switch-original.tsv"),
-        ]
-    )
+    try:
+        run(
+            [
+                "bash", str(args.switch_script), args.db_host, args.db_port,
+                args.db_name, args.db_user, args.db_marker, args.context,
+                action,
+                str(args.evidence_dir / "switch-original.tsv"),
+            ]
+        )
+    except (subprocess.CalledProcessError, OSError) as failed:
+        # AD_SysConfig is shared across shards. A half-applied switch would
+        # silently mis-attribute every later shard in a --continue run.
+        raise InfrastructureFailure(
+            f"context switch '{action}' failed for {args.context}: {failed}"
+        ) from failed
 
 
 def expected_modern_status(contract: str) -> str:
     if contract.startswith("preserve-legacy-status:"):
         return contract.rsplit(":", 1)[1]
+    if contract.startswith("public-http="):
+        return split_transport_status(contract)
     tail = contract.rsplit("=", 1)[-1]
     if tail.isdigit():
         return tail
     raise SystemExit(f"unresolved modern status contract: {contract}")
+
+
+def split_transport_status(contract: str) -> str:
+    parts = dict(
+        part.split("=", 1) for part in contract.split(";") if "=" in part
+    )
+    if set(parts) != {"public-http", "public-https"} or not all(
+            value.isdigit() for value in parts.values()):
+        raise SystemExit(f"unresolved modern status contract: {contract}")
+    return parts["public-https"]
 
 
 def confidential(path: str) -> bool:
@@ -136,6 +239,9 @@ def main() -> None:
     parser.add_argument("--db-name", required=True)
     parser.add_argument("--db-user", required=True)
     parser.add_argument("--db-marker", required=True)
+    parser.add_argument(
+        "--container-log", type=Path, default=None,
+        help="Tomcat 9 catalina.out to harvest routing-proxy failures from")
     args = parser.parse_args()
 
     if "ADEMPIERE_PHASE5F_DB_PASSWORD" not in os.environ:
@@ -162,16 +268,62 @@ def main() -> None:
             urllib.request.HTTPCookieProcessor(jar), NoRedirect())
 
     cookie_jar, opener = fresh_http()
-    https_opener = urllib.request.build_opener(
-        urllib.request.HTTPCookieProcessor(cookie_jar),
-        urllib.request.HTTPSHandler(
-            context=ssl._create_unverified_context()),
-        NoRedirect(),
-    )
+
+    def https_for(
+            jar: http.cookiejar.CookieJar) -> urllib.request.OpenerDirector:
+        return urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(jar),
+            urllib.request.HTTPSHandler(
+                context=ssl._create_unverified_context()),
+            NoRedirect(),
+        )
     header_contract, cookie_contract, tls_contract, body_contract, session_contract = (
         CONTRACT_OWNERS[args.context]
     )
     observations: list[dict[str, str]] = []
+    failures: list[dict[str, str]] = []
+
+    def publish() -> None:
+        """Republishes both ledgers after every vector.
+
+        A shard that aborts must still upload what it observed. Writing only at
+        shard completion is exactly the defect this replaces: run 33327217266
+        lost every passing ROOT observation because the shard died on its first
+        modern vector. Each file is written to a sibling temporary path and
+        atomically renamed, so a reader never sees a half-written ledger.
+        """
+        for name, rows in (
+            ("route-observations.tsv", observations),
+            ("route-failures.tsv", failures),
+        ):
+            target = args.evidence_dir / name
+            if not rows:
+                continue
+            scratch = target.with_suffix(target.suffix + ".partial")
+            with scratch.open("w", encoding="utf-8", newline="") as stream:
+                writer = csv.DictWriter(
+                    stream, fieldnames=list(rows[0]), delimiter="\t",
+                    lineterminator="\n"
+                )
+                writer.writeheader()
+                writer.writerows(rows)
+            scratch.replace(target)
+
+    def record_failure(failure: VectorFailure) -> None:
+        failures.append(
+            {
+                "route_id": failure.route_id,
+                "context": args.context,
+                "mode": failure.mode,
+                "kind": failure.kind,
+                "detail": failure.detail.replace("\t", " ").replace(
+                    "\n", "\\n"),
+            }
+        )
+        print(f"FAIL {failure.route_id} {failure.mode}: {failure.kind}",
+              file=sys.stderr)
+        print(failure.detail, file=sys.stderr)
+        publish()
 
     def observe(
         route: dict[str, str],
@@ -183,10 +335,20 @@ def main() -> None:
         request_headers: dict[str, str] | None = None,
     ) -> dict[str, str]:
         before, tables_before = database_snapshot(args)
-        status, headers, body = request(
-            target_opener, origin.rstrip("/") + route["path"], route["method"],
-            request_headers,
-        )
+        target_url = origin.rstrip("/") + route["path"]
+        try:
+            status, headers, body = request(
+                target_opener, target_url, route["method"], request_headers,
+            )
+        except OSError as unreachable:
+            # A transport error is attributable to this vector, so it is
+            # recorded like a status mismatch rather than ending the shard.
+            database_snapshot(args)
+            raise VectorFailure(
+                route["route_id"], mode, "transport-error",
+                f"request: {route['method']} {target_url}\n"
+                f"error: {type(unreachable).__name__}: {unreachable}",
+            ) from unreachable
         after, tables_after = database_snapshot(args)
         changed_tables = sorted(
             table for table in set(tables_before) | set(tables_after)
@@ -232,58 +394,49 @@ def main() -> None:
             ],
             "public_origin_only": "true" if public_origin_only else "false",
         }
-        if row["status"] != expected_status:
-            # A status mismatch is the only signal this smoke emits, so report
-            # the response itself. Without it the failure cannot be attributed
-            # to the servlet, the container error page or the routing proxy,
-            # and a fix can only be guessed at.
-            #
-            # This message reaches public CI logs, so it stays inside the
-            # Phase 5e secret-hygiene perimeter: session cookies, credentials
-            # and handoff tickets are redacted by name, and any session id
-            # embedded in the body preview is scrubbed.
-            redacted = ("set-cookie", "cookie", "authorization")
-            detail = "\n".join(
-                f"  {name}: "
-                + ("<redacted>"
-                   if name.lower() in redacted
-                   or name.lower().startswith("x-adempiere-handoff")
-                   else value)
-                for name, value in headers
-            )
-            preview = re.sub(
-                r"(?i)(jsessionid=)[^\s\"'&;<]+", r"\1<redacted>",
-                body[:2048].decode("utf-8", "replace"))
-            raise SystemExit(
-                f"{route['route_id']} {mode}: status {status} != "
-                f"{expected_status}\n"
-                f"request: {route['method']} "
-                f"{origin.rstrip('/') + route['path']}\n"
-                f"response headers:\n{detail}\n"
-                f"response body (first 2048 bytes):\n{preview}"
-            )
         observations.append(row)
+        publish()
+        if row["status"] != expected_status:
+            raise VectorFailure(
+                route["route_id"], mode,
+                f"status {status} != {expected_status}",
+                f"request: {route['method']} {target_url}\n"
+                f"response headers:\n{redact_headers(headers)}\n"
+                f"response body (first 2048 bytes):\n{redact_body(body)}",
+            )
         return row
 
-    set_switch(args, "disable")
+    def attempt(action) -> None:
+        """Runs one route assertion, recording a vector failure and going on."""
+        try:
+            action()
+        except VectorFailure as failure:
+            record_failure(failure)
+
     try:
+        set_switch(args, "disable")
+
         for route in routes:
             _, legacy_opener = fresh_http()
-            observe(
-                route, "legacy-public", legacy_opener, args.public_origin,
+            attempt(lambda route=route, opener=legacy_opener: observe(
+                route, "legacy-public", opener, args.public_origin,
                 route["legacy_status"], True
-            )
+            ))
 
-        reserved_status, _, _ = request(
-            opener,
-            args.public_origin.rstrip("/") + routes[0]["path"],
-            routes[0]["method"],
-            {"X-Adempiere-Handoff-Ticket": "browser-forbidden"},
-        )
-        if reserved_status != 400:
-            raise SystemExit(
-                f"{args.context}: reserved browser header returned {reserved_status}"
+        def reserved_header_vector() -> None:
+            reserved_status, _, _ = request(
+                opener,
+                args.public_origin.rstrip("/") + routes[0]["path"],
+                routes[0]["method"],
+                {"X-Adempiere-Handoff-Ticket": "browser-forbidden"},
             )
+            if reserved_status != 400:
+                raise VectorFailure(
+                    routes[0]["route_id"], "reserved-browser-header",
+                    f"status {reserved_status} != 400",
+                    "a browser-supplied handoff header must be refused",
+                )
+        attempt(reserved_header_vector)
 
         if args.context in ELIGIBLE:
             cookie_jar.clear()
@@ -293,35 +446,50 @@ def main() -> None:
                     row for row in routes
                     if row["route_id"].startswith("/wstore::Index::")
                 )
-                first = observe(
-                    bootstrap, "modern-session-bootstrap", opener,
-                    args.public_origin,
-                    expected_modern_status(bootstrap["modern_status_contract"]),
-                    True,
-                )
-                public_sessions = [
-                    cookie for cookie in cookie_jar
-                    if cookie.name == "JSESSIONID" and cookie.path == "/wstore"
-                ]
-                if first["set_cookie"] != "true" or len(public_sessions) != 1:
-                    raise SystemExit(
-                        "/wstore: modern bootstrap did not establish one public session"
+
+                def bootstrap_vector() -> None:
+                    first = observe(
+                        bootstrap, "modern-session-bootstrap", opener,
+                        args.public_origin,
+                        expected_modern_status(
+                            bootstrap["modern_status_contract"]),
+                        True,
                     )
-                observe(
-                    bootstrap, "modern-session-follow-up", opener,
-                    args.public_origin,
-                    expected_modern_status(bootstrap["modern_status_contract"]),
-                    True,
-                )
+                    public_sessions = [
+                        cookie for cookie in cookie_jar
+                        if cookie.name == "JSESSIONID"
+                        and cookie.path == "/wstore"
+                    ]
+                    if (first["set_cookie"] != "true"
+                            or len(public_sessions) != 1):
+                        raise VectorFailure(
+                            bootstrap["route_id"], "modern-session-bootstrap",
+                            "bootstrap did not establish exactly one "
+                            "public session",
+                            f"set_cookie={first['set_cookie']} "
+                            f"public_wstore_sessions={len(public_sessions)}",
+                        )
+                    observe(
+                        bootstrap, "modern-session-follow-up", opener,
+                        args.public_origin,
+                        expected_modern_status(
+                            bootstrap["modern_status_contract"]),
+                        True,
+                    )
+                attempt(bootstrap_vector)
 
             cookie_jar.clear()
-            for route in routes:
+
+            def modern_vector(route: dict[str, str]) -> None:
                 is_confidential = (
                     args.context == "/wstore" and confidential(route["path"])
                 )
+                # Each modern route is observed from its own session so that
+                # one route's session state cannot decide another's status.
+                route_jar, route_opener = fresh_http()
                 if is_confidential:
                     redirect = observe(
-                        route, "modern-public-tls-redirect", opener,
+                        route, "modern-public-tls-redirect", route_opener,
                         args.public_origin, "302", True,
                     )
                     if (
@@ -330,20 +498,25 @@ def main() -> None:
                         or "127.0.0.1:8890" in redirect["location"]
                         or "localhost:8890" in redirect["location"]
                     ):
-                        raise SystemExit(
-                            f"{route['route_id']}: confidential redirect leaked "
-                            "or omitted the public HTTPS origin"
+                        raise VectorFailure(
+                            route["route_id"], "modern-public-tls-redirect",
+                            "confidential redirect leaked or omitted the "
+                            "public HTTPS origin",
+                            f"location: {redirect['location']}",
                         )
                 observe(
                     route,
                     "modern-public-confidential"
                     if is_confidential else "modern-public",
-                    https_opener if is_confidential else opener,
+                    https_for(route_jar) if is_confidential else route_opener,
                     args.public_https_origin
                     if is_confidential else args.public_origin,
                     expected_modern_status(route["modern_status_contract"]),
                     True,
                 )
+
+            for route in routes:
+                attempt(lambda route=route: modern_vector(route))
         else:
             reason = {
                 "/admin": "legacy-without-consumer-ownership",
@@ -357,35 +530,55 @@ def main() -> None:
                 encoding="utf-8",
             )
     finally:
-        set_switch(args, "clear")
+        # Independent scopes, in this order, because each of the three can
+        # fail and none may suppress the others. Publication and the container
+        # log harvest are the only surviving explanation of an infrastructure
+        # abort, and set_switch itself raises InfrastructureFailure - running
+        # it first inside a shared scope would lose exactly the evidence that
+        # failure needs, and would replace the original exception with its own.
+        try:
+            publish()
+        finally:
+            try:
+                harvest_proxy_failures(args)
+            finally:
+                # The clear must run even after an infrastructure failure:
+                # AD_SysConfig is shared, and leaving a context enabled would
+                # mis-attribute every later shard of a --continue run.
+                set_switch(args, "clear")
 
-    output = args.evidence_dir / "route-observations.tsv"
-    with output.open("w", encoding="utf-8", newline="") as stream:
-        writer = csv.DictWriter(
-            stream, fieldnames=list(observations[0]), delimiter="\t",
-            lineterminator="\n"
-        )
-        writer.writeheader()
-        writer.writerows(observations)
     provenance = {
         "context": args.context,
         "public_origin": args.public_origin,
         "public_https_origin": args.public_https_origin,
         "git_head": run(["git", "rev-parse", "HEAD"]).strip(),
+        "ci_run_id": os.environ.get("GITHUB_RUN_ID", "local"),
+        "ci_run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT", "local"),
         "database_marker": args.db_marker,
         "route_count": len(routes),
         "observation_count": len(observations),
+        "failure_count": len(failures),
         "modern_execution": (
             "all-routes-public-http-or-https"
             if args.context in ELIGIBLE else "explicitly-unexecuted"
         ),
         "client": "python-urllib-public-origin",
         "legacy_cookie_isolation": "fresh-cookie-jar-per-route",
+        "modern_cookie_isolation": (
+            "fresh-cookie-jar-per-route"
+            if args.context in ELIGIBLE else "not-applicable"
+        ),
     }
     (args.evidence_dir / "provenance.json").write_text(
         json.dumps(provenance, sort_keys=True, indent=2) + "\n", encoding="utf-8"
     )
-    print(f"{args.context}: recorded {len(observations)} public-origin observations")
+    print(f"{args.context}: recorded {len(observations)} public-origin "
+          f"observations, {len(failures)} failed")
+    if failures:
+        raise SystemExit(
+            f"{args.context}: {len(failures)} route vector(s) failed; see "
+            f"{args.evidence_dir / 'route-failures.tsv'}"
+        )
 
 
 if __name__ == "__main__":

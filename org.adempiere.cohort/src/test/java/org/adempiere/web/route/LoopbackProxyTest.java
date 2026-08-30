@@ -96,6 +96,162 @@ class LoopbackProxyTest {
 	}
 
 	@Test
+	@DisplayName("a Location that is not a valid URI is still rewritten, not failed closed")
+	void unparseableBackendLocationIsRewritten() throws Exception {
+			HttpServer server = HttpServer.create(
+					new InetSocketAddress("127.0.0.1", 0), 0);
+			int port = server.getAddress().getPort();
+			server.createContext("/index.jsp", exchange -> {
+				exchange.getResponseHeaders().add(
+						"Location",
+						"http://127.0.0.1:" + port + "/x.jsp?msg=a b");
+				exchange.sendResponseHeaders(302, -1);
+				exchange.close();
+			});
+			server.start();
+			try {
+				CapturedResponse response = new CapturedResponse();
+				ProxyResult result = new LoopbackProxy(
+						"http://127.0.0.1:" + port).proxy(
+								new Request() {
+									@Override
+									public String contextPath() {
+										return "";
+									}
+								},
+								response, PublicRouteClass.UNKNOWN, "/index.jsp",
+								null, null, null,
+								ContextRoutingPolicy.forContext("/"));
+				assertTrue(result.completed());
+				assertEquals(
+						"https://public.example/x.jsp?msg=a b",
+						response.headers.get("Location").get(0));
+			} finally {
+				server.stop(0);
+		}
+	}
+
+	@Test
+	@DisplayName("a same-backend Location that omits the internal port is rewritten")
+	void omittedBackendPortIsRewritten() throws Exception {
+			HttpServer server = HttpServer.create(
+					new InetSocketAddress("127.0.0.1", 0), 0);
+			server.createContext("/index.jsp", exchange -> {
+				exchange.getResponseHeaders().add(
+						"Location", "http://127.0.0.1/admin/");
+				exchange.sendResponseHeaders(302, -1);
+				exchange.close();
+			});
+			server.start();
+			try {
+				CapturedResponse response = new CapturedResponse();
+				ProxyResult result = new LoopbackProxy(
+						"http://127.0.0.1:" + server.getAddress().getPort()).proxy(
+								new Request() {
+									@Override
+									public String contextPath() {
+										return "";
+									}
+								},
+								response, PublicRouteClass.UNKNOWN, "/index.jsp",
+								null, null, null,
+								ContextRoutingPolicy.forContext("/"));
+				assertTrue(result.completed());
+				assertEquals(
+						"https://public.example/admin/",
+						response.headers.get("Location").get(0));
+			} finally {
+				server.stop(0);
+		}
+	}
+
+	@Test
+	@DisplayName("a Location that only shares a textual prefix with the backend fails closed")
+	void backendPrefixWithoutOriginBoundaryIsNotExposed() throws Exception {
+			HttpServer server = HttpServer.create(
+					new InetSocketAddress("127.0.0.1", 0), 0);
+			int port = server.getAddress().getPort();
+			server.createContext("/index.jsp", exchange -> {
+				// The backend origin is normalized without a trailing slash, so
+				// this value passes a bare startsWith. Stripping the prefix
+				// would leave "@evil.example/x", which appended to the public
+				// origin is read by a browser as userinfo: the ingress would
+				// emit an open redirect to evil.example under its own origin.
+				exchange.getResponseHeaders().add(
+						"Location",
+						"http://127.0.0.1:" + port + "@evil.example/x");
+				exchange.sendResponseHeaders(302, -1);
+				exchange.close();
+			});
+			server.start();
+			try {
+				CapturedResponse response = new CapturedResponse();
+				ProxyResult result = new LoopbackProxy(
+						"http://127.0.0.1:" + port).proxy(
+								new Request() {
+									@Override
+									public String contextPath() {
+										return "";
+									}
+								},
+								response, PublicRouteClass.UNKNOWN, "/index.jsp",
+								null, null, null,
+								ContextRoutingPolicy.forContext("/"));
+				assertFalse(result.completed());
+				assertEquals("internal-location-leak", result.failure());
+				assertFalse(response.headers.containsKey("Location"));
+			} finally {
+				server.stop(0);
+		}
+	}
+
+	@Test
+	@DisplayName("a same-host Location on a different explicit port still fails closed")
+	void foreignLoopbackPortIsStillNotExposed() throws Exception {
+			HttpServer server = HttpServer.create(
+					new InetSocketAddress("127.0.0.1", 0), 0);
+			int port = server.getAddress().getPort();
+			server.createContext("/index.jsp", exchange -> {
+				exchange.getResponseHeaders().add(
+						"Location", "http://127.0.0.1:" + (port + 1)
+								+ "/private;jsessionid=SECRET1?token=SECRET2");
+				exchange.sendResponseHeaders(302, -1);
+				exchange.close();
+			});
+			server.start();
+			try {
+				CapturedResponse response = new CapturedResponse();
+				ProxyResult result = new LoopbackProxy(
+						"http://127.0.0.1:" + port).proxy(
+								new Request() {
+									@Override
+									public String contextPath() {
+										return "";
+									}
+								},
+								response, PublicRouteClass.UNKNOWN, "/index.jsp",
+								null, null, null,
+								ContextRoutingPolicy.forContext("/"));
+				assertFalse(result.completed());
+				assertEquals("internal-location-leak", result.failure());
+				assertFalse(response.headers.containsKey("Location"));
+				// Accepting a port-omitted same-host Location must not become
+				// "accept any loopback Location": a different explicit port is
+				// a different origin, and the Phase 5e isolation guarantee is
+				// that it never reaches the browser. The diagnostic records
+				// what was rejected, and does so through RedirectDescriptor so
+				// that the permanent log cannot carry a session or a query
+				// value.
+				assertTrue(result.diagnostic().contains("port=" + (port + 1)));
+				assertTrue(result.diagnostic().contains("/private;jsessionid="));
+				assertFalse(result.diagnostic().contains("SECRET1"));
+				assertFalse(result.diagnostic().contains("SECRET2"));
+			} finally {
+				server.stop(0);
+		}
+	}
+
+	@Test
 	@DisplayName("wstore application cookies round-trip without exposing internal JSESSIONID")
 	void wstoreApplicationCookieIsIsolated() throws Exception {
 			HttpServer server = HttpServer.create(
