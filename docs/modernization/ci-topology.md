@@ -152,6 +152,24 @@ Cleaning this up — either by untracking both artifacts or by making the reacto
 write them to a build directory — is repository hygiene owned by Phase 7, not
 by this CI change.
 
+## Known flake in the current-phase smoke
+
+`Current-phase database smoke` is a blocking gate that drives a real browser, so
+its reliability matters as much as its coverage.
+
+One timeout has been observed: `RoutedCohortMatrixTest.publicOriginCohortMatrix`
+failed at `RoutedCohortMatrixTest:320`, the `waitFor` on the `grdChooseRole`
+role-selection grid, with a Playwright `TimeoutError`. The same commit passed on
+re-run with no change to the job, and the job definition is byte-equivalent to
+the `phase-5e-public-origin` job it replaced — same runner image, service
+container, environment and Gradle task — so the consolidation did not introduce
+it. It is a ZK login round-trip that occasionally exceeds the default Playwright
+timeout under runner load.
+
+It is recorded rather than fixed here because raising a timeout inside a phase
+contract is a phase change, not a CI change. If it recurs, the fix belongs in
+the Phase 5e test's own wait configuration.
+
 ## Concurrency
 
 Concurrency groups are repository-wide, not scoped to a workflow. Both
