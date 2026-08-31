@@ -1,0 +1,6 @@
+context	path	method	public_http_rule	public_https_rule	forwarded_internal_rule
+/wstore	/login.jsp	*	redirect-public-https	proxy	rebuild-X-Forwarded-Proto=https-and-secure=true-on-loopback
+/wstore	/loginServlet	*	redirect-public-https	proxy	rebuild-X-Forwarded-Proto=https-and-secure=true-on-loopback
+/wstore	/checkOutServlet	*	redirect-public-https	proxy	rebuild-X-Forwarded-Proto=https-and-secure=true-on-loopback
+/wstore	/orderServlet	*	redirect-public-https	proxy	rebuild-X-Forwarded-Proto=https-and-secure=true-on-loopback
+*	*	*	proxy-preserving-public-scheme	proxy-preserving-public-scheme	never-trust-browser-forwarded-metadata;never-expose-loopback-authority

@@ -1,0 +1,928 @@
+import java.security.MessageDigest
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipOutputStream
+
+def phase5fRoutingDir = layout.buildDirectory.dir('phase5f/context-routing')
+def phase5fRuntimeContractDir =
+	layout.projectDirectory.dir('contracts/phase5f-jakarta-web-v1')
+def phase5fInstalledHome = layout.buildDirectory.dir('phase3/runtime/Adempiere')
+def phase5fReleaseHome =
+	layout.buildDirectory.dir('phase3/release/Adempiere').get()
+def phase5fModernWarDir =
+	project(':serverRoot').layout.buildDirectory.dir('phase5f-wars')
+
+def phase5fRoutingContexts = [
+	admin: [
+		context: '/admin', legacy: 'adempiereRoot.war',
+		deployed: 'admin.war', modern: 'admin-modern.war',
+		defaultState: 'legacy-unless-approved'],
+	ROOT: [
+		context: '/', legacy: 'adempiereWebCM.war',
+		deployed: 'ROOT.war', modern: 'ROOT-modern.war',
+		defaultState: 'eligible-after-gates'],
+	mobile: [
+		context: '/mobile', legacy: 'mobile.war',
+		deployed: 'mobile.war', modern: 'mobile-modern.war',
+		defaultState: 'disabled'],
+	adempiere: [
+		context: '/adempiere', legacy: 'adempiereApps.war',
+		deployed: 'adempiere.war', modern: 'adempiere-modern.war',
+		defaultState: 'disabled'],
+	wstore: [
+		context: '/wstore', legacy: 'adempiereWebStore.war',
+		deployed: 'wstore.war', modern: 'wstore-modern.war',
+		defaultState: 'eligible-after-gates'],
+]
+
+def phase5fOriginalName = { Map spec ->
+	spec.legacy.substring(0, spec.legacy.length() - 4) + 'Original.war'
+}
+
+def phase5fDigest = { File file ->
+	MessageDigest.getInstance('SHA-256')
+		.digest(file.bytes).encodeHex().toString()
+}
+
+def phase5fEntries = { File archive ->
+	def result = new LinkedHashMap<String, byte[]>()
+	new ZipFile(archive).withCloseable { zip ->
+		zip.entries().each { entry ->
+			if (!entry.directory) {
+				result[entry.name] = zip.getInputStream(entry).withCloseable {
+					it.readAllBytes()
+				}
+			}
+		}
+	}
+	result
+}
+
+def phase5fRemove
+phase5fRemove = { File victim ->
+	if (!victim.exists()) {
+		return
+	}
+	if (victim.isDirectory()) {
+		victim.listFiles().each { phase5fRemove(it) }
+	}
+	if (!victim.delete()) {
+		throw new GradleException("Could not remove ${victim}")
+	}
+}
+
+def phase5fDescriptorOverlay = { String frozen ->
+	def root = frozen.indexOf('<web-app')
+	def close = root < 0 ? -1 : frozen.indexOf('>', root)
+	if (root < 0 || close < 0) {
+		throw new GradleException('The pristine descriptor has no web-app root')
+	}
+	def insert = '''
+	<listener>
+		<listener-class>org.adempiere.web.context.ContextRoutingStartupListener</listener-class>
+	</listener>
+	<filter>
+		<filter-name>phase5fContextRouter</filter-name>
+		<filter-class>org.adempiere.web.context.ContextRoutingFilter</filter-class>
+	</filter>
+	<filter-mapping>
+		<filter-name>phase5fContextRouter</filter-name>
+		<url-pattern>/*</url-pattern>
+	</filter-mapping>
+'''
+	def routed = frozen.substring(0, close + 1) + insert + frozen.substring(close + 1)
+	if (routed.contains('<tracking-mode>')) {
+		return routed
+	}
+	if (routed.contains('</session-config>')) {
+		return routed.replaceFirst(
+			'</session-config>',
+			'<tracking-mode>COOKIE</tracking-mode></session-config>')
+	}
+	routed.replaceFirst(
+		'</web-app>',
+		'<session-config><tracking-mode>COOKIE</tracking-mode></session-config>\\n</web-app>')
+}
+
+def phase5fWriteArchive = { Map<String, byte[]> entries, File target ->
+	target.parentFile.mkdirs()
+	def temporary = new File(target.parentFile, target.name + '.building')
+	new ZipOutputStream(new BufferedOutputStream(
+			new FileOutputStream(temporary))).withCloseable { output ->
+		output.setLevel(java.util.zip.Deflater.BEST_COMPRESSION)
+		entries.keySet().sort().each { name ->
+			def entry = new ZipEntry(name)
+			entry.time = 0L
+			output.putNextEntry(entry)
+			output.write(entries[name])
+			output.closeEntry()
+		}
+	}
+	if (target.exists() && !target.delete()) {
+		throw new GradleException("Could not replace ${target}")
+	}
+	if (!temporary.renameTo(target)) {
+		throw new GradleException("Could not write ${target}")
+	}
+}
+
+tasks.register('materializePhase5fPristineContextWars') {
+	group = 'build'
+	description = 'Freezes the five canonical Tomcat 9 context WARs before routing'
+	dependsOn tasks.named('stagePhase5eInstalledRouting')
+	def output = phase5fRoutingDir.map { it.dir('pristine') }
+	outputs.dir output
+	outputs.upToDateWhen { false }
+	doLast {
+		delete output
+		phase5fRoutingContexts.each { name, spec ->
+			def lib = phase5fInstalledHome.get().dir('lib')
+			def original = lib.file(phase5fOriginalName(spec)).asFile
+			def active = lib.file(spec.legacy).asFile
+			def activeEntries = active.isFile()
+				? phase5fEntries(active)
+				: [:]
+			def activeIsRouted = activeEntries.containsKey(
+				'WEB-INF/lib/phase5f-context-routing-bridge.jar')
+			def pristine = activeIsRouted && original.isFile()
+				? original
+				: active
+			if (!pristine.isFile()) {
+				throw new GradleException("Missing pristine context ${pristine}")
+			}
+			def entries = phase5fEntries(pristine)
+			if (!entries.containsKey('WEB-INF/web.xml')) {
+				throw new GradleException("${pristine} has no WEB-INF/web.xml")
+			}
+			if (entries.containsKey(
+					'WEB-INF/lib/phase5f-context-routing-bridge.jar')) {
+				throw new GradleException("${pristine} is already routed")
+			}
+			def frozen = output.get().file(spec.legacy).asFile
+			frozen.parentFile.mkdirs()
+			frozen.bytes = pristine.bytes
+		}
+	}
+}
+
+tasks.register('derivePhase5fLegacyContextWars') {
+	group = 'build'
+	description = 'Derives five independently routed Tomcat 9 context archives'
+	dependsOn(
+		tasks.named('materializePhase5fPristineContextWars'),
+		':org.adempiere.cohort:contextBridgeOverlayJar')
+	def output = phase5fRoutingDir.map { it.dir('legacy') }
+	inputs.dir phase5fRoutingDir.map { it.dir('pristine') }
+	inputs.file project(':org.adempiere.cohort').tasks
+		.named('contextBridgeOverlayJar').flatMap { it.archiveFile }
+	outputs.dir output
+	doLast {
+		delete output
+		def bridge = project(':org.adempiere.cohort').tasks
+			.named('contextBridgeOverlayJar').get().archiveFile.get().asFile
+		phase5fRoutingContexts.each { name, spec ->
+			def pristine = phase5fRoutingDir.get()
+				.file("pristine/${spec.legacy}").asFile
+			def entries = phase5fEntries(pristine)
+			entries['WEB-INF/web.xml'] = phase5fDescriptorOverlay(
+				new String(entries['WEB-INF/web.xml'], 'UTF-8')).getBytes('UTF-8')
+			entries['WEB-INF/lib/phase5f-context-routing-bridge.jar'] = bridge.bytes
+			phase5fWriteArchive(entries,
+				output.get().file(spec.deployed).asFile)
+		}
+	}
+}
+
+tasks.register('verifyPhase5fLegacyContextWars') {
+	group = 'verification'
+	description = 'Proves each deterministic legacy derivation changes only its descriptor and bridge'
+	dependsOn tasks.named('derivePhase5fLegacyContextWars')
+	def evidence = phase5fRoutingDir.map { it.file('derived-contexts.tsv') }
+	inputs.dir phase5fRoutingDir.map { it.dir('pristine') }
+	inputs.dir phase5fRoutingDir.map { it.dir('legacy') }
+	outputs.file evidence
+	doLast {
+		def rows = ['context\tpristine_sha256\tderived_sha256\tchanged_entries']
+		phase5fRoutingContexts.each { name, spec ->
+			def pristineFile = phase5fRoutingDir.get()
+				.file("pristine/${spec.legacy}").asFile
+			def routedFile = phase5fRoutingDir.get()
+				.file("legacy/${spec.deployed}").asFile
+			def pristine = phase5fEntries(pristineFile)
+			def routed = phase5fEntries(routedFile)
+			def changed = (pristine.keySet() + routed.keySet()).findAll { entry ->
+				!java.util.Arrays.equals(pristine[entry], routed[entry])
+			}.sort()
+			def expected = [
+				'WEB-INF/lib/phase5f-context-routing-bridge.jar',
+				'WEB-INF/web.xml',
+			].sort()
+			if (changed != expected) {
+				throw new GradleException(
+					"${spec.context} derived diff is ${changed}, expected ${expected}")
+			}
+			def descriptor = new String(routed['WEB-INF/web.xml'], 'UTF-8')
+			[
+				'ContextRoutingStartupListener',
+				'ContextRoutingFilter',
+				'<filter-name>phase5fContextRouter</filter-name>',
+				'<tracking-mode>COOKIE</tracking-mode>',
+			].each { required ->
+				if (!descriptor.contains(required)) {
+					throw new GradleException(
+						"${spec.deployed} omits ${required}")
+				}
+			}
+			def determinismCheck = phase5fRoutingDir.get()
+				.file("determinism/${spec.deployed}").asFile
+			phase5fWriteArchive(new LinkedHashMap<String, byte[]>(routed),
+				determinismCheck)
+			if (!java.util.Arrays.equals(routedFile.bytes, determinismCheck.bytes)) {
+				throw new GradleException(
+					"${spec.context} legacy routing derivation is not deterministic")
+			}
+			rows << "${spec.context}\t${phase5fDigest(pristineFile)}\t" +
+				"${phase5fDigest(routedFile)}\t${changed.join(',')}"
+		}
+		def report = evidence.get().asFile
+		report.parentFile.mkdirs()
+		report.text = rows.join('\n') + '\n'
+	}
+}
+
+ext.phase5fModernContextDescriptor = { String name, Map spec ->
+	def descriptorName = name == 'ROOT' ? 'ROOT' : name
+	def cookiePath = spec.context
+	"""<?xml version="1.0" encoding="UTF-8"?>
+<Context docBase="\${catalina.base}/phase5f/${spec.modern}"
+         disableURLRewriting="true"
+         sessionCookieName="JSESSIONID_${descriptorName.toUpperCase(Locale.ROOT)}"
+         sessionCookiePath="${cookiePath}"
+         sessionCookiePathUsesTrailingSlash="false"
+         crossContext="false"
+         useHttpOnly="true"
+         privileged="false"
+         reloadable="false">
+${project.phase5fJarScannerElement(name.toString())}
+  <Valve className="org.apache.catalina.valves.RemoteIpValve"
+         internalProxies="127\\.0\\.0\\.1|::1"
+         protocolHeader="x-forwarded-proto"
+         protocolHeaderHttpsValue="https"/>
+</Context>
+"""
+}
+
+ext.stagePhase5fContextRouting = { File home ->
+	def lib = new File(home, 'lib')
+	def modernDir = new File(home, 'tomcat10-api/phase5f')
+	def descriptors = new File(home, 'tomcat10-api/conf/Catalina/localhost')
+	def publicWebapps = new File(home, 'tomcat/webapps')
+	def manifestRows = []
+	modernDir.mkdirs()
+	descriptors.mkdirs()
+	phase5fRoutingContexts.each { name, spec ->
+		def pristineSource = phase5fRoutingDir.get()
+			.file("pristine/${spec.legacy}").asFile
+		def original = new File(lib, phase5fOriginalName(spec))
+		def active = new File(lib, spec.legacy)
+		original.parentFile.mkdirs()
+		original.bytes = pristineSource.bytes
+		active.bytes = phase5fRoutingDir.get()
+			.file("legacy/${spec.deployed}").asFile.bytes
+
+		if (publicWebapps.isDirectory()) {
+			phase5fRemove(new File(publicWebapps,
+				spec.deployed.substring(0, spec.deployed.length() - 4)))
+			def deployed = new File(publicWebapps, spec.deployed)
+			if (deployed.isFile()) {
+				deployed.bytes = active.bytes
+			}
+		}
+
+		def modern = phase5fModernWarDir.get().file(spec.modern).asFile
+		if (!modern.isFile()) {
+			throw new GradleException("Missing modern context ${modern}")
+		}
+		def stagedModern = new File(modernDir, spec.modern)
+		stagedModern.bytes = modern.bytes
+		phase5fRemove(new File(home, "tomcat10-api/webapps/${spec.modern}"))
+		phase5fRemove(new File(home, "tomcat10-api/webapps/" +
+			spec.modern.substring(0, spec.modern.length() - 4)))
+		phase5fRemove(new File(home, "tomcat10-api/webapps/${spec.deployed}"))
+		phase5fRemove(new File(home, "tomcat10-api/webapps/" +
+			spec.deployed.substring(0, spec.deployed.length() - 4)))
+
+		def descriptorName = name == 'ROOT' ? 'ROOT.xml' : "${name}.xml"
+		def descriptor = new File(descriptors, descriptorName)
+		descriptor.text = project.phase5fModernContextDescriptor(
+			name.toString(), spec)
+		manifestRows << "${phase5fDigest(active)}  lib/${spec.legacy}"
+		manifestRows << "${phase5fDigest(original)}  lib/${original.name}"
+		manifestRows << "${phase5fDigest(stagedModern)}  tomcat10-api/phase5f/${spec.modern}"
+		manifestRows << "${phase5fDigest(descriptor)}  tomcat10-api/conf/Catalina/localhost/${descriptorName}"
+	}
+	def config = new File(home, 'config')
+	config.mkdirs()
+	new File(config, 'phase5f-context-routing.sha256').text =
+		manifestRows.sort().join('\n') + '\n'
+}
+
+tasks.register('stagePhase5fInstalledContextRouting') {
+	group = 'verification'
+	description = 'Stages Phase 5f routing in the installed product'
+	dependsOn(
+		tasks.named('verifyPhase5fLegacyContextWars'),
+		tasks.named('phase5fSourceNativeJakartaFoundation'))
+	mustRunAfter tasks.named('verifyPhase4InstalledApi')
+	outputs.upToDateWhen { false }
+	doLast {
+		project.stagePhase5fContextRouting(phase5fInstalledHome.get().asFile)
+	}
+}
+
+tasks.register('stagePhase5fReleaseContextRouting') {
+	group = 'verification'
+	description = 'Stages Phase 5f routing in the 394LTS release tree'
+	dependsOn(
+		tasks.named('stagePhase5eReleaseRouting'),
+		tasks.named('verifyPhase5fLegacyContextWars'),
+		tasks.named('phase5fSourceNativeJakartaFoundation'))
+	mustRunAfter tasks.named('verifyPhase4InstalledApi')
+	outputs.upToDateWhen { false }
+	doLast {
+		project.stagePhase5fContextRouting(phase5fReleaseHome.asFile)
+	}
+}
+
+tasks.register('packagePhase5fReleaseContextRouting', Exec) {
+	group = 'verification'
+	description = 'Rebuilds both 394LTS archives with the complete Phase 5f topology'
+	dependsOn tasks.named('stagePhase5fReleaseContextRouting')
+	mustRunAfter tasks.named('packagePhase5eReleaseRouting')
+	commandLine(
+		'bash',
+		rootProject.file('scripts/phase4/package-installed-api.sh'),
+		rootProject.projectDir,
+		phase5fReleaseHome.asFile,
+		'394LTS')
+}
+
+tasks.register('verifyPhase5fInstalledReleaseTopology', Exec) {
+	group = 'verification'
+	description = 'Proves the installed and release topology, manifests, isolation and inherited seams'
+	dependsOn(
+		tasks.named('stagePhase5fInstalledContextRouting'),
+		tasks.named('packagePhase5fReleaseContextRouting'))
+	commandLine(
+		'bash',
+		rootProject.file('scripts/phase5/verify-phase5f-installed-topology.sh'),
+		phase5fInstalledHome.get().asFile,
+		phase5fReleaseHome.asFile,
+		rootProject.file('build/phase3/release/Adempiere_394LTS.zip'),
+		rootProject.file('build/phase3/release/Adempiere_394LTS.tar.gz'),
+		phase5fRoutingDir.get().asFile,
+		phase5fModernWarDir.get().asFile)
+}
+
+tasks.register('verifyPhase5fContextRollback', Exec) {
+	group = 'verification'
+	description = 'Rehearses five-context rollback and proves live modern sessions cannot fall back'
+	dependsOn(
+		tasks.named('verifyPhase5fInstalledReleaseTopology'),
+		':org.adempiere.cohort:phase5fRollbackCoreTest',
+		':org.adempiere.cohort:phase5fRollbackBridgeTest')
+	commandLine(
+		'bash',
+		rootProject.file('scripts/phase5/verify-phase5f-context-rollback.sh'),
+		phase5fInstalledHome.get().asFile,
+		rootProject.file('build/phase3/release/Adempiere_394LTS.zip'),
+		rootProject.file('build/phase3/release/Adempiere_394LTS.tar.gz'),
+		phase5fRoutingDir.get().asFile,
+		rootProject.layout.buildDirectory.dir('phase5f/rollback').get().asFile)
+}
+
+tasks.register('phase5fTopologyMutationProof') {
+	group = 'verification'
+	description = 'Proves topology verification rejects duplicate deployment and public connector mutations'
+	dependsOn tasks.named('verifyPhase5fInstalledReleaseTopology')
+	def evidence = phase5fRoutingDir.map { it.file('topology-mutations.tsv') }
+	outputs.file evidence
+	doLast {
+		def source = phase5fInstalledHome.get().asFile
+		def mutated = phase5fRoutingDir.get().dir('mutation-home').asFile
+		delete mutated
+		copy {
+			from source
+			into mutated
+		}
+		def duplicate = new File(mutated,
+			'tomcat10-api/webapps/wstore-modern.war')
+		duplicate.parentFile.mkdirs()
+		duplicate.bytes = new File(mutated,
+			'tomcat10-api/phase5f/wstore-modern.war').bytes
+		def result = exec {
+			ignoreExitValue = true
+			commandLine(
+				'bash',
+				rootProject.file('scripts/phase5/verify-phase5f-installed-topology.sh'),
+				mutated,
+				phase5fReleaseHome.asFile,
+				rootProject.file('build/phase3/release/Adempiere_394LTS.zip'),
+				rootProject.file('build/phase3/release/Adempiere_394LTS.tar.gz'),
+				phase5fRoutingDir.get().asFile,
+				phase5fModernWarDir.get().asFile)
+		}
+		if (result.exitValue == 0) {
+			throw new GradleException(
+				'The topology verifier accepted a duplicate auto-deployed modern WAR')
+		}
+		duplicate.delete()
+		def serverXml = new File(mutated, 'tomcat10-api/conf/server.xml')
+		serverXml.text = serverXml.text.replace(
+			'<Connector address="127.0.0.1"',
+			'<Connector address="0.0.0.0"')
+		result = exec {
+			ignoreExitValue = true
+			commandLine(
+				'bash',
+				rootProject.file('scripts/phase5/verify-phase5f-installed-topology.sh'),
+				mutated,
+				phase5fReleaseHome.asFile,
+				rootProject.file('build/phase3/release/Adempiere_394LTS.zip'),
+				rootProject.file('build/phase3/release/Adempiere_394LTS.tar.gz'),
+				phase5fRoutingDir.get().asFile,
+				phase5fModernWarDir.get().asFile)
+		}
+		if (result.exitValue == 0) {
+			throw new GradleException(
+				'The topology verifier accepted a public Tomcat 10 connector')
+		}
+		def report = evidence.get().asFile
+		report.parentFile.mkdirs()
+		report.text =
+			"mutation\tdetected\n" +
+			"duplicate-auto-deploy\ttrue\n" +
+			"public-modern-connector\ttrue\n"
+	}
+}
+
+tasks.register('phase5fInstalledTopologyVerification') {
+	group = 'verification'
+	description = 'Runs the focused Phase 5f installed, archive, mutation and rollback gates'
+	dependsOn(
+		tasks.named('verifyPhase5fContextRollback'),
+		tasks.named('phase5fTopologyMutationProof'))
+}
+
+tasks.register('phase5fFoundationVerification') {
+	group = 'verification'
+	description = 'Runs the database-neutral Phase 5f routing, foundation, topology and oracle gates'
+	dependsOn(
+		':org.adempiere.cohort:test',
+		':org.adempiere.cohort:contextBridgeTest',
+		tasks.named('phase5fOracleContractValidation'),
+		tasks.named('phase5fSourceNativeJakartaFoundation'),
+		tasks.named('verifyPhase5fLegacyContextWars'),
+		tasks.named('phase5fInstalledTopologyVerification'))
+}
+
+def phase5fSmokeEvidence = layout.buildDirectory.dir('phase5f/runtime-evidence')
+def phase5fPublicOrigin = providers.gradleProperty('phase5fPublicOrigin')
+	.orElse('http://127.0.0.1:8888')
+def phase5fPublicHttpsOrigin =
+	providers.gradleProperty('phase5fPublicHttpsOrigin')
+		.orElse('https://127.0.0.1:8444')
+def phase5fPublicHttpsPort = phase5fPublicHttpsOrigin.map {
+	def uri = java.net.URI.create(it)
+	uri.port == -1 ? 443 : uri.port
+}
+def phase5fDbHost = providers.gradleProperty('phase3DbHost').orElse('127.0.0.1')
+def phase5fDbPort = providers.gradleProperty('phase3DbPort').orElse('5432')
+def phase5fDbName = providers.gradleProperty('phase3DbName')
+	.orElse('adempiere_phase3_ci')
+def phase5fDbUser = providers.gradleProperty('phase3DbUser')
+	.orElse('adempiere_phase3_ci')
+def phase5fDbPassword = providers.gradleProperty('phase3DbPassword')
+	.orElse('adempiere_phase3_ci')
+def phase5fDbSystemPassword =
+	providers.gradleProperty('phase3DbSystemPassword')
+		.orElse(providers.environmentVariable(
+			'ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD'))
+def phase5fDatabaseMarker = 'ADempiere Phase 3 disposable database'
+
+def phase5fProcessorStateFile = rootProject.layout.buildDirectory
+	.file('phase5f/switch/background-processors.tsv')
+
+def phase5fProcessorTask = { String taskName, String action, String desc ->
+	tasks.register(taskName, Exec) {
+		group = 'verification'
+		description = desc
+		outputs.upToDateWhen { false }
+		environment 'ADEMPIERE_PHASE5F_DB_PASSWORD', phase5fDbPassword.get()
+		commandLine(
+			'bash',
+			rootProject.file(
+				'scripts/phase5/quiesce-phase5f-background-processors.sh'),
+			phase5fDbHost.get(),
+			phase5fDbPort.get(),
+			phase5fDbName.get(),
+			phase5fDbUser.get(),
+			phase5fDatabaseMarker,
+			action,
+			phase5fProcessorStateFile.get().asFile)
+	}
+}
+
+// Must land before the container boots: AdempiereServerMgr reads these
+// definitions once at startup, so deactivating them afterwards would leave the
+// already-scheduled timers running for the whole shard matrix.
+def phase5fQuiesceProcessors = phase5fProcessorTask(
+	'quiescePhase5fBackgroundProcessors', 'quiesce',
+	'Deactivates ADempiere timer-driven processors so route vectors own their database effects')
+phase5fQuiesceProcessors.configure {
+	dependsOn tasks.named('phase3AntDatabaseBuild')
+}
+def phase5fVerifyProcessorsQuiesced = phase5fProcessorTask(
+	'verifyPhase5fBackgroundProcessorsQuiesced', 'verify',
+	'Verifies no ADempiere background processor was reactivated during the shard matrix')
+phase5fVerifyProcessorsQuiesced.configure {
+	dependsOn phase5fQuiesceProcessors
+}
+
+tasks.register('startPhase5fRoutedLane', Exec) {
+	group = 'verification'
+	description = 'Starts the Phase 5f public ingress and six-context loopback runtime'
+	dependsOn(
+		tasks.named('provisionPhase5eHandoffKey'),
+		tasks.named('stagePhase5fInstalledContextRouting'),
+		tasks.named('phase3AntDatabaseBuild'),
+		phase5fQuiesceProcessors,
+		tasks.named('phase4ModernSoapRuntime'))
+	environment 'ADEMPIERE_ROUTED_LANE_PHASE', 'phase5f'
+	environment 'PHASE5F_PUBLIC_HTTPS_PORT',
+		phase5fPublicHttpsPort.get().toString()
+	commandLine(
+		'bash',
+		rootProject.file('scripts/phase5/start-routed-lane.sh'),
+		rootProject.projectDir,
+		phase5fInstalledHome.get().asFile,
+		rootProject.layout.buildDirectory.file('phase5e/keys/handoff.key')
+			.get().asFile)
+}
+
+tasks.register('stopPhase5fRoutedLane', Exec) {
+	group = 'verification'
+	description = 'Stops the Phase 5f lane and restores all pristine Tomcat 9 contexts'
+	environment 'ADEMPIERE_ROUTED_LANE_PHASE', 'phase5f'
+	commandLine(
+		'bash',
+		rootProject.file('scripts/phase5/stop-routed-lane.sh'),
+		rootProject.projectDir,
+		phase5fInstalledHome.get().asFile)
+}
+
+// The Tomcat 9 container log is where ContextRoutingFilter and
+// CohortRoutingFilter record PHASE5F-PROXY-FAIL. A fail-closed proxy answers
+// 502 with no indication of why, so each shard harvests it into its evidence.
+def phase5fContainerLog = phase5fInstalledHome.map {
+	it.file('tomcat/logs/catalina.out')
+}
+
+// Declaration order is not execution order: these six shards are independent
+// siblings whose only dependency is the lane, so Gradle may run them in any
+// order and has. The explicit mustRunAfter chain below fixes the order, and
+// it is ordered by risk: only '/' and '/wstore' are ELIGIBLE for modern
+// routing, and '/webui' carries the Phase 5e sticky-session disposition, so
+// those three report before the legacy-observation-only contexts.
+def phase5fSwitchBaselineFile = layout.buildDirectory.file(
+	'phase5f/switch-baseline.tsv')
+
+// AD_SysConfig is shared mutable state that every shard reads. Bracketing the
+// shards with a captured baseline and an equality check turns a leaked or
+// half-applied switch row into an attributed failure of this gate rather than a
+// silent mis-routing of whichever shard happens to run next.
+def phase5fSwitchStateTask = { String taskName, String switchAction, String desc ->
+	tasks.register(taskName, Exec) {
+		group = 'verification'
+		description = desc
+		dependsOn tasks.named('startPhase5fRoutedLane')
+		outputs.upToDateWhen { false }
+		environment 'ADEMPIERE_PHASE5F_DB_PASSWORD', phase5fDbPassword.get()
+		commandLine(
+			'bash',
+			rootProject.file('scripts/phase5/reset-phase5f-context-switch.sh'),
+			phase5fDbHost.get(),
+			phase5fDbPort.get(),
+			phase5fDbName.get(),
+			phase5fDbUser.get(),
+			phase5fDatabaseMarker,
+			'/',
+			switchAction,
+			phase5fSwitchBaselineFile.get().asFile)
+	}
+}
+
+def phase5fCaptureSwitchBaseline = phase5fSwitchStateTask(
+	'capturePhase5fSwitchBaseline', 'baseline',
+	'Captures the pre-shard state of all five Phase 5f context switches')
+def phase5fVerifySwitchBaseline = phase5fSwitchStateTask(
+	'verifyPhase5fSwitchBaseline', 'verify',
+	'Verifies every Phase 5f context switch was restored to its captured state')
+
+def phase5fShardTasks = []
+def phase5fPreviousShard = null
+[
+	ROOT: '/',
+	wstore: '/wstore',
+	webui: '/webui',
+	admin: '/admin',
+	mobile: '/mobile',
+	adempiere: '/adempiere',
+].each { name, contextPath ->
+	def shard = tasks.register("phase5f${name.toString().capitalize()}RoutesSmokeShard", Exec) {
+		group = 'verification'
+		description = "Replays the ${contextPath} Phase 5f route shard through the public origin"
+		dependsOn tasks.named('startPhase5fRoutedLane'),
+			phase5fCaptureSwitchBaseline
+		inputs.files(
+			phase5fRuntimeContractDir.file('route-validation.tsv'),
+			phase5fRuntimeContractDir.file('database-effect-ownership.tsv'),
+			rootProject.file('scripts/phase5/phase5f-route-smoke.py'),
+			rootProject.file('scripts/phase5/reset-phase5f-context-switch.sh'))
+		outputs.dir phase5fSmokeEvidence.map { it.dir(name.toString()) }
+		outputs.upToDateWhen { false }
+		environment 'ADEMPIERE_PHASE5F_DB_PASSWORD', phase5fDbPassword.get()
+		doFirst {
+			if (!phase5fDbSystemPassword.isPresent()) {
+				throw new GradleException(
+					"${path} requires -Pphase3DbSystemPassword or "
+						+ 'ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD; no runtime '
+						+ 'observation was recorded')
+			}
+			// Deleted by name, not by wiping the directory: the shard now
+			// republishes these ledgers after every vector so that an abort
+			// still uploads what it observed, and a wholesale delete would
+			// discard a previous attempt's evidence before this one has
+			// produced any of its own.
+			delete phase5fSmokeEvidence.get().dir(name.toString())
+				.file('route-observations.tsv').asFile,
+				phase5fSmokeEvidence.get().dir(name.toString())
+					.file('route-observations.tsv.partial').asFile,
+				phase5fSmokeEvidence.get().dir(name.toString())
+					.file('route-failures.tsv').asFile,
+				phase5fSmokeEvidence.get().dir(name.toString())
+					.file('route-failures.tsv.partial').asFile,
+				phase5fSmokeEvidence.get().dir(name.toString())
+					.file('proxy-failures.log').asFile,
+				phase5fSmokeEvidence.get().dir(name.toString())
+					.file('modern-unexecuted.tsv').asFile,
+				phase5fSmokeEvidence.get().dir(name.toString())
+					.file('provenance.json').asFile
+			phase5fSmokeEvidence.get().dir(name.toString()).asFile.mkdirs()
+		}
+		commandLine(
+			'python3',
+			rootProject.file('scripts/phase5/phase5f-route-smoke.py'),
+			'--context', contextPath,
+			'--public-origin', phase5fPublicOrigin.get(),
+			'--public-https-origin', phase5fPublicHttpsOrigin.get(),
+			'--contract', phase5fRuntimeContractDir.file('route-validation.tsv').asFile,
+			'--effects',
+				phase5fRuntimeContractDir.file('database-effect-ownership.tsv').asFile,
+			'--evidence-dir',
+				phase5fSmokeEvidence.get().dir(name.toString()).asFile,
+			'--switch-script',
+				rootProject.file('scripts/phase5/reset-phase5f-context-switch.sh'),
+			'--db-host', phase5fDbHost.get(),
+			'--db-port', phase5fDbPort.get(),
+			'--db-name', phase5fDbName.get(),
+			'--db-user', phase5fDbUser.get(),
+			'--db-marker', phase5fDatabaseMarker,
+			'--container-log', phase5fContainerLog.get().asFile)
+	}
+	if (phase5fPreviousShard != null) {
+		def previous = phase5fPreviousShard
+		shard.configure { mustRunAfter previous }
+	}
+	phase5fPreviousShard = shard
+	phase5fShardTasks << shard
+}
+
+phase5fVerifySwitchBaseline.configure { mustRunAfter phase5fShardTasks }
+
+tasks.register('capturePhase5fSoapCoexistence', Exec) {
+	group = 'verification'
+	description = 'Replays the complete Phase 4 SOAP corpus while Phase 5f contexts are active'
+	dependsOn tasks.named('startPhase5fRoutedLane'), phase5fVerifySwitchBaseline
+	mustRunAfter phase5fShardTasks, phase5fVerifySwitchBaseline
+	environment 'ADEMPIERE_PHASE5F_DB_PASSWORD', phase5fDbPassword.get()
+	commandLine(
+		'bash',
+		rootProject.file('scripts/phase5/capture-phase5f-coexistence.sh'),
+		rootProject.projectDir,
+		phase5fSmokeEvidence.get().asFile,
+		phase5fDbHost.get(),
+		phase5fDbPort.get(),
+		phase5fDbName.get(),
+		phase5fDbUser.get(),
+		phase5fDatabaseMarker)
+}
+
+tasks.register('verifyPhase5fRuntimeEvidence', Exec) {
+	group = 'verification'
+	description = 'Validates provenance, exact 82-route coverage, effects and coexistence evidence'
+	dependsOn(
+		phase5fShardTasks,
+		phase5fVerifySwitchBaseline,
+		phase5fVerifyProcessorsQuiesced,
+		tasks.named('capturePhase5fSoapCoexistence'))
+	mustRunAfter phase5fShardTasks, phase5fVerifySwitchBaseline,
+		phase5fVerifyProcessorsQuiesced,
+		tasks.named('capturePhase5fSoapCoexistence')
+	outputs.file phase5fSmokeEvidence.map { it.file('summary.tsv') }
+	commandLine(
+		'python3',
+		rootProject.file('scripts/phase5/validate-phase5f-runtime-evidence.py'),
+		'--evidence-root', phase5fSmokeEvidence.get().asFile,
+		'--contract', phase5fRuntimeContractDir.file('route-validation.tsv').asFile,
+		'--effects',
+			phase5fRuntimeContractDir.file('database-effect-ownership.tsv').asFile,
+		'--summary', phase5fSmokeEvidence.get().file('summary.tsv').asFile)
+}
+
+tasks.register('phase5fRuntimeEvidenceValidatorMutationProof', Exec) {
+	group = 'verification'
+	description = 'Proves runtime evidence validation rejects omissions, fabrication and drift'
+	inputs.files(
+		phase5fRuntimeContractDir.file('route-validation.tsv'),
+		phase5fRuntimeContractDir.file('database-effect-ownership.tsv'),
+		rootProject.file('scripts/phase5/validate-phase5f-runtime-evidence.py'),
+		rootProject.file('scripts/phase5/verify-phase5f-runtime-evidence-validator.py'))
+	outputs.file layout.buildDirectory.file(
+		'phase5f/evidence-validator/mutation-report.tsv')
+	commandLine(
+		'python3',
+		rootProject.file(
+			'scripts/phase5/verify-phase5f-runtime-evidence-validator.py'),
+		'--repo-root', rootProject.projectDir,
+		'--work-dir', layout.buildDirectory.dir(
+			'phase5f/evidence-validator/work').get().asFile,
+		'--report', layout.buildDirectory.file(
+			'phase5f/evidence-validator/mutation-report.tsv').get().asFile)
+}
+
+tasks.register('phase5fJakartaWebRoutesSmoke') {
+	group = 'verification'
+	description = 'Canonical database-backed Phase 5f six-context public-origin route replay'
+	dependsOn tasks.named('verifyPhase5fRuntimeEvidence')
+	doFirst {
+		if (!phase5fDbSystemPassword.isPresent()) {
+			throw new GradleException(
+				'phase5fJakartaWebRoutesSmoke requires '
+					+ '-Pphase3DbSystemPassword or '
+					+ 'ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD; the '
+					+ 'database-backed route replay was not executed')
+		}
+	}
+}
+
+def phase5fTrackedInputs = [
+	rootProject.file('lib/mysql-connector-java-5.1.13-bin.jar'),
+	rootProject.file('lib/ADInterface-1.0.war'),
+]
+def phase5fTrackedInputBefore = layout.buildDirectory.file(
+	'phase5f/immutability/tracked-inputs-before.tsv')
+def phase5fTrackedInputAfter = layout.buildDirectory.file(
+	'phase5f/immutability/tracked-inputs-after.tsv')
+
+tasks.register('capturePhase5fTrackedInputHashes') {
+	group = 'verification'
+	description = 'Captures candidate tracked binary hashes before canonical Phase 5f verification'
+	inputs.files phase5fTrackedInputs
+	outputs.file phase5fTrackedInputBefore
+	outputs.upToDateWhen { false }
+	doLast {
+		def output = phase5fTrackedInputBefore.get().asFile
+		output.parentFile.mkdirs()
+		output.text = 'path\tsha256\n' + phase5fTrackedInputs.collect { input ->
+			if (!input.isFile()) {
+				throw new GradleException("Missing tracked Phase 5f input ${input}")
+			}
+			"${rootProject.relativePath(input)}\t${phase5fDigest(input)}"
+		}.join('\n') + '\n'
+	}
+}
+
+tasks.register('verifyPhase5fTrackedInputImmutability') {
+	group = 'verification'
+	description = 'Fails if canonical Phase 5f verification rewrites tracked legacy binaries'
+	dependsOn tasks.named('capturePhase5fTrackedInputHashes')
+	mustRunAfter 'phase5fFinalVerificationBody'
+	outputs.file phase5fTrackedInputAfter
+	outputs.upToDateWhen { false }
+	doLast {
+		def beforeFile = phase5fTrackedInputBefore.get().asFile
+		if (!beforeFile.isFile()) {
+			throw new GradleException('Phase 5f tracked-input preflight evidence is missing')
+		}
+		def before = beforeFile.readLines('UTF-8').drop(1).findAll { it }
+			.collectEntries { line ->
+				def fields = line.split('\t', -1)
+				[(fields[0]): fields[1]]
+			}
+		def after = [:]
+		phase5fTrackedInputs.each { input ->
+			after[rootProject.relativePath(input)] = phase5fDigest(input)
+		}
+		def changed = before.findAll { path, digest -> after[path] != digest }
+		def output = phase5fTrackedInputAfter.get().asFile
+		output.parentFile.mkdirs()
+		output.text = 'path\tbefore_sha256\tafter_sha256\timmutable\n' +
+			before.collect { path, digest ->
+				"${path}\t${digest}\t${after[path]}\t${after[path] == digest}"
+			}.join('\n') + '\n'
+		if (!changed.isEmpty()) {
+			throw new GradleException(
+				"Canonical Phase 5f verification mutated tracked inputs: ${changed.keySet()}")
+		}
+	}
+}
+
+tasks.register('phase5fTrackedInputImmutabilitySmoke') {
+	group = 'verification'
+	description = 'Runs the isolated legacy build and proves tracked Phase 5f inputs are unchanged'
+	dependsOn(
+		tasks.named('capturePhase5fTrackedInputHashes'),
+		tasks.named('phase3AntNoDatabaseBuild'),
+		tasks.named('verifyPhase5fTrackedInputImmutability'))
+}
+
+tasks.register('phase5fFinalVerificationBody') {
+	group = 'verification'
+	description = 'Runs the complete database-neutral Phase 5f verification body'
+	dependsOn tasks.named('capturePhase5fTrackedInputHashes')
+	dependsOn(
+		tasks.named('phase5fOracleContractValidation'),
+		tasks.named('phase5fRuntimeEvidenceValidatorMutationProof'),
+		':org.adempiere.cohort:test',
+		':org.adempiere.cohort:contextBridgeTest',
+		':org.adempiere.cohort:verifyRoutingCoreIsolation',
+		tasks.named('phase5fSourceNativeJakartaFoundation'),
+		':zkwebui:verifyPhase5fWebuiInheritedRoutes',
+		tasks.named('verifyPhase5fLegacyContextWars'),
+		tasks.named('phase5fInstalledTopologyVerification'),
+		tasks.named('verifyPhase5Inventories'),
+		tasks.named('phase5eFinalVerification'),
+		tasks.named('phase5dFinalVerification'),
+		tasks.named('phase4FinalVerification'))
+	finalizedBy tasks.named('verifyPhase5fTrackedInputImmutability')
+}
+
+tasks.register('phase5fFinalVerification') {
+	group = 'verification'
+	description = 'Runs canonical Phase 5f verification with tracked-input immutability enforcement'
+	dependsOn tasks.named('phase5fFinalVerificationBody')
+}
+
+gradle.projectsEvaluated {
+	tasks.named('phase3AntNoDatabaseBuild') {
+		mustRunAfter tasks.named('capturePhase5fTrackedInputHashes')
+	}
+	tasks.named('verifyPhase5fTrackedInputImmutability') {
+		mustRunAfter tasks.named('phase3AntNoDatabaseBuild')
+	}
+	def installedTopology =
+		tasks.named('verifyPhase5fInstalledReleaseTopology')
+	project(':org.adempiere.cohort').tasks.named(
+		'phase5fRollbackCoreTest').configure {
+			mustRunAfter installedTopology
+		}
+	project(':org.adempiere.cohort').tasks.named(
+		'phase5fRollbackBridgeTest').configure {
+			mustRunAfter installedTopology
+		}
+	def stopLane = tasks.named('stopPhase5fRoutedLane')
+	def startLane = tasks.named('startPhase5fRoutedLane')
+	// Vacuous unless it observes the state the shards left behind.
+	tasks.named('verifyPhase5fBackgroundProcessorsQuiesced') {
+		mustRunAfter phase5fShardTasks,
+			tasks.named('capturePhase5fSoapCoexistence')
+	}
+	startLane.configure { finalizedBy stopLane }
+	stopLane.configure {
+		mustRunAfter(
+			phase5fShardTasks,
+			tasks.named('capturePhase5fSoapCoexistence'),
+			tasks.named('verifyPhase5fRuntimeEvidence'),
+			tasks.named('phase5fJakartaWebRoutesSmoke'))
+	}
+	tasks.named('cleanupPhase3Database') {
+		mustRunAfter(
+			phase5fShardTasks,
+			startLane,
+			stopLane,
+			tasks.named('capturePhase5fSoapCoexistence'),
+			tasks.named('verifyPhase5fRuntimeEvidence'),
+			tasks.named('phase5fJakartaWebRoutesSmoke'))
+	}
+}

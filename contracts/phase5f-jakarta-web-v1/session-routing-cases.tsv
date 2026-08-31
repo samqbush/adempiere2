@@ -1,0 +1,12 @@
+case_id	context	start_state	switch_state	expected_runtime	session_created	rule
+SESSIONLESS-LEGACY	*	no-session	disabled	legacy	false	A sessionless request follows the switch without creating a session merely to decide.
+SESSIONLESS-MODERN	*	no-session	enabled	modern	false	Anonymous/sessionless requests may proxy without manufacturing affinity.
+PRESWITCH-LEGACY	*	legacy-session	enabled	legacy	unchanged	A session created before enablement remains legacy until it ends.
+PRESWITCH-MODERN	*	modern-session	disabled	modern	unchanged	A session created before disablement remains modern until it ends.
+MODERN-AFFINITY-MISSING	*	modern-decision-without-affinity	any	explicit-503	unchanged	A recorded modern decision can never be treated as undecided.
+MODERN-BACKEND-FAILURE	*	modern-session	any	explicit-502-or-503	unchanged	An established modern session never falls back to legacy.
+LOGOUT	*	modern-session	any	none	destroyed	Destroy both runtime sessions and decide again on the next request that needs a session.
+TIMEOUT	*	modern-session	any	none	destroyed	Remove context-local decision and affinity after both runtime caches return to baseline.
+CONTAINER-DESTRUCTION	*	modern-session	any	none	destroyed	Container-side destruction cannot leave a reusable decision or affinity.
+LIVE-ROLLBACK	*	modern-session	rollback	reauthenticate	destroyed	Restore the pristine legacy WAR and invalidate, never convert, live modern sessions.
+CROSS-CONTEXT	*	modern-session-in-other-context	any	independent	false	No context may read or mutate another context's session or affinity.

@@ -1,0 +1,163 @@
+/*
+ * Phase 5f: the reviewed Tomcat JarScanFilter shared by every deployed context.
+ *
+ * Tomcat opens and walks every WEB-INF/lib JAR of every context twice at
+ * startup - once for Jasper's TLD scan, once for the Servlet pluggability
+ * fragment pass. The six routed contexts carry 124-127 JARs each and the API WAR
+ * carries 37. In run 33290776432 that cost 13-15 minutes per context and roughly
+ * 21 minutes for ADInterface, deployed serially, so :startPhase5fRoutedLane
+ * never became ready and no route shard ever ran.
+ *
+ * The filter below suppresses both walks. It is generated from
+ * gradle/phase5/jar-scan-policy.tsv rather than written per descriptor, so the
+ * six routed contexts, the Phase 5e /webui context and the Phase 4 API context
+ * cannot drift apart, and verifyPhase5fJarScanPolicy proves the policy against
+ * the built archives.
+ *
+ * This does NOT suppress container ServletContainerInitializers: WsSci is loaded
+ * from the container class loader, not through the JarScanner, and continues to
+ * process WEB-INF/classes. Application-JAR annotation scanning was already
+ * excluded before this change by the empty <absolute-ordering/> the generated
+ * Servlet 6 descriptors carry.
+ */
+
+def phase5fJarScanPolicyFile =
+	rootProject.layout.projectDirectory.file('gradle/phase5/jar-scan-policy.tsv')
+
+ext.phase5fJarScanPolicy = { ->
+	def allowed = [:].withDefault { [] as SortedSet }
+	def header = false
+	phase5fJarScanPolicyFile.asFile.eachLine('UTF-8') { line ->
+		if (!line.trim() || line.startsWith('#')) {
+			return
+		}
+		def fields = line.split('\t', -1)
+		if (!header) {
+			if (fields.take(4) != ['context', 'jar', 'scan_type', 'reason']) {
+				throw new GradleException(
+					"gradle/phase5/jar-scan-policy.tsv has an unexpected header: ${line}")
+			}
+			header = true
+			return
+		}
+		if (fields.length != 4) {
+			throw new GradleException(
+				"gradle/phase5/jar-scan-policy.tsv expects 4 columns: ${line}")
+		}
+		if (fields[2] != 'tld') {
+			throw new GradleException(
+				"gradle/phase5/jar-scan-policy.tsv supports only 'tld' entries: ${line}")
+		}
+		allowed[fields[0]] << fields[1]
+	}
+	if (!header) {
+		throw new GradleException(
+			'gradle/phase5/jar-scan-policy.tsv has no header row')
+	}
+	allowed
+}
+
+/**
+ * The <JarScanner> element for one deployed context.
+ *
+ * StandardJarScanFilter.check, read from the shipped tomcat-util-scan.jar of
+ * Tomcat 10.1.59: because defaultTldScan is true, a TLD scan returns
+ * matchName(tldScanSet, jar) whenever matchName(tldSkipSet, jar) is true. With
+ * tldSkip="*.jar" the allowlist is therefore the exact and complete set of JARs
+ * still scanned for tag libraries. The same branch governs PLUGGABILITY, so an
+ * empty pluggabilityScan means no application JAR is opened for fragments.
+ *
+ * tldScan REPLACES the container default rather than adding to it, and that
+ * default lists only log4j and slf4j taglib JARs, none of which appear in any
+ * deployed WAR.
+ *
+ * scanClassPath="false" is deliberate and is what makes this policy provable.
+ * StandardJarScanner.scan() walks WEB-INF/lib and then, when scanClassPath is
+ * true, every URL on the container class path through the SAME filter - so
+ * tldSkip="*.jar" would silently suppress tag libraries in
+ * $CATALINA_BASE/lib as well, a surface verify-jar-scan-policy.py does not and
+ * cannot inspect (the lane copies AdempiereSLib.jar there at runtime, and it
+ * ships 15 javax-era JSTL 1.0/1.1 TLDs that no Jakarta context could use
+ * anyway). Turning the class-path pass off makes the filter's scope exactly
+ * equal to the gate's scope, so an unreviewed TLD JAR can no longer be lost
+ * without a gate failure. This removes no capability the filter left in
+ * place.
+ *
+ * @param context the deployed context name, as used in jar-scan-policy.tsv
+ * @param indent  leading whitespace, so the element sits correctly in each
+ *                descriptor
+ */
+ext.phase5fJarScannerElement = { String context, String indent = '  ' ->
+	def allowed = project.phase5fJarScanPolicy()[context]
+	def scanAttribute = allowed.isEmpty()
+		? ''
+		: "\n${indent}${' ' * 17}tldScan=\"${allowed.join(',')}\""
+	"""${indent}<!-- See gradle/phase5/jar-scan-policy.tsv. Suppresses the TLD and
+${indent}     pluggability JAR walks that made this context take 13-15 minutes to
+${indent}     deploy. Container SCIs and WEB-INF/classes are unaffected. -->
+${indent}<JarScanner scanClassPath="false">
+${indent}  <JarScanFilter tldSkip="*.jar"${scanAttribute}
+${indent}                 pluggabilitySkip="*.jar"/>
+${indent}</JarScanner>"""
+}
+
+def phase5fJarScanEvidence =
+	rootProject.layout.buildDirectory.file('phase5f/jar-scan/inventory.tsv')
+
+/**
+ * Deployed context name -> the built WAR the routed lane actually serves.
+ *
+ * All seven are covered deliberately. ADInterface is auto-deployed from
+ * webapps/ with no descriptor of its own, so an earlier draft of this work left
+ * it unfiltered - and its ~21 minute deploy alone would have kept the lane
+ * outside any readiness budget.
+ */
+ext.phase5fScannedWars = { ->
+	[
+		adempiere  : project(':serverRoot').layout.buildDirectory
+			.file('phase5f-wars/adempiere-modern.war'),
+		admin      : project(':serverRoot').layout.buildDirectory
+			.file('phase5f-wars/admin-modern.war'),
+		mobile     : project(':serverRoot').layout.buildDirectory
+			.file('phase5f-wars/mobile-modern.war'),
+		ROOT       : project(':serverRoot').layout.buildDirectory
+			.file('phase5f-wars/ROOT-modern.war'),
+		wstore     : project(':serverRoot').layout.buildDirectory
+			.file('phase5f-wars/wstore-modern.war'),
+		webui      : project(':zkwebui').layout.buildDirectory
+			.file('libs/webui-modern.war'),
+		ADInterface: project(':org.adempiere.webservice').layout.buildDirectory
+			.file('libs/ADInterface-Modern-1.0.war'),
+	]
+}
+
+tasks.register('verifyPhase5fJarScanPolicy', Exec) {
+	group = 'verification'
+	description =
+		'Proves the reviewed JarScanFilter policy against every deployed WAR'
+	dependsOn(
+		tasks.named('phase5fJakartaWebWars'),
+		project(':zkwebui').tasks.named('war'),
+		project(':org.adempiere.webservice').tasks.named('modernSoapWar'))
+	inputs.file phase5fJarScanPolicyFile
+	inputs.file rootProject.file('scripts/phase5/verify-jar-scan-policy.py')
+	inputs.files(project.phase5fScannedWars().values())
+	outputs.file phase5fJarScanEvidence
+	def arguments = [
+		'python3',
+		rootProject.file('scripts/phase5/verify-jar-scan-policy.py').toString(),
+	]
+	project.phase5fScannedWars().each { context, war ->
+		arguments << '--war' << "${context}=${war.get().asFile}".toString()
+	}
+	arguments << '--policy' << phase5fJarScanPolicyFile.asFile.toString()
+	arguments << '--evidence' << phase5fJarScanEvidence.get().asFile.toString()
+	commandLine arguments
+}
+
+// Enforced by the canonical database-neutral gate. The filter is the reason the
+// routed lane can boot at all, so the policy behind it is a contract, not a
+// tuning knob.
+tasks.named('phase5fFinalVerificationBody') {
+	dependsOn tasks.named('verifyPhase5fJarScanPolicy')
+}

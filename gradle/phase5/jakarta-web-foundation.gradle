@@ -1,0 +1,972 @@
+import java.nio.file.Files
+import java.security.MessageDigest
+
+def phase5fBuildDir = layout.buildDirectory.dir('phase5f/jakarta-web')
+def phase5fContract = file('contracts/phase5f-jakarta-web-v1/deployed-routes.tsv')
+def phase5fServletApi = '6.0.0'
+def phase5fPagesApi = '3.1.1'
+def phase5fTagsApi = '3.0.2'
+def phase5fJspContract = file(
+	'contracts/phase5f-jakarta-web-v1/jsp-precompile-contract.tsv')
+def phase5fTextAssetExtensions = [
+	'css', 'html', 'htm', 'jnlp', 'js', 'jsp', 'jspf', 'properties',
+	'tld', 'txt', 'xml', 'xsl', 'xslt',
+] as Set
+def phase5fWebAssetExcludes = [
+	'META-INF/MANIFEST.MF',
+	'WEB-INF/web.xml',
+	'WEB-INF/c.tld',
+	'WEB-INF/fmt.tld',
+	'WEB-INF/fn.tld',
+	'WEB-INF/sql.tld',
+	'WEB-INF/x.tld',
+	'WEB-INF/classes/**',
+	'WEB-INF/lib/**',
+	'WEB-INF/src/**',
+	'build/**',
+	'dist/**',
+	'**/build/**',
+	'**/dist/**',
+]
+def phase5fExcludedWebAsset = { String relativePath ->
+	def path = relativePath.replace('\\', '/')
+	path == 'META-INF/MANIFEST.MF' ||
+		path == 'WEB-INF/web.xml' ||
+		path in [
+			'WEB-INF/c.tld',
+			'WEB-INF/fmt.tld',
+			'WEB-INF/fn.tld',
+			'WEB-INF/sql.tld',
+			'WEB-INF/x.tld',
+		] ||
+		path.startsWith('WEB-INF/classes/') ||
+		path.startsWith('WEB-INF/lib/') ||
+		path.startsWith('WEB-INF/src/') ||
+		path.startsWith('build/') ||
+		path.startsWith('dist/') ||
+		path.contains('/build/') ||
+		path.contains('/dist/')
+}
+def phase5fTextAsset = { String relativePath ->
+	def name = new File(relativePath).name
+	def separator = name.lastIndexOf('.')
+	separator >= 0 &&
+		phase5fTextAssetExtensions.contains(name.substring(separator + 1).toLowerCase(Locale.ROOT))
+}
+def phase5fSharedSources = [
+	'base/src/org/compiere/model/MAd.java',
+	'base/src/org/compiere/util/FileUpload.java',
+	'base/src/org/compiere/util/WebEnv.java',
+	'base/src/org/compiere/util/WebLogin.java',
+	'base/src/org/compiere/util/WebSessionCtx.java',
+	'base/src/org/compiere/util/WebUser.java',
+	'base/src/org/compiere/util/WebUtil.java',
+	'org.adempiere.asset/src/main/java/base/org/compiere/asset/model/MAssetDelivery.java',
+	'org.adempiere.asset/src/main/java/base/org/compiere/asset/model/MRegistration.java',
+]
+
+configurations {
+	phase5fJspCompiler
+}
+
+dependencies {
+	phase5fJspCompiler 'org.apache.tomcat.embed:tomcat-embed-jasper:10.1.59'
+	phase5fJspCompiler 'org.eclipse.jdt:ecj:3.37.0'
+	phase5fJspCompiler 'org.apache.ant:ant:1.10.15'
+	phase5fJspCompiler "jakarta.servlet.jsp.jstl:jakarta.servlet.jsp.jstl-api:${phase5fTagsApi}"
+	phase5fJspCompiler 'org.glassfish.web:jakarta.servlet.jsp.jstl:3.0.1'
+}
+
+def phase5fContexts = [
+	admin: [
+		context: '/admin',
+		sources: ['serverRoot/src/main/servlet'],
+		web: 'serverRoot/src/web',
+		sessionTimeout: 15,
+	],
+	ROOT: [
+		context: '/',
+		sources: ['webCM/src/main/servlet'],
+		web: 'webCM/src/web',
+		sessionTimeout: 10,
+	],
+	mobile: [
+		context: '/mobile',
+		sources: ['org.compiere.mobile/WEB-INF/src'],
+		web: 'org.compiere.mobile',
+		sessionTimeout: 15,
+	],
+	adempiere: [
+		context: '/adempiere',
+		sources: ['serverApps/src/main/servlet'],
+		includes: [
+			'org/compiere/www/**',
+			'org/compiere/wstore/RequestServlet.java',
+			'org/compiere/wstore/JSPEnv.java',
+		],
+		web: 'serverApps/src/web',
+		sessionTimeout: 15,
+	],
+	wstore: [
+		context: '/wstore',
+		sources: ['serverApps/src/main/servlet'],
+		includes: ['org/compiere/wstore/**'],
+		web: 'webStore/src/web',
+		sessionTimeout: 30,
+	],
+]
+
+def phase5fServletClasses = [
+	'/admin': [
+		JnlpDownloadServlet: 'jnlp.sample.servlet.JnlpDownloadServlet',
+		StatusInfo: 'org.compiere.web.StatusInfo',
+		AdempiereMonitor: 'org.compiere.web.AdempiereMonitor',
+	],
+	'/': [
+		AdRedirector: 'org.compiere.cm.AdRedirector',
+		Broadcast: 'org.compiere.cm.Broadcast',
+		CacheService: 'org.compiere.cm.cache.Service',
+		Community: 'org.compiere.cm.Community',
+		MediaBroadcast: 'org.compiere.cm.MediaBroadcast',
+		RequestServlet: 'org.compiere.cm.RequestServlet',
+		StageBroadcast: 'org.compiere.cm.StageBroadcast',
+		XMLBroadcast: 'org.compiere.cm.XMLBroadcast',
+	],
+	'/mobile': [:],
+	'/adempiere': [:],
+	'/wstore': [:],
+]
+
+def phase5fImplementation = { String context, String name ->
+	if (phase5fServletClasses[context]?.containsKey(name)) {
+		return phase5fServletClasses[context][name]
+	}
+	if (context == '/mobile') {
+		return name == 'DisplayChart'
+			? 'org.jfree.chart.servlet.DisplayChart'
+			: "org.compiere.mobile.${name}"
+	}
+	if (context == '/adempiere') {
+		return name == 'WRequest'
+			? 'org.compiere.wstore.RequestServlet'
+			: "org.compiere.www.${name}"
+	}
+	if (context == '/wstore') {
+		def jsp = [
+			Basket: '/basket.jsp', Index: '/index.jsp', Info: '/info.jsp',
+			Login: '/login.jsp', Request: '/request.jsp',
+		]
+		return jsp.containsKey(name) ? [jsp: jsp[name]] : "org.compiere.wstore.${name}"
+	}
+	throw new GradleException("No Phase 5f implementation rule for ${context} ${name}")
+}
+
+def phase5fReadRoutes = {
+	def rows = phase5fContract.readLines('UTF-8').drop(1).findAll { it }
+		.collect { line ->
+			def fields = line.split('\t', -1)
+			def id = fields[0].split('::', -1)
+			[context: fields[1], name: id[1], pattern: id[2]]
+		}
+	rows.findAll { it.context in phase5fContexts.values()*.context }
+}
+
+def phase5fXml = { String value ->
+	value.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+}
+
+// A legacy <error-page> whose <location> resolves to a mapped servlet makes
+// sendError() observable as that servlet's response rather than as the raw
+// status. The ROOT context relies on this: sendError(404) is dispatched to '/',
+// which Broadcast serves, so the legacy runtime answers 302. Phase 5f
+// synthesizes a curated metadata-complete descriptor, so these entries have to
+// be carried over from the legacy descriptor explicitly; otherwise the modern
+// context returns the container default error page and diverges from the frozen
+// legacy oracle.
+def phase5fLegacyErrorPages = { String context ->
+	def entry = phase5fContexts.values().find { it.context == context }
+	if (entry == null) {
+		throw new GradleException(
+			"No Phase 5f context definition for ${context}")
+	}
+	def descriptor = file("${entry.web}/WEB-INF/web.xml")
+	if (!descriptor.isFile()) {
+		throw new GradleException(
+			"Missing legacy descriptor ${descriptor} for ${context}")
+	}
+	(descriptor.getText('UTF-8') =~ /(?s)<error-page>(.*?)<\/error-page>/)
+		.collect { match ->
+			def body = match[1]
+			def code = (body =~ /(?s)<error-code>\s*(.*?)\s*<\/error-code>/)
+			def location = (body =~ /(?s)<location>\s*(.*?)\s*<\/location>/)
+			if (!code || !location) {
+				throw new GradleException(
+					"Unsupported legacy <error-page> in ${descriptor}: Phase 5f "
+						+ 'only carries over <error-code>/<location> pairs')
+			}
+			[code: code[0][1], location: location[0][1]]
+		}
+}
+
+def phase5fDescriptor = { String context, int timeout ->
+	def routes = phase5fReadRoutes().findAll { it.context == context }
+	def filterNames = [
+		'/admin': ['AdempiereMonitorFilter'],
+		'/mobile': ['WFilter'],
+		'/adempiere': ['WFilter'],
+		'/wstore': ['WebStoreFilter'],
+	].get(context, [])
+	def declarations = new LinkedHashMap()
+	routes.findAll { !filterNames.contains(it.name) }.each { row ->
+		declarations.putIfAbsent(row.name, phase5fImplementation(context, row.name))
+	}
+	def out = new StringBuilder()
+	out << '<?xml version="1.0" encoding="UTF-8"?>\n'
+	out << '<web-app xmlns="https://jakarta.ee/xml/ns/jakartaee"\n'
+	out << '  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n'
+	out << '  xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee '
+	out << 'https://jakarta.ee/xml/ns/jakartaee/web-app_6_0.xsd"\n'
+	out << '  version="6.0" metadata-complete="true">\n'
+	out << '  <absolute-ordering/>\n'
+	if (context == '/admin') {
+		out << '  <filter><filter-name>AdempiereMonitorFilter</filter-name>'
+		out << '<filter-class>org.compiere.web.AdempiereMonitorFilter</filter-class></filter>\n'
+		out << '  <filter-mapping><filter-name>AdempiereMonitorFilter</filter-name>'
+		out << '<url-pattern>/adempiereMonitor/*</url-pattern></filter-mapping>\n'
+	}
+	if (context == '/mobile') {
+		out << '  <filter><filter-name>WFilter</filter-name>'
+		out << '<filter-class>org.compiere.mobile.WFilter</filter-class></filter>\n'
+		out << '  <filter-mapping><filter-name>WFilter</filter-name>'
+		out << '<url-pattern>/*</url-pattern></filter-mapping>\n'
+	}
+	if (context == '/adempiere') {
+		out << '  <filter><filter-name>WFilter</filter-name>'
+		out << '<filter-class>org.compiere.www.WFilter</filter-class></filter>\n'
+		out << '  <filter-mapping><filter-name>WFilter</filter-name>'
+		out << '<url-pattern>/*</url-pattern></filter-mapping>\n'
+	}
+	if (context == '/wstore') {
+		out << '  <filter><filter-name>WebStoreFilter</filter-name>'
+		out << '<filter-class>org.compiere.wstore.StoreFilter</filter-class></filter>\n'
+		out << '  <filter-mapping><filter-name>WebStoreFilter</filter-name>'
+		out << '<url-pattern>/*</url-pattern></filter-mapping>\n'
+	}
+	if (context == '/') {
+		['org.compiere.cm.utils.Counter', 'org.compiere.cm.utils.Attributes'].each {
+			out << "  <listener><listener-class>${it}</listener-class></listener>\n"
+		}
+	}
+	declarations.each { name, implementation ->
+		out << "  <servlet><servlet-name>${phase5fXml(name)}</servlet-name>"
+		if (implementation instanceof Map) {
+			out << "<jsp-file>${implementation.jsp}</jsp-file>"
+		} else {
+			out << "<servlet-class>${implementation}</servlet-class>"
+		}
+		out << '</servlet>\n'
+	}
+	routes.findAll { !filterNames.contains(it.name) }.each { row ->
+		out << "  <servlet-mapping><servlet-name>${phase5fXml(row.name)}</servlet-name>"
+		out << "<url-pattern>${phase5fXml(row.pattern)}</url-pattern></servlet-mapping>\n"
+	}
+	if (context == '/wstore') {
+		out << '  <security-constraint><web-resource-collection><web-resource-name>'
+		out << 'SSL pages</web-resource-name><url-pattern>/login.jsp</url-pattern>'
+		out << '<url-pattern>/login.jsp/*</url-pattern>'
+		out << '<url-pattern>/loginServlet</url-pattern><url-pattern>/checkOutServlet</url-pattern>'
+		out << '<url-pattern>/loginServlet/*</url-pattern>'
+		out << '<url-pattern>/checkOutServlet/*</url-pattern>'
+		out << '<url-pattern>/orderServlet</url-pattern>'
+		out << '<url-pattern>/orderServlet/*</url-pattern></web-resource-collection>'
+		out << '<user-data-constraint><transport-guarantee>CONFIDENTIAL</transport-guarantee>'
+		out << '</user-data-constraint></security-constraint>\n'
+	}
+	phase5fLegacyErrorPages(context).each { page ->
+		out << "  <error-page><error-code>${phase5fXml(page.code)}</error-code>"
+		out << "<location>${phase5fXml(page.location)}</location></error-page>\n"
+	}
+	out << "  <session-config><session-timeout>${timeout}</session-timeout>"
+	out << '<tracking-mode>COOKIE</tracking-mode></session-config>\n'
+	out << '  <resource-ref><res-ref-name>java/AdempiereDS</res-ref-name>'
+	out << '<res-type>javax.sql.DataSource</res-type><res-auth>Container</res-auth></resource-ref>\n'
+	out << '  <resource-ref><res-ref-name>java/AdempiereSRDS</res-ref-name>'
+	out << '<res-type>javax.sql.DataSource</res-type><res-auth>Container</res-auth></resource-ref>\n'
+	out << '</web-app>\n'
+	out.toString()
+}
+
+tasks.register('preparePhase5fJakartaSources') {
+	group = 'build'
+	description = 'Creates the closed, manifest-owned Jakarta Servlet 6 source closure'
+	def output = phase5fBuildDir.map { it.dir('sources') }
+	outputs.dir output
+	inputs.files(
+		phase5fContexts.values().collectMany { it.sources }.collect { fileTree(it) } +
+		phase5fSharedSources.collect { file(it) })
+	doLast {
+		delete output
+		phase5fSharedSources.each { path ->
+			copy {
+				from file(path)
+				into output.get().dir("shared/${new File(path).parent}")
+				filter { String line -> line.replace('javax.servlet', 'jakarta.servlet') }
+			}
+		}
+		phase5fContexts.each { name, spec ->
+			spec.sources.each { sourceRoot ->
+				copy {
+					from sourceRoot
+					into output.get().dir(name.toString())
+					if (spec.includes) {
+						include spec.includes
+					} else {
+						include '**/*.java'
+					}
+					filter { String line ->
+						def migrated = line.replace('javax.servlet', 'jakarta.servlet')
+						if (migrated.contains(
+							'import org.apache.taglibs.standard.tag.el.core.ExpressionUtil;')) {
+							return ''
+						}
+						def replacements = [
+							'String info = (String)ExpressionUtil.evalNotNull ("location", "countryID",':
+								'String info = JspExpression.evaluate(m_countryID_el, String.class, pageContext);',
+							'String info = (String)ExpressionUtil.evalNotNull ("location", "regionID",':
+								'String info = JspExpression.evaluate(m_regionID_el, String.class, pageContext);',
+							'String city = (String)ExpressionUtil.evalNotNull ("location", "city",':
+								'String city = JspExpression.evaluate(m_city_el, String.class, pageContext);',
+							'String postal = (String)ExpressionUtil.evalNotNull ("location", "postal",':
+								'String postal = JspExpression.evaluate(m_postal_el, String.class, pageContext);',
+							'String regionName = (String)ExpressionUtil.evalNotNull ("location", "regionName",':
+								'String regionName = JspExpression.evaluate(m_regionName_el, String.class, pageContext);',
+							'info = (String)ExpressionUtil.evalNotNull ("workflow", "activityID",':
+								'info = JspExpression.evaluate(m_activityID_el, String.class, pageContext);',
+								'String info = (String)ExpressionUtil.evalNotNull ("requestOrder", "bpartnerID",':
+									'String info = JspExpression.evaluate(m_bpartnerID_el, String.class, pageContext);',
+						]
+						def hit = replacements.find { from, to -> migrated.contains(from) }
+						if (hit != null) {
+							return migrated.substring(0, migrated.indexOf(migrated.trim())) + hit.value
+						}
+						if (migrated ==~ /\s*m_(countryID|regionID|city|postal|regionName|activityID|bpartnerID)_el, String\.class, this, pageContext\);\s*/) {
+							return ''
+						}
+						migrated
+					}
+				}
+			}
+		}
+		// Each transform below implements exactly one reviewed deviation from
+		// contracts/phase5f-jakarta-web-v1/known-deviations.tsv. The anchor
+		// count is asserted so an upstream source edit fails the build instead
+		// of silently dropping the deviation.
+		def replaceExactly = { String relativePath, String from, String to ->
+			def source = output.get().file(relativePath).asFile
+			def text = source.getText('UTF-8')
+			if (text.count(from) != 1) {
+				throw new GradleException(
+					"The generated ${relativePath} source no longer has exactly "
+						+ 'one reviewed occurrence of the transformed statement')
+			}
+			source.setText(text.replace(from, to), 'UTF-8')
+		}
+		// DEV-P5F-ERR-01 /::AdRedirector::/AdRedirector
+		replaceExactly(
+			'ROOT/org/compiere/cm/AdRedirector.java',
+			'response.sendError(500,"Unknown or illegal Ad set, can\'t handle request...");',
+			'response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Unknown or illegal Ad set, can\'t handle request...");')
+		// DEV-P5F-ERR-02 /::Community::/communityServlet. getAllIDs is called
+		// with an empty transaction name, so Trx.get rejects it and the
+		// resulting DBException escaped as a 500. The reviewed deviation keeps
+		// the query unchanged and reports the bad request instead. The thrown
+		// type is DBException; the IllegalArgumentException is only its cause.
+		replaceExactly(
+			'ROOT/org/compiere/cm/Community.java',
+			'int [] allIDs = X_W_Store.getAllIDs ("W_Store", "AD_Client_ID=" + ctx.get ("#AD_Client_ID"), "");',
+			'''int [] allIDs;
+			try
+			{
+				allIDs = X_W_Store.getAllIDs ("W_Store", "AD_Client_ID=" + ctx.get ("#AD_Client_ID"), "");
+			}
+			catch (org.adempiere.exceptions.DBException missingTransaction)
+			{
+				response.sendError(HttpServletResponse.SC_BAD_REQUEST, "No Transaction Name");
+				return;
+			}''')
+		// DEV-P5F-ERR-03 /::XMLBroadcast::/xml/*. setStatus is deliberate:
+		// the ROOT descriptor maps error code 404 to '/', so sendError(404)
+		// would be dispatched to Broadcast and observed as a 302 redirect.
+		replaceExactly(
+			'ROOT/org/compiere/cm/XMLBroadcast.java',
+			'resetInternalMediaURL (request);',
+			'''if (thisRequest.getWebProject() == null)
+		{
+			response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+			return;
+		}
+		resetInternalMediaURL (request);''')
+		// DEV-P5F-ERR-04 /wstore::PaymentServlet::/paymentServlet. A GET without
+		// a payment amount fell through to doPost, so the mutation handler ran
+		// on a GET and failed with 500. Reject it before any response is
+		// committed; parameterized GETs keep their legacy behaviour.
+		replaceExactly(
+			'wstore/org/compiere/wstore/PaymentServlet.java',
+			'log.info("Get from " + request.getRemoteHost() + " - " + request.getRemoteAddr());',
+			'''log.info("Get from " + request.getRemoteHost() + " - " + request.getRemoteAddr());
+		String phase5fAmt = WebUtil.getParameter (request, "Amt");
+		if (phase5fAmt == null || phase5fAmt.length() == 0)
+		{
+			response.setHeader("Allow", "POST");
+			response.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED,
+				"Payment mutation is not defined for plain GET");
+			return;
+		}''')
+		def helper = output.get().file(
+			'wstore/org/compiere/wstore/JspExpression.java').asFile
+		helper.parentFile.mkdirs()
+		helper.setText('''package org.compiere.wstore;
+
+import jakarta.el.ExpressionFactory;
+import jakarta.servlet.jsp.PageContext;
+
+final class JspExpression {
+    private JspExpression() {
+    }
+
+    static <T> T evaluate(String expression, Class<T> expectedType, PageContext pageContext) {
+        if (expression == null) {
+            return null;
+        }
+        Object value = ExpressionFactory.newInstance()
+            .createValueExpression(pageContext.getELContext(), expression, expectedType)
+            .getValue(pageContext.getELContext());
+        return expectedType.cast(value);
+    }
+}
+''', 'UTF-8')
+	}
+}
+
+tasks.register('preparePhase5fJakartaWebAssets') {
+	group = 'build'
+	description = 'Creates isolated Jakarta JSP, tag, and static web trees without changing legacy assets'
+	def output = phase5fBuildDir.map { it.dir('web') }
+	outputs.dir output
+	inputs.files phase5fContexts.values().collect {
+		fileTree(it.web) { exclude phase5fWebAssetExcludes }
+	}
+	doLast {
+		delete output
+		phase5fContexts.each { name, spec ->
+			def destination = output.get().dir(name.toString())
+			copy {
+				from spec.web
+				into destination
+				exclude phase5fWebAssetExcludes
+				exclude phase5fTextAssetExtensions.collect { "**/*.${it}" }
+			}
+			copy {
+				from spec.web
+				into destination
+				include phase5fTextAssetExtensions.collect { "**/*.${it}" }
+				exclude phase5fWebAssetExcludes
+				filter { String line ->
+					line
+						.replace('javax.servlet', 'jakarta.servlet')
+						.replace('http://java.sun.com/jsp/jstl/core', 'jakarta.tags.core')
+						.replace('http://java.sun.com/jsp/jstl/fmt', 'jakarta.tags.fmt')
+						.replace('http://java.sun.com/jsp/jstl/functions', 'jakarta.tags.functions')
+						.replace('http://java.sun.com/xml/ns/j2ee', 'https://jakarta.ee/xml/ns/jakartaee')
+						.replace('web-jsptaglibrary_2_0.xsd', 'web-jsptaglibrary_3_0.xsd')
+						.replace('version="2.0"', 'version="3.0"')
+				}
+			}
+		}
+	}
+}
+
+tasks.register('verifyPhase5fBinaryWebAssets') {
+	group = 'verification'
+	description = 'Proves every generated and packaged binary web asset is byte-identical to legacy input'
+	dependsOn tasks.named('phase5fJakartaWebWars')
+	doLast {
+		def problems = []
+		def binaryCount = 0
+		def representative = ['gif', 'jpg', 'png', 'ico'].collectEntries { [(it): 0] }
+		phase5fContexts.each { name, spec ->
+			def sourceRoot = file(spec.web)
+			def generatedRoot = phase5fBuildDir.get().dir("web/${name}").asFile
+			def warName = name == 'ROOT' ? 'ROOT-modern.war' : "${name}-modern.war"
+			def war = project(':serverRoot').layout.buildDirectory
+				.file("phase5f-wars/${warName}").get().asFile
+			new java.util.zip.ZipFile(war).withCloseable { archive ->
+				archive.entries().findAll { !it.directory }.each { entry ->
+					def path = entry.name
+					if (path.endsWith('.war') ||
+						path.startsWith('build/') ||
+						path.startsWith('dist/') ||
+						path.contains('/build/') ||
+						path.contains('/dist/')) {
+						problems << "${war.name} packages nested build output ${path}"
+					}
+				}
+				fileTree(generatedRoot).files.each { generated ->
+					def path = generatedRoot.toPath().relativize(generated.toPath())
+						.toString().replace('\\', '/')
+					if (path.endsWith('.war') ||
+						path.startsWith('build/') ||
+						path.startsWith('dist/') ||
+						path.contains('/build/') ||
+						path.contains('/dist/')) {
+						problems << "${name}:${path} survives in generated assets"
+					}
+				}
+				fileTree(sourceRoot).files.sort { it.path }.each { source ->
+					def relative = sourceRoot.toPath().relativize(source.toPath())
+						.toString().replace('\\', '/')
+					if (phase5fExcludedWebAsset(relative) || phase5fTextAsset(relative)) {
+						return
+					}
+					binaryCount++
+					def extension = relative.contains('.')
+						? relative.substring(relative.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT)
+						: ''
+					if (representative.containsKey(extension)) {
+						representative[extension]++
+					}
+					def generated = new File(generatedRoot, relative)
+					if (!generated.isFile() ||
+						!java.util.Arrays.equals(source.bytes, generated.bytes)) {
+						problems << "${name}:${relative} changed in generated assets"
+						return
+					}
+					def entry = archive.getEntry(relative)
+					if (entry == null) {
+						problems << "${name}:${relative} is absent from ${war.name}"
+						return
+					}
+					def packaged = archive.getInputStream(entry).withCloseable { it.bytes }
+					if (!java.util.Arrays.equals(source.bytes, packaged)) {
+						problems << "${name}:${relative} changed in ${war.name}"
+					}
+				}
+			}
+		}
+		if (binaryCount == 0) {
+			problems << 'no binary assets were checked'
+		}
+		representative.each { extension, count ->
+			if (count == 0) {
+				problems << "no representative .${extension} asset was checked"
+			}
+		}
+		if (!problems.empty) {
+			throw new GradleException(
+				"Phase 5f binary asset integrity failed:\n  - " +
+					problems.take(50).join('\n  - '))
+		}
+		logger.lifecycle(
+			"Phase 5f binary assets: ${binaryCount} generated and packaged files " +
+				"are byte-identical; representatives ${representative}")
+	}
+}
+
+tasks.register('writePhase5fServlet6Descriptors') {
+	group = 'build'
+	description = 'Writes explicit metadata-complete Servlet 6 descriptors from the reviewed route ledger'
+	inputs.file phase5fContract
+	// The generated descriptor now carries the legacy <error-page> entries over,
+	// so each legacy descriptor is a real input. Without this a change to one of
+	// them leaves the task UP-TO-DATE and packages a stale WEB-INF/web.xml.
+	inputs.files phase5fContexts.values().collect {
+		file("${it.web}/WEB-INF/web.xml")
+	}
+	def output = phase5fBuildDir.map { it.dir('descriptors') }
+	outputs.dir output
+	doLast {
+		delete output
+		phase5fContexts.each { name, spec ->
+			def descriptor = output.get().file("${name}/WEB-INF/web.xml").asFile
+			descriptor.parentFile.mkdirs()
+			descriptor.setText(phase5fDescriptor(spec.context, spec.sessionTimeout), 'UTF-8')
+		}
+	}
+}
+
+def phase5fOwner = project(':serverRoot')
+phase5fOwner.ext.phase5fConfigure = {
+	def shared = phase5fOwner.sourceSets.create('phase5fShared') {
+		java.srcDir(rootProject.layout.buildDirectory.dir(
+			'phase5f/jakarta-web/sources/shared'))
+		resources.srcDirs = []
+	}
+	phase5fOwner.tasks.named(shared.compileJavaTaskName) {
+		dependsOn rootProject.tasks.named('preparePhase5fJakartaSources')
+	}
+	[
+		phase5fOwner.project(':base'),
+		phase5fOwner.project(':org.adempiere.asset'),
+	].each {
+		phase5fOwner.dependencies.add('phase5fSharedImplementation', it)
+	}
+	phase5fOwner.dependencies.add(
+		'phase5fSharedCompileOnly', "jakarta.servlet:jakarta.servlet-api:${phase5fServletApi}")
+	phase5fOwner.dependencies.add(
+		'phase5fSharedImplementation', 'com.sun.mail:javax.mail:1.4.7')
+
+	def sharedJar = phase5fOwner.tasks.register('phase5fSharedJakartaJar', Jar) {
+		dependsOn phase5fOwner.tasks.named(shared.classesTaskName)
+		archiveFileName = 'phase5f-shared-jakarta.jar'
+		destinationDirectory = phase5fOwner.layout.buildDirectory.dir('phase5f-runtime')
+		from shared.output
+		reproducibleFileOrder = true
+		preserveFileTimestamps = false
+	}
+	def sanitizedBase = phase5fOwner.tasks.register('phase5fLegacyBaseRuntimeJar', Jar) {
+		dependsOn ':base:jar'
+		inputs.property('phase5fServletLinkedCoreClasses', [
+			'MAd', 'FileUpload', 'WebEnv', 'WebLogin', 'WebSessionCtx', 'WebUser', 'WebUtil'])
+		archiveFileName = 'phase5f-base-runtime.jar'
+		destinationDirectory = phase5fOwner.layout.buildDirectory.dir('phase5f-runtime')
+		from { zipTree(project(':base').tasks.named('jar').get().archiveFile) }
+		exclude(
+			'org/compiere/model/MAd.class',
+			'org/compiere/model/MAd$*.class',
+			'org/compiere/util/FileUpload*.class',
+			'org/compiere/util/WebEnv*.class',
+			'org/compiere/util/WebLogin*.class',
+			'org/compiere/util/WebSessionCtx*.class',
+			'org/compiere/util/WebUser*.class',
+			'org/compiere/util/WebUtil*.class',
+			'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA')
+		reproducibleFileOrder = true
+		preserveFileTimestamps = false
+	}
+	def sanitizedAsset = phase5fOwner.tasks.register('phase5fLegacyAssetRuntimeJar', Jar) {
+		dependsOn ':org.adempiere.asset:jar'
+		inputs.property(
+			'phase5fServletLinkedAssetClasses', ['MAssetDelivery', 'MRegistration'])
+		archiveFileName = 'phase5f-asset-runtime.jar'
+		destinationDirectory = phase5fOwner.layout.buildDirectory.dir('phase5f-runtime')
+		from { zipTree(project(':org.adempiere.asset').tasks.named('jar').get().archiveFile) }
+		exclude(
+			'org/compiere/asset/model/MAssetDelivery*.class',
+			'org/compiere/asset/model/MRegistration.class',
+			'org/compiere/asset/model/MRegistration$*.class',
+			'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA')
+		reproducibleFileOrder = true
+		preserveFileTimestamps = false
+	}
+	phase5fContexts.each { name, spec ->
+		def sourceSetName = "phase5f${name.toString().capitalize()}"
+		def sourceSet = phase5fOwner.sourceSets.create(sourceSetName) {
+			java.srcDir(rootProject.layout.buildDirectory.dir(
+				"phase5f/jakarta-web/sources/${name}"))
+			resources.srcDirs = []
+		}
+		phase5fOwner.tasks.named(sourceSet.compileJavaTaskName) {
+			dependsOn rootProject.tasks.named('preparePhase5fJakartaSources')
+			options.compilerArgs += ['-Xlint:all,-serial,-deprecation']
+		}
+		phase5fOwner.dependencies.add(
+			"${sourceSetName}Implementation", phase5fOwner.files(shared.output))
+		phase5fOwner.dependencies.add(
+			"${sourceSetName}Implementation", phase5fOwner.files(phase5fOwner.sourceSets.main.output))
+		phase5fOwner.dependencies.add(
+			"${sourceSetName}Implementation", phase5fOwner.project(':base'))
+		phase5fOwner.dependencies.add(
+			"${sourceSetName}Implementation", phase5fOwner.project(':client'))
+		phase5fOwner.dependencies.add(
+			"${sourceSetName}Implementation", phase5fOwner.project(':JasperReports'))
+		phase5fOwner.dependencies.add(
+			"${sourceSetName}Implementation", phase5fOwner.project(':org.adempiere.asset'))
+		phase5fOwner.dependencies.add(
+			"${sourceSetName}Implementation", 'org.jfree:jfreechart:1.0.14')
+		phase5fOwner.dependencies.add(
+			"${sourceSetName}Implementation", 'commons-codec:commons-codec:1.15')
+		phase5fOwner.dependencies.add(
+			"${sourceSetName}Implementation", 'commons-lang:commons-lang:2.6')
+		phase5fOwner.dependencies.add(
+			"${sourceSetName}Implementation", 'com.sun.mail:javax.mail:1.4.7')
+		phase5fOwner.dependencies.add(
+			"${sourceSetName}CompileOnly", "jakarta.servlet:jakarta.servlet-api:${phase5fServletApi}")
+		phase5fOwner.dependencies.add(
+			"${sourceSetName}CompileOnly", "jakarta.servlet.jsp:jakarta.servlet.jsp-api:${phase5fPagesApi}")
+		phase5fOwner.dependencies.add(
+			"${sourceSetName}CompileOnly", 'jakarta.el:jakarta.el-api:5.0.1')
+		phase5fOwner.dependencies.add(
+			"${sourceSetName}CompileOnly", "jakarta.servlet.jsp.jstl:jakarta.servlet.jsp.jstl-api:${phase5fTagsApi}")
+		if (name == 'wstore') {
+			phase5fOwner.dependencies.add(
+				"${sourceSetName}RuntimeOnly",
+				"jakarta.servlet.jsp.jstl:jakarta.servlet.jsp.jstl-api:${phase5fTagsApi}")
+			phase5fOwner.dependencies.add(
+				"${sourceSetName}RuntimeOnly",
+				'org.glassfish.web:jakarta.servlet.jsp.jstl:3.0.1')
+		}
+
+		def warTask = phase5fOwner.tasks.register("phase5f${name.toString().capitalize()}War", War) {
+			group = 'build'
+			description = "Builds the deterministic source-native Jakarta ${spec.context} WAR"
+			dependsOn rootProject.tasks.named('writePhase5fServlet6Descriptors')
+			dependsOn rootProject.tasks.named('preparePhase5fJakartaWebAssets')
+			dependsOn phase5fOwner.tasks.named(sourceSet.classesTaskName)
+			dependsOn sharedJar, sanitizedBase, sanitizedAsset
+			archiveFileName = name == 'ROOT' ? 'ROOT-modern.war' : "${name}-modern.war"
+			destinationDirectory = phase5fOwner.layout.buildDirectory.dir('phase5f-wars')
+			classpath = phase5fOwner.configurations[
+				sourceSet.runtimeClasspathConfigurationName].filter { dependency ->
+				!(dependency.name ==~ /(?i)(javaee-api|javax\.servlet-api|jakarta\.servlet-api|servlet-api|jsp-api)-.*\.jar/)
+					&& !dependency.absolutePath.endsWith('/tools/lib/harness-1.0.0.jar')
+					&& !(dependency.name ==~ /base-.*\.jar/)
+					&& !(dependency.name ==~ /org\.adempiere\.asset-.*\.jar/)
+			}
+			from(sourceSet.output) { into 'WEB-INF/classes' }
+			from(rootProject.layout.buildDirectory.dir(
+				"phase5f/jakarta-web/web/${name}"))
+			into('WEB-INF/lib') {
+				from sharedJar
+				from sanitizedBase
+				from sanitizedAsset
+			}
+			from(rootProject.layout.buildDirectory.file(
+				"phase5f/jakarta-web/descriptors/${name}/WEB-INF/web.xml")) {
+				into 'WEB-INF'
+			}
+			reproducibleFileOrder = true
+			preserveFileTimestamps = false
+			duplicatesStrategy = DuplicatesStrategy.FAIL
+		}
+		rootProject.tasks.named('phase5fJakartaWebWars').configure { dependsOn warTask }
+	}
+}
+
+tasks.register('phase5fJakartaWebWars') {
+	group = 'build'
+	description = 'Builds every deterministic Phase 5f non-SOAP Jakarta WAR'
+}
+
+gradle.projectsEvaluated {
+	phase5fOwner.phase5fConfigure()
+}
+
+tasks.register('verifyPhase5fJakartaNamespaceClosure') {
+	group = 'verification'
+	description = 'Proves the generated source closure migrated Servlet APIs while preserving Java SE javax'
+	dependsOn tasks.named('preparePhase5fJakartaSources')
+	doLast {
+		def sources = fileTree(phase5fBuildDir.map { it.dir('sources') }) { include '**/*.java' }
+		if (sources.empty) {
+			throw new GradleException('Phase 5f Jakarta source closure is empty')
+		}
+		def servlet = []
+		def javaSe = 0
+		sources.each { source ->
+			def text = source.getText('UTF-8')
+			if (text.contains('javax.servlet')) {
+				servlet << relativePath(source)
+			}
+			if (text =~ /javax\.(swing|print|sql|naming|xml)\b/) {
+				javaSe++
+			}
+		}
+		if (!servlet.empty) {
+			throw new GradleException("Legacy Servlet namespace remains: ${servlet}")
+		}
+		if (javaSe == 0) {
+			throw new GradleException('The closure no longer proves retention of Java SE javax namespaces')
+		}
+		def bridge = fileTree('org.adempiere.cohort/src/bridge') { include '**/*.java' }
+		if (!bridge.any { it.getText('UTF-8').contains('javax.servlet') }) {
+			throw new GradleException('The frozen Phase 5e Javax bridge was unexpectedly migrated')
+		}
+	}
+}
+
+tasks.register('verifyPhase5fServletDiscoveryAbsence') {
+	group = 'verification'
+	description = 'Rejects annotations, web fragments, and ServletContainerInitializers in modern WARs'
+	dependsOn tasks.named('phase5fJakartaWebWars')
+	doLast {
+		def problems = []
+		fileTree(phase5fBuildDir.map { it.dir('sources') }) { include '**/*.java' }.each { source ->
+			def text = source.getText('UTF-8')
+			['@WebServlet', '@WebFilter', '@WebListener', 'ServletContainerInitializer'].each {
+				if (text.contains(it)) problems << "${relativePath(source)} contains ${it}"
+			}
+		}
+		fileTree(project(':serverRoot').layout.buildDirectory.dir('phase5f-wars')) {
+			include '*.war'
+		}.each { war ->
+			zipTree(war).matching {
+				include 'META-INF/web-fragment.xml'
+				include 'META-INF/services/jakarta.servlet.ServletContainerInitializer'
+			}.each { problems << "${war.name} contains discovery metadata ${it}" }
+			new java.util.zip.ZipFile(war).withCloseable { archive ->
+				archive.entries().findAll {
+					!it.directory && it.name.startsWith('WEB-INF/lib/') &&
+						it.name.endsWith('.jar')
+				}.each { library ->
+					def nested = new java.util.zip.ZipInputStream(
+						archive.getInputStream(library))
+					try {
+						for (def entry = nested.nextEntry; entry != null; entry = nested.nextEntry) {
+							if (entry.name in [
+								'META-INF/web-fragment.xml',
+								'META-INF/services/jakarta.servlet.ServletContainerInitializer',
+							]) {
+								problems << "${war.name}!/${library.name}!/${entry.name}"
+							}
+						}
+					} finally {
+						nested.close()
+					}
+				}
+			}
+		}
+		if (!problems.empty) {
+			throw new GradleException("Implicit Servlet discovery is forbidden: ${problems}")
+		}
+	}
+}
+
+tasks.register('verifyPhase5fServlet6Descriptors') {
+	group = 'verification'
+	description = 'Checks explicit Servlet 6 descriptors against all contracted context routes'
+	dependsOn tasks.named('writePhase5fServlet6Descriptors')
+	doLast {
+		phase5fContexts.each { name, spec ->
+			def descriptor = phase5fBuildDir.get().file(
+				"descriptors/${name}/WEB-INF/web.xml").asFile
+			def text = descriptor.getText('UTF-8')
+			[
+				'version="6.0"', 'metadata-complete="true"', '<absolute-ordering/>',
+				'<tracking-mode>COOKIE</tracking-mode>',
+			].each { required ->
+				if (!text.contains(required)) {
+					throw new GradleException("${descriptor} lacks ${required}")
+				}
+			}
+			phase5fLegacyErrorPages(spec.context).each { page ->
+				def carried =
+					"<error-page><error-code>${phase5fXml(page.code)}</error-code>" +
+						"<location>${phase5fXml(page.location)}</location></error-page>"
+				if (!text.contains(carried)) {
+					throw new GradleException(
+						"${descriptor} omits the legacy error-page "
+							+ "${page.code} -> ${page.location}, so sendError "
+							+ 'would return the container default page instead '
+							+ 'of the legacy dispatch target')
+				}
+			}
+			phase5fReadRoutes().findAll { it.context == spec.context }.each { route ->
+				if (!text.contains("<url-pattern>${phase5fXml(route.pattern)}</url-pattern>")) {
+					throw new GradleException("${descriptor} omits ${route.name} ${route.pattern}")
+				}
+				if (spec.context == '/wstore') {
+					[
+						'/login.jsp', '/login.jsp/*',
+						'/loginServlet', '/loginServlet/*',
+						'/checkOutServlet', '/checkOutServlet/*',
+						'/orderServlet', '/orderServlet/*',
+					].each { confidential ->
+						if (!text.contains(
+								"<url-pattern>${confidential}</url-pattern>")) {
+							throw new GradleException(
+								"${descriptor} omits CONFIDENTIAL ${confidential}")
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+tasks.register('verifyPhase5fWstoreJspSources') {
+	group = 'verification'
+	description = 'Validates the closed retained JSP set and Jakarta Pages/Tags compatibility'
+	dependsOn tasks.named('preparePhase5fJakartaWebAssets')
+	inputs.file phase5fJspContract
+	doLast {
+		def contract = file('contracts/phase5f-jakarta-web-v1/jsp-precompile-contract.tsv')
+			.readLines('UTF-8').drop(1).findAll { it }.collect { it.split('\t', -1)[0] }
+		def modernRoot = phase5fBuildDir.get().dir('web/wstore').asFile
+		def actual = fileTree(modernRoot) { include '*.jsp' }.files
+			.collect { modernRoot.toPath().relativize(it.toPath()).toString() }
+		def retainedNames = contract.collect { new File(it).name }.sort()
+		if (!actual.containsAll(retainedNames)) {
+			throw new GradleException(
+				"Generated web tree omits retained JSPs: expected ${retainedNames}, got ${actual.sort()}")
+		}
+		def problems = []
+		retainedNames.each { path ->
+			def text = new File(modernRoot, path).getText('UTF-8')
+			if (text.contains('javax.servlet') || text.contains('java.sun.com/jstl')) {
+				problems << path
+			}
+		}
+		def legacy = file('webStore/src/web/WEB-INF/jspf/page.jspf').getText('UTF-8')
+		if (!legacy.contains('http://java.sun.com/jsp/jstl/core')) {
+			throw new GradleException('The frozen legacy JSTL asset was unexpectedly migrated')
+		}
+		if (!problems.empty) {
+			throw new GradleException("Retained JSPs contain legacy Servlet/JSTL references: ${problems}")
+		}
+	}
+}
+
+tasks.register('phase5fPrecompileWstoreJsp', JavaExec) {
+	group = 'verification'
+	description = 'Precompiles all 25 retained wstore JSPs with Tomcat 10.1 Jasper'
+	dependsOn(
+		tasks.named('verifyPhase5fWstoreJspSources'),
+		tasks.named('preparePhase5fJakartaWebAssets'),
+		':serverRoot:phase5fWstoreClasses')
+	classpath = configurations.phase5fJspCompiler
+	mainClass = 'org.apache.jasper.JspC'
+	javaLauncher = javaToolchains.launcherFor {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+	def output = phase5fBuildDir.map { it.dir('jsp-precompile') }
+	outputs.dir output
+	doFirst {
+		delete output
+		output.get().asFile.mkdirs()
+		def modernRoot = phase5fBuildDir.get().dir('web/wstore').asFile
+		def retained = phase5fJspContract.readLines('UTF-8').drop(1)
+			.findAll { it }
+			.collect { new File(modernRoot, new File(it.split('\t', -1)[0]).name).absolutePath }
+		def compileClasspath = (
+			project(':serverRoot').sourceSets.phase5fWstore.output.classesDirs.files +
+			project(':serverRoot').configurations.phase5fWstoreRuntimeClasspath.files
+		).collect { it.absolutePath }.join(File.pathSeparator)
+		args = [
+			'-uriroot', modernRoot.absolutePath,
+			'-d', output.get().asFile.absolutePath,
+			'-compile',
+			'-classpath', compileClasspath,
+		] + retained
+	}
+	doLast {
+		def compiled = fileTree(output) { include '**/*_jsp.class' }.files.size()
+		if (compiled != 25) {
+			throw new GradleException(
+				"Expected 25 precompiled retained JSP classes, found ${compiled}")
+		}
+	}
+}
+
+tasks.register('phase5fSourceNativeJakartaFoundation') {
+	group = 'verification'
+	description = 'Compiles, packages, and verifies the Phase 5f source-native Jakarta web foundation'
+	dependsOn(
+		tasks.named('phase5fJakartaWebWars'),
+		tasks.named('verifyPhase5fJakartaNamespaceClosure'),
+		tasks.named('verifyPhase5fServlet6Descriptors'),
+		tasks.named('verifyPhase5fServletDiscoveryAbsence'),
+		tasks.named('verifyPhase5fBinaryWebAssets'),
+		tasks.named('verifyPhase5fWstoreJspSources'),
+		tasks.named('phase5fPrecompileWstoreJsp'),
+		':zkwebui:verifyPhase5fWebuiInheritedRoutes')
+}

@@ -43,6 +43,9 @@ rootProject.file('gradle/phase4/runtime.properties').withInputStream {
 	phase4Runtime.load(it)
 }
 def cxfVersion = phase4Runtime.getProperty('cxf.version')
+def phase3AntLibDir =
+		rootProject.file('build/phase3/source-current/lib')
+def phase3AntCoreLibrary = new File(phase3AntLibDir, 'Adempiere.jar')
 
 dependencies {
 	api files('WEB-INF/lib/xbean.jar')
@@ -53,7 +56,7 @@ dependencies {
 		'WEB-INF/classes',
 		'WEB-INF/lib/generated_xmlbeans.jar',
 		'WEB-INF/lib/xbean.jar',
-		'../lib/Adempiere.jar')
+		phase3AntCoreLibrary)
 	businessTestImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
 	businessTestRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
 	cxfImplementation sourceSets.main.output
@@ -62,15 +65,15 @@ dependencies {
 		'WEB-INF/lib/generated_xmlbeans.jar',
 		'WEB-INF/lib/xbean.jar',
 		'WEB-INF/lib/commons-codec-1.3.jar')
-	cxfCompileOnly files('../lib/Adempiere.jar')
+	cxfCompileOnly files(phase3AntCoreLibrary)
 	cxfImplementation "org.apache.cxf:cxf-rt-frontend-jaxws:${cxfVersion}"
 	cxfImplementation "org.apache.cxf:cxf-rt-transports-http:${cxfVersion}"
 	cxfRuntimeOnly 'com.sun.xml.messaging.saaj:saaj-impl:3.0.4'
 	cxfCompileOnly 'jakarta.servlet:jakarta.servlet-api:6.0.0'
 	routerTestImplementation sourceSets.main.output
 	routerTestImplementation files(
-		'../lib/Adempiere.jar',
-		'../lib/glassfish.jar')
+		phase3AntCoreLibrary,
+		new File(phase3AntLibDir, 'glassfish.jar'))
 	routerTestImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
 	routerTestRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
 }
@@ -116,9 +119,15 @@ tasks.register('compileLegacyWebService', Exec) {
 	inputs.files fileTree('WEB-INF/src').matching { include '**/*.java', '**/*.xml' }
 	inputs.files fileTree('src/neutral/java').matching { include '**/*.java' }
 	inputs.files fileTree('src/business/java').matching { include '**/*.java' }
+	inputs.files fileTree(phase3AntLibDir).matching { include '*.jar' }
 	inputs.file 'build.xml'
 	outputs.dir 'WEB-INF/classes'
-	commandLine 'ant', '-f', file('build.xml').absolutePath, 'compile'
+	commandLine(
+		'ant',
+		'-f',
+		file('build.xml').absolutePath,
+		"-DAdempiere.dir=${phase3AntLibDir}",
+		'compile')
 }
 
 tasks.named('compileBusinessTestJava') {
@@ -126,6 +135,10 @@ tasks.named('compileBusinessTestJava') {
 }
 
 tasks.named('compileCxfJava') {
+	dependsOn tasks.named('compileLegacyWebService')
+}
+
+tasks.named('compileRouterTestJava') {
 	dependsOn tasks.named('compileLegacyWebService')
 }
 
@@ -190,7 +203,7 @@ def phase3SharedLibrary =
 		rootProject.file('build/phase3/runtime/Adempiere/lib/AdempiereSLib.jar')
 def phase3PackagesLibrary =
 		rootProject.file('build/phase3/runtime/Adempiere/lib/packages.jar')
-def adempiereCoreLibrary = rootProject.file('lib/Adempiere.jar')
+def adempiereCoreLibrary = phase3AntCoreLibrary
 
 tasks.register('modernAdempiereCoreJar', Jar) {
 	description = 'Builds the servlet-free ADempiere core for the modern SOAP runtime'

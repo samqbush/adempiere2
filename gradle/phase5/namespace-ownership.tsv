@@ -18,6 +18,9 @@ org.adempiere.cohort/src/bridge/java/org/adempiere/web/bridge/CohortDecisionInte
 org.adempiere.cohort/src/bridge/java/org/adempiere/web/bridge/CohortRoutingFilter.java	javax.servlet	jakarta-web	org.adempiere.cohort	frozen-zk36-bridge	5h
 org.adempiere.cohort/src/bridge/java/org/adempiere/web/bridge/ModernBackendProxy.java	javax.servlet	jakarta-web	org.adempiere.cohort	frozen-zk36-bridge	5h
 org.adempiere.cohort/src/bridgeTest/java/org/adempiere/web/bridge/CohortRoutingFilterTest.java	javax.servlet	jakarta-web	org.adempiere.cohort	frozen-zk36-bridge	5h
+org.adempiere.cohort/src/contextBridge/java/org/adempiere/web/context/ContextRoutingFilter.java	javax.servlet	jakarta-web	org.adempiere.cohort	frozen-zk36-bridge	5h
+org.adempiere.cohort/src/contextBridge/java/org/adempiere/web/context/ContextRoutingStartupListener.java	javax.servlet	jakarta-web	org.adempiere.cohort	frozen-zk36-bridge	5h
+org.adempiere.cohort/src/contextBridgeTest/java/org/adempiere/web/context/ContextRoutingFilterTest.java	javax.servlet	jakarta-web	org.adempiere.cohort	frozen-zk36-bridge	5h
 org.adempiere.pos/.idea/libraries/SBT__javax_servlet_servlet_api_2_4_jar.xml	javax.servlet	jakarta-web	org.adempiere.pos	migrate	5f
 org.adempiere.webservice/src/router/java/org/adempiere/webservice/router/SoapCompatibilityRouter.java	javax.servlet	jakarta-web	org.adempiere.webservice	migrate	5f
 org.compiere.mobile/WEB-INF/src/org/compiere/mobile/LoginDynUpdate.java	javax.servlet	jakarta-web	org.compiere.mobile	migrate	5f

@@ -1,4 +1,15 @@
 # This is a Gradle generated file for dependency locking.
 # Manual edits can break the build and are not advised.
 # This file is expected to be part of source control.
+jakarta.el:jakarta.el-api:5.0.0=phase5fJspCompiler
+jakarta.servlet.jsp.jstl:jakarta.servlet.jsp.jstl-api:3.0.2=phase5fJspCompiler
+jakarta.servlet:jakarta.servlet-api:6.0.0=phase5fJspCompiler
+org.apache.ant:ant-launcher:1.10.15=phase5fJspCompiler
+org.apache.ant:ant:1.10.15=phase5fJspCompiler
+org.apache.tomcat.embed:tomcat-embed-core:10.1.59=phase5fJspCompiler
+org.apache.tomcat.embed:tomcat-embed-el:10.1.59=phase5fJspCompiler
+org.apache.tomcat.embed:tomcat-embed-jasper:10.1.59=phase5fJspCompiler
+org.apache.tomcat:tomcat-annotations-api:10.1.59=phase5fJspCompiler
+org.eclipse.jdt:ecj:3.37.0=phase5fJspCompiler
+org.glassfish.web:jakarta.servlet.jsp.jstl:3.0.1=phase5fJspCompiler
 empty=annotationProcessor,compileClasspath,runtimeClasspath,signatures,testAnnotationProcessor,testCompileClasspath,testRuntimeClasspath

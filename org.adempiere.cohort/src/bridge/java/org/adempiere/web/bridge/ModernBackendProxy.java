@@ -3,114 +3,109 @@ package org.adempiere.web.bridge;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.util.Collections;
 import java.util.Enumeration;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.nio.file.Path;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import org.adempiere.web.handoff.HandoffProtocol;
-import org.adempiere.web.route.BoundedTransfer;
-import org.adempiere.web.route.ProxyHeaderPolicy;
-import org.adempiere.web.route.ProxyLimits;
+import org.adempiere.web.route.LoopbackProxy;
+import org.adempiere.web.route.ProxyResult;
 import org.adempiere.web.route.PublicRouteClass;
-import org.adempiere.web.route.PublicRouteClassifier;
+import org.adempiere.web.route.DeferredResponseBuffer;
 
 /**
- * Streams one public request to the loopback modern runtime and streams the
- * response back.
- *
- * <p>Streaming rather than buffering is not an optimisation: the ZK client
- * bundles are megabytes, and a buffering proxy on the <em>public</em> ingress
- * turns every concurrent modern session into retained heap on Tomcat 9.
- *
- * <p>Everything the proxy does is bounded and allowlisted:
- *
- * <ul>
- *   <li>method and route class come from {@link PublicRouteClassifier};</li>
- *   <li>request and response headers come from {@link ProxyHeaderPolicy};</li>
- *   <li>the {@code Host} header is replaced with the backend authority;</li>
- *   <li>connect and read timeouts and both byte caps come from
- *       {@link ProxyLimits}, enforced by {@link BoundedTransfer}, which is
- *       neutral code so the caps are asserted by ordinary unit tests rather
- *       than only by pushing an oversized body through a live container;</li>
- *   <li>the modern {@code Set-Cookie} is consumed here and its identifier is
- *       returned to the caller, which keeps it in the Tomcat 9 session. It is
- *       never written to the public response.</li>
- * </ul>
+ * Javax Servlet adapter for the reusable, framework-neutral loopback proxy.
  */
 class ModernBackendProxy {
 
-	/** What the proxy did, so the caller can audit and fail correctly. */
-	static final class Result {
+	private static final long PHASE5E_RESPONSE_LIMIT = 64L << 20;
 
-		private final boolean completed;
-		private final String failure;
-		private final String modernSessionId;
-		private final boolean sessionEnded;
+	static final class Result implements AutoCloseable {
+
+		private final ProxyResult delegate;
+		private final DeferredServletResponse deferred;
+		private boolean committed;
+
+		private Result(ProxyResult delegate) {
+			this(delegate, null);
+		}
 
 		private Result(
-				boolean completed,
-				String failure,
-				String modernSessionId,
-				boolean sessionEnded) {
-			this.completed = completed;
-			this.failure = failure;
-			this.modernSessionId = modernSessionId;
-			this.sessionEnded = sessionEnded;
+				ProxyResult delegate, DeferredServletResponse deferred) {
+			this.delegate = delegate;
+			this.deferred = deferred;
 		}
 
 		static Result completed(String modernSessionId) {
-			return new Result(true, null, modernSessionId, false);
+			return new Result(ProxyResult.completed(modernSessionId));
 		}
 
 		static Result failed(String failure) {
-			return new Result(false, failure, null, false);
+			return new Result(ProxyResult.failed(failure));
 		}
 
-		/**
-		 * The modern runtime ended this session server-side and nothing was
-		 * written to the public response, so the router still owns it.
-		 */
 		static Result ended() {
-			return new Result(true, null, null, true);
+			return new Result(ProxyResult.ended());
 		}
 
 		boolean completed() {
-			return completed;
+			return delegate.completed();
 		}
 
 		String failure() {
-			return failure;
+			return delegate.failure();
 		}
 
 		String modernSessionId() {
-			return modernSessionId;
+			return delegate.modernSessionId();
 		}
 
 		boolean sessionEnded() {
-			return sessionEnded;
+			return delegate.sessionEnded();
+		}
+
+		ProxyResult coreResult() {
+			return delegate;
+		}
+
+		void commitTo(HttpServletResponse response) throws IOException {
+			if (committed) {
+				throw new IllegalStateException(
+						"The staged backend response was already committed");
+			}
+			if (!delegate.completed() || delegate.sessionEnded()
+					|| deferred == null) {
+				throw new IllegalStateException(
+						"Only an ordinary completed response can be committed");
+			}
+			deferred.commitTo(response);
+			committed = true;
+		}
+
+		@Override
+		public void close() throws IOException {
+			if (deferred != null) {
+				deferred.close();
+			}
 		}
 	}
 
-	private final String backend;
+	private final LoopbackProxy delegate;
+	private final long responseLimit;
 
 	ModernBackendProxy(String backend) {
-		this.backend = backend;
+		this(backend, PHASE5E_RESPONSE_LIMIT);
 	}
 
-	/**
-	 * @param pathInside   the stripped path within the context
-	 * @param modernCookie the modern session identifier to present, or
-	 *                     {@code null} on the bootstrap request
-	 * @param ticket       the handoff ticket, or {@code null} after bootstrap
-	 * @param boundSessionId the rotated Tomcat 9 session identifier the ticket is
-	 *                     bound to; sent alongside the ticket so the modern
-	 *                     runtime asserts the binding independently
-	 */
+	ModernBackendProxy(String backend, long responseLimit) {
+		this.delegate = new LoopbackProxy(backend);
+		this.responseLimit = responseLimit;
+	}
+
 	Result proxy(
 			HttpServletRequest request,
 			HttpServletResponse response,
@@ -119,192 +114,127 @@ class ModernBackendProxy {
 			String modernCookie,
 			String ticket,
 			String boundSessionId) throws IOException {
-		URL target = target(request, pathInside);
-		HttpURLConnection connection = (HttpURLConnection) target.openConnection();
-		connection.setInstanceFollowRedirects(false);
-		connection.setConnectTimeout(ProxyLimits.CONNECT_TIMEOUT_MILLIS);
-		connection.setReadTimeout(PublicRouteClassifier.polling(routeClass)
-				? ProxyLimits.POLLING_READ_TIMEOUT_MILLIS
-				: ProxyLimits.READ_TIMEOUT_MILLIS);
-		connection.setRequestMethod(request.getMethod());
-		connection.setUseCaches(false);
-
-		copyRequestHeaders(request, connection);
-		connection.setRequestProperty("Host", target.getAuthority());
-		if (modernCookie != null) {
-			connection.setRequestProperty("Cookie", "JSESSIONID=" + modernCookie);
-		}
-		if (ticket != null) {
-			connection.setRequestProperty(HandoffProtocol.TICKET_HEADER, ticket);
-			connection.setRequestProperty(
-					HandoffProtocol.SESSION_HEADER, boundSessionId);
-		}
-
-		if ("POST".equalsIgnoreCase(request.getMethod())) {
-			connection.setDoOutput(true);
-			long declared = request.getContentLengthLong();
-			if (!BoundedTransfer.declaredWithin(
-					declared, ProxyLimits.MAX_REQUEST_BYTES)) {
-				return Result.failed("request-too-large");
-			}
-			if (declared >= 0) {
-				connection.setFixedLengthStreamingMode(declared);
-			} else {
-				connection.setChunkedStreamingMode(ProxyLimits.BUFFER_BYTES);
-			}
-			try (InputStream from = request.getInputStream();
-					OutputStream to = connection.getOutputStream()) {
-				if (!BoundedTransfer.copy(
-						from, to, ProxyLimits.MAX_REQUEST_BYTES)) {
-					return Result.failed("request-too-large");
-				}
-			}
-		}
-
-		int status;
+		DeferredServletResponse deferred =
+				new DeferredServletResponse(responseLimit);
 		try {
-			status = connection.getResponseCode();
-		} catch (IOException unreachable) {
-			connection.disconnect();
-			return Result.failed("backend-unavailable");
-		}
-
-		// The end signal is read BEFORE a single byte of status, header or body
-		// is written to the public response. The router has to be able to
-		// invalidate the Tomcat 9 session and send its own redirect, and it
-		// cannot do either once the response is committed.
-		if (HandoffProtocol.END_VALUE.equals(
-				connection.getHeaderField(HandoffProtocol.END_HEADER))) {
-			connection.disconnect();
-			return Result.ended();
-		}
-
-		String modernSessionId = null;
-		response.setStatus(status);
-		for (Map.Entry<String, List<String>> header
-				: connection.getHeaderFields().entrySet()) {
-			String name = header.getKey();
-			if (name == null) {
-				continue;
-			}
-			if ("Set-Cookie".equalsIgnoreCase(name)) {
-				String identifier = sessionCookie(header.getValue());
-				if (identifier != null) {
-					modernSessionId = identifier;
-				}
-				// Consumed. The browser must never see the internal cookie.
-				continue;
-			}
-			if (!ProxyHeaderPolicy.forwardResponseHeader(name)) {
-				continue;
-			}
-			for (String value : header.getValue()) {
-				if ("Location".equalsIgnoreCase(name)) {
-					response.addHeader(name, publicLocation(request, value));
-				} else {
-					response.addHeader(name, value);
-				}
-			}
-		}
-
-		try (InputStream from = status >= 400
-				? errorStream(connection)
-				: connection.getInputStream()) {
-			if (from != null) {
-				try (OutputStream to = response.getOutputStream()) {
-					if (!BoundedTransfer.copy(
-							from, to, ProxyLimits.MAX_RESPONSE_BYTES)) {
-						return Result.failed("response-too-large");
-					}
-				}
-			}
-		} catch (IOException interrupted) {
-			return Result.failed("backend-stream-interrupted");
-		} finally {
-			connection.disconnect();
-		}
-		return Result.completed(modernSessionId);
-	}
-
-	private URL target(HttpServletRequest request, String pathInside)
-			throws IOException {
-		StringBuilder uri = new StringBuilder(backend)
-				.append(request.getContextPath())
-				.append(pathInside);
-		String query = request.getQueryString();
-		if (query != null && !query.isEmpty()) {
-			uri.append('?').append(query);
-		}
-		return new URL(uri.toString());
-	}
-
-	private void copyRequestHeaders(
-			HttpServletRequest request, HttpURLConnection connection) {
-		Enumeration<String> names = request.getHeaderNames();
-		while (names != null && names.hasMoreElements()) {
-			String name = names.nextElement();
-			if (!ProxyHeaderPolicy.forwardRequestHeader(name)) {
-				continue;
-			}
-			Enumeration<String> values = request.getHeaders(name);
-			while (values != null && values.hasMoreElements()) {
-				connection.addRequestProperty(name, values.nextElement());
-			}
+			ProxyResult result = delegate.proxy(
+					new ServletRequestAdapter(request), deferred, routeClass,
+					pathInside, modernCookie, ticket, boundSessionId);
+			return new Result(result, deferred);
+		} catch (IOException | RuntimeException failure) {
+			deferred.close();
+			throw failure;
 		}
 	}
 
-	/**
-	 * Rewrites a backend-absolute redirect back onto the public origin.
-	 *
-	 * <p>Only the origin changes. The path is identical on both sides by design
-	 * (the modern context is mounted at {@code /webui} internally as well as
-	 * publicly), so no HTML, JavaScript, CSS or asynchronous-update body is ever
-	 * rewritten - which is the property that makes this proxy safe for ZK.
-	 */
-	private String publicLocation(HttpServletRequest request, String location) {
-		if (location == null || !location.startsWith(backend)) {
-			return location;
+	private static final class ServletRequestAdapter
+			implements LoopbackProxy.Request {
+
+		private final HttpServletRequest request;
+
+		private ServletRequestAdapter(HttpServletRequest request) {
+			this.request = request;
 		}
-		String path = location.substring(backend.length());
-		StringBuilder publicOrigin = new StringBuilder(request.getScheme())
-				.append("://")
-				.append(request.getServerName());
-		int port = request.getServerPort();
-		boolean defaultPort = ("http".equals(request.getScheme()) && port == 80)
-				|| ("https".equals(request.getScheme()) && port == 443);
-		if (!defaultPort) {
-			publicOrigin.append(':').append(port);
+
+		@Override
+		public String method() {
+			return request.getMethod();
 		}
-		return publicOrigin.append(path).toString();
+
+		@Override
+		public String contextPath() {
+			return request.getContextPath();
+		}
+
+		@Override
+		public String queryString() {
+			return request.getQueryString();
+		}
+
+		@Override
+		public Iterable<String> headerNames() {
+			return iterable(request.getHeaderNames());
+		}
+
+		@Override
+		public Iterable<String> headers(String name) {
+			return iterable(request.getHeaders(name));
+		}
+
+		@Override
+		public long contentLength() {
+			return request.getContentLengthLong();
+		}
+
+		@Override
+		public InputStream inputStream() throws IOException {
+			return request.getInputStream();
+		}
+
+		@Override
+		public String scheme() {
+			return request.getScheme();
+		}
+
+		@Override
+		public String serverName() {
+			return request.getServerName();
+		}
+
+		@Override
+		public int serverPort() {
+			return request.getServerPort();
+		}
 	}
 
-	private static InputStream errorStream(HttpURLConnection connection) {
-		InputStream errors = connection.getErrorStream();
-		if (errors != null) {
-			return errors;
-		}
-		try {
-			return connection.getInputStream();
-		} catch (IOException absent) {
-			return null;
-		}
-	}
+	static final class DeferredServletResponse
+			implements LoopbackProxy.Response, AutoCloseable {
 
-	/** @return the {@code JSESSIONID} value, or {@code null} when absent */
-	private static String sessionCookie(List<String> setCookies) {
-		for (String cookie : setCookies) {
-			if (cookie == null) {
-				continue;
+		private int status;
+		private final List<String[]> headers = new ArrayList<>();
+		private final DeferredResponseBuffer body;
+
+		private DeferredServletResponse(long maximumBytes) {
+			String catalinaBase = System.getProperty("catalina.base", ".");
+			body = new DeferredResponseBuffer(
+					Path.of(catalinaBase, "work", "phase5e-response-spool"),
+					maximumBytes);
+		}
+
+		@Override
+		public void status(int status) {
+			this.status = status;
+		}
+
+		@Override
+		public void header(String name, String value) {
+			headers.add(new String[] {name, value});
+		}
+
+		@Override
+		public OutputStream outputStream() {
+			return body.outputStream();
+		}
+
+		void commitTo(HttpServletResponse response) throws IOException {
+			response.setStatus(status);
+			for (String[] header : headers) {
+				response.addHeader(header[0], header[1]);
 			}
-			for (String attribute : cookie.split(";")) {
-				String trimmed = attribute.trim();
-				if (trimmed.regionMatches(true, 0, "JSESSIONID=", 0, 11)) {
-					String value = trimmed.substring(11);
-					return value.isEmpty() ? null : value;
-				}
+			if (body.size() > 0) {
+				body.commitTo(response.getOutputStream());
 			}
 		}
-		return null;
+
+		@Override
+		public void close() throws IOException {
+			body.close();
+		}
 	}
 
+	private static <T> Iterable<T> iterable(Enumeration<T> values) {
+		return values == null
+				? Collections.emptyList()
+				: () -> values.asIterator();
+	}
 }

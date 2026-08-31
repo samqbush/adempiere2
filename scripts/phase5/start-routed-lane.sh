@@ -33,14 +33,80 @@ file_mode() {
   fi
 }
 
+# Failure diagnostics.
+#
+# Every redirection below writes to stderr, and the ORDER matters. The previous
+# form was `tail -200 file 2>/dev/null >&2`, which silently discarded the whole
+# dump: redirections apply left to right, so `2>/dev/null` points fd2 at
+# /dev/null and the following `>&2` then points fd1 at the SAME /dev/null. Every
+# failing lane therefore printed a three-line banner and no evidence at all,
+# which is precisely the information needed to diagnose it.
+dump_runtime_diagnostics() {
+  local label=$1 logs_dir=$2 dump_pid=${3:-}
+  # A stack dump is the only evidence that separates "still working" from
+  # "deadlocked". Both are indistinguishable from a probe that keeps returning
+  # 000, and a lane only fails once per CI round, so the first failing round
+  # must already carry it.
+  if [[ -n "$dump_pid" ]] && kill -0 "$dump_pid" 2>/dev/null; then
+    echo "--- $label thread dump (pid $dump_pid) ---" >&2
+    jcmd "$dump_pid" Thread.print >&2 2>/dev/null || true
+  fi
+  echo "--- $label deployment timings ---" >&2
+  # Tomcat logs one of these per context, so a lane that failed because it was
+  # still deploying is distinguishable from one that failed because a context
+  # threw. A lane that produced none was still in its first deployment.
+  if [[ -f "$logs_dir/catalina.out" ]]; then
+    grep -E 'HostConfig\.(deployDescriptor|deployWAR)' \
+      "$logs_dir/catalina.out" >&2 2>/dev/null || true
+  fi
+  local log
+  for log in "$logs_dir/catalina.out" "$logs_dir"/catalina.*.log \
+      "$logs_dir"/localhost.*.log; do
+    [[ -f "$log" ]] || continue
+    echo "--- $label $(basename "$log") (last 200 lines) ---" >&2
+    tail -200 "$log" >&2 2>/dev/null || true
+  done
+}
+
+lane_phase=${ADEMPIERE_ROUTED_LANE_PHASE:-phase5e}
 public_port=${PHASE5E_PUBLIC_PORT:-8888}
+public_https_port=${PHASE5F_PUBLIC_HTTPS_PORT:-8444}
+
+# Readiness probing.
+#
+# Every readiness probe MUST be individually bounded. A Tomcat connector binds
+# its port during init, before any context has deployed, so the kernel completes
+# the TCP handshake and queues the request in the accept backlog while the
+# container is still single-threadedly deploying contexts. An unbounded curl
+# therefore blocks forever against a listening-but-unserviced socket, which
+# silently converts the wait below into a deadlock and makes the failure
+# diagnostics unreachable.
+#
+# The wait is a wall-clock deadline rather than an iteration count, because an
+# iteration count is only a time budget when every iteration is bounded.
+#
+# The budget is for the whole lane, not per probe loop. Per-loop budgets would
+# multiply: three sequential loops each granted the full budget can wait three
+# times as long as the stated timeout before the lane finally fails.
+#
+# 900s is measured, not guessed. Before the reviewed JarScanFilter
+# (gradle/phase5/jar-scan-policy.tsv) each Phase 5f context spent 13-15 minutes
+# walking its 124-127 WEB-INF/lib JARs and the API WAR spent roughly 21, so the
+# former 3600s budget could not be met and run 33290776432 timed out with both
+# probes still reporting 000. With the filter installed, a local boot of the
+# same seven contexts reached "Server startup" in 4,910 ms. 900s therefore
+# leaves two orders of magnitude of margin for the legacy Tomcat 9 ingress and
+# a slow runner, while still failing fast enough to iterate.
+readiness_timeout=${ADEMPIERE_ROUTED_LANE_READY_TIMEOUT:-900}
+probe_connect_timeout=${ADEMPIERE_ROUTED_LANE_PROBE_CONNECT_TIMEOUT:-5}
+probe_max_time=${ADEMPIERE_ROUTED_LANE_PROBE_MAX_TIME:-15}
 properties_file="$repo_root/gradle/phase4/runtime.properties"
 api_port=$(awk -F= '$1 == "api.port" {sub(/^[^=]*=/, ""); print; exit}' \
   "$properties_file")
-tomcat10_dir="$repo_root/build/phase5e/tomcat10"
+tomcat10_dir="$repo_root/build/$lane_phase/tomcat10"
 api_war="$repo_root/org.adempiere.webservice/build/libs/ADInterface-Modern-1.0.war"
-evidence_dir="$repo_root/build/phase5e/evidence"
-pid_file="$repo_root/build/phase5e/tomcat10-routed.pid"
+evidence_dir="$repo_root/build/$lane_phase/evidence"
+pid_file="$repo_root/build/$lane_phase/tomcat10-routed.pid"
 
 mkdir -p "$evidence_dir" "$(dirname "$pid_file")"
 
@@ -85,6 +151,32 @@ sed "s#\${catalina.base}#$tomcat10_dir#g" \
   "$adempiere_home/tomcat10-api/conf/Catalina/localhost/webui.xml" \
   >"$tomcat10_dir/conf/Catalina/localhost/webui.xml"
 
+if [[ "$lane_phase" == phase5f ]]; then
+  mkdir -p "$tomcat10_dir/phase5f"
+  for modern in "$adempiere_home"/tomcat10-api/phase5f/*-modern.war; do
+    [[ -f "$modern" ]] || continue
+    cp "$modern" "$tomcat10_dir/phase5f/$(basename "$modern")"
+  done
+  for descriptor in "$adempiere_home"/tomcat10-api/conf/Catalina/localhost/*.xml; do
+    [[ -f "$descriptor" ]] || continue
+    name=$(basename "$descriptor")
+    [[ "$name" == webui.xml ]] && continue
+    sed "s#\${catalina.base}#$tomcat10_dir#g" "$descriptor" \
+      >"$tomcat10_dir/conf/Catalina/localhost/$name"
+  done
+  shared_runtime="$adempiere_home/tomcat/lib/AdempiereSLib.jar"
+  if [[ ! -f "$shared_runtime" ]]; then
+    echo "The installed shared datasource runtime is missing: $shared_runtime" >&2
+    exit 66
+  fi
+  cp "$shared_runtime" "$tomcat10_dir/lib/AdempiereSLib.jar"
+  python3 "$repo_root/scripts/phase5/configure-phase5f-tomcat10-datasources.py" \
+    --source-server "$adempiere_home/tomcat/conf/server.xml" \
+    --source-context "$adempiere_home/tomcat/conf/context.xml" \
+    --target-server "$tomcat10_dir/conf/server.xml" \
+    --target-context-dir "$tomcat10_dir/conf/Catalina/localhost"
+fi
+
 grep -Fq 'address="127.0.0.1"' "$tomcat10_dir/conf/server.xml"
 grep -Fq '<Server port="-1"' "$tomcat10_dir/conf/server.xml"
 
@@ -94,10 +186,14 @@ rm -f "$pid_file"
 "$tomcat10_dir/bin/catalina.sh" start >/dev/null 2>&1
 
 modern_ready=no
-for _ in $(seq 1 180); do
+lane_deadline=$(( SECONDS + readiness_timeout ))
+modern_deadline=$lane_deadline
+while (( SECONDS < modern_deadline )); do
   status=$(curl -sS -o /dev/null -w '%{http_code}' \
+    --connect-timeout "$probe_connect_timeout" --max-time "$probe_max_time" \
     "http://127.0.0.1:$api_port/webui/" 2>/dev/null || true)
   api_status=$(curl -sS -o /dev/null -w '%{http_code}' \
+    --connect-timeout "$probe_connect_timeout" --max-time "$probe_max_time" \
     "http://127.0.0.1:$api_port/ADInterface/services/ADService?wsdl" \
     2>/dev/null || true)
   # 403 is a healthy armed modern context: it refuses an unbootstrapped session
@@ -114,9 +210,11 @@ done
 
 if [[ "$modern_ready" != yes ]]; then
   echo "The Phase 5e modern runtime did not become ready" >&2
+  echo "  waited            -> ${readiness_timeout}s" >&2
   echo "  internal /webui/ -> ${status:-none}" >&2
   echo "  /ADInterface     -> ${api_status:-none}" >&2
-  tail -200 "$tomcat10_dir/logs/catalina.out" 2>/dev/null >&2 || true
+  dump_runtime_diagnostics 'modern runtime' "$tomcat10_dir/logs" \
+    "$(cat "$pid_file" 2>/dev/null || true)"
   "$repo_root/scripts/phase5/stop-routed-lane.sh" "$repo_root" "$adempiere_home" || true
   exit 70
 fi
@@ -144,12 +242,76 @@ source "$env_script" nosave
 set -u
 
 export CATALINA_BASE="$catalina_base"
-export CATALINA_PID="$catalina_base/temp/phase5e-public.pid"
+export CATALINA_PID="$catalina_base/temp/${lane_phase}-public.pid"
 export CATALINA_TMPDIR="$catalina_base/temp"
-export CATALINA_OPTS="$ADEMPIERE_JAVA_OPTIONS -Duser.timezone=UTC -Duser.language=en -Duser.country=US -Dadempiere.phase5e.handoffKey=$handoff_key -Dadempiere.phase5e.modernBackend=http://127.0.0.1:$api_port -Dadempiere.phase5e.configurationTtlMillis=0"
+export CATALINA_OPTS="$ADEMPIERE_JAVA_OPTIONS -Duser.timezone=UTC -Duser.language=en -Duser.country=US -Dadempiere.phase5e.handoffKey=$handoff_key -Dadempiere.phase5e.modernBackend=http://127.0.0.1:$api_port -Dadempiere.phase5e.configurationTtlMillis=0 -Dadempiere.phase5f.modernBackend=http://127.0.0.1:$api_port"
 mkdir -p "$CATALINA_TMPDIR"
 
-if curl -sS -o /dev/null "http://127.0.0.1:$public_port/" 2>/dev/null; then
+if [[ "$lane_phase" == phase5f ]]; then
+  tls_dir="$repo_root/build/phase5f/public-https"
+  server_backup="$tls_dir/server.xml.original"
+  keystore="$tls_dir/public-ingress.p12"
+  password_file="$tls_dir/keystore.password"
+  mkdir -p "$tls_dir"
+  chmod 700 "$tls_dir"
+  if [[ -f "$server_backup" ]]; then
+    cp "$server_backup" "$catalina_base/conf/server.xml"
+  else
+    cp "$catalina_base/conf/server.xml" "$server_backup"
+  fi
+  openssl rand -hex 16 >"$password_file"
+  chmod 600 "$password_file"
+  keystore_password=$(cat "$password_file")
+  rm -f "$keystore"
+  "$JAVA_HOME/bin/keytool" -genkeypair -noprompt \
+    -alias phase5f-public-ingress -keyalg RSA -keysize 2048 \
+    -validity 2 -storetype PKCS12 -keystore "$keystore" \
+    -storepass "$keystore_password" -keypass "$keystore_password" \
+    -dname "CN=localhost,OU=Phase5f,O=ADempiere,L=Test,ST=Test,C=US" \
+    -ext "SAN=IP:127.0.0.1,DNS:localhost" >/dev/null
+  python3 - "$catalina_base/conf/server.xml" "$keystore" \
+      "$keystore_password" "$public_https_port" <<'PY'
+import sys
+import re
+from pathlib import Path
+from xml.sax.saxutils import quoteattr
+
+server = Path(sys.argv[1])
+keystore, password, port = sys.argv[2:]
+text = server.read_text(encoding="utf-8")
+connector = f"""
+    <!-- Phase 5f isolated smoke-only public HTTPS ingress. -->
+    <Connector address="127.0.0.1" port={quoteattr(port)}
+               protocol="org.apache.coyote.http11.Http11NioProtocol"
+               SSLEnabled="true" scheme="https" secure="true"
+               maxThreads="50">
+      <SSLHostConfig>
+        <Certificate certificateKeystoreFile={quoteattr(keystore)}
+                     certificateKeystorePassword={quoteattr(password)}
+                     certificateKeystoreType="PKCS12" type="RSA" />
+      </SSLHostConfig>
+    </Connector>
+"""
+if "</Service>" not in text:
+    raise SystemExit("Tomcat 9 server.xml has no Service close tag")
+text = text.replace("</Service>", connector + "  </Service>", 1)
+# A CONFIDENTIAL security-constraint is enforced by the container before any
+# routing filter runs, and Tomcat builds its redirect from the matched
+# connector's redirectPort. The installed product ships ADEMPIERE_SSL_PORT,
+# which is not listening in this lane, so the redirect has to be retargeted at
+# the isolated Phase 5f public HTTPS ingress.
+text, redirects = re.subn(r'redirectPort="[0-9]+"',
+                          f'redirectPort="{port}"', text)
+if redirects == 0:
+    raise SystemExit("Tomcat 9 server.xml declares no redirectPort")
+server.write_text(text, encoding="utf-8")
+PY
+  CATALINA_OPTS="$CATALINA_OPTS -Dadempiere.phase5f.publicHttpsPort=$public_https_port"
+  export CATALINA_OPTS
+fi
+
+if curl -sS -o /dev/null --connect-timeout 2 --max-time 5 \
+  "http://127.0.0.1:$public_port/" 2>/dev/null; then
   echo "Port $public_port is already serving HTTP; refusing to reuse an unknown lane" >&2
   "$repo_root/scripts/phase5/stop-routed-lane.sh" "$repo_root" "$adempiere_home" || true
   exit 70
@@ -157,19 +319,55 @@ fi
 
 "$CATALINA_HOME/bin/startup.sh" >/dev/null
 public_ready=no
-for _ in $(seq 1 180); do
+public_deadline=$lane_deadline
+while (( SECONDS < public_deadline )); do
   public_status=$(curl -sS -o /dev/null -w '%{http_code}' \
+    --connect-timeout "$probe_connect_timeout" --max-time "$probe_max_time" \
     "http://127.0.0.1:$public_port/webui/" 2>/dev/null || true)
   if [[ "$public_status" == 200 ]]; then
     public_ready=yes
     break
   fi
+  # Without this the loop waits out the whole lane budget after a Tomcat 9 JVM
+  # that died during startup, and reports a timeout instead of the crash.
+  if [[ -f "$CATALINA_PID" ]] && ! kill -0 "$(cat "$CATALINA_PID")" 2>/dev/null; then
+    echo "The public Tomcat 9 runtime exited during startup" >&2
+    break
+  fi
   sleep 1
 done
 
+if [[ "$lane_phase" == phase5f ]]; then
+  https_ready=no
+  https_deadline=$lane_deadline
+  while (( SECONDS < https_deadline )); do
+    https_status=$(curl -ksS -o /dev/null -w '%{http_code}' \
+      --connect-timeout "$probe_connect_timeout" --max-time "$probe_max_time" \
+      "https://127.0.0.1:$public_https_port/webui/" 2>/dev/null || true)
+    if [[ "$https_status" == 200 ]]; then
+      https_ready=yes
+      break
+    fi
+    if [[ -f "$CATALINA_PID" ]] &&
+        ! kill -0 "$(cat "$CATALINA_PID")" 2>/dev/null; then
+      echo "The public Tomcat 9 runtime exited during startup" >&2
+      break
+    fi
+    sleep 1
+  done
+  if [[ "$https_ready" != yes ]]; then
+    echo "The Phase 5f public HTTPS ingress did not become ready (${https_status:-none})" >&2
+    dump_runtime_diagnostics 'public ingress' "$catalina_base/logs" \
+    "$(cat "$CATALINA_PID" 2>/dev/null || true)"
+    "$repo_root/scripts/phase5/stop-routed-lane.sh" "$repo_root" "$adempiere_home" || true
+    exit 70
+  fi
+fi
+
 if [[ "$public_ready" != yes ]]; then
   echo "The Phase 5e public /webui ingress did not become ready (${public_status:-none})" >&2
-  tail -200 "$catalina_base/logs/catalina.out" 2>/dev/null >&2 || true
+  dump_runtime_diagnostics 'public ingress' "$catalina_base/logs" \
+    "$(cat "$CATALINA_PID" 2>/dev/null || true)"
   "$repo_root/scripts/phase5/stop-routed-lane.sh" "$repo_root" "$adempiere_home" || true
   exit 70
 fi
@@ -279,6 +477,11 @@ fi
   printf 'configuration_cache_ttl_millis\t0\n'
   printf 'modern_pid\t%s\n' "$modern_pid"
   printf 'public_pid\t%s\n' "${public_pid:-unknown}"
+  if [[ "$lane_phase" == phase5f ]]; then
+    printf 'public_https_listener\t127.0.0.1:%s\n' "$public_https_port"
+    printf 'public_https_certificate_sha256\t%s\n' \
+      "$(shasum -a 256 "$keystore" | awk '{print $1}')"
+  fi
   printf 'catalina_base_public\t%s\n' "$catalina_base"
   printf 'catalina_home_modern\t%s\n' "$tomcat10_dir"
 } >"$evidence_dir/routed-lane.tsv"

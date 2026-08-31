@@ -15,6 +15,14 @@ inputs:
     description: Backward-compatible selector; false runs the installed-product gate
     required: false
     default: 'true'
+  args:
+    description: >-
+      Extra Gradle command-line arguments, space separated. Intended for
+      execution-policy flags such as --continue. Like `task`, this is expanded
+      unquoted, so callers must supply a fixed literal and never interpolate
+      untrusted input.
+    required: false
+    default: ''
 runs:
   using: composite
   steps:
@@ -30,7 +38,9 @@ runs:
             task=phase3NoDatabaseDistribution
           fi
         fi
+        extra_args='${{ inputs.args }}'
         # Deliberately unquoted: $task may name several tasks, and they must
         # reach Gradle as separate arguments so they share one task graph.
+        # $extra_args is expanded on the same terms.
         # shellcheck disable=SC2086
-        xvfb-run -a ./gradlew $task --dependency-verification=strict
+        xvfb-run -a ./gradlew $task $extra_args --dependency-verification=strict

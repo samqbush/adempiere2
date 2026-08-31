@@ -1,0 +1,11 @@
+mutation_id	mutation_type	target	expected_detection	closing_task
+MUT-P5F-01	route-omission	deployed-routes.tsv	expected 82 deployed routes	phase5fOracleContractMutationProof
+MUT-P5F-02	wrong-auth-class	route-validation.tsv	generated oracle ledger drift	phase5fOracleContractMutationProof
+MUT-P5F-03	unsafe-request-header	header-policy.tsv	unsafe header policy	phase5fOracleContractMutationProof
+MUT-P5F-04	unsafe-response-cookie	cookie-policy.tsv	application-cookie allowlist is incomplete	phase5fOracleContractMutationProof
+MUT-P5F-05	internal-redirect-leak	tls-routes.tsv	TLS forwarding is not bounded to loopback	phase5fOracleContractMutationProof
+MUT-P5F-06	fallback-after-modern-failure	context-policy-schema.tsv	fallback policy weakened	phase5fOracleContractMutationProof
+MUT-P5F-07	wrong-byte-cap	context-policy-schema.tsv	invalid numeric policy	phase5fOracleContractMutationProof
+MUT-P5F-08	missing-jsp-compile	jsp-precompile-contract.tsv	JSP precompile contract	phase5fOracleContractMutationProof
+MUT-P5F-09	stale-deployed-route	deployed-routes.tsv	expected 82 deployed routes	phase5fOracleContractMutationProof
+MUT-P5F-10	wrong-drop-defer-disposition	non-deployed-dispositions.tsv	expected exact 30 non-deployed dispositions	phase5fOracleContractMutationProof

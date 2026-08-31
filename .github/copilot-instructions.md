@@ -62,6 +62,41 @@ Both Phase 5e gates are executed and green. The database-backed smoke records
 all 23 public-origin cohort, isolation, lifecycle, SOAP-coexistence, and
 secret-hygiene rows as passing.
 
+**Phase 5f is implemented and active on `phase-5f-jakarta-web-routes`, but is
+not complete or merged.** Its database-neutral `phase5fFinalVerification` gate
+has executed green twice. It governs exactly 82 deployed and 30 non-deployed
+mappings, builds isolated generated Jakarta source/web trees and five modern
+context WARs (`/admin`, `/`, `/mobile`, `/adempiere`, `/wstore`), precompiles
+all 25 retained `/wstore` JSPs, adds source-native `/webui/timeline`, and
+replaces only the exact historical DSP theme URL with static Phase 5d CSS.
+Installed and release topology preserves Phase 4 CXF and Phase 5e `/webui`,
+stages one Phase 5f WAR per context under `tomcat10-api/phase5f/`, and retains
+pristine per-context rollback.
+
+The implemented `phase5fJakartaWebRoutesSmoke` has six public-origin shards and
+**has been executed in CI, which supplies `phase3DbSystemPassword`, and it is
+green.** All six shards execute in a single run. Run 33379849664, on commit
+`9ba62875d`, recorded 129 observations - `/` (16), `/wstore` (68), `/webui` (6), `/admin` (4), `/mobile`
+(14), `/adempiere` (21) - and passed `verifyPhase5fSwitchBaseline`,
+`capturePhase5fSoapCoexistence` and
+`verifyPhase5fBackgroundProcessorsQuiesced`. The strict aggregate
+`verifyPhase5fRuntimeEvidence` passed. Every failure mode was diagnosed from a run's own evidence and fixed: a dropped `<error-page>`,
+three registered deviations (`DEV-P5F-ERR-02..04`), the container
+`redirectPort`, the Phase 4 POS credential fixture, a latent argument-list
+defect, three ambient database writers (timer-driven processors, automatic error
+reporting, and first-touch `WebEnv.initWeb` initialisation), and an aggregate
+digest that measured more content than the table digests. The shards run in an
+explicit order (`/`, `/wstore`, `/webui`, `/admin`, `/mobile`, `/adempiere`),
+record vector failures rather than aborting, and `Current-phase database smoke`
+passes `--continue`, so one run reports the whole matrix.
+All 82 route observations and their route-specific database effects are
+therefore observed, and both contract ledgers carry the executed marker. The 25
+`/wstore` JSP precompile rows remain
+`contract-only-runtime-observation-pending`, because only three of those pages
+are reached by a route vector. `/mobile` and `/adempiere` remain disabled until
+Phase 5g and `/admin` remains legacy pending named consumer ownership. T5e-1
+remains open and T5f-1 closes in Phase 5h.
+
 The accepted target is ZK CE `10.3.0.1-jakarta` from the public ZK repository.
 Do not introduce evaluation artifacts or commercial repository credentials.
 Freeze the installed ZK 3.6/Tomcat 9 web product before migrating source; later
@@ -91,6 +126,8 @@ by a phase become canonical only after that phase's exit criteria prove them.
 | Phase 5e cohort routing gate | `./gradlew phase5eFinalVerification --dependency-verification=strict` | Database-neutral gate for the fail-closed cohort model and handoff protocol, the isolated Javax/ZK 3.6 bridge closure pinned against the frozen Phase 5b WAR, the deterministic derived routed `webui.war` and its three-entry diff contract, the reviewed public route/header/cookie/audit contracts, sixteen mutation proofs (each mutant is compiled before it is scored, and detection is read from the named test's own JUnit report so a compile or infrastructure failure can never count), the enforced 8 MiB/64 MiB proxy byte caps, the session-cache census parser tests over the reviewed `catalina.out` fixtures, the installed and release routing overlay including the resolved modern `docBase`, and rollback that survives the **real** Ant `setupWLib` run with real merge inputs. **Chains** `phase5dFinalVerification` |
 | Phase 5e cohort routing smoke | `./gradlew phase5eCohortRoutingSmoke -Pphase3DbSystemPassword='<password>' --dependency-verification=strict` | Executed, green marker-owned PostgreSQL gate that boots the routed public Tomcat 9 ingress and the loopback modern runtime, drives the complete public-origin cohort matrix through a browser that can only reach the public origin, proves concurrent client/org/role/user/language isolation by comparing each interleaved capture with that identity's solo capture, proves that logout, the product's session-inactivity timeout and container-side destruction each record a real session destruction on every runtime that must have one and return every `SessionManager` cache a runtime reports for that session to its marked baseline, proves a logged-out browser is decided again rather than inheriting its previous cohort, and replays the complete Phase 4 SOAP corpus while routed modern sessions are authenticated. All 23 matrix rows pass |
 | Phase 5e handoff key | `./gradlew provisionPhase5eHandoffKey` | Generates the shared >=32-byte 0600 key from the OS CSPRNG, outside every archive under `ADEMPIERE_HOME`. The repository ships no key and no placeholder |
+| Phase 5f Jakarta route contracts and topology | `./gradlew phase5fFinalVerification --dependency-verification=strict` | Implemented and executed green twice. Verifies the 82 deployed/30 non-deployed contract and mutations, isolated generated Jakarta closures, five deterministic modern context WARs, 25 JSP precompiles, Servlet 6/discovery rules, `/timeline` and static DSP contracts, independent routing policies, installed/release topology, rollback, inventories, and Phase 4/5d/5e regressions. Does **not** prove runtime route/database-effect parity |
+| Phase 5f Jakarta route smoke | `./gradlew phase5fJakartaWebRoutesSmoke -Pphase3DbSystemPassword='<password>' --dependency-verification=strict` | Implemented six-shard, marker-owned PostgreSQL public-origin replay for `/webui`, `/admin`, `/`, `/mobile`, `/adempiere`, and `/wstore`, plus exact 82-row effect validation and Phase 4 SOAP coexistence. Shards run in the explicit order `/`, `/wstore`, `/webui`, `/admin`, `/mobile`, `/adempiere`, record vector failures instead of aborting, and are driven with `--continue`. **Executed and green** in run 33379849664 on commit `9ba62875d`: 129 observations, zero vector failures across all six shards, and the strict aggregate `verifyPhase5fRuntimeEvidence` validated 82 legacy routes, all 37 eligible modern routes and 45 explicitly unexecuted modern routes |
 | Full product build, no DB restore | `ant build -Dnodbrestore=true` | Authoritative underlying Ant reactor; prefer the guarded Phase 3 lifecycle for CI |
 | Full product build with DB restore/migrations | `ant build -Dnodbrestore=false` | Database-affecting underlying reactor; run only against an approved disposable environment |
 | Gradle module build | `./gradlew build --dependency-verification=strict` | Reproducible Phase 2 gate on JDK 21 with Java 21 bytecode; omits quarantined Ant-only deployables |
@@ -108,8 +145,8 @@ by a phase become canonical only after that phase's exit criteria prove them.
 | Typecheck | Java compilation through the applicable Ant/Gradle build | No separate typecheck command |
 | End-to-end/contract | None currently canonical | Introduced incrementally in Phases 2-5 |
 
-Existing CI lives under `.github/workflows/`. Phase 5e includes 31 Gradle
-projects: Phase 4 promoted the XFire-free web-service seam, and Phase 5e added
+Existing CI lives under `.github/workflows/`. The build has the root plus 31
+included Gradle projects: Phase 4 promoted the XFire-free web-service seam, and Phase 5e added
 the Gradle-only `:org.adempiere.cohort` routing project. That project has no Ant
 reactor entry, because its bridge source set compiles against classes extracted
 from the materialized frozen Phase 5b WAR rather than against anything the Ant
@@ -119,7 +156,8 @@ and the five ZK package jars are materialized from the frozen Phase 5b commit in
 an isolated worktree, and Gradle owns the modern `/webui-modern` WAR. From Phase
 5e the deployed Tomcat 9 `webui.war` is *derived* from that frozen artifact by
 `derivePhase5eLegacyWebWar`; the pristine copy remains `lib/webuiOriginal.war`
-and is the rollback material. Phase 3 preserved all 32
+and is the rollback material. Phase 5f adds isolated generated source sets and
+five WAR tasks under existing projects, not another Gradle project. Phase 3 preserved all 32
 Ant reactor entries and added explicit no-database and
 installed-product lanes, and retains the three-test disposable runtime smoke.
 The `jbossfacet` surface is explicitly quarantined because its checked-in JBoss
@@ -140,8 +178,9 @@ checks to mark required are `Contracts` and `Current-phase database smoke`.
 `docs/modernization/ci-topology.md`. Every pull request runs `Contracts` - a
 single Gradle invocation of the head of the phase-gate chain plus
 `phase5cFinalVerification`, which together schedule exactly the same task set as
-the former six per-phase jobs - and `Current-phase database smoke`, the runtime
-gate for the phase under active development. The remaining database-backed
+the former seven per-phase jobs (287 tasks, versus 882 across those jobs) - and
+`Current-phase database smoke`, the runtime gate for the phase under active
+development, currently `phase5fJakartaWebRoutesSmoke`, which is green. The remaining database-backed
 smokes run post-merge on `push` to `develop`, nightly, and on demand as
 `Regression matrix`.
 

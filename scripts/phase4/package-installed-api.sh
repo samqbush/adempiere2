@@ -9,8 +9,8 @@ fi
 repo_root=$(cd "$1" && pwd -P)
 distribution_home=$(cd "$2" && pwd -P)
 version=$3
-expected_home="$repo_root/install/build/Adempiere"
-output_dir="$repo_root/install/build"
+expected_home="$repo_root/build/phase3/release/Adempiere"
+output_dir="$repo_root/build/phase3/release"
 
 if [[ "$distribution_home" != "$expected_home" || "$version" != "394LTS" ]]; then
 	echo "Refusing to package outside the Phase 4 release staging tree." >&2

@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Phase 5d Servlet 6 deployment descriptor for the functional /webui-modern
-  ADempiere ZK CE 10.3.0.1-jakarta slice.
+  Servlet 6 deployment descriptor for the functional /webui-modern ADempiere
+  ZK CE 10.3.0.1-jakarta slice, including the Phase 5f inherited routes.
 
   This descriptor was written by hand and reviewed route by route. Eclipse
   Transformer does not migrate Servlet 2.4 schemas (gradle/phase5/transformer-rules.tsv
   records `servlet-descriptors  manual-migration`), so nothing here is a
   mechanical rewrite of zkwebui/WEB-INF/web.xml.
 
-  SCOPE - only the routes the Phase 5d walking skeleton needs:
+  SCOPE - the Phase 5d walking skeleton plus the two reviewed Phase 5f
+  inherited-route decisions:
 
     login -> role selection -> desktop/menu -> read-only "Error Message" window
 
@@ -22,15 +23,15 @@
     * auEngine  -> /zkau/*         (ZK asynchronous update engine; also serves
       the ZK client resources under /zkau/web/**)
     * requestFilter -> /*          (ADempiere SessionTimeoutFilter)
+    * timelineFeed -> /timeline    (source-native Jakarta read-only XML feed)
+    * the exact historical theme/default/css/theme.css.dsp resource is served
+      by the container default servlet as byte-identical Phase 5d static CSS.
+      There is deliberately no *.dsp servlet mapping, so every other DSP path
+      is absent and returns 404.
 
-  DELIBERATELY NOT MIGRATED (Phase 5f owns them, per MODERNIZATION_PLAN.md
-  task 5f "Migrate non-ZK servlets, JSP/Jakarta Tags/TLD assets, and inherited
-  routes by independently reversible context"):
-    * dspLoader  *.dsp  - the ZK 3.6 org.zkoss.web.servlet.dsp.InterpreterServlet
-      and the whole .dsp theme. ZK CE 10 does not ship the DSP interpreter, and
-      the Phase 5d entry page therefore links reviewed static CSS instead.
-    * timelineFeed /timeline - org.adempiere.webui.TimelineEventFeed; the
-      timeline dashboard gadget is not on the Phase 5d route.
+  DELIBERATELY NOT MIGRATED:
+    * the ZK 3.6 org.zkoss.web.servlet.dsp.InterpreterServlet, wildcard *.dsp
+      mapping, and all five legacy DSP/JSP TLDs.
     * The two java/AdempiereDS and java/AdempiereSRDS <resource-ref> entries.
       The Phase 5d loopback runtime connects through ADEMPIERE_HOME's
       AdempiereEnv.properties exactly as the Phase 4 CXF WAR does, so declaring
@@ -86,6 +87,16 @@
 	<servlet-mapping>
 		<servlet-name>auEngine</servlet-name>
 		<url-pattern>/zkau/*</url-pattern>
+	</servlet-mapping>
+
+	<servlet>
+		<description>Read-only XML event feed for the timeline gadget</description>
+		<servlet-name>timelineFeed</servlet-name>
+		<servlet-class>org.adempiere.webui.TimelineEventFeed</servlet-class>
+	</servlet>
+	<servlet-mapping>
+		<servlet-name>timelineFeed</servlet-name>
+		<url-pattern>/timeline</url-pattern>
 	</servlet-mapping>
 
 	<!--
@@ -151,6 +162,10 @@
 	<!-- Only the media types the Phase 5d routes actually serve. -->
 	<mime-mapping>
 		<extension>css</extension>
+		<mime-type>text/css</mime-type>
+	</mime-mapping>
+	<mime-mapping>
+		<extension>dsp</extension>
 		<mime-type>text/css</mime-type>
 	</mime-mapping>
 	<mime-mapping>

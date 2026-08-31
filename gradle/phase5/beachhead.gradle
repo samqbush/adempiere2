@@ -3,7 +3,7 @@ def phase5cModernWar = rootProject.layout.projectDirectory.file(
 def phase5cInstalledHome =
 	rootProject.layout.buildDirectory.dir('phase3/runtime/Adempiere')
 def phase5cReleaseHome =
-	rootProject.layout.projectDirectory.dir('install/build/Adempiere')
+	rootProject.layout.buildDirectory.dir('phase3/release/Adempiere').get()
 
 tasks.register('stagePhase5cInstalledWeb') {
 	group = 'verification'
@@ -86,8 +86,8 @@ tasks.register('verifyPhase5cWebOverlay', Exec) {
 		rootProject.file('scripts/phase5/verify-web-overlay.sh'),
 		phase5cInstalledHome.get().asFile,
 		phase5cReleaseHome.asFile,
-		rootProject.file('install/build/Adempiere_394LTS.zip'),
-		rootProject.file('install/build/Adempiere_394LTS.tar.gz'),
+		rootProject.file('build/phase3/release/Adempiere_394LTS.zip'),
+		rootProject.file('build/phase3/release/Adempiere_394LTS.tar.gz'),
 		rootProject.file(
 			'org.adempiere.webservice/build/libs/ADInterface-Modern-1.0.war'))
 }
@@ -150,8 +150,8 @@ tasks.register('verifyPhase5cRollbackArtifacts', Exec) {
 		'bash',
 		rootProject.file('scripts/phase5/verify-web-overlay-rollback.sh'),
 		phase5cInstalledHome.get().asFile,
-		rootProject.file('install/build/Adempiere_394LTS.zip'),
-		rootProject.file('install/build/Adempiere_394LTS.tar.gz'),
+		rootProject.file('build/phase3/release/Adempiere_394LTS.zip'),
+		rootProject.file('build/phase3/release/Adempiere_394LTS.tar.gz'),
 		rootProject.file(
 			'org.adempiere.webservice/build/libs/ADInterface-Modern-1.0.war'),
 		rootProject.layout.buildDirectory.dir(

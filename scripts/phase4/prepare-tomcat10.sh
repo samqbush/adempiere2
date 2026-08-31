@@ -67,8 +67,58 @@ mv "$extracted" "$target_dir"
 sed -i.bak \
 	-e 's/<Server port="8005"/<Server port="-1"/' \
 	-e "s/port=\"8080\" protocol=\"HTTP\\/1.1\"/address=\"127.0.0.1\" port=\"$api_port\" protocol=\"HTTP\\/1.1\"/" \
+	-e 's/<Host name="localhost"/<Host startStopThreads="6" name="localhost"/' \
 	"$target_dir/conf/server.xml"
 rm "$target_dir/conf/server.xml.bak"
+# Deploying seven contexts one after another is what made the Phase 5f routed
+# lane exceed its readiness budget. startStopThreads is inherited from
+# ContainerBase and is what HostConfig.deployDescriptors()/deployWARs() use to
+# size their executor; the Tomcat 9 and 10.1 default is 1, i.e. fully
+# sequential. An explicit bounded value is used rather than 0, because 0 means
+# availableProcessors() and CI runner CPU topology varies.
+if ! grep -Fq '<Host startStopThreads="6" name="localhost"' \
+		"$target_dir/conf/server.xml"; then
+	echo "Failed to set startStopThreads on the Tomcat 10 host" >&2
+	exit 1
+fi
+
+# Default JAR scan policy for every context that does not ship its own
+# <JarScanner>. ADInterface.war is auto-deployed from webapps with no context
+# descriptor, and its TLD scan alone cost roughly 21 minutes. Its WEB-INF/lib
+# contains no *.tld, no web-fragment.xml, no ServletContainerInitializer and no
+# META-INF/resources entry, which scripts/phase5/verify-jar-scan-policy.py
+# proves and keeps true. Tomcat processes conf/context.xml BEFORE the
+# per-application descriptor, so a context that declares its own <JarScanner>
+# (every Phase 5e/5f context does) replaces this element rather than merging
+# with it.
+context_xml="$target_dir/conf/context.xml"
+if [[ "$(grep -c '</Context>' "$context_xml")" != "1" ]]; then
+	echo "Unexpected conf/context.xml shape in Tomcat $tomcat_version" >&2
+	exit 1
+fi
+python3 - "$context_xml" <<'PY'
+import sys
+
+path = sys.argv[1]
+with open(path, encoding='utf-8') as handle:
+	text = handle.read()
+element = (
+	'  <JarScanner scanClassPath="false">\n'
+	'    <JarScanFilter tldSkip="*.jar" pluggabilitySkip="*.jar"/>\n'
+	'  </JarScanner>\n'
+	'</Context>'
+)
+if text.count('</Context>') != 1:
+	raise SystemExit('conf/context.xml does not have exactly one </Context>')
+with open(path, 'w', encoding='utf-8') as handle:
+	handle.write(text.replace('</Context>', element))
+PY
+if ! grep -Fq '<JarScanner scanClassPath="false">' "$context_xml" ||
+		! grep -Fq '<JarScanFilter tldSkip="*.jar" pluggabilitySkip="*.jar"/>' \
+		"$context_xml"; then
+	echo "Failed to install the default JAR scan filter in conf/context.xml" >&2
+	exit 1
+fi
 rm -rf \
 	"$target_dir/webapps/docs" \
 	"$target_dir/webapps/examples" \

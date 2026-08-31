@@ -34,7 +34,7 @@ publishes Java 21 bytecode:
   verifyJdepsInternals --dependency-verification=strict
 ```
 
-This covers the root and 29 included Gradle projects. It is not a replacement
+This covers the root and 31 included Gradle projects. It is not a replacement
 for the full Ant distribution build.
 
 Phase 3 adds guarded Gradle orchestration around the authoritative Ant product
@@ -182,6 +182,49 @@ Both Phase 5e gates are executed and green. The database-backed smoke records
 all 23 public-origin cohort, isolation, lifecycle, SOAP-coexistence, and
 secret-hygiene rows as passing; see
 `docs/modernization/phase-5e-evidence.md`.
+
+Phase 5f is implemented and active on `phase-5f-jakarta-web-routes`, but it is
+not complete or merged:
+
+```bash
+./gradlew phase5fFinalVerification --dependency-verification=strict
+./gradlew phase5fJakartaWebRoutesSmoke \
+  -Pphase3DbSystemPassword='<password>' \
+  --dependency-verification=strict
+```
+
+The database-neutral gate has been executed green twice. It closes the scope at
+82 deployed and 30 explicitly non-deployed mappings, builds isolated generated
+Jakarta source/web trees without rewriting legacy sources, precompiles all 25
+retained `/wstore` JSPs, and produces five deterministic modern context WARs for
+`/admin`, `/`, `/mobile`, `/adempiere`, and `/wstore`. The retained Phase 5e
+`webui-modern.war` now includes the source-native read-only `/timeline` route
+and serves only the exact historical theme DSP path as static Phase 5d CSS;
+every other DSP path, the interpreter, and its five vendor TLDs remain absent.
+
+Routing is whole-context, same-path, sticky for existing sessions, independently
+policy-bound, and fail-closed without legacy fallback. The installed product and
+both 394LTS archives stage one Phase 5f WAR per context under
+`tomcat10-api/phase5f/`, preserve Phase 4 CXF and Phase 5e `/webui`, and retain
+pristine rollback WARs. `/mobile` and `/adempiere` remain disabled until Phase
+5g; `/admin` remains legacy pending named consumer ownership; `/` and `/wstore` are
+the two eligible modern contexts and both are now observed.
+
+`phase5fJakartaWebRoutesSmoke` is implemented as six public-origin shards plus
+Phase 4 SOAP coexistence. It is **Executed and green** in run 33379849664 on commit `9ba62875d`, which recorded
+129 public-origin observations with zero vector failures - `/` (16), `/wstore`
+(68), `/webui` (6), `/admin` (4), `/mobile` (14), `/adempiere` (21) - and passed
+`verifyPhase5fSwitchBaseline`, `capturePhase5fSoapCoexistence`,
+`verifyPhase5fBackgroundProcessorsQuiesced` and the strict aggregate
+`verifyPhase5fRuntimeEvidence`, which validated 82 legacy routes, all 37
+eligible modern routes and 45 explicitly unexecuted modern routes. The 82 route observations and
+their route-specific database effects are therefore observed, and the contract
+ledgers carry the executed marker. The 25 `/wstore` JSP precompile rows stay
+`contract-only-runtime-observation-pending`, because only three of those pages
+are reached by a route vector. T5e-1 remains open;
+T5f-1 closes in Phase 5h. Required checks and branch protection remain a manual
+repository-administrator action. See
+`docs/modernization/phase-5f-evidence.md`.
 
 The Tomcat smoke requires HTTP 2xx/3xx from each deployed context except
 `ADInterface`, whose unrouted base path is explicitly expected to return 404;

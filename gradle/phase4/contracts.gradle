@@ -1081,7 +1081,7 @@ tasks.register('stagePhase4ReleaseApi') {
 	description = 'Stages the modern SOAP WAR and runtime metadata in the release distribution tree'
 	dependsOn ':org.adempiere.webservice:verifyModernSoapWar'
 	doLast {
-		def distributionHome = rootProject.file('install/build/Adempiere')
+		def distributionHome = rootProject.file('build/phase3/release/Adempiere')
 		if (!distributionHome.isDirectory()) {
 			throw new GradleException(
 				"Phase 4 release staging home is missing: ${distributionHome}")
@@ -1105,9 +1105,9 @@ tasks.register('preparePhase4ReleaseApi', Exec) {
 	dependsOn tasks.named('stagePhase4ReleaseApi')
 	commandLine(
 		file('scripts/phase4/prepare-tomcat10.sh'),
-		rootProject.file('install/build/Adempiere/tomcat10-api'),
-		rootProject.file('install/build/Adempiere/lib/ADInterface-Modern-1.0.war'),
-		rootProject.file('install/build/Adempiere'))
+		rootProject.file('build/phase3/release/Adempiere/tomcat10-api'),
+		rootProject.file('build/phase3/release/Adempiere/lib/ADInterface-Modern-1.0.war'),
+		rootProject.file('build/phase3/release/Adempiere'))
 }
 
 tasks.register('packagePhase4ReleaseApi', Exec) {
@@ -1117,7 +1117,7 @@ tasks.register('packagePhase4ReleaseApi', Exec) {
 	commandLine(
 		file('scripts/phase4/package-installed-api.sh'),
 		projectDir,
-		rootProject.file('install/build/Adempiere'),
+		rootProject.file('build/phase3/release/Adempiere'),
 		'394LTS')
 }
 
@@ -1127,8 +1127,8 @@ tasks.register('verifyPhase4ReleaseApi', Exec) {
 	dependsOn tasks.named('packagePhase4ReleaseApi')
 	commandLine(
 		file('scripts/phase4/verify-release-api.sh'),
-		rootProject.file('install/build/Adempiere_394LTS.zip'),
-		rootProject.file('install/build/Adempiere_394LTS.tar.gz'),
+		rootProject.file('build/phase3/release/Adempiere_394LTS.zip'),
+		rootProject.file('build/phase3/release/Adempiere_394LTS.tar.gz'),
 		file('gradle/phase4/installed-artifacts.txt'))
 }
 
@@ -1175,7 +1175,9 @@ tasks.register('phase4InstalledApi', Exec) {
 gradle.projectsEvaluated {
 	project(':org.adempiere.webservice')
 		.tasks.named('compileLegacyWebService') {
-			mustRunAfter tasks.named('phase3AntNoDatabaseBuild')
+			mustRunAfter(
+				tasks.named('phase3AntNoDatabaseBuild'),
+				tasks.named('phase3AntDatabaseBuild'))
 		}
 	[
 		'compileCxfJava',

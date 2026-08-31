@@ -1,0 +1,6 @@
+deviation_id	route_id	legacy_observation	phase5f_rule	database_effect_rule	rationale	closing_gate
+DEV-P5F-ERR-01	/::AdRedirector::/AdRedirector	GET-without-ad-input=500	GET-without-ad-input=400	no-new-write	Missing required client input is a client error, not an internal failure.	phase5fJakartaWebRoutesSmoke
+DEV-P5F-ERR-02	/::Community::/communityServlet	GET-without-transaction-name=500	GET-without-transaction-name=400	no-new-write	Missing required transaction input is a client error, not an unhandled exception.	phase5fJakartaWebRoutesSmoke
+DEV-P5F-ERR-03	/::XMLBroadcast::/xml/*	GET-missing-resource=500	GET-missing-resource=404	no-new-write	An absent XML resource is not an internal failure.	phase5fJakartaWebRoutesSmoke
+DEV-P5F-ERR-04	/wstore::PaymentServlet::/paymentServlet	plain-GET=500	plain-GET=405	no-new-write	Payment mutation is not defined for plain GET.	phase5fJakartaWebRoutesSmoke
+DEV-P5F-DSP-01	/webui::dspLoader::*.dsp	historical-theme-resource=200-through-ZK3.6-DSP	GET-and-HEAD-exact-historical-theme-path=200-static-Phase5d-CSS;all-other-dsp=404	no-write	Do not restore the ZK 3.6 DSP interpreter or its five vendor TLDs.	phase5fJakartaWebRoutesSmoke

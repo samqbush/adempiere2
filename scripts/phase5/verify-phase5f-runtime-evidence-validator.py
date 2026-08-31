@@ -1,0 +1,555 @@
+#!/usr/bin/env python3
+"""Prove the runtime-evidence validator rejects incomplete or synthetic ledgers."""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import shutil
+import subprocess
+from pathlib import Path
+
+
+DIRS = {"/": "ROOT", "/adempiere": "adempiere", "/admin": "admin", "/mobile": "mobile", "/webui": "webui", "/wstore": "wstore"}
+ELIGIBLE = {"/", "/wstore"}
+CONFIDENTIAL_WSTORE = {
+    "/wstore/login.jsp", "/wstore/loginServlet",
+    "/wstore/checkOutServlet", "/wstore/orderServlet",
+}
+FIELDS = [
+    "route_id", "context", "mode", "method", "auth_enforcement", "traffic_class",
+    "status", "expected_status", "headers_sha256", "body_sha256", "set_cookie",
+    "location", "header_contract", "cookie_contract", "tls_contract",
+    "body_contract", "session_contract", "database_before",
+    "database_after", "database_tables_before", "database_tables_after",
+    "database_changed_tables", "database_effect_contract",
+    "owned_tables_or_group",
+    "public_origin_only",
+]
+
+
+def invoke(
+    validator: Path, root: Path, contract: Path, effects: Path,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            "python3", str(validator), "--evidence-root", str(root),
+            "--contract", str(contract), "--effects", str(effects),
+            "--summary", str(root / "summary.tsv"),
+        ],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False,
+    )
+
+
+def expected_modern_status(value: str) -> str:
+    if value.startswith("preserve-legacy-status:"):
+        return value.rsplit(":", 1)[1]
+    if value.startswith("public-http="):
+        parts = dict(
+            part.split("=", 1) for part in value.split(";") if "=" in part
+        )
+        if set(parts) != {"public-http", "public-https"} or not all(
+                item.isdigit() for item in parts.values()):
+            raise SystemExit(f"unresolved modern status contract: {value}")
+        return parts["public-https"]
+    return value.rsplit("=", 1)[-1]
+
+
+def confidential(path: str) -> bool:
+    return any(path == owned or path.startswith(owned + "/")
+               for owned in CONFIDENTIAL_WSTORE)
+
+
+# Any status works for the synthetic baseline; what the fixture must exercise
+# is that modern parity is read from the baseline row rather than the contract.
+CONFIDENTIAL_HTTPS_FIXTURE_STATUS = "200"
+
+
+def fixture_row(
+    route: dict[str, str], effect: dict[str, str],
+    context: str, mode: str, status: str,
+    *, public: bool = True, set_cookie: str = "false",
+    location: str = "none", expected: str | None = None,
+) -> dict[str, str]:
+    return {
+        "route_id": route["route_id"], "context": context,
+        "mode": mode, "method": route["method"],
+        "auth_enforcement": route["auth_enforcement"],
+        "traffic_class": route["traffic_class"],
+        "status": status,
+        "expected_status": status if expected is None else expected,
+        "headers_sha256": "1" * 64, "body_sha256": "2" * 64,
+        "set_cookie": set_cookie, "database_before": "3" * 64,
+        "location": location, "header_contract": "fixture-header",
+        "cookie_contract": "fixture-cookie",
+        "tls_contract": "fixture-tls",
+        "body_contract": "fixture-body",
+        "session_contract": "fixture-session",
+        "database_after": "3" * 64,
+        "database_tables_before": "{}",
+        "database_tables_after": "{}",
+        "database_changed_tables": "none",
+        "database_effect_contract": effect["effect_contract"],
+        "owned_tables_or_group": effect["owned_tables_or_group"],
+        "public_origin_only": "true" if public else "false",
+    }
+
+
+def rewrite_mode_field(
+    root: Path, directory: str, mode: str, changes: dict[str, str],
+    *, also_modes: tuple[str, ...] = (),
+    also_changes: dict[str, str] | None = None,
+) -> None:
+    """Rewrites named fields on the first observation recorded in `mode`.
+
+    `also_modes` applies `also_changes` to the same route in those modes, so a
+    mutant can move two legs of one route in lockstep.
+    """
+    path = root / directory / "route-observations.tsv"
+    with path.open(encoding="utf-8", newline="") as stream:
+        reader = csv.DictReader(stream, delimiter="\t")
+        fields = reader.fieldnames
+        rows = list(reader)
+    for row in rows:
+        if row["mode"] == mode:
+            row.update(changes)
+            route_id = row["route_id"]
+            break
+    else:
+        raise RuntimeError(f"fixture has no {mode} observation")
+    if also_modes:
+        matched = [
+            row for row in rows
+            if row["route_id"] == route_id and row["mode"] in also_modes
+        ]
+        if len(matched) != len(also_modes):
+            raise RuntimeError(
+                f"fixture is missing {also_modes} for {route_id}")
+        for row in matched:
+            row.update(also_changes or {})
+    with path.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=fields, delimiter="\t")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def duplicate_mode_row(
+    root: Path, directory: str, mode: str, changes: dict[str, str],
+) -> None:
+    """Inserts a shadowing duplicate ahead of the first `mode` observation."""
+    path = root / directory / "route-observations.tsv"
+    with path.open(encoding="utf-8", newline="") as stream:
+        reader = csv.DictReader(stream, delimiter="\t")
+        fields = reader.fieldnames
+        rows = list(reader)
+    for index, row in enumerate(rows):
+        if row["mode"] == mode:
+            shadow = dict(row)
+            shadow.update(changes)
+            rows.insert(index, shadow)
+            break
+    else:
+        raise RuntimeError(f"fixture has no {mode} observation")
+    with path.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=fields, delimiter="\t")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def drop_mode_row(root: Path, directory: str, mode: str) -> None:
+    """Removes the first observation recorded in `mode`."""
+    path = root / directory / "route-observations.tsv"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    for index, line in enumerate(lines):
+        if f"\t{mode}\t" in line:
+            del lines[index]
+            path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            return
+    raise RuntimeError(f"fixture has no {mode} observation")
+
+
+def mark_mode_non_public(root: Path, directory: str, mode: str) -> None:
+    path = root / directory / "route-observations.tsv"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    for index, line in enumerate(lines):
+        if f"\t{mode}\t" in line:
+            fields = line.split("\t")
+            fields[-1] = "false"
+            lines[index] = "\t".join(fields)
+            path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            return
+    raise RuntimeError(f"fixture has no {mode} observation")
+
+
+def mutate_first_row(root: Path, directory: str, changes: dict[str, str]) -> None:
+    path = root / directory / "route-observations.tsv"
+    with path.open(encoding="utf-8", newline="") as stream:
+        rows = list(csv.DictReader(stream, delimiter="\t"))
+    rows[0].update(changes)
+    with path.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(
+            stream, fieldnames=list(rows[0]), delimiter="\t",
+            lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def mutate_rows_where(
+    root: Path, directory: str, predicate, changes: dict[str, str],
+) -> None:
+    path = root / directory / "route-observations.tsv"
+    with path.open(encoding="utf-8", newline="") as stream:
+        rows = list(csv.DictReader(stream, delimiter="\t"))
+    matched = 0
+    for row in rows:
+        if predicate(row):
+            row.update(changes)
+            matched += 1
+            break
+    if matched == 0:
+        raise SystemExit(
+            f"mutation fixture has no matching row in {directory}")
+    with path.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(
+            stream, fieldnames=list(rows[0]), delimiter="\t",
+            lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--repo-root", type=Path, required=True)
+    parser.add_argument("--work-dir", type=Path, required=True)
+    parser.add_argument("--report", type=Path, required=True)
+    args = parser.parse_args()
+    repo = args.repo_root.resolve()
+    contract = repo / "contracts/phase5f-jakarta-web-v1/route-validation.tsv"
+    effects_path = (
+        repo / "contracts/phase5f-jakarta-web-v1/database-effect-ownership.tsv"
+    )
+    routes = list(csv.DictReader(contract.open(encoding="utf-8", newline=""), delimiter="\t"))
+    effects = {
+        row["route_id"]: row for row in csv.DictReader(
+            effects_path.open(encoding="utf-8", newline=""), delimiter="\t"
+        )
+    }
+    validator = repo / "scripts/phase5/validate-phase5f-runtime-evidence.py"
+    if args.work_dir.exists():
+        shutil.rmtree(args.work_dir)
+    fixture = args.work_dir / "complete-fixture"
+    for context, directory_name in DIRS.items():
+        directory = fixture / directory_name
+        directory.mkdir(parents=True)
+        selected = [row for row in routes if row["context"] == context]
+        evidence_rows = [
+            fixture_row(
+                route, effects[route["route_id"]], context,
+                "legacy-public", route["legacy_status"])
+            for route in selected
+        ]
+        if context in ELIGIBLE:
+            for route in selected:
+                is_confidential = (
+                    context == "/wstore" and confidential(route["path"])
+                )
+                if is_confidential:
+                    # The frozen oracle only captured these over public HTTP,
+                    # so the modern HTTPS response is held to a legacy HTTPS
+                    # observation taken in the same run rather than to the
+                    # contract status, which governs the transport redirect.
+                    evidence_rows.append(fixture_row(
+                        route, effects[route["route_id"]], context,
+                        "legacy-public-confidential",
+                        CONFIDENTIAL_HTTPS_FIXTURE_STATUS,
+                        expected="record-only",
+                    ))
+                    evidence_rows.append(fixture_row(
+                        route, effects[route["route_id"]], context,
+                        "modern-public-tls-redirect", "302",
+                        location="https://public.example" + route["path"],
+                    ))
+                evidence_rows.append(fixture_row(
+                    route, effects[route["route_id"]], context,
+                    "modern-public-confidential"
+                    if is_confidential else "modern-public",
+                    CONFIDENTIAL_HTTPS_FIXTURE_STATUS if is_confidential
+                    else expected_modern_status(
+                        route["modern_status_contract"]),
+                    public=True,
+                ))
+            if context == "/wstore":
+                bootstrap = next(
+                    route for route in selected
+                    if route["route_id"].startswith("/wstore::Index::")
+                )
+                evidence_rows.extend([
+                    fixture_row(
+                        bootstrap, effects[bootstrap["route_id"]], context,
+                        "modern-session-bootstrap",
+                        expected_modern_status(
+                            bootstrap["modern_status_contract"]),
+                        set_cookie="true",
+                    ),
+                    fixture_row(
+                        bootstrap, effects[bootstrap["route_id"]], context,
+                        "modern-session-follow-up",
+                        expected_modern_status(
+                            bootstrap["modern_status_contract"]),
+                    ),
+                ])
+        else:
+            (directory / "modern-unexecuted.tsv").write_text(
+                "context\troute_count\treason\n"
+                f"{context}\t{len(selected)}\tvalidator-fixture-unexecuted\n",
+                encoding="utf-8",
+            )
+        (directory / "provenance.json").write_text(json.dumps({
+            "context": context, "public_origin": "http://127.0.0.1:8888",
+            # The real HEAD: the validator now compares this against the
+            # checked-out commit, so a literal placeholder would make the
+            # baseline fixture unrepresentative of passing evidence.
+            "git_head": subprocess.run(
+                ["git", "rev-parse", "HEAD"], check=True,
+                capture_output=True, text=True,
+            ).stdout.strip(),
+            "failure_count": 0,
+            "database_marker": "ADempiere Phase 3 disposable database",
+            "route_count": len(selected),
+            "observation_count": len(evidence_rows),
+            "client": "python-urllib-public-origin",
+            "legacy_cookie_isolation": "fresh-cookie-jar-per-route",
+            "modern_cookie_isolation": (
+                "fresh-cookie-jar-per-route"
+                if context in ELIGIBLE else "not-applicable"
+            ),
+            "public_https_origin": "https://127.0.0.1:8444",
+            "modern_execution": (
+                "all-routes-public-http-or-https"
+                if context in ELIGIBLE else "explicitly-unexecuted"
+            ),
+        }, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        # Positive control for the ID-allocation allowance. Every other
+        # fixture row records `none`, so a regression that made
+        # with_id_allocation a no-op would leave all mutants "detected" and
+        # only surface against real CI evidence. One row per context that
+        # already owns AD_Session records a permitted AD_Session insert with
+        # its consequent AD_Sequence update, so the clean fixture fails unless
+        # the allowance genuinely exists.
+        for row in evidence_rows:
+            owned = row["owned_tables_or_group"].lower()
+            if row["database_effect_contract"] in {
+                "session-bootstrap-owned",
+                "read-only-after-session-bootstrap",
+                "existing-phase5d-session-contract",
+            } and "ad_session" in owned:
+                row.update({
+                    "database_after": "5" * 64,
+                    "database_tables_before":
+                        '{"ad_session":"a","ad_sequence":"a"}',
+                    "database_tables_after":
+                        '{"ad_session":"b","ad_sequence":"b"}',
+                    "database_changed_tables": "ad_session,ad_sequence",
+                })
+                break
+        with (directory / "route-observations.tsv").open("w", encoding="utf-8", newline="") as stream:
+            writer = csv.DictWriter(stream, FIELDS, delimiter="\t", lineterminator="\n")
+            writer.writeheader()
+            writer.writerows(evidence_rows)
+    (fixture / "phase4-soap-coexistence.tsv").write_text(
+        "phase4_soap_corpus\tpass\twhile-phase5f-route-shards-active\n",
+        encoding="utf-8",
+    )
+    (fixture / "secret-hygiene.tsv").write_text("secret_hygiene\tpass\n", encoding="utf-8")
+    if invoke(validator, fixture, contract, effects_path).returncode != 0:
+        raise SystemExit("complete validator fixture was rejected")
+
+    mutations = {
+        "missing-route": lambda root: (root / "ROOT/route-observations.tsv").write_text(
+            "\n".join((root / "ROOT/route-observations.tsv").read_text().splitlines()[:-1]) + "\n",
+            encoding="utf-8",
+        ),
+        "wrong-status": lambda root: (root / "admin/route-observations.tsv").write_text(
+            (root / "admin/route-observations.tsv").read_text().replace("\t401\t401\t", "\t200\t401\t", 1),
+            encoding="utf-8",
+        ),
+        "non-public-origin": lambda root: (root / "mobile/route-observations.tsv").write_text(
+            (root / "mobile/route-observations.tsv").read_text().replace("\ttrue\n", "\tfalse\n", 1),
+            encoding="utf-8",
+        ),
+        "confidential-non-public-origin": lambda root:
+            mark_mode_non_public(
+                root, "wstore", "modern-public-confidential"),
+        # The modern HTTPS response must be held to the legacy HTTPS response
+        # observed in the same run. If it were still scored against the
+        # contract status, moving the baseline would go unnoticed.
+        "confidential-parity-drift": lambda root: rewrite_mode_field(
+            root, "wstore", "legacy-public-confidential",
+            {"status": "503"}),
+        "missing-confidential-baseline": lambda root: drop_mode_row(
+            root, "wstore", "legacy-public-confidential"),
+        # A baseline that was itself asserted against something is not a
+        # baseline; record-only is what makes it independent.
+        "asserted-confidential-baseline": lambda root: rewrite_mode_field(
+            root, "wstore", "legacy-public-confidential",
+            {"expected_status": "200"}),
+        "confidential-baseline-non-public-origin": lambda root:
+            mark_mode_non_public(
+                root, "wstore", "legacy-public-confidential"),
+        # Both confidential legs cross the same public HTTPS ingress, so a
+        # broken ingress fails both identically and satisfies parity. Only a
+        # floor on the baseline itself can tell that apart from agreement.
+        "confidential-lane-failure-in-lockstep": lambda root: rewrite_mode_field(
+            root, "wstore", "legacy-public-confidential",
+            {"status": "502"}, also_modes=("modern-public-confidential",),
+            also_changes={"status": "502", "expected_status": "502"}),
+        # Keyed by route, a duplicate would shadow the genuine baseline and
+        # hand modern parity to whichever row was written last.
+        "duplicate-confidential-baseline": lambda root: duplicate_mode_row(
+            root, "wstore", "legacy-public-confidential", {"status": "503"}),
+        "missing-public-https-provenance": lambda root: (
+            root / "wstore/provenance.json"
+        ).write_text(
+            json.dumps({
+                key: value for key, value in json.loads(
+                    (root / "wstore/provenance.json").read_text()
+                ).items() if key != "public_https_origin"
+            }, sort_keys=True, indent=2) + "\n",
+            encoding="utf-8",
+        ),
+        "database-write": lambda root: (root / "ROOT/route-observations.tsv").write_text(
+            (root / "ROOT/route-observations.tsv").read_text().replace(
+                "3" * 64 + "\t" + "3" * 64,
+                "3" * 64 + "\t" + "4" * 64,
+                1,
+            ),
+            encoding="utf-8",
+        ),
+        # The aggregate digest is derived from the table-grain digests, so the
+        # two can only disagree if the ledger was edited after collection.
+        "aggregate-table-snapshot-disagreement": lambda root: mutate_first_row(
+            root, "ROOT", {"database_after": "5" * 64}),
+        "wrong-database-contract": lambda root: mutate_first_row(
+            root, "ROOT",
+            {"database_effect_contract": "session-bootstrap-owned"}),
+        "wrong-database-group": lambda root: mutate_first_row(
+            root, "ROOT", {"owned_tables_or_group": "AD_Session"}),
+        "unexpected-owned-snapshot-write": lambda root: mutate_first_row(
+            root, "ROOT", {
+                "database_after": "4" * 64,
+                "database_tables_before": '{"c_order":"a"}',
+                "database_tables_after": '{"c_order":"b"}',
+                "database_changed_tables": "c_order",
+            }),
+        # AD_Sequence is permitted only as a consequence of an already
+        # permitted insert. Under a no-write contract it must still fail, or
+        # the ID-allocation allowance would become a universal write permit.
+        "id-allocation-under-no-write": lambda root: mutate_first_row(
+            root, "ROOT", {
+                "database_after": "4" * 64,
+                "database_tables_before": '{"ad_sequence":"a"}',
+                "database_tables_after": '{"ad_sequence":"b"}',
+                "database_changed_tables": "ad_sequence",
+            }),
+        # W_Click is owned by the click-tracking route alone, through its
+        # ownership row, not by the read-only-plus-session-basket contract.
+        "unowned-click-table-write": lambda root: mutate_rows_where(
+            root, "wstore",
+            lambda row: (
+                row["database_effect_contract"]
+                == "read-only-plus-session-basket"
+                and "w_click" not in row["owned_tables_or_group"].lower()
+            ),
+            {
+                "database_after": "4" * 64,
+                "database_tables_before": '{"w_click":"a"}',
+                "database_tables_after": '{"w_click":"b"}',
+                "database_changed_tables": "w_click",
+            }),
+        # Evidence carried over from an earlier commit is otherwise
+        # indistinguishable from evidence this run produced.
+        "stale-commit-provenance": lambda root: (
+            root / "ROOT/provenance.json"
+        ).write_text(
+            json.dumps({
+                **json.loads((root / "ROOT/provenance.json").read_text()),
+                "git_head": "0" * 40,
+            }, sort_keys=True, indent=2) + "\n",
+            encoding="utf-8",
+        ),
+        # A shard that records failures and continues must not be able to
+        # publish a passing aggregate.
+        "recorded-route-failures": lambda root: (
+            root / "ROOT/provenance.json"
+        ).write_text(
+            json.dumps({
+                **json.loads((root / "ROOT/provenance.json").read_text()),
+                "failure_count": 1,
+            }, sort_keys=True, indent=2) + "\n",
+            encoding="utf-8",
+        ),
+        # The ledger itself is authoritative even if the counter is forged.
+        "unreported-route-failure-ledger": lambda root: (
+            root / "ROOT/route-failures.tsv"
+        ).write_text(
+            "route_id\tmode\tkind\tdetail\n"
+            "/::Broadcast::/\tmodern-public\tstatus-mismatch\t"
+            "expected 302 observed 502\n",
+            encoding="utf-8",
+        ),
+        "legacy-cookie-reuse": lambda root: (
+            root / "ROOT/provenance.json"
+        ).write_text(
+            (root / "ROOT/provenance.json").read_text().replace(
+                "fresh-cookie-jar-per-route", "shared-cookie-jar"),
+            encoding="utf-8",
+        ),
+        "missing-soap": lambda root: (root / "phase4-soap-coexistence.tsv").unlink(),
+        "missing-modern-route": lambda root: (root / "ROOT/route-observations.tsv").write_text(
+            "\n".join(
+                line for line in
+                (root / "ROOT/route-observations.tsv").read_text().splitlines()
+                if not (
+                    "modern-public" in line
+                    and "/::AdRedirector::/AdRedirector" in line
+                )
+            ) + "\n",
+            encoding="utf-8",
+        ),
+        "wrong-modern-status": lambda root: (root / "ROOT/route-observations.tsv").write_text(
+            (root / "ROOT/route-observations.tsv").read_text().replace(
+                "\tmodern-public\tGET\t", "\tmodern-public\tGET\t", 1
+            ).replace("\t400\t400\t", "\t200\t200\t", 1),
+            encoding="utf-8",
+        ),
+        "missing-stateful-follow-up": lambda root: (root / "wstore/route-observations.tsv").write_text(
+            "\n".join(
+                line for line in
+                (root / "wstore/route-observations.tsv").read_text().splitlines()
+                if "modern-session-follow-up" not in line
+            ) + "\n",
+            encoding="utf-8",
+        ),
+        "disabled-counted-modern": lambda root: (root / "admin/route-observations.tsv").write_text(
+            (root / "admin/route-observations.tsv").read_text()
+            + (root / "admin/route-observations.tsv").read_text().splitlines()[1]
+            .replace("legacy-public", "modern-public") + "\n",
+            encoding="utf-8",
+        ),
+    }
+    report = ["mutation\tresult"]
+    for name, mutate in mutations.items():
+        target = args.work_dir / name
+        shutil.copytree(fixture, target)
+        mutate(target)
+        if invoke(validator, target, contract, effects_path).returncode == 0:
+            raise SystemExit(f"runtime evidence mutation was accepted: {name}")
+        report.append(f"{name}\tdetected")
+    args.report.parent.mkdir(parents=True, exist_ok=True)
+    args.report.write_text("\n".join(report) + "\n", encoding="utf-8")
+    print(f"detected all {len(mutations)} Phase 5f runtime-evidence mutations")
+
+
+if __name__ == "__main__":
+    main()

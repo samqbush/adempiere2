@@ -10,14 +10,15 @@ set -euo pipefail
 repo_root=${1:?repository root is required}
 adempiere_home=${2:?installed ADEMPIERE_HOME is required}
 
+lane_phase=${ADEMPIERE_ROUTED_LANE_PHASE:-phase5e}
 public_port=${PHASE5E_PUBLIC_PORT:-8888}
 properties_file="$repo_root/gradle/phase4/runtime.properties"
 api_port=$(awk -F= '$1 == "api.port" {sub(/^[^=]*=/, ""); print; exit}' \
   "$properties_file")
-tomcat10_dir="$repo_root/build/phase5e/tomcat10"
-pid_file="$repo_root/build/phase5e/tomcat10-routed.pid"
+tomcat10_dir="$repo_root/build/$lane_phase/tomcat10"
+pid_file="$repo_root/build/$lane_phase/tomcat10-routed.pid"
 catalina_base="$adempiere_home/tomcat"
-public_pid_file="$catalina_base/temp/phase5e-public.pid"
+public_pid_file="$catalina_base/temp/${lane_phase}-public.pid"
 
 stop_public() {
   local env_script="$adempiere_home/utils/myEnvironment.sh"
@@ -66,6 +67,14 @@ stop_modern() {
 stop_public || true
 stop_modern || true
 
+if [[ "$lane_phase" == phase5f ]]; then
+  tls_dir="$repo_root/build/phase5f/public-https"
+  if [[ -f "$tls_dir/server.xml.original" ]]; then
+    cp "$tls_dir/server.xml.original" "$catalina_base/conf/server.xml"
+  fi
+  rm -f "$tls_dir/public-ingress.p12" "$tls_dir/keystore.password"
+fi
+
 # The installed Tomcat 9 deployment is restored to the PRISTINE artifact, which
 # is what lib/webuiOriginal.war holds. Restoring from lib/webui.war would put
 # the routed archive back: the next unrelated Tomcat 9 start would then serve a
@@ -76,6 +85,23 @@ stop_modern || true
 # serves the expansion; leaving the routed expansion in place makes the restored
 # archive cosmetic.
 if [[ -d "$catalina_base/webapps" ]]; then
+  if [[ "$lane_phase" == phase5f ]]; then
+    for pair in \
+      "admin:adempiereRootOriginal.war" \
+      "ROOT:adempiereWebCMOriginal.war" \
+      "mobile:mobileOriginal.war" \
+      "adempiere:adempiereAppsOriginal.war" \
+      "wstore:adempiereWebStoreOriginal.war"; do
+      deployed=${pair%%:*}
+      original=${pair#*:}
+      rm -rf "$catalina_base/webapps/$deployed"
+      if [[ -f "$adempiere_home/lib/$original" ]]; then
+        cp "$adempiere_home/lib/$original" "$catalina_base/webapps/$deployed.war"
+      else
+        rm -f "$catalina_base/webapps/$deployed.war"
+      fi
+    done
+  fi
   rm -rf "$catalina_base/webapps/webui"
   if [[ -f "$adempiere_home/lib/webuiOriginal.war" ]]; then
     cp "$adempiere_home/lib/webuiOriginal.war" "$catalina_base/webapps/webui.war"

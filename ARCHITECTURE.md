@@ -88,7 +88,9 @@ developer-oriented experimental path with machine-specific assumptions.
 | `ant build -Dnodbrestore=false` | Underlying database-enabled Ant build. Run only through an approved disposable environment with explicit release scoping. | `build.xml`, `gradle/phase3/distribution.gradle`. |
 | `./gradlew phase5eFinalVerification --dependency-verification=strict` | Database-neutral Phase 5e gate: fail-closed cohort configuration and handoff-ticket unit tests, the isolated Javax/ZK 3.6 bridge closure pinned against the frozen Phase 5b WAR, the deterministic derived routed `webui.war` and its three-entry diff contract, the reviewed public route/header/cookie/audit contracts, sixteen mutation proofs (each mutant compiled before it is scored, detection read from the named test's own JUnit report), the enforced 8 MiB/64 MiB proxy byte caps, the installed and release routing overlay including the resolved modern `docBase` at `tomcat10-api/phase5e/webui-modern.war` and the removal of the superseded auto-deployed copy, and rollback that survives the **real** Ant `setupWLib` run with real merge inputs. Chains `phase5dFinalVerification`, so the direct `/webui-modern` lane stays an independent regression gate. | `gradle/phase5/cohort-routing.gradle`, `org.adempiere.cohort/`, `contracts/phase5e-routed-web-v1/`, `scripts/phase5/verify-routed-overlay.sh`, `scripts/phase5/verify-routed-rollback.sh`, `scripts/phase5/verify-cohort-mutation-proof.sh`. |
 | `./gradlew phase5eCohortRoutingSmoke -Pphase3DbSystemPassword='<password>' --dependency-verification=strict` | Database-backed Phase 5e gate: boots the routed public Tomcat 9 ingress and the loopback Tomcat 10.1.59 modern runtime against one marker-owned PostgreSQL 14.6, drives the complete public-origin cohort matrix through a browser that can only reach the public origin, proves concurrent client/org/role/user/language isolation by comparing each interleaved capture with the same identity's solo capture on ADempiere-produced facts, proves that logout, the product's session-inactivity timeout and container-side destruction each record a real session destruction on every runtime that must have one and return every `SessionManager` cache to its marked baseline, proves a logged-out browser is decided again instead of inheriting its previous cohort, and replays the complete Phase 4 SOAP corpus while routed modern sessions are authenticated. **Executed and green:** all 23 matrix rows pass; see `docs/modernization/phase-5e-evidence.md`. | `gradle/phase5/cohort-routing.gradle`, `zkwebui/src/routedBrowserTest/`, `scripts/phase5/start-routed-lane.sh`, `scripts/phase5/capture-routed-lane.sh`, `scripts/phase5/reset-cohort-config.sh`. |
-| `./gradlew build --dependency-verification=strict` | Reproducible JDK 21 module gate across 30 included projects. It executes the core unit gate and publishes Java 21 bytecode. It does **not** build every Ant deployable; `:zkwebui` builds the Phase 5d functional ZK CE 10 `/webui-modern` slice, not the frozen legacy `webui.war`. | `.github/workflows/build_with_gradle.yml`, `settings.gradle`, `gradle/phase3/topology.tsv`. |
+| `./gradlew phase5fFinalVerification --dependency-verification=strict` | Database-neutral Phase 5f gate: verifies the exact 82 deployed and 30 non-deployed mapping contracts and mutations; isolated generated Jakarta source/web trees; five deterministic source-native context WARs; all 25 retained `/wstore` JSPs through Tomcat 10.1 Jasper; Servlet 6 descriptors and discovery absence; `/webui/timeline` and static DSP contracts; independent fail-closed context policies; installed product and both-release topology; per-context rollback; current inventories; and Phase 4/5d/5e regressions. **Implemented and executed green twice; Phase 5f remains active and unmerged.** | `gradle/phase5/jakarta-web-foundation.gradle`, `gradle/phase5/phase5f-context-routing.gradle`, `gradle/phase5/phase5f-oracle-contracts.gradle`, `contracts/phase5f-jakarta-web-v1/`, `docs/modernization/phase-5f-evidence.md`. |
+| `./gradlew phase5fJakartaWebRoutesSmoke -Pphase3DbSystemPassword='<password>' --dependency-verification=strict` | Database-backed Phase 5f gate: six public-origin route shards (`/webui`, `/admin`, `/`, `/mobile`, `/adempiere`, `/wstore`), exact 82-row runtime/database-effect validation, lifecycle and policy observations, and complete Phase 4 SOAP coexistence. **Implemented; executed and green** in run 33379849664 on commit `9ba62875d`, which recorded 129 public-origin observations with zero vector failures - `/` (16), `/wstore` (68), `/webui` (6), `/admin` (4), `/mobile` (14), `/adempiere` (21) - and passed the strict aggregate `verifyPhase5fRuntimeEvidence` over 82 legacy routes, all 37 eligible modern routes and 45 explicitly unexecuted modern routes. Attribution required removing three ambient database writers (the eight timer-driven processor sources, automatic error reporting, and first-touch `WebEnv.initWeb` initialisation) and deriving the snapshot aggregate from the table-grain digests. | `gradle/phase5/phase5f-context-routing.gradle`, `scripts/phase5/phase5f-route-smoke.py`, `scripts/phase5/validate-phase5f-runtime-evidence.py`, `scripts/phase5/capture-phase5f-coexistence.sh`. |
+| `./gradlew build --dependency-verification=strict` | Reproducible JDK 21 module gate across the root and 31 included projects. It executes the core unit gate and publishes Java 21 bytecode. It does **not** build every Ant deployable; Phase 5f adds isolated generated source sets and WAR tasks under existing projects rather than another Gradle project. | `.github/workflows/build_with_gradle.yml`, `settings.gradle`, `gradle/phase3/topology.tsv`. |
 | `./gradlew publish --dependency-verification=strict` | Publishes Gradle artifacts to Maven Central staging during a published release using JDK 21. Release publication rejects previously used versions and declares JDK 21 as the minimum. | `.github/workflows/publish_with_gradle.yml`, `.github/workflows/build_with_gradle.yml`, `gradle/phase2/release-contract.properties`. |
 | `./utils/RUN_Adempiere.sh` | Starts the desktop Swing client. | `utils/RUN_Adempiere.sh#L20-L42`. |
 | `./utils/RUN_Server2.sh` | Starts the selected external WildFly, Tomcat, or Jetty server. | `utils/RUN_Server2.sh#L20-L85`. |
@@ -108,17 +110,17 @@ developer-oriented experimental path with machine-specific assumptions.
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `main.yml` | Push and pull request to `master`, `develop`, and bugfix/feature/hotfix/test branch patterns | Runs the guarded distribution, installed-product, Phase 4 API, Phase 5 frozen-oracle, Phase 5c packaging/rollback, Phase 5d database-neutral and PostgreSQL-backed modern-web, and Phase 5e database-neutral and PostgreSQL-backed cohort-routing gates on JDK 21. The Phase 5c, 5d and 5e jobs pin `ubuntu-24.04`. Phase 5d and 5e failure uploads include compile, WAR, browser, full-row database-effect, coexistence, cohort-matrix and rollback evidence (`.github/workflows/main.yml`). |
+| `main.yml` | Push and pull request to `master`, `develop`, and bugfix/feature/hotfix/test branch patterns | Runs the guarded distribution, installed-product, Phase 4 API, Phase 5 frozen-oracle, Phase 5c packaging/rollback, Phase 5d modern-web, Phase 5e cohort-routing, and Phase 5f database-neutral plus PostgreSQL-backed six-shard route gates on JDK 21. Phase 5f uploads contracts, generated Jakarta evidence, WAR/topology/rollback evidence, runtime rows, container logs and SOAP coexistence results. Workflow presence does not make a check required (`.github/workflows/main.yml`). |
 | `build_with_gradle.yml` | Same push and pull-request branch families | Runs the reproducible Gradle gate, internal-API checks, Tomcat bridge probe, and a separate PostgreSQL 14.6/Xvfb runtime-smoke job on JDK 21 (`.github/workflows/build_with_gradle.yml`). |
 | `release.yml` | Published GitHub release | Runs the database-enabled Ant build and uploads installers and seed artifacts (`.github/workflows/release.yml#L1-L77`). |
 | `publish_with_gradle.yml` | Published GitHub release | Runs `gradle publish` with Maven Central credentials (`.github/workflows/publish_with_gradle.yml#L1-L38`). |
 | `auto-assign-pull-requests.yml` | Pull request opened | Adds the `09 Pending Peer Review` label (`.github/workflows/auto-assign-pull-requests.yml#L1-L33`). |
 | `issue-and-pr-translator.yml` | Issue, PR, comment, and discussion events | Runs an issue/PR translation action (`.github/workflows/issue-and-pr-translator.yml#L1-L22`). |
 
-**CI enforcement is `[UNVERIFIED]`.** Workflow files prove that checks run, but
-required status checks and branch protection are GitHub repository settings and
-are not represented in the checkout. README badges likewise prove visibility,
-not merge blocking (`README.md#L1-L10`).
+**CI enforcement remains manual.** Workflow files prove that checks run, but a
+GitHub repository administrator must configure branch protection and required
+status checks for `develop`; until then they do not block merges. README badges
+likewise prove visibility, not merge blocking (`README.md#L1-L10`).
 
 ### Directory and module layout
 
@@ -144,12 +146,14 @@ not merge blocking (`README.md#L1-L10`).
 
 The Ant `jar` reactor enumerates 32 build directories, including deployable web
 applications and database components; the separate `build` target also invokes
-the installer (`utils_dev/build.xml#L20-L58`). Gradle now has 31 unique projects,
-including the Phase 5d modern web `:zkwebui` project and the Phase 5e
-`:org.adempiere.cohort` routing project. The Phase 5e project is Gradle-only: it
+the installer (`utils_dev/build.xml#L20-L58`). Gradle now has the root plus 31
+included projects, including the Phase 5d modern web `:zkwebui` project and the
+Phase 5e `:org.adempiere.cohort` routing project. The Phase 5e project is Gradle-only: it
 has no Ant reactor entry, because its bridge source set compiles against classes
 extracted from the *materialised frozen* Phase 5b WAR rather than against
-anything the Ant reactor builds.
+anything the Ant reactor builds. Phase 5f adds generated source sets, tests and
+WAR tasks to existing projects; it adds no Gradle project and does not alter the
+32-entry Ant reactor.
 
 **[Resolved contradiction] Ant and Gradle do not mean the same thing by
 "build."** Gradle omits important Ant deployables, including `zkwebui`,
@@ -176,6 +180,7 @@ explicit fail-on-drift quarantine in `gradle/phase3/metadata-quarantine.tsv`.
 | Phase 4 API server (XFire retired) | Isolated Tomcat 10.1.59 on JDK 21 with CXF 4.1.8/Jakarta EE 10 behind Tomcat 9 | The distinct modern WAR boots on loopback, serves the four approved static WSDLs, and passes all 33 direct baselines plus 11 valid-credential/security scenarios and four mutation-state comparisons. After per-service and atomic `ADService` rollback rehearsal, the Tomcat 9 router became CXF-only while retaining both historical paths. Source, descriptors, checked-in binaries, installed WARs, and both 394LTS archives reject active XFire; the archives retain executable launchers and omit `AdempiereEnv.properties`. Phase 4 merged to `develop` as `8c0ca4c1d6b35a5f366d6dd2150ed3bb27bc2a89`; Phase 5 now owns the reviewed non-SOAP route contract while Phase 4 retains exact SOAP assertions (`gradle/phase4/runtime.properties`, `gradle/phase5/route-contracts.tsv`, `scripts/phase4/verify-release-api.sh`, `scripts/phase4/smoke-compatibility-router.sh`). |
 | Phase 5d modern web slice | Functional ZK CE 10.3.0.1-jakarta `/webui-modern` application on the existing loopback Tomcat 10.1.59 process, beside the unchanged Phase 4 CXF WAR | `webui-modern.war` keeps its Phase 5c artifact name and context path and now carries the migrated ZK compile closure, hand-written Servlet 6 and ZK 10 descriptors for the login/role/menu/window routes only, and the shared ADempiere runtime repackaged from the Ant-built `Adempiere.jar`, `packages.jar` and `AdempiereSLib.jar`. It passes ordinary GardenAdmin login, role selection, desktop/menu and the read-only "Error Message" window, reproducing all eleven comparable frozen legacy semantic facts and the zero-write database effect. Tomcat 9 remains the sole browser ingress; the two lanes use distinct ports, distinct JVMs and distinct `CATALINA_BASE` trees and share only the marker-owned disposable database. The same checksummed overlay is staged in the installed tree and both 394LTS archives without changing the Phase 4 API WAR (`gradle/phase5/zk-functional-slice.gradle`, `docs/modernization/phase-5c-ingress-session-adr.md`, `gradle/phase5/beachhead.gradle`). |
 | Phase 5e cohort routing | Public Tomcat 9 `/webui` ingress routing selected sessions to the loopback Tomcat 10.1.59 modern application, mounted internally at the identical `/webui` path | New sessions are selected after ordinary authentication and role selection from three strict, fail-closed, system-level `AD_SysConfig` rows, and the decision is sticky for the life of the session. Selected sessions rotate their Tomcat 9 session identifier once and are handed over with a versioned, HMAC-SHA-256, single-use, 30-second, loopback-only ticket that never reaches the browser. The browser holds exactly one public `JSESSIONID` cookie; both contexts are cookie-only and the modern `Context` disables URL rewriting. An established modern session never falls back to the legacy runtime. The routed `webui.war` is the frozen Phase 5b artifact plus exactly three reviewed entries, derived deterministically. The modern archive is staged at `tomcat10-api/phase5e/webui-modern.war`, which is what the `Context` descriptor's `docBase` resolves to, and the superseded Phase 5c/5d auto-deployed `tomcat10-api/webapps/webui-modern.war` is removed so exactly one modern UI context exists in the shipped product. Rollback restores that Phase 5c/5d location and the deployed Tomcat 9 archive, and deletes `lib/webuiOriginal.war` so the real Ant `setupWLib` cannot resurrect the overlay (`gradle/phase5/cohort-routing.gradle`, `docs/modernization/phase-5e-cohort-routing-adr.md`, `contracts/phase5e-routed-web-v1/`). |
+| Phase 5f Jakarta web routes | Public Tomcat 9 remains the only ingress; loopback Tomcat 10.1.59 hosts the retained `/webui` application plus five same-path modern context WARs | The exact scope is 82 deployed mappings and 30 non-deployed dispositions. Isolated generated source/web trees create `admin-modern.war`, `ROOT-modern.war`, `mobile-modern.war`, `adempiere-modern.war`, and `wstore-modern.war` without rewriting legacy trees. `/webui/timeline` is source-native Jakarta and the single historical DSP theme URL is static CSS; the interpreter and other DSP routes are absent. Each context has independent route/header/cookie/TLS/limit/timeout/lifecycle policy and fail-closed affinity. Installed and release trees stage one WAR per Phase 5f context under `tomcat10-api/phase5f/`, preserve Phase 4 CXF and Phase 5e `/webui`, and retain pristine rollback artifacts. `/mobile` and `/adempiere` remain disabled and `/admin` remains legacy pending named consumer ownership; `/` and `/wstore` are the two eligible modern contexts and both are now observed. The database-neutral gate is green, and the six-shard runtime smoke is green in run 33379849664 with 129 observations and zero vector failures (`gradle/phase5/jakarta-web-foundation.gradle`, `gradle/phase5/phase5f-context-routing.gradle`, `contracts/phase5f-jakarta-web-v1/`, `docs/modernization/phase-5f-evidence.md`). |
 | Installed application server | External Tomcat by default, under `/opt/tomcat`; WildFly and Jetty are selectable | `install/Adempiere/AdempiereEnvTemplate.properties#L28-L38`, `utils/RUN_Server2.sh#L20-L85`. No runtime version is pinned by the environment template. |
 | Experimental sbt servers | Tomcat/webapp-runner 9.0.41.0 and Jetty 10.0.12 | `build.sbt#L99-L178`. |
 | Product version | 3.9.4 / `394LTS`; environment template release `3.9.4` | `utils_dev/build.properties#L5-L6`, `install/Adempiere/AdempiereEnvTemplate.properties#L74-L76`. |
@@ -964,7 +969,7 @@ logging (`serverRoot/src/main/server/org/compiere/server/AdempiereServer.java#L2
 | Database support | High for PostgreSQL/Oracle; Inferred for MySQL/MariaDB production viability | Adapters and installer branches exist, but CI exercises PostgreSQL only. |
 | Test execution under Ant | High for configuration; Unverified for a clean local run | Targets/defaults are explicit; no build was executed for this document. |
 | Test execution under Gradle | Unverified | Jupiter dependencies exist, but platform activation was not found. |
-| CI merge enforcement | Unverified | Branch protection/required checks are remote settings. |
+| CI merge enforcement | High | Required checks remain an explicit manual repository-administrator action; workflow files alone do not block merges. |
 | EOL/support status | Inferred | Local versions are proven; upstream lifecycle status was not queried. |
 | Metrics/tracing coverage | Inferred | Monitor/logging surfaces exist; absence of external instrumentation cannot be proved from source alone. |
 | Production topology, scale, and active integrations | Unverified | Deployment-specific facts are outside this checkout. |
@@ -984,7 +989,7 @@ logging (`serverRoot/src/main/server/org/compiere/server/AdempiereServer.java#L2
 - `build.sbt` - experimental Scala/web-container path and hard-coded local
   assumptions.
 - `.github/workflows/main.yml` - full Ant CI topology and path-filtered database
-  restore.
+  restore plus Phase 4/5 web migration gates.
 - `.github/workflows/build_with_gradle.yml` - Gradle subset CI.
 - `.github/workflows/release.yml` - release artifact and seed publication.
 - `.github/actions/adempiere-build/action.yml` - exact Ant CI command and tool
@@ -1021,6 +1026,15 @@ logging (`serverRoot/src/main/server/org/compiere/server/AdempiereServer.java#L2
   application boot.
 - `zkwebui/WEB-INF/src/org/adempiere/webui/session/SessionContextListener.java` -
   request/event context propagation.
+- `gradle/phase5/jakarta-web-foundation.gradle` - isolated Phase 5f Jakarta
+  source/web generation, five modern WARs, Servlet 6 descriptors, and JSP
+  precompilation.
+- `gradle/phase5/phase5f-context-routing.gradle` - six-context routing gates,
+  installed/release topology, rollback, and database-backed shard orchestration.
+- `contracts/phase5f-jakarta-web-v1/` - exact 82 deployed/30 non-deployed route
+  scope and independent context policies.
+- `docs/modernization/phase-5f-evidence.md` - authoritative distinction between
+  the twice-green database-neutral gate and the unexecuted database smoke.
 - `base/src/org/compiere/util/Login.java` - authentication and access-context
   loading.
 - `org.adempiere.webservice/WEB-INF/web.xml` - XFire servlet mappings.
