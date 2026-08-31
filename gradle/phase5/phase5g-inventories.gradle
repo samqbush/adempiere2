@@ -40,8 +40,18 @@ tasks.register('generatePhase5gInventories', Exec) {
 	description = 'Generates the Phase 5g-0 process, callout and extension-surface inventories'
 	inputs.file rootProject.file('db/ddlutils/adempiere-data.xml')
 	inputs.file phase5gScanRootListing
+	// Declare exactly what the generator reads: Java sources under each scan
+	// root, with the same `build`, `bin` and `.git` pruning the generator
+	// applies at every directory level. Declaring the whole root instead would
+	// pull in sibling Gradle projects' build outputs, which makes this task
+	// consume another task's output without a dependency on it.
 	phase5gInventorySourceRoots.each { root ->
-		inputs.dir(rootProject.file(root)).withPropertyName("scanRoot_${root.replace('/', '_').replace('.', '_')}")
+		inputs.files(rootProject.fileTree(rootProject.file(root)) {
+			include '**/*.java'
+			exclude '**/build/**'
+			exclude '**/bin/**'
+			exclude '**/.git/**'
+		}).withPropertyName("scanRoot_${root.replace('/', '_').replace('.', '_')}")
 	}
 	inputs.file rootProject.file('scripts/phase5/generate-phase5g-inventories.py')
 	outputs.dir phase5gGeneratedDir
