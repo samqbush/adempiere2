@@ -510,6 +510,45 @@ def phase5fDbSystemPassword =
 			'ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD'))
 def phase5fDatabaseMarker = 'ADempiere Phase 3 disposable database'
 
+def phase5fProcessorStateFile = rootProject.layout.buildDirectory
+	.file('phase5f/switch/background-processors.tsv')
+
+def phase5fProcessorTask = { String taskName, String action, String desc ->
+	tasks.register(taskName, Exec) {
+		group = 'verification'
+		description = desc
+		outputs.upToDateWhen { false }
+		environment 'ADEMPIERE_PHASE5F_DB_PASSWORD', phase5fDbPassword.get()
+		commandLine(
+			'bash',
+			rootProject.file(
+				'scripts/phase5/quiesce-phase5f-background-processors.sh'),
+			phase5fDbHost.get(),
+			phase5fDbPort.get(),
+			phase5fDbName.get(),
+			phase5fDbUser.get(),
+			phase5fDatabaseMarker,
+			action,
+			phase5fProcessorStateFile.get().asFile)
+	}
+}
+
+// Must land before the container boots: AdempiereServerMgr reads these
+// definitions once at startup, so deactivating them afterwards would leave the
+// already-scheduled timers running for the whole shard matrix.
+def phase5fQuiesceProcessors = phase5fProcessorTask(
+	'quiescePhase5fBackgroundProcessors', 'quiesce',
+	'Deactivates ADempiere timer-driven processors so route vectors own their database effects')
+phase5fQuiesceProcessors.configure {
+	dependsOn tasks.named('phase3AntDatabaseBuild')
+}
+def phase5fVerifyProcessorsQuiesced = phase5fProcessorTask(
+	'verifyPhase5fBackgroundProcessorsQuiesced', 'verify',
+	'Verifies no ADempiere background processor was reactivated during the shard matrix')
+phase5fVerifyProcessorsQuiesced.configure {
+	dependsOn phase5fQuiesceProcessors
+}
+
 tasks.register('startPhase5fRoutedLane', Exec) {
 	group = 'verification'
 	description = 'Starts the Phase 5f public ingress and six-context loopback runtime'
@@ -517,6 +556,7 @@ tasks.register('startPhase5fRoutedLane', Exec) {
 		tasks.named('provisionPhase5eHandoffKey'),
 		tasks.named('stagePhase5fInstalledContextRouting'),
 		tasks.named('phase3AntDatabaseBuild'),
+		phase5fQuiesceProcessors,
 		tasks.named('phase4ModernSoapRuntime'))
 	environment 'ADEMPIERE_ROUTED_LANE_PHASE', 'phase5f'
 	environment 'PHASE5F_PUBLIC_HTTPS_PORT',
@@ -694,14 +734,15 @@ tasks.register('verifyPhase5fRuntimeEvidence', Exec) {
 	dependsOn(
 		phase5fShardTasks,
 		phase5fVerifySwitchBaseline,
+		phase5fVerifyProcessorsQuiesced,
 		tasks.named('capturePhase5fSoapCoexistence'))
 	mustRunAfter phase5fShardTasks, phase5fVerifySwitchBaseline,
+		phase5fVerifyProcessorsQuiesced,
 		tasks.named('capturePhase5fSoapCoexistence')
 	outputs.file phase5fSmokeEvidence.map { it.file('summary.tsv') }
 	commandLine(
 		'python3',
 		rootProject.file('scripts/phase5/validate-phase5f-runtime-evidence.py'),
-		phase5fRuntimeContractDir.file('database-effect-ownership.tsv'),
 		'--evidence-root', phase5fSmokeEvidence.get().asFile,
 		'--contract', phase5fRuntimeContractDir.file('route-validation.tsv').asFile,
 		'--effects',
@@ -862,6 +903,11 @@ gradle.projectsEvaluated {
 		}
 	def stopLane = tasks.named('stopPhase5fRoutedLane')
 	def startLane = tasks.named('startPhase5fRoutedLane')
+	// Vacuous unless it observes the state the shards left behind.
+	tasks.named('verifyPhase5fBackgroundProcessorsQuiesced') {
+		mustRunAfter phase5fShardTasks,
+			tasks.named('capturePhase5fSoapCoexistence')
+	}
 	startLane.configure { finalizedBy stopLane }
 	stopLane.configure {
 		mustRunAfter(

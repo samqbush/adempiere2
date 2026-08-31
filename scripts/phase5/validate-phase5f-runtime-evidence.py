@@ -60,25 +60,37 @@ def permitted_write_tables(effect: dict[str, str]) -> set[str]:
         "web-access-log": {"cm_webaccesslog"},
         "web-basket": {"w_basket", "w_basketline"},
     }
+
+    def with_id_allocation(permitted: set[str]) -> set[str]:
+        # ADempiere allocates every new record's ID from AD_Sequence
+        # (MSequence), so an AD_Sequence update is an unavoidable consequence
+        # of a permitted insert rather than an independent effect. It is
+        # permitted only where some write is already permitted, so a route
+        # under a no-write contract that touches AD_Sequence still fails.
+        return permitted | {"ad_sequence"} if permitted else permitted
+
     if contract in {
         "no-write", "no-new-write", "read-only", "download-read-only",
     }:
         return set()
     if contract == "content-read-plus-owned-access-metadata":
-        return groups["web-access-log"] if "web-access-log" in owned else set()
+        return with_id_allocation(
+            groups["web-access-log"] if "web-access-log" in owned else set())
     if contract == "read-only-after-session-bootstrap":
-        return {"ad_session"} if "ad_session" in direct else set()
+        return with_id_allocation(
+            {"ad_session"} if "ad_session" in direct else set())
     if contract == "session-bootstrap-owned":
-        return direct & {"ad_session", "ad_preference"}
+        return with_id_allocation(direct & {"ad_session", "ad_preference"})
     if contract == "read-only-plus-session-basket":
-        return (direct & {"ad_session"}) | (
+        permitted = (direct & {"ad_session", "w_click"}) | (
             groups["web-basket"] if "web-basket" in owned else set())
+        return with_id_allocation(permitted)
     if contract == "method-specific-fixture-required":
-        return direct & {"ad_session", "ad_preference"}
+        return with_id_allocation(direct & {"ad_session", "ad_preference"})
     if contract == "existing-phase5d-session-contract":
-        return direct & {
+        return with_id_allocation(direct & {
             "ad_session", "ad_preference", "ad_recentitem", "ad_changelog"
-        }
+        })
     raise SystemExit(f"unknown database effect contract: {contract}")
 
 

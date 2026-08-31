@@ -13,6 +13,7 @@ import re
 import ssl
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from collections import defaultdict
@@ -23,6 +24,9 @@ ELIGIBLE = {"/", "/wstore"}
 # Marks an observation taken where no frozen legacy baseline exists, so the
 # observation is the baseline rather than something scored against one.
 RECORD_ONLY = "record-only"
+# Seconds to let a response-committed-before-write servlet finish committing
+# before the post-request snapshot is taken. See the citation at its use.
+WRITE_SETTLE_SECONDS = 0.5
 CONFIDENTIAL_WSTORE = {
     "/wstore/login.jsp", "/wstore/loginServlet",
     "/wstore/checkOutServlet", "/wstore/orderServlet",
@@ -368,6 +372,17 @@ def main() -> None:
                 f"request: {route['method']} {target_url}\n"
                 f"error: {type(unreachable).__name__}: {unreachable}",
             ) from unreachable
+        # A servlet may commit its response before it finishes writing. Click
+        # is the proven case: serverApps/src/main/servlet/org/compiere/wstore/
+        # Click.java flushes the redirect at line 115 and only then persists
+        # the MClick row at line 119, so the client can be served before the
+        # W_Click insert commits. Without a settle the write can land after
+        # this vector's `after` snapshot and inside the next vector's window,
+        # where it is misattributed to a route that does not own it. A fixed
+        # bounded wait is used rather than polling for a stable snapshot,
+        # because each snapshot is a full data dump and a second one per
+        # observation would roughly double the matrix runtime.
+        time.sleep(WRITE_SETTLE_SECONDS)
         after, tables_after = database_snapshot(args)
         changed_tables = sorted(
             table for table in set(tables_before) | set(tables_after)

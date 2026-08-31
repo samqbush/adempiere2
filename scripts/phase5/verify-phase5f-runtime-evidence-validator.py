@@ -195,6 +195,29 @@ def mutate_first_row(root: Path, directory: str, changes: dict[str, str]) -> Non
         writer.writerows(rows)
 
 
+def mutate_rows_where(
+    root: Path, directory: str, predicate, changes: dict[str, str],
+) -> None:
+    path = root / directory / "route-observations.tsv"
+    with path.open(encoding="utf-8", newline="") as stream:
+        rows = list(csv.DictReader(stream, delimiter="\t"))
+    matched = 0
+    for row in rows:
+        if predicate(row):
+            row.update(changes)
+            matched += 1
+            break
+    if matched == 0:
+        raise SystemExit(
+            f"mutation fixture has no matching row in {directory}")
+    with path.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(
+            stream, fieldnames=list(rows[0]), delimiter="\t",
+            lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo-root", type=Path, required=True)
@@ -307,6 +330,29 @@ def main() -> None:
                 if context in ELIGIBLE else "explicitly-unexecuted"
             ),
         }, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        # Positive control for the ID-allocation allowance. Every other
+        # fixture row records `none`, so a regression that made
+        # with_id_allocation a no-op would leave all mutants "detected" and
+        # only surface against real CI evidence. One row per context that
+        # already owns AD_Session records a permitted AD_Session insert with
+        # its consequent AD_Sequence update, so the clean fixture fails unless
+        # the allowance genuinely exists.
+        for row in evidence_rows:
+            owned = row["owned_tables_or_group"].lower()
+            if row["database_effect_contract"] in {
+                "session-bootstrap-owned",
+                "read-only-after-session-bootstrap",
+                "existing-phase5d-session-contract",
+            } and "ad_session" in owned:
+                row.update({
+                    "database_after": "5" * 64,
+                    "database_tables_before":
+                        '{"ad_session":"a","ad_sequence":"a"}',
+                    "database_tables_after":
+                        '{"ad_session":"b","ad_sequence":"b"}',
+                    "database_changed_tables": "ad_session,ad_sequence",
+                })
+                break
         with (directory / "route-observations.tsv").open("w", encoding="utf-8", newline="") as stream:
             writer = csv.DictWriter(stream, FIELDS, delimiter="\t", lineterminator="\n")
             writer.writeheader()
@@ -391,6 +437,31 @@ def main() -> None:
                 "database_tables_before": '{"c_order":"a"}',
                 "database_tables_after": '{"c_order":"b"}',
                 "database_changed_tables": "c_order",
+            }),
+        # AD_Sequence is permitted only as a consequence of an already
+        # permitted insert. Under a no-write contract it must still fail, or
+        # the ID-allocation allowance would become a universal write permit.
+        "id-allocation-under-no-write": lambda root: mutate_first_row(
+            root, "ROOT", {
+                "database_after": "4" * 64,
+                "database_tables_before": '{"ad_sequence":"a"}',
+                "database_tables_after": '{"ad_sequence":"b"}',
+                "database_changed_tables": "ad_sequence",
+            }),
+        # W_Click is owned by the click-tracking route alone, through its
+        # ownership row, not by the read-only-plus-session-basket contract.
+        "unowned-click-table-write": lambda root: mutate_rows_where(
+            root, "wstore",
+            lambda row: (
+                row["database_effect_contract"]
+                == "read-only-plus-session-basket"
+                and "w_click" not in row["owned_tables_or_group"].lower()
+            ),
+            {
+                "database_after": "4" * 64,
+                "database_tables_before": '{"w_click":"a"}',
+                "database_tables_after": '{"w_click":"b"}',
+                "database_changed_tables": "w_click",
             }),
         # Evidence carried over from an earlier commit is otherwise
         # indistinguishable from evidence this run produced.

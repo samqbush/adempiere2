@@ -159,6 +159,17 @@ def effect_for(route_id: str, context: str) -> tuple[str, str, str]:
                 "web-asset,invoice",
                 "Download response may be large but owns no write.",
             )
+        if name == "Click":
+            # Click.java:119,176-201 persists an MClick (W_Click) row on every
+            # request; recording the click is the servlet's entire purpose.
+            # Run 33360842891 observed the W_Click write on the legacy and the
+            # modern leg alike, with no background processor active in the
+            # legacy observation.
+            return (
+                "read-only-plus-session-basket",
+                "AD_Session,W_Click,web-basket",
+                "Click tracking route owns its W_Click row and the context-local session basket.",
+            )
         return (
             "read-only-plus-session-basket",
             "AD_Session,web-basket",
