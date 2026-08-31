@@ -31,8 +31,8 @@ The normative files are under `contracts/phase5f-jakarta-web-v1/`.
 |---|---|
 | Phase 5e regression after routing-core extraction | **Executed and green through both Phase 5f final-gate runs.** |
 | `phase5fFinalVerification` | **Implemented; executed and green twice** on 2026-08-27. Local logs: `build/phase5f-final-rebuild.log` and `build/phase5f-final-validation.log`. |
-| `phase5fJakartaWebRoutesSmoke` | **Implemented; executed in CI; never passed.** Closest run 33360842891: all six shards green, failure confined to `verifyPhase5fRuntimeEvidence`. See "Runtime gate failures" below. |
-| Per-context smoke shards | **Six implemented. All six passed with zero vector failures for the first time in run 33360842891, producing 129 observations: `/` (16), `/wstore` (68), `/webui` (6), `/admin` (4), `/mobile` (14), `/adempiere` (21).** |
+| `phase5fJakartaWebRoutesSmoke` | **Implemented; executed in CI; never passed.** Closest run 33369428234: all six shards green, every unowned-write error gone, one remaining failure inside `verifyPhase5fRuntimeEvidence`. See "Runtime gate failures" below. |
+| Per-context smoke shards | **Six implemented. All six passed with zero vector failures in runs 33360842891 and 33369428234, producing 129 observations: `/` (16), `/wstore` (68), `/webui` (6), `/admin` (4), `/mobile` (14), `/adempiere` (21).** |
 | Installed product/release overlay proof | **Executed and green** through `phase5fFinalVerification`. |
 | Per-context rollback rehearsal | **Executed and green** through `phase5fFinalVerification`. |
 
@@ -56,9 +56,18 @@ below with the evidence it was diagnosed from, newest first.
 
 ### Current status: every shard passes; the aggregate validator is the last gate
 
-Latest completed run: 33360842891. Every one of the six shards reported zero
-vector failures for the first time, and both `verifyPhase5fSwitchBaseline` and
-`capturePhase5fSoapCoexistence` passed:
+Latest completed run: 33369428234, which carried the processor quiesce and the
+error-reporting quiesce described below. `Contracts` was green. Every one of the
+six shards again reported zero vector failures, `verifyPhase5fSwitchBaseline`,
+`capturePhase5fSoapCoexistence` and `verifyPhase5fBackgroundProcessorsQuiesced`
+all passed, and **every unowned-write error was gone** - the quiesce did what it
+was built to do. One failure remained, on
+`/::AdRedirector::/AdRedirector`: `database aggregate and table snapshots
+disagree`. It is diagnosed under "The aggregate digest measured more than the
+table digests" below.
+
+The shape below is from run 33360842891, whose evidence produced the diagnosis
+that the two quiesces answer. Both runs reported the same shard matrix:
 
 ```
 /:          16 observations   PASS
@@ -196,7 +205,8 @@ permitted **only where some write is already permitted**. A route under a
 touches `AD_Sequence` still fails, which a new `id-allocation-under-no-write`
 mutant proves.
 
-The runtime-evidence mutation harness now detects 26 mutations, up from 24:
+These two corrections took the runtime-evidence mutation harness from 24 to 26
+mutations:
 `id-allocation-under-no-write` and `unowned-click-table-write`. Both were
 confirmed to fail for the intended reason rather than incidentally.
 
@@ -232,18 +242,19 @@ route response: `MIssue.create` simply returns `null`. The state file carries a
 column name per row, so one file restores both the processor `IsActive` flags
 and this one, and `verify` fails if either is re-enabled during the matrix.
 
-#### Deliberately not blessed
+#### Deliberately not blessed - and what run 33369428234 settled
 
-The same replay leaves a residual that is **not** being widened into the
-contract, because the evidence does not establish it is route-caused:
+The same replay left two residuals that were **not** widened into the contract,
+because the evidence did not establish they were route-caused:
 
 - `AD_Session` on `/::CacheService::/cache/*`, `/::MediaBroadcast::/media/*`
-  and `/wstore::AssetServlet::/assetServlet/*`. Every one of these observations
-  also carried an active processor row, and the processors create their own
-  `AD_Session` records, so the quiesce is expected to remove them. If any
-  survives it is a real session-creation effect and will be diagnosed then.
+  and `/wstore::AssetServlet::/assetServlet/*`. **Removed by the quiesce**, as
+  predicted: run 33369428234 recorded no such change.
 - `AD_NotificationQueue`, `AD_NotificationRecipient` and `AD_Queue` on
-  `/::AdRedirector::/AdRedirector` in `modern-public`, for the same reason.
+  `/::AdRedirector::/AdRedirector` in `modern-public`. **Not removed.** Run
+  33369428234 still records them, so the prediction that they were processor
+  session noise was wrong. Their real origin is diagnosed under "First-touch
+  initialisation is the third ambient writer" below.
 
 #### Checked and cleared
 
@@ -256,6 +267,95 @@ when a `CM_Ad_ID` is supplied and the Phase 5b request vector is a bare
 `/AdRedirector`. Neither observed leg recorded a `CM_Ad` change, which confirms
 it. A future vector carrying `CM_Ad_ID` would need the ownership row corrected
 the same way the click route's was.
+
+#### The aggregate digest measured more than the table digests
+
+Run 33369428234 failed on `/::AdRedirector::/AdRedirector` with `database
+aggregate and table snapshots disagree`. Replaying the run's own uploaded
+evidence pinned it to the `legacy-public` leg, which recorded
+`database_before != database_after` while **not one** of its 480 per-table
+digests differed.
+
+The two digests measured different things.
+`phase5f-route-smoke.py::database_snapshot()` collected one
+`pg_dump --data-only --column-inserts` and derived the aggregate from *every*
+non-comment line of it, while the per-table map bucketed only lines beginning
+`INSERT INTO `. The aggregate therefore also covered
+`SELECT pg_catalog.setval(...)` lines. A native PostgreSQL sequence advances
+outside the transaction that drew from it, so an allocation elsewhere in the
+JVM moves the aggregate while no observed row changes - and
+`validate-phase5f-runtime-evidence.py:158` asserts
+`(before == after) == (not changed)`, which then fires on a route that wrote
+nothing.
+
+The aggregate is now derived from the sorted table-grain digests, so both
+measure exactly the same content and the cross-check becomes what it was
+intended to be: a detector of evidence edited after collection. A new
+`aggregate-table-snapshot-disagreement` mutant proves it still has teeth; the
+harness now detects 27 mutations.
+
+Sequence position is deliberately outside the database-effect contract. The
+contract governs business-data writes, deletions and truncations - all of which
+still change a table digest, and a table that empties or appears is still caught
+because the changed set is computed over the union of both maps. ADempiere's own
+allocator table `AD_Sequence` remains observed at table grain and remains
+governed by the `with_id_allocation` rule.
+
+#### First-touch initialisation is the third ambient writer
+
+With the aggregate corrected, the same replay surfaced the residual the quiesce
+had not removed: `AD_Queue`, `AD_NotificationQueue`,
+`AD_NotificationRecipient` and the consequent `AD_Sequence`, on
+`/::AdRedirector::/AdRedirector` in `modern-public` only.
+
+The origin is not the redirector. A servlet without `load-on-startup` is
+initialised lazily by its first request, and ADempiere's web initialisation is
+not read-only: `base/src/org/compiere/util/WebEnv.java:144-195` runs once per
+web-application class loader behind a static `s_initOK` guard and, inside
+`Trx.run`, enqueues a `@ServerStarted@` notification through
+`QueueLoader`/`DefaultNotifier`, inserting the queue and recipient rows. It is
+one-time per context per JVM, it is attributed to whichever vector happens to
+touch that context first, and a different vector ordering would move it to a
+different route. That is why it appeared on the modern leg only: the legacy
+contexts were already initialised, and `AdRedirector` was the first modern
+vector to reach an uninitialised one.
+
+Blessing it as an ownership row was rejected for the same reason as the
+processors: it would grant a redirect route under a `no-new-write` contract a
+standing permit for four unrelated tables, and the permit would be load-bearing
+for a write it does not cause.
+
+`phase5f-route-smoke.py` instead performs an unscored **warm-up pass** over
+every route of the shard immediately after each `set_switch`, once for the
+legacy runtime and once for the modern one, followed by a 3-second settle. Every
+servlet under test is therefore already initialised before the first observation
+window opens. The pass asserts nothing and swallows transport errors, because
+each route is asserted immediately afterwards by its own observation, and it
+cannot mask a per-request effect, which by definition also occurs on the
+observed request. Review hardened it twice: warming uses a short 15-second
+timeout rather than the 130-second observation timeout, so a lane that accepts
+connections but never answers cannot burn the job's whole budget before a single
+observation is recorded; and it catches `http.client.HTTPException` as well as
+`OSError`, because `http.client` exceptions are not `OSError` subclasses and
+would otherwise end the shard with an empty evidence directory - the exact
+defect per-vector publishing exists to prevent. `observe()` was widened the same
+way, so a truncated response is recorded as an attributed transport failure.
+
+Review also found that the table-grain parser dropped physical lines that were
+not the first line of an `INSERT`. `pg_dump --column-inserts` does not escape
+newlines inside string literals, so a row containing one spans several lines.
+Those lines used to reach the raw-dump aggregate; once the aggregate became
+derived, they would have reached nothing, and an update confined to the tail of
+a multi-line value would have changed no digest at all. Continuation lines are
+now attributed to their statement's table, with a `SET` or `SELECT` line ending
+the statement.
+
+With the aggregate fix applied to the run's evidence and the four
+initialisation tables removed from that one vector, the strict validator accepts
+the whole matrix: 82 legacy routes, all 37 eligible modern routes and 45
+explicitly unexecuted modern routes. That is a **simulation on real evidence,
+not an observed run**, and no runtime row may be claimed green until CI
+reproduces it.
 
 ### Earlier status: all six shards execute; eight vector failures remain
 

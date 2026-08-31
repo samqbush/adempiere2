@@ -426,6 +426,10 @@ def main() -> None:
             ),
             encoding="utf-8",
         ),
+        # The aggregate digest is derived from the table-grain digests, so the
+        # two can only disagree if the ledger was edited after collection.
+        "aggregate-table-snapshot-disagreement": lambda root: mutate_first_row(
+            root, "ROOT", {"database_after": "5" * 64}),
         "wrong-database-contract": lambda root: mutate_first_row(
             root, "ROOT",
             {"database_effect_contract": "session-bootstrap-owned"}),

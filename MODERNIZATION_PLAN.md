@@ -994,16 +994,22 @@ on `phase-5f-jakarta-web-routes`, but is **not complete or merged**. Its
 database-neutral `phase5fFinalVerification` gate has been executed green twice.
 Its database-backed `phase5fJakartaWebRoutesSmoke` gate and six context shards
 are implemented and **have been executed in CI, which supplies
-`phase3DbSystemPassword`. They have never passed.** The lane does start. All six shards now execute in a single run. Run 33342082144 recorded 122
-observations and observed `/webui` and `/wstore` for the first time: `/webui`
-(6), `/admin` (4), `/mobile` (14) and `/adempiere` (21) passed, while `/`
-recorded 3 vector failures, `/wstore` 4, and `capturePhase5fSoapCoexistence`
-failed. Each of those eight failures was diagnosed from that run's own evidence
-and fixed - a dropped `<error-page>` in the synthesized descriptor, three
-registered deviations (`DEV-P5F-ERR-02..04`) that had never been implemented,
-the container `redirectPort` behind three `CONFIDENTIAL` `/wstore` redirects,
-and the Phase 4 POS credential fixture that the coexistence capture never
-applied. The gate has not yet been observed green.
+`phase3DbSystemPassword`. They have never passed.** The lane does start. All six shards now execute in a single run, and
+since run 33360842891 all six report zero vector failures. Run 33369428234, the
+most recent, recorded 129 observations - `/` (16), `/wstore` (68), `/webui` (6),
+`/admin` (4), `/mobile` (14), `/adempiere` (21) - and passed
+`verifyPhase5fSwitchBaseline`, `capturePhase5fSoapCoexistence` and
+`verifyPhase5fBackgroundProcessorsQuiesced`. The failure is now confined to the
+strict aggregate `verifyPhase5fRuntimeEvidence`, which reported a single
+`/::AdRedirector::/AdRedirector` error. Every earlier failure mode was diagnosed
+from a run's own evidence and fixed: a dropped `<error-page>`, three registered
+deviations (`DEV-P5F-ERR-02..04`), the container `redirectPort` behind three
+`CONFIDENTIAL` `/wstore` redirects, the Phase 4 POS credential fixture, a latent
+argument-list defect in the aggregate task, three ambient database writers
+(timer-driven processors, automatic error reporting, and first-touch
+`WebEnv.initWeb` initialisation), and an aggregate digest that measured more
+content than the table digests it was cross-checked against. The gate has not
+yet been observed green.
 
 **Regime:** Legacy ZK/Tomcat 9 remains lit; the modern ZK/Tomcat 10.1 slice
 crossed from dark to lit at Phase 5d and now expands.
@@ -1524,16 +1530,22 @@ regressions.
 `phase5fJakartaWebRoutesSmoke` is implemented as six public-origin shards
 (`/webui`, `/admin`, `/`, `/mobile`, `/adempiere`, `/wstore`) plus complete
 Phase 4 SOAP coexistence and exact runtime-evidence validation. It **has been
-executed in CI and has never passed.** All six shards now execute in a single run. Run 33342082144 recorded 122
-observations and observed `/webui` and `/wstore` for the first time: `/webui`
-(6), `/admin` (4), `/mobile` (14) and `/adempiere` (21) passed, while `/`
-recorded 3 vector failures, `/wstore` 4, and `capturePhase5fSoapCoexistence`
-failed. Each of those eight failures was diagnosed from that run's own evidence
-and fixed - a dropped `<error-page>` in the synthesized descriptor, three
-registered deviations (`DEV-P5F-ERR-02..04`) that had never been implemented,
-the container `redirectPort` behind three `CONFIDENTIAL` `/wstore` redirects,
-and the Phase 4 POS credential fixture that the coexistence capture never
-applied. The gate has not yet been observed green. The shards run in an explicit order (`/`, `/wstore`,
+executed in CI and has never passed.** All six shards now execute in a single run, and
+since run 33360842891 all six report zero vector failures. Run 33369428234, the
+most recent, recorded 129 observations - `/` (16), `/wstore` (68), `/webui` (6),
+`/admin` (4), `/mobile` (14), `/adempiere` (21) - and passed
+`verifyPhase5fSwitchBaseline`, `capturePhase5fSoapCoexistence` and
+`verifyPhase5fBackgroundProcessorsQuiesced`. The failure is now confined to the
+strict aggregate `verifyPhase5fRuntimeEvidence`, which reported a single
+`/::AdRedirector::/AdRedirector` error. Every earlier failure mode was diagnosed
+from a run's own evidence and fixed: a dropped `<error-page>`, three registered
+deviations (`DEV-P5F-ERR-02..04`), the container `redirectPort` behind three
+`CONFIDENTIAL` `/wstore` redirects, the Phase 4 POS credential fixture, a latent
+argument-list defect in the aggregate task, three ambient database writers
+(timer-driven processors, automatic error reporting, and first-touch
+`WebEnv.initWeb` initialisation), and an aggregate digest that measured more
+content than the table digests it was cross-checked against. The gate has not
+yet been observed green. The shards run in an explicit order (`/`, `/wstore`,
 `/webui`, `/admin`, `/mobile`, `/adempiere`), record vector failures instead of
 aborting, and the job passes `--continue`, so one run reports the whole matrix.
 Until it is green, all 82 route observations and route-specific database

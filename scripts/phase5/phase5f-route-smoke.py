@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import http.client
 import http.cookiejar
 import json
 import os
@@ -27,6 +28,15 @@ RECORD_ONLY = "record-only"
 # Seconds to let a response-committed-before-write servlet finish committing
 # before the post-request snapshot is taken. See the citation at its use.
 WRITE_SETTLE_SECONDS = 0.5
+# First-touch initialisation runs on its own transaction and can commit after
+# the warming request returns, so the pass is followed by a longer settle than
+# a single request needs.
+WARM_UP_SETTLE_SECONDS = 3.0
+# Warming is unscored, so it must never consume the observation timeout. A lane
+# that accepts connections but never answers would otherwise burn hours here
+# before a single observation is recorded, and the shard would be killed by the
+# job timeout with an empty evidence directory.
+WARM_UP_TIMEOUT_SECONDS = 15
 CONFIDENTIAL_WSTORE = {
     "/wstore/login.jsp", "/wstore/loginServlet",
     "/wstore/checkOutServlet", "/wstore/orderServlet",
@@ -73,20 +83,45 @@ def database_snapshot(args: argparse.Namespace) -> tuple[str, dict[str, str]]:
             f"database snapshot failed: {unreadable}"
         ) from unreadable
     table_lines: dict[str, list[str]] = defaultdict(list)
-    all_lines: list[str] = []
+    # `pg_dump --column-inserts` does not escape newlines inside string
+    # literals, so one row can span several physical lines. Continuation lines
+    # are attributed to the statement's table rather than dropped: otherwise an
+    # update confined to the tail of a multi-line value would change no digest
+    # and the write would be invisible. A `SET` or `setval` line ends the
+    # current statement, which is how a continuation is told from dump preamble.
+    current: str | None = None
     for line in content.splitlines():
         if line.startswith("--") or not line.strip():
             continue
-        all_lines.append(line)
         if line.startswith("INSERT INTO "):
-            table = line[len("INSERT INTO "):].split(" ", 1)[0]
-            table_lines[table.lower()].append(line)
+            current = line[len("INSERT INTO "):].split(" ", 1)[0].lower()
+            table_lines[current].append(line)
+        elif line.startswith("SET ") or line.startswith("SELECT "):
+            current = None
+        elif current is not None:
+            table_lines[current].append(line)
+    tables = {
+        table: hashlib.sha256("\n".join(lines).encode()).hexdigest()
+        for table, lines in sorted(table_lines.items())
+    }
+    # The aggregate digest is derived from the table-grain digests rather than
+    # from the raw dump. Both then measure exactly the same content -- the row
+    # data of every table -- so the validator's cross-check between them is an
+    # evidence-tamper detector instead of a comparison of two different things.
+    #
+    # A raw-dump aggregate also covers `SELECT pg_catalog.setval(...)` lines.
+    # A native PostgreSQL sequence advances outside the transaction that drew
+    # from it, so an unrelated allocation moves the raw aggregate while no table
+    # row changes, which made the cross-check fire on routes that wrote nothing.
+    # Sequence position is deliberately out of scope for the database-effect
+    # contract: the contract governs business-data writes, and ADempiere's own
+    # allocator table `AD_Sequence` is itself observed at table grain.
     return (
-        hashlib.sha256("\n".join(all_lines).encode()).hexdigest(),
-        {
-            table: hashlib.sha256("\n".join(lines).encode()).hexdigest()
-            for table, lines in sorted(table_lines.items())
-        },
+        hashlib.sha256(
+            "\n".join(f"{table}\t{digest}" for table, digest in tables.items())
+            .encode()
+        ).hexdigest(),
+        tables,
     )
 
 
@@ -171,10 +206,11 @@ def request(
     url: str,
     method: str,
     headers: dict[str, str] | None = None,
+    timeout: int = 130,
 ) -> tuple[int, list[tuple[str, str]], bytes]:
     target = urllib.request.Request(url, method=method, headers=headers or {})
     try:
-        response = opener.open(target, timeout=130)
+        response = opener.open(target, timeout=timeout)
     except urllib.error.HTTPError as error:
         response = error
     with response:
@@ -363,7 +399,7 @@ def main() -> None:
             status, headers, body = request(
                 target_opener, target_url, route["method"], request_headers,
             )
-        except OSError as unreachable:
+        except (OSError, http.client.HTTPException) as unreachable:
             # A transport error is attributable to this vector, so it is
             # recorded like a status mismatch rather than ending the shard.
             database_snapshot(args)
@@ -442,6 +478,41 @@ def main() -> None:
             )
         return row
 
+    def warm_up(runtime: str) -> None:
+        """Absorbs one-time, first-touch initialisation before observation.
+
+        A servlet without `load-on-startup` is initialised lazily by its first
+        request, and ADempiere's initialisation is not read-only:
+        `base/src/org/compiere/util/WebEnv.java:144-195` runs once per web
+        application class loader behind a static `s_initOK` guard and enqueues a
+        `@ServerStarted@` notification, inserting `AD_Queue`,
+        `AD_NotificationQueue` and `AD_NotificationRecipient` rows. Without this
+        pass those inserts land inside whichever vector happens to touch the
+        context first -- observed on the modern `/::AdRedirector::/AdRedirector`
+        vector -- and are scored as that route's database effect even though no
+        route owns them and a different vector ordering would move them.
+
+        Warming is best effort and deliberately unscored: it asserts nothing and
+        swallows transport errors, because every route is asserted immediately
+        afterwards by its own observation. It cannot mask a per-request effect,
+        which by definition also occurs on the observed request.
+        """
+        for route in routes:
+            jar, warm_opener = fresh_http()
+            targets = [(warm_opener, args.public_origin)]
+            if args.context == "/wstore" and confidential(route["path"]):
+                targets.append((https_for(jar), args.public_https_origin))
+            for warm, origin in targets:
+                try:
+                    request(warm, origin.rstrip("/") + route["path"],
+                            route["method"],
+                            timeout=WARM_UP_TIMEOUT_SECONDS)
+                except (OSError, http.client.HTTPException):
+                    continue
+        print(f"warmed {runtime} runtime with {len(routes)} routes",
+              file=sys.stderr)
+        time.sleep(WARM_UP_SETTLE_SECONDS)
+
     def attempt(action) -> None:
         """Runs one route assertion, recording a vector failure and going on."""
         try:
@@ -451,6 +522,7 @@ def main() -> None:
 
     try:
         set_switch(args, "disable")
+        warm_up("legacy")
 
         for route in routes:
             _, legacy_opener = fresh_http()
@@ -512,6 +584,7 @@ def main() -> None:
         if args.context in ELIGIBLE:
             cookie_jar.clear()
             set_switch(args, "enable")
+            warm_up("modern")
             if args.context == "/wstore":
                 bootstrap = next(
                     row for row in routes
