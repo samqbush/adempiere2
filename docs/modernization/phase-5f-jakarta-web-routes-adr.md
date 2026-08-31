@@ -90,7 +90,9 @@ accident.
 - `phase5fFinalVerification` is implemented and green twice. The implemented
   `phase5fJakartaWebRoutesSmoke` has been executed in CI and has never passed;
   it currently fails in `:startPhase5fRoutedLane` before any shard runs, and
-  `/webui` and `/wstore` have never been observed, so Phase 5f is not
+  all six shards now execute in one run and run 33342082144 observed `/webui`
+  and `/wstore` for the first time, leaving eight vector failures that have
+  since been diagnosed and fixed. Phase 5f is not
   complete.
 - The installed product and both 394LTS archives stage exactly one copy of each
   of the five Phase 5f WARs under `tomcat10-api/phase5f/`, preserve Phase 4 CXF

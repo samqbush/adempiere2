@@ -39,5 +39,7 @@ executed green twice through `phase5fFinalVerification`. The six-shard
 public-origin and database-effect observations remain **unverified** because
 `phase5fJakartaWebRoutesSmoke`, although executed in CI, has never passed. It
 currently fails in `:startPhase5fRoutedLane` before any shard runs, and
-`/webui` and `/wstore` have never been observed in any run. T5f-1 remains open and closes only in
+All six shards now execute in one run; run 33342082144 observed `/webui` and
+`/wstore` for the first time and left eight vector failures, since diagnosed
+and fixed. T5f-1 remains open and closes only in
 Phase 5h; Phase 5f is not complete or merged.

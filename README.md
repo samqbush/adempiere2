@@ -212,12 +212,13 @@ remain ineligible until the database-backed gate passes.
 
 `phase5fJakartaWebRoutesSmoke` is implemented as six public-origin shards plus
 Phase 4 SOAP coexistence. It **has been executed in CI, which supplies
-`phase3DbSystemPassword`, and it has never passed.** The current run fails in
-`:startPhase5fRoutedLane` with `The Phase 5e modern runtime did not become
-ready`, before any shard runs. Because the shards are fail-fast and `/` runs
-fourth of six, `/webui` and `/wstore` have never been observed in any run. All
-82 runtime observations and route-specific database effects therefore remain
-pending. T5e-1 remains open;
+`phase3DbSystemPassword`, and it has never passed.** All six shards now execute
+in one run. Run 33342082144 recorded 122 observations and observed `/webui` and
+`/wstore` for the first time; `/webui`, `/admin`, `/mobile` and `/adempiere`
+passed, and eight vector failures remained across `/`, `/wstore` and the Phase 4
+SOAP coexistence capture. Every one has been diagnosed from that run's own
+evidence and fixed, but until the gate is observed green all 82 runtime
+observations and route-specific database effects remain pending. T5e-1 remains open;
 T5f-1 closes in Phase 5h. Required checks and branch protection remain a manual
 repository-administrator action. See
 `docs/modernization/phase-5f-evidence.md`.

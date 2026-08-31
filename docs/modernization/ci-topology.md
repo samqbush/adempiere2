@@ -185,17 +185,17 @@ lane and is still worth fixing.
 ## The current-phase smoke is red on this branch
 
 `Current-phase database smoke` runs `phase5fJakartaWebRoutesSmoke`, which **has
-never passed.** The routed lane does start and route shards do execute. In run
-33327217291 the `/adempiere`, `/admin` and `/mobile` shards passed and the `/`
-shard failed at route `/::Broadcast::/` in `modern-public` mode, expecting 302
-and observing 502; the modern runtime answered 302 and the 502 was manufactured
-by the routing proxy's fail-closed `internal-location-leak` check.
+never passed.** All six route shards now execute in one run: run 33342082144
+recorded 122 observations, with `/webui`, `/admin`, `/mobile` and `/adempiere`
+passing and eight vector failures across `/`, `/wstore` and the Phase 4 SOAP
+coexistence capture. Every one of those failures has been diagnosed from that
+run's own evidence and fixed, but the gate has not yet been observed green.
 
 This is deliberate and must not be worked around by pointing the job back at a
 green Phase 5e task. The blocking gate is supposed to reflect the state of the
 phase under development, and the state of Phase 5f is red. See
-`docs/modernization/phase-5f-evidence.md` for all three observed failure modes
-and for the fact that `/webui` and `/wstore` have never been observed.
+`docs/modernization/phase-5f-evidence.md` for every observed failure mode and
+the evidence each fix was derived from.
 
 The job carries two deliberate deviations from the other lanes:
 

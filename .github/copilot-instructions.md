@@ -75,13 +75,16 @@ pristine per-context rollback.
 
 The implemented `phase5fJakartaWebRoutesSmoke` has six public-origin shards and
 **has been executed in CI, which supplies `phase3DbSystemPassword`. It has never
-passed.** The routed lane does start and shards do execute. The most recent run,
-33327217291, passed `/adempiere` (21 observations), `/admin` (4) and `/mobile`
-(14), then failed `/` at route `/::Broadcast::/` in `modern-public` mode,
-expecting 302 and observing 502. The modern runtime answered 302; the 502 is
-manufactured by the routing proxy's own fail-closed `internal-location-leak`
-check. Because the shards were fail-fast and `/` did not run first, **`/webui`
-and `/wstore` have never been observed in any run.** The shards now run in an
+passed.** All six shards now execute in a single run. Run 33342082144 recorded 122
+observations and observed `/webui` and `/wstore` for the first time: `/webui`
+(6), `/admin` (4), `/mobile` (14) and `/adempiere` (21) passed, while `/`
+recorded 3 vector failures, `/wstore` 4, and `capturePhase5fSoapCoexistence`
+failed. Each of those eight failures was diagnosed from that run's own evidence
+and fixed - a dropped `<error-page>` in the synthesized descriptor, three
+registered deviations (`DEV-P5F-ERR-02..04`) that had never been implemented,
+the container `redirectPort` behind three `CONFIDENTIAL` `/wstore` redirects,
+and the Phase 4 POS credential fixture that the coexistence capture never
+applied. The gate has not yet been observed green. The shards run in an
 explicit order (`/`, `/wstore`, `/webui`, `/admin`, `/mobile`, `/adempiere`),
 record vector failures rather than aborting, and `Current-phase database smoke`
 passes `--continue`, so one run reports the whole matrix.

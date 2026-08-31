@@ -190,11 +190,11 @@ jobs:
   # phase5fJakartaWebRoutesSmoke. It is currently RED, and this job is meant to
   # reflect the state of the phase under development.
   #
-  # The lane itself starts and route shards do execute. As of run 33327217291
-  # the /adempiere, /admin and /mobile shards passed and the '/' shard failed:
-  # route /::Broadcast::/ in modern-public mode expected 302 and observed 502.
-  # The modern runtime answered 302 correctly; the 502 is manufactured by the
-  # routing proxy's own fail-closed internal-location-leak check.
+  # All six route shards now execute in a single run. As of run 33342082144
+  # the lane recorded 122 observations: /webui, /admin, /mobile and /adempiere
+  # passed, and eight vector failures remained across '/', '/wstore' and the
+  # Phase 4 SOAP coexistence capture. Each has since been diagnosed from that
+  # run's evidence and fixed; the gate has not yet been observed green.
   # See docs/modernization/phase-5f-evidence.md.
   current-phase-smoke:
     name: Current-phase database smoke

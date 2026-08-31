@@ -994,18 +994,16 @@ on `phase-5f-jakarta-web-routes`, but is **not complete or merged**. Its
 database-neutral `phase5fFinalVerification` gate has been executed green twice.
 Its database-backed `phase5fJakartaWebRoutesSmoke` gate and six context shards
 are implemented and **have been executed in CI, which supplies
-`phase3DbSystemPassword`. They have never passed.** The lane does start: the
-most recent run, 33327217291, reached the shards and recorded `/adempiere` 21,
-`/admin` 4 and `/mobile` 14 observations passing before `/` failed. The failing
-vector is route `/::Broadcast::/` in `modern-public` mode, which expected 302
-and observed 502. The modern Tomcat 10 access log records `GET / ... 302` for
-that exchange, so the modern runtime answered correctly; the 502 is manufactured
-by the routing proxy's own fail-closed `internal-location-leak` check when
-`LoopbackProxy.publicLocation()` cannot map the backend `Location` header to the
-public origin. An earlier run had failed before the shards in
-`:startPhase5fRoutedLane` with `The Phase 5e modern runtime did not become
-ready`; that is no longer the observed failure. `/webui` and `/wstore` have
-never been observed in any run, because the shards were fail-fast.
+`phase3DbSystemPassword`. They have never passed.** The lane does start. All six shards now execute in a single run. Run 33342082144 recorded 122
+observations and observed `/webui` and `/wstore` for the first time: `/webui`
+(6), `/admin` (4), `/mobile` (14) and `/adempiere` (21) passed, while `/`
+recorded 3 vector failures, `/wstore` 4, and `capturePhase5fSoapCoexistence`
+failed. Each of those eight failures was diagnosed from that run's own evidence
+and fixed - a dropped `<error-page>` in the synthesized descriptor, three
+registered deviations (`DEV-P5F-ERR-02..04`) that had never been implemented,
+the container `redirectPort` behind three `CONFIDENTIAL` `/wstore` redirects,
+and the Phase 4 POS credential fixture that the coexistence capture never
+applied. The gate has not yet been observed green.
 
 **Regime:** Legacy ZK/Tomcat 9 remains lit; the modern ZK/Tomcat 10.1 slice
 crossed from dark to lit at Phase 5d and now expands.
@@ -1526,19 +1524,19 @@ regressions.
 `phase5fJakartaWebRoutesSmoke` is implemented as six public-origin shards
 (`/webui`, `/admin`, `/`, `/mobile`, `/adempiere`, `/wstore`) plus complete
 Phase 4 SOAP coexistence and exact runtime-evidence validation. It **has been
-executed in CI and has never passed.** The most recent run, 33327217291, does
-reach the shards: `/adempiere` (21 observations), `/admin` (4) and `/mobile`
-(14) passed, and `:phase5fROOTRoutesSmokeShard` then failed at route
-`/::Broadcast::/` in `modern-public` mode, expecting 302 and observing 502. The
-modern runtime answered 302; the 502 is manufactured by the routing proxy's
-fail-closed `internal-location-leak` check. An earlier run had failed before any
-shard in `:startPhase5fRoutedLane` with `The Phase 5e modern runtime did not
-become ready`, and an earlier one still failed `/` with
-`AdRedirector modern-public: status 500 != 400`. Because the shards were
-fail-fast and `/` did not run first, **`/webui` and `/wstore` have never been
-observed in any run.** The shards now run in an explicit order (`/`, `/wstore`,
+executed in CI and has never passed.** All six shards now execute in a single run. Run 33342082144 recorded 122
+observations and observed `/webui` and `/wstore` for the first time: `/webui`
+(6), `/admin` (4), `/mobile` (14) and `/adempiere` (21) passed, while `/`
+recorded 3 vector failures, `/wstore` 4, and `capturePhase5fSoapCoexistence`
+failed. Each of those eight failures was diagnosed from that run's own evidence
+and fixed - a dropped `<error-page>` in the synthesized descriptor, three
+registered deviations (`DEV-P5F-ERR-02..04`) that had never been implemented,
+the container `redirectPort` behind three `CONFIDENTIAL` `/wstore` redirects,
+and the Phase 4 POS credential fixture that the coexistence capture never
+applied. The gate has not yet been observed green. The shards run in an explicit order (`/`, `/wstore`,
 `/webui`, `/admin`, `/mobile`, `/adempiere`), record vector failures instead of
-aborting, and the job passes `--continue`, so one run reports the whole matrix. Therefore all 82 route observations and route-specific database
+aborting, and the job passes `--continue`, so one run reports the whole matrix.
+Until it is green, all 82 route observations and route-specific database
 effects remain pending, and Phase 5f must not be described as complete. See
 `docs/modernization/phase-5f-evidence.md`.
 
