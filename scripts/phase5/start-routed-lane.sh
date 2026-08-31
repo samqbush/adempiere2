@@ -294,8 +294,17 @@ connector = f"""
 """
 if "</Service>" not in text:
     raise SystemExit("Tomcat 9 server.xml has no Service close tag")
-server.write_text(text.replace("</Service>", connector + "  </Service>", 1),
-                  encoding="utf-8")
+text = text.replace("</Service>", connector + "  </Service>", 1)
+# A CONFIDENTIAL security-constraint is enforced by the container before any
+# routing filter runs, and Tomcat builds its redirect from the matched
+# connector's redirectPort. The installed product ships ADEMPIERE_SSL_PORT,
+# which is not listening in this lane, so the redirect has to be retargeted at
+# the isolated Phase 5f public HTTPS ingress.
+text, redirects = re.subn(r'redirectPort="[0-9]+"',
+                          f'redirectPort="{port}"', text)
+if redirects == 0:
+    raise SystemExit("Tomcat 9 server.xml declares no redirectPort")
+server.write_text(text, encoding="utf-8")
 PY
   CATALINA_OPTS="$CATALINA_OPTS -Dadempiere.phase5f.publicHttpsPort=$public_https_port"
   export CATALINA_OPTS

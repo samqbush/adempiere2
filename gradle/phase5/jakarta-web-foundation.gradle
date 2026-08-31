@@ -175,6 +175,39 @@ def phase5fXml = { String value ->
 	value.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 }
 
+// A legacy <error-page> whose <location> resolves to a mapped servlet makes
+// sendError() observable as that servlet's response rather than as the raw
+// status. The ROOT context relies on this: sendError(404) is dispatched to '/',
+// which Broadcast serves, so the legacy runtime answers 302. Phase 5f
+// synthesizes a curated metadata-complete descriptor, so these entries have to
+// be carried over from the legacy descriptor explicitly; otherwise the modern
+// context returns the container default error page and diverges from the frozen
+// legacy oracle.
+def phase5fLegacyErrorPages = { String context ->
+	def entry = phase5fContexts.values().find { it.context == context }
+	if (entry == null) {
+		throw new GradleException(
+			"No Phase 5f context definition for ${context}")
+	}
+	def descriptor = file("${entry.web}/WEB-INF/web.xml")
+	if (!descriptor.isFile()) {
+		throw new GradleException(
+			"Missing legacy descriptor ${descriptor} for ${context}")
+	}
+	(descriptor.getText('UTF-8') =~ /(?s)<error-page>(.*?)<\/error-page>/)
+		.collect { match ->
+			def body = match[1]
+			def code = (body =~ /(?s)<error-code>\s*(.*?)\s*<\/error-code>/)
+			def location = (body =~ /(?s)<location>\s*(.*?)\s*<\/location>/)
+			if (!code || !location) {
+				throw new GradleException(
+					"Unsupported legacy <error-page> in ${descriptor}: Phase 5f "
+						+ 'only carries over <error-code>/<location> pairs')
+			}
+			[code: code[0][1], location: location[0][1]]
+		}
+}
+
 def phase5fDescriptor = { String context, int timeout ->
 	def routes = phase5fReadRoutes().findAll { it.context == context }
 	def filterNames = [
@@ -249,6 +282,10 @@ def phase5fDescriptor = { String context, int timeout ->
 		out << '<user-data-constraint><transport-guarantee>CONFIDENTIAL</transport-guarantee>'
 		out << '</user-data-constraint></security-constraint>\n'
 	}
+	phase5fLegacyErrorPages(context).each { page ->
+		out << "  <error-page><error-code>${phase5fXml(page.code)}</error-code>"
+		out << "<location>${phase5fXml(page.location)}</location></error-page>\n"
+	}
 	out << "  <session-config><session-timeout>${timeout}</session-timeout>"
 	out << '<tracking-mode>COOKIE</tracking-mode></session-config>\n'
 	out << '  <resource-ref><res-ref-name>java/AdempiereDS</res-ref-name>'
@@ -320,20 +357,71 @@ tasks.register('preparePhase5fJakartaSources') {
 				}
 			}
 		}
-		def adRedirector = output.get().file(
-			'ROOT/org/compiere/cm/AdRedirector.java').asFile
-		def legacyAdError =
-			'response.sendError(500,"Unknown or illegal Ad set, can\'t handle request...");'
-		def modernAdError =
-			'response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Unknown or illegal Ad set, can\'t handle request...");'
-		def adRedirectorText = adRedirector.getText('UTF-8')
-		if (adRedirectorText.count(legacyAdError) != 1) {
-			throw new GradleException(
-				'The generated AdRedirector source no longer has exactly one '
-					+ 'reviewed legacy missing-input response')
+		// Each transform below implements exactly one reviewed deviation from
+		// contracts/phase5f-jakarta-web-v1/known-deviations.tsv. The anchor
+		// count is asserted so an upstream source edit fails the build instead
+		// of silently dropping the deviation.
+		def replaceExactly = { String relativePath, String from, String to ->
+			def source = output.get().file(relativePath).asFile
+			def text = source.getText('UTF-8')
+			if (text.count(from) != 1) {
+				throw new GradleException(
+					"The generated ${relativePath} source no longer has exactly "
+						+ 'one reviewed occurrence of the transformed statement')
+			}
+			source.setText(text.replace(from, to), 'UTF-8')
 		}
-		adRedirector.setText(
-			adRedirectorText.replace(legacyAdError, modernAdError), 'UTF-8')
+		// DEV-P5F-ERR-01 /::AdRedirector::/AdRedirector
+		replaceExactly(
+			'ROOT/org/compiere/cm/AdRedirector.java',
+			'response.sendError(500,"Unknown or illegal Ad set, can\'t handle request...");',
+			'response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Unknown or illegal Ad set, can\'t handle request...");')
+		// DEV-P5F-ERR-02 /::Community::/communityServlet. getAllIDs is called
+		// with an empty transaction name, so Trx.get rejects it and the
+		// resulting DBException escaped as a 500. The reviewed deviation keeps
+		// the query unchanged and reports the bad request instead. The thrown
+		// type is DBException; the IllegalArgumentException is only its cause.
+		replaceExactly(
+			'ROOT/org/compiere/cm/Community.java',
+			'int [] allIDs = X_W_Store.getAllIDs ("W_Store", "AD_Client_ID=" + ctx.get ("#AD_Client_ID"), "");',
+			'''int [] allIDs;
+			try
+			{
+				allIDs = X_W_Store.getAllIDs ("W_Store", "AD_Client_ID=" + ctx.get ("#AD_Client_ID"), "");
+			}
+			catch (org.adempiere.exceptions.DBException missingTransaction)
+			{
+				response.sendError(HttpServletResponse.SC_BAD_REQUEST, "No Transaction Name");
+				return;
+			}''')
+		// DEV-P5F-ERR-03 /::XMLBroadcast::/xml/*. setStatus is deliberate:
+		// the ROOT descriptor maps error code 404 to '/', so sendError(404)
+		// would be dispatched to Broadcast and observed as a 302 redirect.
+		replaceExactly(
+			'ROOT/org/compiere/cm/XMLBroadcast.java',
+			'resetInternalMediaURL (request);',
+			'''if (thisRequest.getWebProject() == null)
+		{
+			response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+			return;
+		}
+		resetInternalMediaURL (request);''')
+		// DEV-P5F-ERR-04 /wstore::PaymentServlet::/paymentServlet. A GET without
+		// a payment amount fell through to doPost, so the mutation handler ran
+		// on a GET and failed with 500. Reject it before any response is
+		// committed; parameterized GETs keep their legacy behaviour.
+		replaceExactly(
+			'wstore/org/compiere/wstore/PaymentServlet.java',
+			'log.info("Get from " + request.getRemoteHost() + " - " + request.getRemoteAddr());',
+			'''log.info("Get from " + request.getRemoteHost() + " - " + request.getRemoteAddr());
+		String phase5fAmt = WebUtil.getParameter (request, "Amt");
+		if (phase5fAmt == null || phase5fAmt.length() == 0)
+		{
+			response.setHeader("Allow", "POST");
+			response.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED,
+				"Payment mutation is not defined for plain GET");
+			return;
+		}''')
 		def helper = output.get().file(
 			'wstore/org/compiere/wstore/JspExpression.java').asFile
 		helper.parentFile.mkdirs()
@@ -488,6 +576,12 @@ tasks.register('writePhase5fServlet6Descriptors') {
 	group = 'build'
 	description = 'Writes explicit metadata-complete Servlet 6 descriptors from the reviewed route ledger'
 	inputs.file phase5fContract
+	// The generated descriptor now carries the legacy <error-page> entries over,
+	// so each legacy descriptor is a real input. Without this a change to one of
+	// them leaves the task UP-TO-DATE and packages a stale WEB-INF/web.xml.
+	inputs.files phase5fContexts.values().collect {
+		file("${it.web}/WEB-INF/web.xml")
+	}
 	def output = phase5fBuildDir.map { it.dir('descriptors') }
 	outputs.dir output
 	doLast {
@@ -752,6 +846,18 @@ tasks.register('verifyPhase5fServlet6Descriptors') {
 			].each { required ->
 				if (!text.contains(required)) {
 					throw new GradleException("${descriptor} lacks ${required}")
+				}
+			}
+			phase5fLegacyErrorPages(spec.context).each { page ->
+				def carried =
+					"<error-page><error-code>${phase5fXml(page.code)}</error-code>" +
+						"<location>${phase5fXml(page.location)}</location></error-page>"
+				if (!text.contains(carried)) {
+					throw new GradleException(
+						"${descriptor} omits the legacy error-page "
+							+ "${page.code} -> ${page.location}, so sendError "
+							+ 'would return the container default page instead '
+							+ 'of the legacy dispatch target')
 				}
 			}
 			phase5fReadRoutes().findAll { it.context == spec.context }.each { route ->

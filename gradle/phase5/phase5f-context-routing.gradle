@@ -675,11 +675,17 @@ tasks.register('capturePhase5fSoapCoexistence', Exec) {
 	description = 'Replays the complete Phase 4 SOAP corpus while Phase 5f contexts are active'
 	dependsOn tasks.named('startPhase5fRoutedLane'), phase5fVerifySwitchBaseline
 	mustRunAfter phase5fShardTasks, phase5fVerifySwitchBaseline
+	environment 'ADEMPIERE_PHASE5F_DB_PASSWORD', phase5fDbPassword.get()
 	commandLine(
 		'bash',
 		rootProject.file('scripts/phase5/capture-phase5f-coexistence.sh'),
 		rootProject.projectDir,
-		phase5fSmokeEvidence.get().asFile)
+		phase5fSmokeEvidence.get().asFile,
+		phase5fDbHost.get(),
+		phase5fDbPort.get(),
+		phase5fDbName.get(),
+		phase5fDbUser.get(),
+		phase5fDatabaseMarker)
 }
 
 tasks.register('verifyPhase5fRuntimeEvidence', Exec) {
