@@ -208,23 +208,54 @@ now carries a positive control - one row per context that already owns
 `AD_Sequence` update. Neutering `with_id_allocation` was confirmed to make the
 harness reject its own clean fixture.
 
+#### Automatic error reporting is the second ambient writer
+
+The run's evidence was replayed through the corrected validator with every
+processor-caused table removed, to find what the quiesce would *not* fix. One
+row survived: `AD_Issue` on `/::Community::/communityServlet` in
+`modern-public`.
+
+Both legs of that route are contractually correct - legacy returns 500 and
+modern returns 400, each matching its contract - so this is not a status
+regression. `AD_Issue` is ADempiere's automatic error report:
+`CLogErrorBuffer` routes every SEVERE log record to `MIssue.create`
+(`base/src/org/compiere/util/CLogErrorBuffer.java:222`), which inserts a row
+unless `AD_System.IsAutoErrorReport` is off
+(`base/src/org/compiere/model/MIssue.java:70-73`). Like the processors, it is
+diagnostic infrastructure driven by log events rather than route business
+state, and it is written after the response is decided, so it lands in whichever
+observation window is open. `MIssue.report()` additionally attempts an outbound
+call to ADempiere's issue service, which a CI lane should not be making.
+
+The quiesce therefore also turns `IsAutoErrorReport` off. This cannot change a
+route response: `MIssue.create` simply returns `null`. The state file carries a
+column name per row, so one file restores both the processor `IsActive` flags
+and this one, and `verify` fails if either is re-enabled during the matrix.
+
 #### Deliberately not blessed
 
-Replaying the corrected validator against the run's evidence, with
-processor-caused tables removed, leaves a small residual that is **not** being
-widened into the contract, because the evidence does not establish it is
-route-caused and benign:
+The same replay leaves a residual that is **not** being widened into the
+contract, because the evidence does not establish it is route-caused:
 
-- `AD_Issue` on `/::Community::/communityServlet` in `modern-public` only.
-  `AD_Issue` is ADempiere's automatic error report. A modern-only error report
-  may be a genuine regression, and blessing it would hide exactly that.
 - `AD_Session` on `/::CacheService::/cache/*`, `/::MediaBroadcast::/media/*`
   and `/wstore::AssetServlet::/assetServlet/*`. Every one of these observations
   also carried an active processor row, and the processors create their own
   `AD_Session` records, so the quiesce is expected to remove them. If any
-  survives, it is a real session-creation effect and will be diagnosed then.
+  survives it is a real session-creation effect and will be diagnosed then.
 - `AD_NotificationQueue`, `AD_NotificationRecipient` and `AD_Queue` on
   `/::AdRedirector::/AdRedirector` in `modern-public`, for the same reason.
+
+#### Checked and cleared
+
+`/::AdRedirector::/AdRedirector` carries a `no-new-write` contract, and
+`webCM/src/main/servlet/org/compiere/cm/AdRedirector.java:55-56` does write:
+it constructs an `MAd` and calls `addClick()`, which increments `ActualClick`
+and saves (`base/src/org/compiere/model/MAd.java`). The contract is
+nevertheless correct **for this vector**, because that branch is only taken
+when a `CM_Ad_ID` is supplied and the Phase 5b request vector is a bare
+`/AdRedirector`. Neither observed leg recorded a `CM_Ad` change, which confirms
+it. A future vector carrying `CM_Ad_ID` would need the ownership row corrected
+the same way the click route's was.
 
 ### Earlier status: all six shards execute; eight vector failures remain
 

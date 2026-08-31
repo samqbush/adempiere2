@@ -106,14 +106,30 @@ tables=("${scheduler_sources[@]}")
 
 mkdir -p "$(dirname "$state_file")"
 
+# The second ambient writer. CLogErrorBuffer routes every SEVERE log record to
+# MIssue.create (base/src/org/compiere/util/CLogErrorBuffer.java:222), which
+# inserts an AD_Issue row unless AD_System.IsAutoErrorReport is off
+# (base/src/org/compiere/model/MIssue.java:70-73). That is diagnostic
+# infrastructure driven by log events, not route business state, and it is
+# written after the response is decided, so it lands in whichever observation
+# window happens to be open. MIssue.report() also attempts an outbound call to
+# ADempiere's issue service, which a CI lane should not be making. Disabling it
+# cannot change a route response: create() simply returns null.
+ERROR_REPORT_TABLE=ad_system
+ERROR_REPORT_COLUMN=IsAutoErrorReport
+
+# table<TAB>id<TAB>column<TAB>value, so one file carries both the processor
+# IsActive flags and the error-report flag without a second format.
 snapshot() {
   for table in "${tables[@]}"; do
     "${psql_cmd[@]}" -F $'\t' -c \
-      "SELECT '$table', ${table}_ID, IsActive FROM $table ORDER BY ${table}_ID"
+      "SELECT '$table', ${table}_ID, 'IsActive', IsActive FROM $table ORDER BY ${table}_ID"
   done
+  "${psql_cmd[@]}" -F $'\t' -c \
+    "SELECT '$ERROR_REPORT_TABLE', AD_System_ID, '$ERROR_REPORT_COLUMN', $ERROR_REPORT_COLUMN FROM $ERROR_REPORT_TABLE ORDER BY AD_System_ID"
 }
 
-assert_all_inactive() {
+assert_quiesced() {
   local table count
   for table in "${tables[@]}"; do
     count=$("${psql_cmd[@]}" -c "SELECT count(*) FROM $table WHERE IsActive='Y'")
@@ -122,6 +138,12 @@ assert_all_inactive() {
       exit 67
     }
   done
+  count=$("${psql_cmd[@]}" -c \
+    "SELECT count(*) FROM $ERROR_REPORT_TABLE WHERE $ERROR_REPORT_COLUMN='Y'")
+  [[ "$count" == "0" ]] || {
+    echo "Phase 5f automatic error reporting is still enabled on $count AD_System rows" >&2
+    exit 67
+  }
 }
 
 case "$action" in
@@ -131,12 +153,15 @@ case "$action" in
       for table in "${tables[@]}"; do
         printf "UPDATE %s SET IsActive='N', Updated=now(), UpdatedBy=100 WHERE IsActive='Y';\n" "$table"
       done
+      printf "UPDATE %s SET %s='N', Updated=now(), UpdatedBy=100 WHERE %s='Y';\n" \
+        "$ERROR_REPORT_TABLE" "$ERROR_REPORT_COLUMN" "$ERROR_REPORT_COLUMN"
     } | "${psql_cmd[@]}" --single-transaction -f - >/dev/null
-    assert_all_inactive
-    printf 'Quiesced %d Phase 5f background processor tables\n' "${#tables[@]}"
+    assert_quiesced
+    printf 'Quiesced %d Phase 5f background processor tables and automatic error reporting\n' \
+      "${#tables[@]}"
     ;;
   verify)
-    assert_all_inactive
+    assert_quiesced
     ;;
   restore)
     [[ -f "$state_file" ]] || {
@@ -144,10 +169,10 @@ case "$action" in
       exit 65
     }
     {
-      while IFS=$'\t' read -r table id active; do
-        [[ -n "$table" ]] || continue
-        printf "UPDATE %s SET IsActive='%s' WHERE %s_ID=%s;\n" \
-          "$table" "$active" "$table" "$id"
+      while IFS=$'\t' read -r table id column value; do
+        [[ -n "$table" && -n "$column" ]] || continue
+        printf "UPDATE %s SET %s='%s' WHERE %s_ID=%s;\n" \
+          "$table" "$column" "$value" "$table" "$id"
       done <"$state_file"
     } | "${psql_cmd[@]}" --single-transaction -f - >/dev/null
     rm -f "$state_file"
