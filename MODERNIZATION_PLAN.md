@@ -189,7 +189,7 @@ necessarily block merges.
 | R1 | Core | Phase 2 smoke and Phase 3 DB-backed metadata validation protect selected runtime and dictionary seams; broader business behavior remains | Phase 5 | Expand representative document, accounting, and UI behavior coverage. |
 | R2 | Swing/POS | Closed for the Phase 2 Garden World login/role/menu/process slice; broader operator workflows remain outside this phase | Closed in Phase 2; broader coverage Phase 5 | The semantic Xvfb smoke is now gated; expand coverage during the ZK/client modernization. |
 | R3 | Background jobs | Exact-once scheduler execution and context/transaction cleanup are proven; production discovery breadth and observability remain | Phase 6 | Expand processor discovery and add operational metrics/alerts. |
-| R4 | Web UI | Phase 5d replaces the 503 marker with a functional modern slice and crosses the Testability Milestone. Phase 5e adds proven fail-closed `/webui` cohort routing, concurrent identity isolation, and logout/timeout/container cleanup. Phase 5f now builds isolated generated Jakarta source/web trees, five source-native context WARs, the source-native `/timeline` route and exact static DSP compatibility resource, and independently reversible context routing for the closed 82-deployed/30-non-deployed scope. Its database-neutral gate is green twice, and the six-shard database-backed route replay is green in run 33379849664 with 129 observations and zero vector failures across all six contexts. Production customizations, 13 non-reproducible legacy entries, the four `/*` reachability-only vectors, disabled `/mobile` and `/adempiere`, unowned `/admin`, JasperReports interactive web, and screen-level visual parity remain residuals. | Phase 5f database-backed gate for route/effect observations; Phase 5g for disabled contexts, reports and screen-level parity; Phase 7 for full artifact reproducibility | Do not treat implemented packaging or database-neutral contracts as runtime route parity. Production owners must validate custom overlays. Both PR gates are now green; the 25 `/wstore` JSP precompile rows remain runtime-pending because only three of those pages are reached by a route vector. |
+| R4 | Web UI | Phase 5d replaces the 503 marker with a functional modern slice and crosses the Testability Milestone. Phase 5e adds proven fail-closed `/webui` cohort routing, concurrent identity isolation, and logout/timeout/container cleanup. Phase 5f merged at `83aeb8536` with both gates green: isolated generated Jakarta source/web trees, five source-native context WARs, the source-native `/timeline` route and exact static DSP compatibility resource, and independently reversible context routing for the closed 82-deployed/30-non-deployed scope, observed in run 33379849664 with 129 observations and zero vector failures across all six contexts. **No modern *business* write, document transition, process execution, report, or upload/download has ever been observed** - the modern runtime is proven only for login, role selection, menu and a read-only window (it does write `AD_Session` on login). Production customizations, 13 non-reproducible legacy entries, the four `/*` reachability-only vectors, disabled `/mobile` and `/adempiere`, unowned `/admin`, JasperReports interactive web, and screen-level visual parity remain residuals. | Phase 5g sub-increments `5g-1a`..`5g-7` for write/process/report/upload/dashboard/POS/extension parity and screen-level visual parity; `5g-0` for the governance amendment that opens a named disposition per disabled or unowned context and `5g-7` for the `phase5g-web-parity-gate` that closes it; Phase 7 for full artifact reproducibility | Do not treat implemented packaging or database-neutral contracts as runtime route parity. Production owners must validate custom overlays. Both Phase 5f gates are green; the 25 `/wstore` JSP precompile rows remain runtime-pending because only three of those pages are reached by a route vector. `contract-only-runtime-observation-pending` is **not** an acceptable disposition for a Phase 5g acceptance criterion. |
 | R5 | SOAP/servlets | Unknown consumers and undocumented route classes may break | Phase 4 | Inventory consumers, freeze WSDL/HTTP fixtures, and run parallel replay. |
 | R6 | Database | Production size, custom schema, supported engines, and rollback windows are unknown | Phase 6 | Approve customer-specific migration runbook and rehearse on a sanitized copy. |
 | R7 | Extension metadata | The fail-closed validator names 16 pre-existing active `AD_Process` bindings with absent or incompatible classes | Phase 7 | Obtain usage evidence, then correct or retire every row in `gradle/phase3/metadata-quarantine.tsv`; additions and stale quarantine rows fail CI. |
@@ -989,8 +989,8 @@ before the next begins. Phase 5a merged as `dc7e84f68`; Phase 5b merged as
 `cac0efdcaa13464e069291992214880cd0239ec5`; Phase 5c merged as `3154ced80`;
 Phase 5d merged as PR #9 at `b47464d2763694c093ed22470000e00f2b6aee73`.
 Phase 5e merged to `develop` at `6eda2bc8`; its database-neutral and
-database-backed gates are executed and green. Phase 5f is implemented and active
-on `phase-5f-jakarta-web-routes`, but is **not complete or merged**. Its
+database-backed gates are executed and green. Phase 5f **merged to `develop` as
+PR #11 at `83aeb8536`**; both of its gates are executed and green. Its
 database-neutral `phase5fFinalVerification` gate has been executed green twice.
 Its database-backed `phase5fJakartaWebRoutesSmoke` gate and six context shards
 are implemented and **have been executed in CI, which supplies
@@ -1010,6 +1010,11 @@ argument-list defect in the aggregate task, three ambient database writers
 `WebEnv.initWeb` initialisation), and a snapshot aggregate that measured more
 content than the table digests it was cross-checked against.
 
+**Phase 5g is now active.** It is the web UI functional parity increment and is
+delivered through sub-increments `5g-0` and `5g-1a` .. `5g-7`; see "Phase 5g
+decomposition and active scope". `5g-0` is in progress and ships no runtime
+code.
+
 **Regime:** Legacy ZK/Tomcat 9 remains lit; the modern ZK/Tomcat 10.1 slice
 crossed from dark to lit at Phase 5d and now expands.
 
@@ -1028,8 +1033,8 @@ crossed from dark to lit at Phase 5d and now expands.
 | 5c | Add the reproducible Jakarta packaging beachhead, verified browser tooling, and binding ingress/session-affinity ADR | Build/runtime | 5b |
 | 5d | Migrate the complete ZK compile closure and cross the Testability Milestone at login -> role -> menu -> read-only window | Web UI | 5c |
 | 5e | Prove concurrent client/org/role/user/language/session cleanup and add fail-closed cohort routing | Security/session | 5d (**merged and verified** at `6eda2bc8`; see "Phase 5e decisions and findings") |
-| 5f | Migrate all 82 deployed non-SOAP mappings by independently reversible context; disposition all 30 non-deployed mappings; build isolated generated Jakarta trees and five modern context WARs; preserve `/webui` while adding source-native `/timeline` and the exact static DSP compatibility resource | Web routes | 5e (**implemented/active, not complete or merged**; database-neutral gate green twice, six-shard database smoke not run) |
-| 5g | Complete read/write UI, process, report, upload/download, POS, dashboard, server-push, and extension parity | Web UI/extensions | 5f |
+| 5f | Migrate all 82 deployed non-SOAP mappings by independently reversible context; disposition all 30 non-deployed mappings; build isolated generated Jakarta trees and five modern context WARs; preserve `/webui` while adding source-native `/timeline` and the exact static DSP compatibility resource | Web routes | 5e (**merged and verified** at `83aeb8536`; database-neutral gate green twice, six-shard database smoke green in run 33379849664) |
+| 5g | Complete read/write UI, process, report, upload/download, POS, dashboard, server-push, and extension parity. Delivered through sub-increments `5g-0` and `5g-1a` .. `5g-7`; see "Phase 5g decomposition" | Web UI/extensions | 5f (**active**; `5g-0` in progress) |
 | 5h | Finish source-native Jakarta, preserve both historical SOAP paths on final ingress, then remove the router, Tomcat 9, transformer, and ZK 3.6 | Runtime/source | 5g |
 
 #### Risks & mitigations
@@ -1461,7 +1466,7 @@ database and recorded all 23 public-origin matrix rows, including concurrency,
 logout, timeout, container destruction, Phase 4 SOAP coexistence, and secret
 hygiene, as passing in `build/phase5e/evidence/cohort-matrix.tsv`.
 
-#### Phase 5f implemented state and active scope
+#### Phase 5f delivered state and scope
 
 Phase 5f is a lit, **L3** non-SOAP route increment. Its accepted governance is
 recorded in
@@ -1469,8 +1474,8 @@ recorded in
 `docs/modernization/phase-5f-transitional-state.md`, and
 `contracts/phase5f-jakarta-web-v1/`.
 
-- The implementation is active on `phase-5f-jakarta-web-routes`; Phase 5f is
-  **not complete and not merged**.
+- Phase 5f **merged to `develop` as PR #11 at `83aeb8536`**, with both gates
+  executed and green.
 - The deployed scope is closed at **82 mappings**: `/webui` 6, `/admin` 4,
   `/` 8, `/mobile` 14, `/adempiere` 21, and `/wstore` 29.
 - The 30 non-deployed mappings have fixed dispositions: drop eight JBoss HTTP
@@ -1518,7 +1523,7 @@ Canonical Phase 5f gates:
   --dependency-verification=strict
 ```
 
-`phase5fFinalVerification` is implemented and was executed green twice. It
+`phase5fFinalVerification` was executed green twice. It
 validates the frozen 82/30 contracts and mutation proofs, routing-core/bridge
 isolation, generated Jakarta source and asset closures, five deterministic WARs,
 all 25 retained JSPs through Tomcat 10.1 Jasper, Servlet 6 descriptors and
@@ -1526,7 +1531,7 @@ discovery absence, `/timeline` and DSP behavior contracts, installed/release
 topology, per-context rollback, current inventories, and the Phase 4/5d/5e
 regressions.
 
-`phase5fJakartaWebRoutesSmoke` is implemented as six public-origin shards
+`phase5fJakartaWebRoutesSmoke` runs six public-origin shards
 (`/webui`, `/admin`, `/`, `/mobile`, `/adempiere`, `/wstore`) plus complete
 Phase 4 SOAP coexistence and exact runtime-evidence validation. It **has been
 executed in CI and is green.** All six shards execute in a single run. Run 33379849664, on
@@ -1574,6 +1579,125 @@ tampering, wrong-session binding, partial identity and single-use replay are
 therefore asserted directly against the codec in the database-neutral gate, and
 the routed browser matrix asserts only what a browser can observe. The routed
 evidence gate fails if a duplicate ticket row reappears in the runtime matrix.
+
+#### Phase 5g decomposition and active scope
+
+Phase 5g is the web UI **functional parity** increment. Like Phase 5 itself it
+is too large for one branch, so it is delivered through sequential
+sub-increments, each cut from `develop` and merged before the next begins.
+Its accepted governance is recorded in
+`docs/modernization/phase-5g-web-parity-adr.md`.
+
+Two ordering rules bind every Phase 5g increment:
+
+1. **Oracle before modern.** The frozen Phase 5b/5c browser oracle asserts zero
+   *business* writes, so it cannot score a write. Each new behaviour class is
+   captured from the legacy Tomcat 9 / ZK 3.6 runtime, frozen, and
+   domain-reviewed **before** the modern runtime is scored against it.
+2. **No branch may both invent the expected answer and implement the thing being
+   scored.** Oracle increments ship no modern runtime code; parity increments
+   add no new oracle facts.
+
+| Increment | Scope | Ships modern code? |
+|---|---|---|
+| 5g-0 | Phase 5f reconciliation; the Phase 5g ADR; ZK-facing extension/callout/validator discovery; the dictionary-process classification and named 5g-1e fixture; the disabled-context governance amendment | No |
+| 5g-1a | The legacy Business Partner CRUD write oracle: a reusable legacy write capture harness, `contracts/legacy-web-write-v1/`, the keyed relational effect model, seed-restore isolation, normalizer mutation proofs, and the recorded domain review | **No** |
+| 5g-1b | Modern Business Partner CRUD parity, scored **only** through the public routed `/webui` origin | Yes |
+| 5g-1c | Sales Order draft -> Complete: document status, document number, reservations and tax. **No accounting** | Yes |
+| 5g-1d | The explicit "Post Immediate" action: `Posted='Y'` and balanced `Fact_Acct` | Yes |
+| 5g-1e | One named non-report dictionary process: `AD_PInstance`, parameters, log rows, and an observable completion signal | Yes |
+| 5g-2 | Report parity: `ZkReportViewer`, `ZkJRViewer`, PDF/print output, residual **R4-5d-1** (the JasperReports interactive web viewer), and the two deferred JasperReports `GetMD5File` mappings | Yes |
+| 5g-3 | Upload/download and attachment parity: `WAttachment`, `WMediaDialog`, `WImageDialog`, `WFileImport`, `SimplePDFViewer`, `WArchiveViewer`; byte-cap and content-type contracts | Yes |
+| 5g-4 | Dashboard and server push: `DashboardPanel`, `DPActivities`, `DPRecentItems`, `DashboardRunnable`, `ServerPushTemplate`; Comet -> polling under the existing ZK target ADR | Yes |
+| 5g-5 | Extension and plugin parity, implemented against the 5g-0 inventory | Yes |
+| 5g-6 | POS parity | Yes |
+| 5g-7 | The Phase 5g exit roll-up: screen-level visual comparison, parallel-run performance and error thresholds, full distribution/database CI, the complete rollback rehearsal, the `phase5g-web-parity-gate` disposition gate for `/mobile`, `/adempiere` and `/admin`, and residual/transitional reconciliation | Yes |
+
+`5g-7` exists because the Phase 5 exit criteria below - screen-level parity,
+performance and error thresholds, full distribution/database CI, and the
+rollback rehearsal - were otherwise owned by no increment. Without it every
+sub-increment could merge while Phase 5g remained incomplete.
+
+**Constraints that bind every Phase 5g increment.**
+
+- **Isolation is seed restore, not surgical rollback.**
+  `scripts/phase5/reset-oracle-fixture.sh` is hard-wired to `AD_User_ID=101` and
+  only removes capture-created `AD_ChangeLog`, `AD_Session` and `AD_RecentItem`
+  rows. It restores no business partner, order, tax, reservation, `AD_PInstance`
+  or accounting state, so it cannot reset a write workload. Every capture -
+  legacy A, legacy B, and each runtime - restores the marker-owned database from
+  the seed, applies the reviewed fixture, and restarts the container to clear
+  application caches. Surgical rollback is forbidden until the complete
+  transitive write set is proved.
+- **Effects are keyed relational facts, not table digests.** The Phase 5f
+  whole-database snapshot works at table-digest granularity, which proves *that*
+  a route wrote but not *that a business transition is correct*. Write scoring
+  compares created/updated/deleted rows keyed by fixture identity, the required
+  foreign-key graph, before/after business values, document status/action
+  values, accounting dimensions with balanced debit/credit totals, and process
+  status/summary/parameter values. Generated identities are normalized through a
+  captured mapping and are never dropped, because dropping them erases broken
+  foreign keys and duplicate effects.
+- **Modern writes are scored only through the public routed `/webui` origin.**
+  A green direct-Tomcat-10 test would not exercise T5e-1 ticket bootstrap,
+  session affinity, request-body proxying or proxy failure behaviour. Direct
+  `/webui-modern` capture is retained as a diagnostic subtest only.
+- **`contract-only-runtime-observation-pending` is banned for acceptance
+  criteria.** It was an honest residual for the 25 Phase 5f `/wstore` JSP rows
+  unreached by the route corpus. It is never valid for a tier that defines an
+  increment's own claim: if a tier cannot execute on both runtimes, the gate
+  fails and the increment stays incomplete.
+- **Accounting is a separate action from completion.** `MOrder.completeIt()`
+  does not post. `Fact_Acct` rows follow either the accounting processor - which
+  the Phase 5f quiescence script deliberately disables - or the explicit UI
+  "Post Immediate" action, so accounting facts are never attributed to the
+  Complete action. Order preparation also rejects a closed accounting period,
+  and the seed's periods end in 2011, so any order fixture must use a reviewed
+  historical date or a marker-owned open period.
+- **Write concurrency is new coverage.** Phase 5e proved identity isolation, not
+  transactional correctness. From 5g-1b onward, add two users editing one
+  record, concurrent writes in different client/org contexts, a
+  process-completion test that records the executing identity and proves
+  thread-context cleanup, and duplicate-submit protection or an explicit
+  legacy-parity result.
+
+**Hazard red-team for Phase 5g.** H1 is not applicable - Phase 5g removes
+nothing. **H2 fires:** ZK CE 10 write-path work is real API work, not
+`javax` -> `jakarta` substitution. H3 is cleared - no runtime major moves.
+**H4 fires:** write and process flows reach AU route classes the read-only
+capture never touched, so every new class is enumerated or the gate fails. H5 is
+cleared. **H6 fires** - and it fires without any new component. T5e-1 and T5f-1
+were proved for authentication and read-only behaviour; extending them to
+destructive and process operations raises the consequence of replay,
+CSRF/same-site requests, session confusion, proxy truncation and error recovery,
+so the public-origin security/session matrix is re-run for write traffic.
+**H7 fires:** every sub-increment is cut from `develop`, never from a sibling.
+**H8 fires:** living-doc updates ship in the same PR.
+
+**Disabled-context disposition.** `/mobile`, `/adempiere` and `/admin` are
+**not** enabled by Phase 5g. They follow the `/admin` precedent and remain
+legacy until a named consumer owns them. This changes the earlier assumption
+that Phase 5g would close them, and it interacts directly with Phase 5h, which
+removes Tomcat 9. `docs/modernization/phase-5g-disabled-context-disposition.md`
+carries the amendment. It permits exactly three dispositions per context -
+`migrate`, `retire` with usage evidence, or `narrow-5h-scope` - and states the
+evidence each one requires.
+
+The amendment does **not** modify the frozen
+`contracts/phase5f-jakarta-web-v1/enable-state-residuals.tsv`. That contract
+already names `phase5g-web-parity-gate` as the closing gate for
+`ENABLE-P5F-MOBILE` and `ENABLE-P5F-ADEMPIERE`, and the amendment defines that
+previously undefined gate: it is satisfied for a context when the context
+carries a recorded disposition with its required evidence, a named owner and a
+closing increment. It is **not** satisfied by enabling the context, and **not**
+by leaving the decision open. The gate is implemented in `5g-7` and Phase 5h is
+blocked behind it, so the decision cannot arrive as a surprise during 5h.
+
+All three dispositions are **open** at the end of `5g-0`. None can be settled
+from this repository: `/adempiere` and `/mobile` need production evidence about
+the pre-ZK servlet client, and `/admin` needs the operator and Java Web Start
+consumers of `/adempiereMonitor/*`, `/statusInfo` and `*.jnlp`. Recording
+`retire` on the strength of an absent in-tree caller is explicitly forbidden.
 
 #### Verification & Exit Criteria (Definition of Done)
 

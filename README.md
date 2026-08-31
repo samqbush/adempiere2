@@ -183,8 +183,8 @@ all 23 public-origin cohort, isolation, lifecycle, SOAP-coexistence, and
 secret-hygiene rows as passing; see
 `docs/modernization/phase-5e-evidence.md`.
 
-Phase 5f is implemented and active on `phase-5f-jakarta-web-routes`, but it is
-not complete or merged:
+Phase 5f merged to `develop` as PR #11 at `83aeb8536`; both of its gates are
+executed and green:
 
 ```bash
 ./gradlew phase5fFinalVerification --dependency-verification=strict
@@ -206,9 +206,10 @@ Routing is whole-context, same-path, sticky for existing sessions, independently
 policy-bound, and fail-closed without legacy fallback. The installed product and
 both 394LTS archives stage one Phase 5f WAR per context under
 `tomcat10-api/phase5f/`, preserve Phase 4 CXF and Phase 5e `/webui`, and retain
-pristine rollback WARs. `/mobile` and `/adempiere` remain disabled until Phase
-5g; `/admin` remains legacy pending named consumer ownership; `/` and `/wstore` are
-the two eligible modern contexts and both are now observed.
+pristine rollback WARs. `/mobile`, `/adempiere` and `/admin` remain legacy, and
+Phase 5g does not enable them - each carries an open disposition closed by
+`phase5g-web-parity-gate` in `5g-7`. `/` and `/wstore` are the two eligible
+modern contexts and both are now observed.
 
 `phase5fJakartaWebRoutesSmoke` is implemented as six public-origin shards plus
 Phase 4 SOAP coexistence. It is **Executed and green** in run 33379849664 on commit `9ba62875d`, which recorded
@@ -225,6 +226,39 @@ are reached by a route vector. T5e-1 remains open;
 T5f-1 closes in Phase 5h. Required checks and branch protection remain a manual
 repository-administrator action. See
 `docs/modernization/phase-5f-evidence.md`.
+
+Phase 5g - web UI functional parity - is active. It is decomposed into
+sequential sub-increments `5g-0` through `5g-7`, each cut from `develop` and
+merged before the next begins; `MODERNIZATION_PLAN.md` carries the decomposition
+and `docs/modernization/phase-5g-web-parity-adr.md` is binding.
+
+**No modern business write, document transition, process execution, report or
+upload/download has ever been observed.** The modern runtime is proven for
+login, role selection, menu and a read-only window. Phase 5f proved that 82
+routes behave like the frozen legacy oracle; that is route parity, not write
+parity.
+
+`5g-0` ships no runtime code. It reconciles the Phase 5f documentation, records
+the Phase 5g ADR, and adds the reviewed discovery inventories - 351 classified
+dictionary processes, 174 callout columns and 197 extension surfaces - under
+`contracts/phase5g-web-parity-v1/`:
+
+```bash
+./gradlew phase5g0FinalVerification --dependency-verification=strict
+```
+
+That gate is now the head of the phase-gate chain and the `Contracts` job runs
+it. It regenerates the inventories from the seed dictionary and the reactor
+sources and requires an exact match, so a new extension callout, model validator
+or changed process class fails the build rather than silently widening a later
+fixture's blast radius.
+
+`5g-0` also **opens** a named disposition for `/mobile`, `/adempiere` and
+`/admin` in `docs/modernization/phase-5g-disabled-context-disposition.md`. Phase
+5g does not enable those contexts. `phase5g-web-parity-gate` - already named as
+their closing gate by the frozen Phase 5f contract - is defined there as the
+`5g-7` gate that requires a recorded `migrate`, `retire` or `narrow-5h-scope`
+disposition with its evidence, and Phase 5h is blocked behind it.
 
 The Tomcat smoke requires HTTP 2xx/3xx from each deployed context except
 `ADInterface`, whose unrouted base path is explicitly expected to return 404;
