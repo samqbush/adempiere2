@@ -217,6 +217,11 @@ def main() -> None:
                     f"unknown route in database evidence: {row['route_id']}")
             validate_database_effect(row, effects[row["route_id"]])
         legacy = [row for row in rows if row["mode"] == "legacy-public"]
+        legacy_https_rows = [
+            row for row in rows
+            if row["mode"] == "legacy-public-confidential"
+        ]
+        legacy_https = {row["route_id"]: row for row in legacy_https_rows}
         modern = [
             row for row in rows
             if row["mode"] in {"modern-public", "modern-public-confidential"}
@@ -256,21 +261,75 @@ def main() -> None:
                 )
             for row in modern:
                 route = contract[row["route_id"]]
+                is_confidential = (
+                    context == "/wstore" and confidential(route["path"])
+                )
                 expected_mode = (
                     "modern-public-confidential"
-                    if context == "/wstore" and confidential(route["path"])
+                    if is_confidential
                     else "modern-public"
                 )
                 if row["mode"] != expected_mode:
                     raise SystemExit(
                         f"{row['route_id']}: mode {row['mode']} != {expected_mode}"
                     )
+                if is_confidential:
+                    # The frozen oracle captured these routes over public HTTP
+                    # only, so the contract status governs the transport
+                    # redirect. The protected resource is held to the legacy
+                    # HTTPS response observed in this same run.
+                    baseline = legacy_https.get(row["route_id"])
+                    if baseline is None:
+                        raise SystemExit(
+                            f"{row['route_id']}: no legacy HTTPS baseline "
+                            "was recorded for a CONFIDENTIAL route"
+                        )
+                    expected = baseline["status"]
+                else:
+                    expected = expected_modern_status(
+                        route["modern_status_contract"])
                 validate_observation(
                     row, route, effects[row["route_id"]],
-                    expected_modern_status(route["modern_status_contract"]),
+                    expected,
                     public_required=True,
                 )
             if context == "/wstore":
+                expected_https_baselines = {
+                    route_id for route_id, route in contract.items()
+                    if route["context"] == "/wstore"
+                    and confidential(route["path"])
+                }
+                # Keyed by route, so a duplicate would silently shadow the
+                # genuine row and hand modern parity to whichever was written
+                # last. Compare the row count, not just the key set.
+                if (set(legacy_https) != expected_https_baselines
+                        or len(legacy_https_rows) != len(
+                            expected_https_baselines)):
+                    raise SystemExit(
+                        "/wstore: legacy HTTPS baseline coverage for the "
+                        "CONFIDENTIAL routes is incomplete or duplicated"
+                    )
+                for route_id, row in legacy_https.items():
+                    # A baseline that was itself scored against something is
+                    # not a baseline, and one taken off the public origin
+                    # would not be legacy public behaviour.
+                    if (row["expected_status"] != "record-only"
+                            or row["public_origin_only"] != "true"
+                            or not row["status"].isdigit()
+                            or len(row["body_sha256"]) != 64):
+                        raise SystemExit(
+                            f"{route_id}: legacy HTTPS baseline is not a "
+                            "public record-only observation"
+                        )
+                    # Both legs cross the same ingress, so an ingress failure
+                    # is identical on both and parity alone cannot see it.
+                    if not 200 <= int(row["status"]) < 400:
+                        raise SystemExit(
+                            f"{route_id}: legacy HTTPS baseline status "
+                            f"{row['status']} is not a served response, so it "
+                            "cannot be the modern parity baseline"
+                        )
+                    validate_database_effect(row, effects[route_id])
                 redirects = [
                     row for row in rows
                     if row["mode"] == "modern-public-tls-redirect"

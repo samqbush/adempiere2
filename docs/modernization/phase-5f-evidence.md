@@ -116,6 +116,45 @@ observed NPE and uses `setStatus` rather than `sendError`, because the restored
 `ERR-04` rejects a plain GET before any response is committed instead of
 falling through to `doPost`.
 
+**The CONFIDENTIAL HTTPS leg had no legacy baseline.** With the port fixed, the
+`modern-public-confidential` observation executed for the first time and
+returned 200 with real page content where the contract required 302. The
+contract was not wrong about 302 - that is the *transport redirect*, which the
+separate `modern-public-tls-redirect` vector already asserts - it was being
+reused to score the protected resource behind the redirect. The frozen Phase 5b
+oracle captured `/wstore/loginServlet`, `/wstore/checkOutServlet` and
+`/wstore/orderServlet` over public HTTP only, recording the 302 and its
+`Location`, so no legacy HTTPS response for them has ever been observed.
+
+The fourth CONFIDENTIAL route is not evidence for the other three.
+`/wstore::Login::/login.jsp/*` has frozen legacy status 200, but its vector path
+is `/wstore/login.jsp/` with a trailing slash, and the constraint's
+`<url-pattern>/login.jsp</url-pattern>` is an exact match. That path escapes the
+constraint on the legacy runtime, so its 200 was served over plain HTTP.
+
+Blessing the observed 200 as a contract literal would have claimed an
+unexecuted runtime observation, which this phase's own contract validator
+exists to prevent. Instead the smoke now observes the legacy runtime over
+public HTTPS in the same run, as `legacy-public-confidential` with a
+record-only expectation, and scores the modern HTTPS response against it. The
+aggregate validator enforces the same parity and requires the four baselines to
+be present, unduplicated, public-origin and record-only.
+
+Parity alone is not sufficient, because both legs cross the same public HTTPS
+ingress: a broken ingress fails both identically and would satisfy parity while
+serving nothing. A CONFIDENTIAL route is therefore also required to have
+actually served or redirected - a status below 400 - before its observation may
+be promoted to the baseline. Six mutants cover the new checks, including one
+that moves both legs to 502 in lockstep and one that inserts a shadowing
+duplicate baseline; the harness detects all 24.
+
+**Recorded divergence.** `/wstore/login.jsp/` is redirected to HTTPS by the
+modern runtime but served over HTTP by the legacy runtime, because the two
+containers disagree about whether a trailing-slash path matches an exact
+`url-pattern`. The `modern-public-tls-redirect` vector hardcodes 302, so this
+divergence is currently unasserted rather than proven benign. It is recorded
+here and is not closed by this phase.
+
 **Container CONFIDENTIAL redirect.** Three `/wstore` routes emitted
 `Location: https://127.0.0.1:4444/...`. Port 4444 is the installed product's
 `ADEMPIERE_SSL_PORT` and is not listening in this lane. The access logs place

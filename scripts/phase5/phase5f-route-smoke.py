@@ -20,6 +20,9 @@ from pathlib import Path
 
 
 ELIGIBLE = {"/", "/wstore"}
+# Marks an observation taken where no frozen legacy baseline exists, so the
+# observation is the baseline rather than something scored against one.
+RECORD_ONLY = "record-only"
 CONFIDENTIAL_WSTORE = {
     "/wstore/login.jsp", "/wstore/loginServlet",
     "/wstore/checkOutServlet", "/wstore/orderServlet",
@@ -220,6 +223,15 @@ def split_transport_status(contract: str) -> str:
     return parts["public-https"]
 
 
+def served_confidential(status: str) -> bool:
+    """True when a CONFIDENTIAL route actually served or redirected.
+
+    A 4xx or 5xx here is a broken lane, not legacy behaviour, and must never
+    become the baseline the modern runtime is compared against.
+    """
+    return status.isdigit() and 200 <= int(status) < 400
+
+
 def confidential(path: str) -> bool:
     return any(path == owned or path.startswith(owned + "/")
                for owned in CONFIDENTIAL_WSTORE)
@@ -282,6 +294,7 @@ def main() -> None:
     )
     observations: list[dict[str, str]] = []
     failures: list[dict[str, str]] = []
+    legacy_https_status: dict[str, str] = {}
 
     def publish() -> None:
         """Republishes both ledgers after every vector.
@@ -330,10 +343,16 @@ def main() -> None:
         mode: str,
         target_opener: urllib.request.OpenerDirector,
         origin: str,
-        expected_status: str,
+        expected_status: str | None,
         public_origin_only: bool,
         request_headers: dict[str, str] | None = None,
     ) -> dict[str, str]:
+        """Observes one vector. A None expected_status records without asserting.
+
+        Record-only is used where no frozen legacy baseline exists, so the
+        observation itself becomes the baseline a later vector is scored
+        against. It must never be used where a baseline does exist.
+        """
         before, tables_before = database_snapshot(args)
         target_url = origin.rstrip("/") + route["path"]
         try:
@@ -362,7 +381,9 @@ def main() -> None:
             "auth_enforcement": route["auth_enforcement"],
             "traffic_class": route["traffic_class"],
             "status": str(status),
-            "expected_status": expected_status,
+            "expected_status": (
+                RECORD_ONLY if expected_status is None else expected_status
+            ),
             "headers_sha256": hashlib.sha256(
                 json.dumps(headers, sort_keys=True).encode()
             ).hexdigest(),
@@ -396,7 +417,7 @@ def main() -> None:
         }
         observations.append(row)
         publish()
-        if row["status"] != expected_status:
+        if expected_status is not None and row["status"] != expected_status:
             raise VectorFailure(
                 route["route_id"], mode,
                 f"status {status} != {expected_status}",
@@ -422,6 +443,41 @@ def main() -> None:
                 route, "legacy-public", opener, args.public_origin,
                 route["legacy_status"], True
             ))
+
+        # The frozen Phase 5b oracle captured the CONFIDENTIAL /wstore routes
+        # over public HTTP only, so their legacy_status is the container's
+        # transport redirect and says nothing about the protected resource
+        # behind it. Observe the legacy runtime over public HTTPS as well, so
+        # the modern HTTPS response is scored against a legacy response taken
+        # in this same run rather than against a literal nobody has observed.
+        if args.context == "/wstore":
+            def legacy_confidential_vector(route: dict[str, str]) -> None:
+                jar, _ = fresh_http()
+                row = observe(
+                    route, "legacy-public-confidential", https_for(jar),
+                    args.public_https_origin, None, True,
+                )
+                # A record-only observation is about to become the oracle the
+                # modern runtime is scored against, so it needs a floor of its
+                # own. Both legs cross the same public HTTPS ingress: if that
+                # ingress were broken, both would fail identically and parity
+                # alone would call a dead lane green.
+                if not served_confidential(row["status"]):
+                    raise VectorFailure(
+                        route["route_id"], "legacy-public-confidential",
+                        f"status {row['status']} is not a served response",
+                        "a CONFIDENTIAL route must serve or redirect over "
+                        "public HTTPS; this status means the ingress or the "
+                        "legacy runtime is broken, so it cannot be used as "
+                        "the parity baseline",
+                    )
+                legacy_https_status[route["route_id"]] = row["status"]
+
+            for route in routes:
+                if confidential(route["path"]):
+                    attempt(
+                        lambda route=route: legacy_confidential_vector(route)
+                    )
 
         def reserved_header_vector() -> None:
             reserved_status, _, _ = request(
@@ -504,6 +560,22 @@ def main() -> None:
                             "public HTTPS origin",
                             f"location: {redirect['location']}",
                         )
+                if is_confidential:
+                    # Parity with the same-run legacy HTTPS observation. A
+                    # missing baseline means its vector failed, and scoring
+                    # this one against a guess would hide that.
+                    expected = legacy_https_status.get(route["route_id"])
+                    if expected is None:
+                        raise VectorFailure(
+                            route["route_id"], "modern-public-confidential",
+                            "no legacy HTTPS baseline was observed",
+                            "the legacy-public-confidential vector for this "
+                            "route did not complete, so modern parity cannot "
+                            "be scored",
+                        )
+                else:
+                    expected = expected_modern_status(
+                        route["modern_status_contract"])
                 observe(
                     route,
                     "modern-public-confidential"
@@ -511,7 +583,7 @@ def main() -> None:
                     https_for(route_jar) if is_confidential else route_opener,
                     args.public_https_origin
                     if is_confidential else args.public_origin,
-                    expected_modern_status(route["modern_status_contract"]),
+                    expected,
                     True,
                 )
 

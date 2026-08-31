@@ -61,18 +61,24 @@ def confidential(path: str) -> bool:
                for owned in CONFIDENTIAL_WSTORE)
 
 
+# Any status works for the synthetic baseline; what the fixture must exercise
+# is that modern parity is read from the baseline row rather than the contract.
+CONFIDENTIAL_HTTPS_FIXTURE_STATUS = "200"
+
+
 def fixture_row(
     route: dict[str, str], effect: dict[str, str],
     context: str, mode: str, status: str,
     *, public: bool = True, set_cookie: str = "false",
-    location: str = "none",
+    location: str = "none", expected: str | None = None,
 ) -> dict[str, str]:
     return {
         "route_id": route["route_id"], "context": context,
         "mode": mode, "method": route["method"],
         "auth_enforcement": route["auth_enforcement"],
         "traffic_class": route["traffic_class"],
-        "status": status, "expected_status": status,
+        "status": status,
+        "expected_status": status if expected is None else expected,
         "headers_sha256": "1" * 64, "body_sha256": "2" * 64,
         "set_cookie": set_cookie, "database_before": "3" * 64,
         "location": location, "header_contract": "fixture-header",
@@ -88,6 +94,79 @@ def fixture_row(
         "owned_tables_or_group": effect["owned_tables_or_group"],
         "public_origin_only": "true" if public else "false",
     }
+
+
+def rewrite_mode_field(
+    root: Path, directory: str, mode: str, changes: dict[str, str],
+    *, also_modes: tuple[str, ...] = (),
+    also_changes: dict[str, str] | None = None,
+) -> None:
+    """Rewrites named fields on the first observation recorded in `mode`.
+
+    `also_modes` applies `also_changes` to the same route in those modes, so a
+    mutant can move two legs of one route in lockstep.
+    """
+    path = root / directory / "route-observations.tsv"
+    with path.open(encoding="utf-8", newline="") as stream:
+        reader = csv.DictReader(stream, delimiter="\t")
+        fields = reader.fieldnames
+        rows = list(reader)
+    for row in rows:
+        if row["mode"] == mode:
+            row.update(changes)
+            route_id = row["route_id"]
+            break
+    else:
+        raise RuntimeError(f"fixture has no {mode} observation")
+    if also_modes:
+        matched = [
+            row for row in rows
+            if row["route_id"] == route_id and row["mode"] in also_modes
+        ]
+        if len(matched) != len(also_modes):
+            raise RuntimeError(
+                f"fixture is missing {also_modes} for {route_id}")
+        for row in matched:
+            row.update(also_changes or {})
+    with path.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=fields, delimiter="\t")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def duplicate_mode_row(
+    root: Path, directory: str, mode: str, changes: dict[str, str],
+) -> None:
+    """Inserts a shadowing duplicate ahead of the first `mode` observation."""
+    path = root / directory / "route-observations.tsv"
+    with path.open(encoding="utf-8", newline="") as stream:
+        reader = csv.DictReader(stream, delimiter="\t")
+        fields = reader.fieldnames
+        rows = list(reader)
+    for index, row in enumerate(rows):
+        if row["mode"] == mode:
+            shadow = dict(row)
+            shadow.update(changes)
+            rows.insert(index, shadow)
+            break
+    else:
+        raise RuntimeError(f"fixture has no {mode} observation")
+    with path.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=fields, delimiter="\t")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def drop_mode_row(root: Path, directory: str, mode: str) -> None:
+    """Removes the first observation recorded in `mode`."""
+    path = root / directory / "route-observations.tsv"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    for index, line in enumerate(lines):
+        if f"\t{mode}\t" in line:
+            del lines[index]
+            path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            return
+    raise RuntimeError(f"fixture has no {mode} observation")
 
 
 def mark_mode_non_public(root: Path, directory: str, mode: str) -> None:
@@ -153,6 +232,16 @@ def main() -> None:
                     context == "/wstore" and confidential(route["path"])
                 )
                 if is_confidential:
+                    # The frozen oracle only captured these over public HTTP,
+                    # so the modern HTTPS response is held to a legacy HTTPS
+                    # observation taken in the same run rather than to the
+                    # contract status, which governs the transport redirect.
+                    evidence_rows.append(fixture_row(
+                        route, effects[route["route_id"]], context,
+                        "legacy-public-confidential",
+                        CONFIDENTIAL_HTTPS_FIXTURE_STATUS,
+                        expected="record-only",
+                    ))
                     evidence_rows.append(fixture_row(
                         route, effects[route["route_id"]], context,
                         "modern-public-tls-redirect", "302",
@@ -162,7 +251,9 @@ def main() -> None:
                     route, effects[route["route_id"]], context,
                     "modern-public-confidential"
                     if is_confidential else "modern-public",
-                    expected_modern_status(route["modern_status_contract"]),
+                    CONFIDENTIAL_HTTPS_FIXTURE_STATUS if is_confidential
+                    else expected_modern_status(
+                        route["modern_status_contract"]),
                     public=True,
                 ))
             if context == "/wstore":
@@ -244,6 +335,33 @@ def main() -> None:
         "confidential-non-public-origin": lambda root:
             mark_mode_non_public(
                 root, "wstore", "modern-public-confidential"),
+        # The modern HTTPS response must be held to the legacy HTTPS response
+        # observed in the same run. If it were still scored against the
+        # contract status, moving the baseline would go unnoticed.
+        "confidential-parity-drift": lambda root: rewrite_mode_field(
+            root, "wstore", "legacy-public-confidential",
+            {"status": "503"}),
+        "missing-confidential-baseline": lambda root: drop_mode_row(
+            root, "wstore", "legacy-public-confidential"),
+        # A baseline that was itself asserted against something is not a
+        # baseline; record-only is what makes it independent.
+        "asserted-confidential-baseline": lambda root: rewrite_mode_field(
+            root, "wstore", "legacy-public-confidential",
+            {"expected_status": "200"}),
+        "confidential-baseline-non-public-origin": lambda root:
+            mark_mode_non_public(
+                root, "wstore", "legacy-public-confidential"),
+        # Both confidential legs cross the same public HTTPS ingress, so a
+        # broken ingress fails both identically and satisfies parity. Only a
+        # floor on the baseline itself can tell that apart from agreement.
+        "confidential-lane-failure-in-lockstep": lambda root: rewrite_mode_field(
+            root, "wstore", "legacy-public-confidential",
+            {"status": "502"}, also_modes=("modern-public-confidential",),
+            also_changes={"status": "502", "expected_status": "502"}),
+        # Keyed by route, a duplicate would shadow the genuine baseline and
+        # hand modern parity to whichever row was written last.
+        "duplicate-confidential-baseline": lambda root: duplicate_mode_row(
+            root, "wstore", "legacy-public-confidential", {"status": "503"}),
         "missing-public-https-provenance": lambda root: (
             root / "wstore/provenance.json"
         ).write_text(
