@@ -350,9 +350,42 @@ public final class LoopbackProxy {
 		return next == '/' || next == '?' || next == '#';
 	}
 
+	/**
+	 * Reports whether an absolute {@code Location} carries userinfo.
+	 *
+	 * <p>Userinfo exists in a redirect almost exclusively to make one origin
+	 * read as another: a browser resolves
+	 * {@code http://127.0.0.1:8890@evil.example/x} to {@code evil.example}
+	 * while the internal origin is what a human reads. Neither ADempiere
+	 * runtime emits credentials in a redirect, so there is no legitimate value
+	 * to preserve, and both other dispositions are wrong - rewriting splices
+	 * the public origin into the userinfo and emits an open redirect under our
+	 * own origin, and relaying discloses the internal origin.
+	 */
+	private static boolean hasUserinfo(String location) {
+		int schemeEnd = location.indexOf("://");
+		if (schemeEnd < 0) {
+			return false;
+		}
+		int start = schemeEnd + 3;
+		for (int index = start; index < location.length(); index++) {
+			char character = location.charAt(index);
+			if (character == '/' || character == '?' || character == '#') {
+				return false;
+			}
+			if (character == '@') {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	private String publicLocation(Request request, String location) {
 		if (location == null) {
 			return location;
+		}
+		if (hasUserinfo(location)) {
+			return null;
 		}
 		String path;
 		if (startsWithOrigin(location, backend)) {
@@ -360,6 +393,11 @@ public final class LoopbackProxy {
 		} else {
 			Matcher target = LOOPBACK_ORIGIN.matcher(location);
 			if (!target.find()) {
+				// A genuinely external or relative Location is the backend's
+				// own decision and is relayed unchanged. It cannot disclose
+				// the internal origin: an absolute value that embedded it
+				// would have to do so as userinfo, which already failed
+				// closed above.
 				return location;
 			}
 			Matcher internal = LOOPBACK_ORIGIN.matcher(backend);
