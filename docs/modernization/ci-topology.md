@@ -182,20 +182,18 @@ the current-phase slot now belongs to `phase5fJakartaWebRoutesSmoke`. The flake
 therefore no longer blocks a pull request, but it still gates the post-merge
 lane and is still worth fixing.
 
-## The current-phase smoke is red on this branch
+## The current-phase smoke is green on this branch
 
-`Current-phase database smoke` runs `phase5fJakartaWebRoutesSmoke`, which **has
-never passed.** All six route shards now execute in one run and all
-six report zero vector failures: run 33369428234 recorded 129 observations and
-passed `verifyPhase5fSwitchBaseline`, `capturePhase5fSoapCoexistence` and
-`verifyPhase5fBackgroundProcessorsQuiesced`. The remaining failure is confined
-to the strict aggregate `verifyPhase5fRuntimeEvidence`. Every failure mode so
-far has been diagnosed from a run's own evidence and fixed, but the gate has not
-yet been observed green.
+`Current-phase database smoke` runs `phase5fJakartaWebRoutesSmoke`, which **is
+green.** All six route shards execute in one run and all six report zero vector
+failures: run 33379849664, on commit `9ba62875d`, recorded 129 observations and
+passed `verifyPhase5fSwitchBaseline`, `capturePhase5fSoapCoexistence`,
+`verifyPhase5fBackgroundProcessorsQuiesced` and the strict aggregate
+`verifyPhase5fRuntimeEvidence`. Every failure mode was diagnosed from a run's own
+evidence and fixed rather than worked around.
 
-This is deliberate and must not be worked around by pointing the job back at a
-green Phase 5e task. The blocking gate is supposed to reflect the state of the
-phase under development, and the state of Phase 5f is red. See
+The job must continue to point at the phase under development rather than at a
+known-green earlier task. See
 `docs/modernization/phase-5f-evidence.md` for every observed failure mode and
 the evidence each fix was derived from.
 

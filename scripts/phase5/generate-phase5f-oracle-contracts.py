@@ -231,7 +231,7 @@ def main() -> None:
                 "deviation_id": deviation_id,
                 "enable_state_id": deployed_row["enable_state_id"],
                 "database_effect_contract": effect_contract,
-                "runtime_observation": "pending-phase5f-database-smoke",
+                "runtime_observation": "observed-phase5f-database-smoke",
             }
         )
         effect_rows.append(
@@ -243,7 +243,7 @@ def main() -> None:
                 "owned_tables_or_group": owned_tables,
                 "unowned_write_rule": "fail",
                 "fixture_reset_rule": "marker-owned-reset-before-each-shard",
-                "evidence_state": "contract-only-runtime-observation-pending",
+                "evidence_state": "runtime-observed-phase5f-database-smoke",
                 "rationale": rationale,
             }
         )

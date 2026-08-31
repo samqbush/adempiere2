@@ -36,10 +36,10 @@ bypass, public Tomcat 10 connector, or silent fallback.
 
 The database-neutral controls, topology and rollback are implemented and were
 executed green twice through `phase5fFinalVerification`. The six-shard
-public-origin and database-effect observations remain **unverified** because
-`phase5fJakartaWebRoutesSmoke`, although executed in CI, has never passed. It
-currently fails in `:startPhase5fRoutedLane` before any shard runs, and
-All six shards now execute in one run; run 33342082144 observed `/webui` and
-`/wstore` for the first time and left eight vector failures, since diagnosed
-and fixed. T5f-1 remains open and closes only in
-Phase 5h; Phase 5f is not complete or merged.
+public-origin and database-effect observations are now **verified**:
+`phase5fJakartaWebRoutesSmoke` is green in run 33379849664 on commit
+`9ba62875d`, with 129 observations, zero vector failures across all six shards,
+and a passing strict aggregate over 82 legacy routes, all 37 eligible modern
+routes and 45 explicitly unexecuted modern routes. T5f-1 nevertheless remains
+open and closes only in Phase 5h, because the transitional multi-context proxy
+and forwarded-secure state it registers are not removed by observing them.

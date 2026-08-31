@@ -1,7 +1,7 @@
 # ADR: Phase 5f Jakarta non-SOAP web routes
 
 Status: accepted and implemented on `phase-5f-jakarta-web-routes`;
-database-backed verification pending; not complete or merged
+database-neutral and database-backed verification both executed green
 
 Extends:
 
@@ -85,15 +85,16 @@ accident.
 - T5e-1 stays open. New multi-context proxy and forwarded-secure-state risk is
   registered as T5f-1 and also closes in Phase 5h.
 - Numeric policies and route-specific database-effect ownership are frozen and
-  database-neutrally enforced. Runtime observations remain pending until the
-  six-shard database-backed smoke executes.
-- `phase5fFinalVerification` is implemented and green twice. The implemented
-  `phase5fJakartaWebRoutesSmoke` has been executed in CI and has never passed;
-  it currently fails in `:startPhase5fRoutedLane` before any shard runs, and
-  all six shards now execute in one run and run 33342082144 observed `/webui`
-  and `/wstore` for the first time, leaving eight vector failures that have
-  since been diagnosed and fixed. Phase 5f is not
-  complete.
+  database-neutrally enforced, and all 82 runtime observations and their
+  route-specific database effects are now observed.
+- `phase5fFinalVerification` is implemented and green twice.
+  `phase5fJakartaWebRoutesSmoke` is green in run 33379849664 on commit
+  `9ba62875d`: 129 observations, zero vector failures across all six shards, and
+  a passing strict aggregate. Attributing effects to routes required removing
+  three ambient database writers - the eight timer-driven processor sources,
+  automatic error reporting, and first-touch `WebEnv.initWeb` initialisation -
+  and deriving the snapshot aggregate from the table-grain digests so both
+  measure the same content.
 - The installed product and both 394LTS archives stage exactly one copy of each
   of the five Phase 5f WARs under `tomcat10-api/phase5f/`, preserve Phase 4 CXF
   and Phase 5e `/webui`, retain pristine rollback WARs, and reject stale

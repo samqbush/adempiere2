@@ -141,10 +141,10 @@ def validate(
     if any(row["policy_id"] not in policy_ids for row in route_validation):
         raise ValueError("route-validation references an unknown policy")
     if any(
-        row["runtime_observation"] != "pending-phase5f-database-smoke"
+        row["runtime_observation"] != "observed-phase5f-database-smoke"
         for row in route_validation
     ):
-        raise ValueError("unexecuted runtime observation was claimed")
+        raise ValueError("route runtime observation marker is not the executed value")
 
     effects = rows(contract_dir / "database-effect-ownership.tsv")
     if unique(effects, "route_id", "database-effect route_id") != route_ids:
@@ -152,10 +152,10 @@ def validate(
     if any(row["unowned_write_rule"] != "fail" for row in effects):
         raise ValueError("an unowned database write is not fail-closed")
     if any(
-        row["evidence_state"] != "contract-only-runtime-observation-pending"
+        row["evidence_state"] != "runtime-observed-phase5f-database-smoke"
         for row in effects
     ):
-        raise ValueError("unexecuted database observation was claimed")
+        raise ValueError("database effect marker is not the executed value")
 
     headers = rows(contract_dir / "header-policy.tsv")
     for context in EXPECTED_CONTEXT_COUNTS:
@@ -287,10 +287,10 @@ def main() -> None:
         stream.write("metric\tvalue\n")
         for key in sorted(summary):
             stream.write(f"{key}\t{summary[key]}\n")
-        stream.write("runtime_observations\tnot-executed\n")
+        stream.write("runtime_observations\texecuted-phase5f-database-smoke\n")
     print(
         "validated Phase 5f database-neutral contract: "
-        "82 deployed routes, 30 non-deployed dispositions, runtime pending"
+        "82 deployed routes, 30 non-deployed dispositions, runtime observed"
     )
 
 

@@ -187,14 +187,13 @@ jobs:
             zkwebui/build/libs/webui-modern.war
 
   # The runtime gate for the phase under active development. This slot holds
-  # phase5fJakartaWebRoutesSmoke. It is currently RED, and this job is meant to
-  # reflect the state of the phase under development.
+  # phase5fJakartaWebRoutesSmoke, and this job is meant to reflect the state of
+  # the phase under development.
   #
-  # All six route shards now execute in a single run. As of run 33342082144
-  # the lane recorded 122 observations: /webui, /admin, /mobile and /adempiere
-  # passed, and eight vector failures remained across '/', '/wstore' and the
-  # Phase 4 SOAP coexistence capture. Each has since been diagnosed from that
-  # run's evidence and fixed; the gate has not yet been observed green.
+  # All six route shards execute in a single run. Run 33379849664 recorded 129
+  # observations with zero vector failures - / (16), /wstore (68), /webui (6),
+  # /admin (4), /mobile (14), /adempiere (21) - and passed the strict aggregate
+  # verifyPhase5fRuntimeEvidence. The gate is GREEN.
   # See docs/modernization/phase-5f-evidence.md.
   current-phase-smoke:
     name: Current-phase database smoke

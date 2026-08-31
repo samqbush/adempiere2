@@ -1,7 +1,7 @@
 # Phase 5f evidence: Jakarta non-SOAP web routes
 
-Status: **implemented on the active Phase 5f branch; database-backed evidence
-pending; phase not complete or merged**.
+Status: **implemented on the active Phase 5f branch; database-neutral and
+database-backed evidence both executed and green; branch not yet merged**.
 
 ## Baseline
 
@@ -15,7 +15,7 @@ pending; phase not complete or merged**.
 
 | Contract | Implemented count/status |
 |---|---|
-| Deployed non-SOAP mappings | 82 fixed rows; runtime observations pending |
+| Deployed non-SOAP mappings | 82 fixed rows; runtime observations executed and green in run 33379849664 |
 | Non-deployed descriptor mappings | 30 fixed dispositions, database-neutrally verified |
 | Context policies | 6 independent schemas, implementations and smoke shards |
 | Reviewed deviations | 5 rows: four error corrections and one DSP decision |
@@ -31,8 +31,8 @@ The normative files are under `contracts/phase5f-jakarta-web-v1/`.
 |---|---|
 | Phase 5e regression after routing-core extraction | **Executed and green through both Phase 5f final-gate runs.** |
 | `phase5fFinalVerification` | **Implemented; executed and green twice** on 2026-08-27. Local logs: `build/phase5f-final-rebuild.log` and `build/phase5f-final-validation.log`. |
-| `phase5fJakartaWebRoutesSmoke` | **Implemented; executed in CI; never passed.** Closest run 33369428234: all six shards green, every unowned-write error gone, one remaining failure inside `verifyPhase5fRuntimeEvidence`. See "Runtime gate failures" below. |
-| Per-context smoke shards | **Six implemented. All six passed with zero vector failures in runs 33360842891 and 33369428234, producing 129 observations: `/` (16), `/wstore` (68), `/webui` (6), `/admin` (4), `/mobile` (14), `/adempiere` (21).** |
+| `phase5fJakartaWebRoutesSmoke` | **Implemented; executed and green** in run 33379849664 on commit `9ba62875d`: 129 observations, zero vector failures, strict aggregate validated. See "Runtime gate failures" for every failure mode diagnosed on the way. |
+| Per-context smoke shards | **Six implemented and all six green, producing 129 observations: `/` (16), `/wstore` (68), `/webui` (6), `/admin` (4), `/mobile` (14), `/adempiere` (21).** |
 | Installed product/release overlay proof | **Executed and green** through `phase5fFinalVerification`. |
 | Per-context rollback rehearsal | **Executed and green** through `phase5fFinalVerification`. |
 
@@ -45,29 +45,51 @@ Canonical commands:
   --dependency-verification=strict
 ```
 
-## Runtime gate failures
+## Runtime gate history
 
 `phase5fJakartaWebRoutesSmoke` runs in CI, which supplies `phase3DbSystemPassword`
 as the `postgres` service password. The earlier claim in this document that the
 gate was "not executed" because that password was unavailable was wrong: the gate
-has been executed repeatedly and has never passed. Several distinct failures
-have been observed, and they are not a progression of one another. Each is kept
-below with the evidence it was diagnosed from, newest first.
+was executed repeatedly and failed for several distinct reasons that are not a
+progression of one another. Each is kept below with the evidence it was
+diagnosed from, newest first, ending with the run that passed.
 
-### Current status: every shard passes; the aggregate validator is the last gate
+### Current status: the gate is green
 
-Latest completed run: 33369428234, which carried the processor quiesce and the
-error-reporting quiesce described below. `Contracts` was green. Every one of the
-six shards again reported zero vector failures, `verifyPhase5fSwitchBaseline`,
-`capturePhase5fSoapCoexistence` and `verifyPhase5fBackgroundProcessorsQuiesced`
-all passed, and **every unowned-write error was gone** - the quiesce did what it
-was built to do. One failure remained, on
-`/::AdRedirector::/AdRedirector`: `database aggregate and table snapshots
-disagree`. It is diagnosed under "The aggregate digest measured more than the
-table digests" below.
+**Run 33379849664, on commit `9ba62875d`, is the first green
+`phase5fJakartaWebRoutesSmoke`.** `Contracts` was green in the same run. All six
+shards recorded zero vector failures, and every downstream task passed,
+including the strict aggregate:
 
-The shape below is from run 33360842891, whose evidence produced the diagnosis
-that the two quiesces answer. Both runs reported the same shard matrix:
+```
+/:          16 observations   PASS
+/wstore:    68 observations   PASS
+/webui:      6 observations   PASS
+/admin:      4 observations   PASS
+/mobile:    14 observations   PASS
+/adempiere: 21 observations   PASS
+verifyPhase5fSwitchBaseline                 PASS
+capturePhase5fSoapCoexistence               PASS
+verifyPhase5fBackgroundProcessorsQuiesced   PASS
+verifyPhase5fRuntimeEvidence                PASS
+  validated 82 legacy routes, all 37 eligible modern routes,
+  and 45 explicitly unexecuted modern routes
+BUILD SUCCESSFUL in 1h 13m 54s
+```
+
+Both contract ledgers now carry the executed marker
+(`observed-phase5f-database-smoke` and
+`runtime-observed-phase5f-database-smoke`), and
+`validate-phase5f-oracle-contracts.py` fails closed on any other value, so the
+marker cannot silently regress. The 25 `/wstore` JSP precompile rows are
+deliberately left at `contract-only-runtime-observation-pending`: only
+`login.jsp`, `basket.jsp` and `info.jsp` are reached by a route vector, so the
+other 22 are proven to precompile but are not proven to serve.
+
+The rest of this section records every failure mode that had to be diagnosed to
+get here, and the evidence each fix was derived from. The matrix shape below is
+from run 33360842891, the first run in which all six shards passed and whose
+evidence produced the ambient-writer diagnosis:
 
 ```
 /:          16 observations   PASS
@@ -350,12 +372,10 @@ a multi-line value would have changed no digest at all. Continuation lines are
 now attributed to their statement's table, with a `SET` or `SELECT` line ending
 the statement.
 
-With the aggregate fix applied to the run's evidence and the four
-initialisation tables removed from that one vector, the strict validator accepts
-the whole matrix: 82 legacy routes, all 37 eligible modern routes and 45
-explicitly unexecuted modern routes. That is a **simulation on real evidence,
-not an observed run**, and no runtime row may be claimed green until CI
-reproduces it.
+Both fixes were first validated by replaying run 33369428234's own evidence with
+the aggregate recomputed and the four initialisation tables removed from that one
+vector, which made the strict validator accept the whole matrix. CI then
+reproduced it for real in run 33379849664.
 
 ### Earlier status: all six shards execute; eight vector failures remain
 
@@ -586,15 +606,26 @@ seconds respectively. They validate:
 - `/mobile` and `/adempiere` are packaged but remain disabled until Phase 5g.
 - `/admin` remains legacy until named infrastructure consumers and owner
   approval are recorded.
-- `/` and `/wstore` are only eligible after the unexecuted database-backed gate.
-- All 82 `runtime_observation` fields and their route-specific database effects
-  remain pending. No contract-only row is presented as runtime evidence.
-- T5e-1 remains open. T5f-1 is implemented database-neutrally but its
-  public-origin runtime controls remain unobserved; both close in Phase 5h.
+- The 25 `/wstore` JSP precompile rows remain
+  `contract-only-runtime-observation-pending`. Only `login.jsp`, `basket.jsp`
+  and `info.jsp` are reached by a route vector, so the other 22 are proven to
+  precompile through Tomcat 10.1 Jasper but are not proven to serve.
+- Three narrowings of the runtime under test are recorded and enforced, not
+  incidental: the eight timer-driven processor sources are deactivated,
+  `AD_System.IsAutoErrorReport` is off, and each shard warms its routes before
+  observing. All three are applied identically to the legacy and the modern leg
+  of every vector, so route parity is unaffected, and
+  `verifyPhase5fBackgroundProcessorsQuiesced` fails the gate if the first two
+  are reverted mid-run.
+- Sequence position is outside the database-effect contract. Table writes,
+  deletions, truncations and tables appearing or disappearing are all still
+  observed; native PostgreSQL sequence state is not.
+- The `<welcome-file-list>` fidelity gap in `phase5fDescriptor` and the
+  `/wstore/login.jsp/` trailing-slash divergence remain recorded and open.
+- `/::AdRedirector::/AdRedirector` carries a `no-new-write` contract that is
+  correct only because the Phase 5b vector omits `CM_Ad_ID`. A future vector
+  carrying it would write `CM_Ad` and needs the ownership row corrected first.
+- T5e-1 remains open; it closes in Phase 5h. T5f-1's public-origin runtime
+  controls are now observed, but it also closes in Phase 5h.
 - Required checks/branch protection remain a manual repository-administrator
   action.
-
-Phase 5f cannot complete or merge on this evidence alone. The six-shard
-`phase5fJakartaWebRoutesSmoke` must execute against the marker-owned disposable
-PostgreSQL 14.6 database, record all 82 rows and database effects, replay the
-complete Phase 4 SOAP corpus, and pass the runtime-evidence validator.

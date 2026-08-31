@@ -207,18 +207,21 @@ policy-bound, and fail-closed without legacy fallback. The installed product and
 both 394LTS archives stage one Phase 5f WAR per context under
 `tomcat10-api/phase5f/`, preserve Phase 4 CXF and Phase 5e `/webui`, and retain
 pristine rollback WARs. `/mobile` and `/adempiere` remain disabled until Phase
-5g; `/admin` remains legacy pending named consumer ownership; `/` and `/wstore`
-remain ineligible until the database-backed gate passes.
+5g; `/admin` remains legacy pending named consumer ownership; `/` and `/wstore` are
+the two eligible modern contexts and both are now observed.
 
 `phase5fJakartaWebRoutesSmoke` is implemented as six public-origin shards plus
-Phase 4 SOAP coexistence. It **has been executed in CI, which supplies
-`phase3DbSystemPassword`, and it has never passed.** All six shards now execute
-in one run. Run 33342082144 recorded 122 observations and observed `/webui` and
-`/wstore` for the first time; `/webui`, `/admin`, `/mobile` and `/adempiere`
-passed, and eight vector failures remained across `/`, `/wstore` and the Phase 4
-SOAP coexistence capture. Every one has been diagnosed from that run's own
-evidence and fixed, but until the gate is observed green all 82 runtime
-observations and route-specific database effects remain pending. T5e-1 remains open;
+Phase 4 SOAP coexistence. It is **Executed and green** in run 33379849664 on commit `9ba62875d`, which recorded
+129 public-origin observations with zero vector failures - `/` (16), `/wstore`
+(68), `/webui` (6), `/admin` (4), `/mobile` (14), `/adempiere` (21) - and passed
+`verifyPhase5fSwitchBaseline`, `capturePhase5fSoapCoexistence`,
+`verifyPhase5fBackgroundProcessorsQuiesced` and the strict aggregate
+`verifyPhase5fRuntimeEvidence`, which validated 82 legacy routes, all 37
+eligible modern routes and 45 explicitly unexecuted modern routes. The 82 route observations and
+their route-specific database effects are therefore observed, and the contract
+ledgers carry the executed marker. The 25 `/wstore` JSP precompile rows stay
+`contract-only-runtime-observation-pending`, because only three of those pages
+are reached by a route vector. T5e-1 remains open;
 T5f-1 closes in Phase 5h. Required checks and branch protection remain a manual
 repository-administrator action. See
 `docs/modernization/phase-5f-evidence.md`.

@@ -1,6 +1,7 @@
 # Phase 5f Jakarta non-SOAP web contract
 
-Status: **reviewed database-neutral contract; runtime observations pending**.
+Status: **reviewed database-neutral contract; runtime observations executed and
+green** in CI run 33379849664 on commit `9ba62875d`.
 
 This contract fixes the Phase 5f governance boundary before Java, Gradle,
 descriptor, packaging, or runtime work begins. It is additive and does not
@@ -48,9 +49,23 @@ reclassify a row.
 5. No new deviation is allowed without a new reviewed row.
 6. `/mobile` and `/adempiere` remain disabled through Phase 5f. `/admin` remains
    legacy unless its infrastructure consumers are owned and approved.
-7. Runtime fields remain explicitly `pending`; database-neutral validation must
-   never rewrite them into observations. The database-backed smoke owns that
-   later evidence.
+7. The runtime marker columns (`route-validation.runtime_observation` and
+   `database-effect-ownership.evidence_state`) are a single reviewed constant,
+   not a per-row observation. Database-neutral validation never derives them
+   from evidence: it asserts the constant fail-closed and rejects any other
+   value. The constant is flipped by a reviewed source change to
+   `generate-phase5f-oracle-contracts.py` and
+   `validate-phase5f-oracle-contracts.py` **only after** an observed green
+   `phase5fJakartaWebRoutesSmoke`, and the run it records is named in the Status
+   line above. It was `pending-phase5f-database-smoke` /
+   `contract-only-runtime-observation-pending` until run 33379849664 and is now
+   `observed-phase5f-database-smoke` /
+   `runtime-observed-phase5f-database-smoke`. The database-backed smoke remains
+   the sole owner of the underlying evidence: it is validated per row by
+   `validate-phase5f-runtime-evidence.py`, which does not read these columns.
+   `jsp-precompile-contract.tsv` keeps
+   `contract-only-runtime-observation-pending` because only 3 of its 25 pages
+   are reached by a route vector.
 8. `./gradlew phase5fOracleContractValidation
    --dependency-verification=strict` regenerates the two derived ledgers,
    validates all joins and counts, verifies the manifest, and proves all ten

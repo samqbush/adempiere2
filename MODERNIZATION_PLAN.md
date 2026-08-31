@@ -189,7 +189,7 @@ necessarily block merges.
 | R1 | Core | Phase 2 smoke and Phase 3 DB-backed metadata validation protect selected runtime and dictionary seams; broader business behavior remains | Phase 5 | Expand representative document, accounting, and UI behavior coverage. |
 | R2 | Swing/POS | Closed for the Phase 2 Garden World login/role/menu/process slice; broader operator workflows remain outside this phase | Closed in Phase 2; broader coverage Phase 5 | The semantic Xvfb smoke is now gated; expand coverage during the ZK/client modernization. |
 | R3 | Background jobs | Exact-once scheduler execution and context/transaction cleanup are proven; production discovery breadth and observability remain | Phase 6 | Expand processor discovery and add operational metrics/alerts. |
-| R4 | Web UI | Phase 5d replaces the 503 marker with a functional modern slice and crosses the Testability Milestone. Phase 5e adds proven fail-closed `/webui` cohort routing, concurrent identity isolation, and logout/timeout/container cleanup. Phase 5f now builds isolated generated Jakarta source/web trees, five source-native context WARs, the source-native `/timeline` route and exact static DSP compatibility resource, and independently reversible context routing for the closed 82-deployed/30-non-deployed scope. Its database-neutral gate is green twice, but the six-shard database-backed route replay has been executed in CI and has never passed; the lane starts and shards run, the `/` shard fails at route `/::Broadcast::/` with a proxy-manufactured 502, and `/webui` and `/wstore` have never been observed. Production customizations, 13 non-reproducible legacy entries, the four `/*` reachability-only vectors, disabled `/mobile` and `/adempiere`, unowned `/admin`, JasperReports interactive web, and screen-level visual parity remain residuals. | Phase 5f database-backed gate for route/effect observations; Phase 5g for disabled contexts, reports and screen-level parity; Phase 7 for full artifact reproducibility | Do not treat implemented packaging or database-neutral contracts as runtime route parity. Production owners must validate custom overlays, and Phase 5f must not be called complete until the database-backed gate and PR gate are green. |
+| R4 | Web UI | Phase 5d replaces the 503 marker with a functional modern slice and crosses the Testability Milestone. Phase 5e adds proven fail-closed `/webui` cohort routing, concurrent identity isolation, and logout/timeout/container cleanup. Phase 5f now builds isolated generated Jakarta source/web trees, five source-native context WARs, the source-native `/timeline` route and exact static DSP compatibility resource, and independently reversible context routing for the closed 82-deployed/30-non-deployed scope. Its database-neutral gate is green twice, and the six-shard database-backed route replay is green in run 33379849664 with 129 observations and zero vector failures across all six contexts. Production customizations, 13 non-reproducible legacy entries, the four `/*` reachability-only vectors, disabled `/mobile` and `/adempiere`, unowned `/admin`, JasperReports interactive web, and screen-level visual parity remain residuals. | Phase 5f database-backed gate for route/effect observations; Phase 5g for disabled contexts, reports and screen-level parity; Phase 7 for full artifact reproducibility | Do not treat implemented packaging or database-neutral contracts as runtime route parity. Production owners must validate custom overlays. Both PR gates are now green; the 25 `/wstore` JSP precompile rows remain runtime-pending because only three of those pages are reached by a route vector. |
 | R5 | SOAP/servlets | Unknown consumers and undocumented route classes may break | Phase 4 | Inventory consumers, freeze WSDL/HTTP fixtures, and run parallel replay. |
 | R6 | Database | Production size, custom schema, supported engines, and rollback windows are unknown | Phase 6 | Approve customer-specific migration runbook and rehearse on a sanitized copy. |
 | R7 | Extension metadata | The fail-closed validator names 16 pre-existing active `AD_Process` bindings with absent or incompatible classes | Phase 7 | Obtain usage evidence, then correct or retire every row in `gradle/phase3/metadata-quarantine.tsv`; additions and stale quarantine rows fail CI. |
@@ -994,22 +994,21 @@ on `phase-5f-jakarta-web-routes`, but is **not complete or merged**. Its
 database-neutral `phase5fFinalVerification` gate has been executed green twice.
 Its database-backed `phase5fJakartaWebRoutesSmoke` gate and six context shards
 are implemented and **have been executed in CI, which supplies
-`phase3DbSystemPassword`. They have never passed.** The lane does start. All six shards now execute in a single run, and
-since run 33360842891 all six report zero vector failures. Run 33369428234, the
-most recent, recorded 129 observations - `/` (16), `/wstore` (68), `/webui` (6),
-`/admin` (4), `/mobile` (14), `/adempiere` (21) - and passed
-`verifyPhase5fSwitchBaseline`, `capturePhase5fSoapCoexistence` and
-`verifyPhase5fBackgroundProcessorsQuiesced`. The failure is now confined to the
-strict aggregate `verifyPhase5fRuntimeEvidence`, which reported a single
-`/::AdRedirector::/AdRedirector` error. Every earlier failure mode was diagnosed
-from a run's own evidence and fixed: a dropped `<error-page>`, three registered
-deviations (`DEV-P5F-ERR-02..04`), the container `redirectPort` behind three
+`phase3DbSystemPassword`. They are green.** All six shards execute in a single run. Run 33379849664, on
+commit `9ba62875d`, recorded 129 public-origin observations with zero vector
+failures - `/` (16), `/wstore` (68), `/webui` (6), `/admin` (4), `/mobile` (14),
+`/adempiere` (21) - and passed `verifyPhase5fSwitchBaseline`,
+`capturePhase5fSoapCoexistence`, `verifyPhase5fBackgroundProcessorsQuiesced` and
+the strict aggregate `verifyPhase5fRuntimeEvidence`, which validated 82 legacy
+routes, all 37 eligible modern routes and 45 explicitly unexecuted modern
+routes. Reaching it required diagnosing every failure from a run's own evidence:
+a dropped `<error-page>`, three registered deviations
+(`DEV-P5F-ERR-02..04`), the container `redirectPort` behind three
 `CONFIDENTIAL` `/wstore` redirects, the Phase 4 POS credential fixture, a latent
 argument-list defect in the aggregate task, three ambient database writers
 (timer-driven processors, automatic error reporting, and first-touch
-`WebEnv.initWeb` initialisation), and an aggregate digest that measured more
-content than the table digests it was cross-checked against. The gate has not
-yet been observed green.
+`WebEnv.initWeb` initialisation), and a snapshot aggregate that measured more
+content than the table digests it was cross-checked against.
 
 **Regime:** Legacy ZK/Tomcat 9 remains lit; the modern ZK/Tomcat 10.1 slice
 crossed from dark to lit at Phase 5d and now expands.
@@ -1530,26 +1529,28 @@ regressions.
 `phase5fJakartaWebRoutesSmoke` is implemented as six public-origin shards
 (`/webui`, `/admin`, `/`, `/mobile`, `/adempiere`, `/wstore`) plus complete
 Phase 4 SOAP coexistence and exact runtime-evidence validation. It **has been
-executed in CI and has never passed.** All six shards now execute in a single run, and
-since run 33360842891 all six report zero vector failures. Run 33369428234, the
-most recent, recorded 129 observations - `/` (16), `/wstore` (68), `/webui` (6),
-`/admin` (4), `/mobile` (14), `/adempiere` (21) - and passed
-`verifyPhase5fSwitchBaseline`, `capturePhase5fSoapCoexistence` and
-`verifyPhase5fBackgroundProcessorsQuiesced`. The failure is now confined to the
-strict aggregate `verifyPhase5fRuntimeEvidence`, which reported a single
-`/::AdRedirector::/AdRedirector` error. Every earlier failure mode was diagnosed
-from a run's own evidence and fixed: a dropped `<error-page>`, three registered
-deviations (`DEV-P5F-ERR-02..04`), the container `redirectPort` behind three
+executed in CI and is green.** All six shards execute in a single run. Run 33379849664, on
+commit `9ba62875d`, recorded 129 public-origin observations with zero vector
+failures - `/` (16), `/wstore` (68), `/webui` (6), `/admin` (4), `/mobile` (14),
+`/adempiere` (21) - and passed `verifyPhase5fSwitchBaseline`,
+`capturePhase5fSoapCoexistence`, `verifyPhase5fBackgroundProcessorsQuiesced` and
+the strict aggregate `verifyPhase5fRuntimeEvidence`, which validated 82 legacy
+routes, all 37 eligible modern routes and 45 explicitly unexecuted modern
+routes. Reaching it required diagnosing every failure from a run's own evidence:
+a dropped `<error-page>`, three registered deviations
+(`DEV-P5F-ERR-02..04`), the container `redirectPort` behind three
 `CONFIDENTIAL` `/wstore` redirects, the Phase 4 POS credential fixture, a latent
 argument-list defect in the aggregate task, three ambient database writers
 (timer-driven processors, automatic error reporting, and first-touch
-`WebEnv.initWeb` initialisation), and an aggregate digest that measured more
-content than the table digests it was cross-checked against. The gate has not
-yet been observed green. The shards run in an explicit order (`/`, `/wstore`,
+`WebEnv.initWeb` initialisation), and a snapshot aggregate that measured more
+content than the table digests it was cross-checked against. The shards run in an explicit order (`/`, `/wstore`,
 `/webui`, `/admin`, `/mobile`, `/adempiere`), record vector failures instead of
 aborting, and the job passes `--continue`, so one run reports the whole matrix.
-Until it is green, all 82 route observations and route-specific database
-effects remain pending, and Phase 5f must not be described as complete. See
+All 82 route observations and their route-specific database effects are
+therefore observed, and both contract ledgers carry the executed marker. The 25
+`/wstore` JSP precompile rows remain
+`contract-only-runtime-observation-pending`, because only three of those pages
+are reached by a route vector. See
 `docs/modernization/phase-5f-evidence.md`.
 
 **Byte caps.** The proxy's 8 MiB request and 64 MiB response caps are enforced
@@ -1795,7 +1796,7 @@ No insecure transition is approved by default.
 | ID | State | Why needed | Scope | Closes | Residual risk |
 |---|---|---|---|---|---|
 | T5e-1 | Internal authenticated handoff between public Tomcat 9 and loopback Tomcat 10 | Avoid a second login while `/webui` is split across runtimes | `/webui`; signed single-use 30-second ticket and shared 0600 key | Phase 5h | Remains open; a process with host-account/key access and loopback reach could forge a modern identity, without widening the existing host trust boundary. |
-| T5f-1 | Multi-context proxying and forwarded secure state | Migrate whole non-SOAP contexts independently while Tomcat 9 remains the only public ingress | `/admin`, `/`, `/mobile`, `/adempiere`, `/wstore`; forwarded secure metadata only for four confidential `/wstore` paths | Phase 5h | A classifier/header-boundary defect could expose an undeclared route, trust spoofed secure state, leak loopback coordinates, or fall back incorrectly. Database-neutral controls are green; runtime observation awaits the unexecuted Phase 5f smoke. |
+| T5f-1 | Multi-context proxying and forwarded secure state | Migrate whole non-SOAP contexts independently while Tomcat 9 remains the only public ingress | `/admin`, `/`, `/mobile`, `/adempiere`, `/wstore`; forwarded secure metadata only for four confidential `/wstore` paths | Phase 5h | A classifier/header-boundary defect could expose an undeclared route, trust spoofed secure state, leak loopback coordinates, or fall back incorrectly. Database-neutral controls are green, and the public-origin runtime observations are green in run 33379849664; the transitional proxy and forwarded secure state are not removed by observing them, so this closes in Phase 5h. |
 
 If a phase adds a temporary security weakening, the row must state the exact
 route/service, compensating control, scanner waiver, owner, and closing task.
