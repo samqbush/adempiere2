@@ -1,0 +1,22 @@
+# Phase 5g-1a owned exclusions.
+#
+# An exclusion recorded here is a scope decision with a named successor. It is
+# NOT a claim of coverage, and it is not the banned disposition
+# `contract-only-runtime-observation-pending`, which the Phase 5g ADR forbids for
+# anything that defines an increment's own claim. Everything below is outside
+# 5g-1a's claim by design.
+#
+# The distinction that matters: `attribution-scope.tsv` and
+# `measurement-scope.tsv` both cover C_BPartner_Location, because the exclusion
+# is from the CAPTURE FLOW, not from observation. If the flow ever writes a
+# location the sentinel sees it and the gate fails. An exclusion that also
+# stopped looking would be indistinguishable from an absence of evidence.
+excluded	reason	closing_increment
+C_BPartner_Location tab	The Business Partner header fires no callout, but C_BPartner_Location declares one (CalloutBPartnerLocation.formatPhone). Including it would put callout arithmetic between the window and the effect on the very first write oracle, so the simplest honest write stops being simple.	5g-1b
+hard delete of C_BPartner	ADempiere does not hard-delete a business partner in normal use; the product flow is deactivation. Freezing a delete oracle would freeze behaviour the application does not exercise.	not scheduled
+C_Order and document transitions	A document transition is a different behaviour class with two registered model validators on its path, one extension-owned.	5g-1c
+Fact_Acct and accounting facts	MOrder.completeIt() does not post, and the Phase 5f quiescence script disables the accounting processor. Accounting follows the explicit Post Immediate action.	5g-1d
+dictionary process execution	AD_PInstance, parameter marshalling and log rows are a separate behaviour class with its own named fixture (AD_Process_ID 295).	5g-1e
+report rendering	110 of the 351 classified dictionary processes are reports.	5g-2
+attachment upload and download	Byte-cap and content-type contracts are their own behaviour class.	5g-3
+modern runtime capture	5g-1a is an oracle increment. The Phase 5g ADR forbids a branch from both inventing the expected answer and implementing the thing being scored.	5g-1b

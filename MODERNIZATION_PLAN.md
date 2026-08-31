@@ -1012,8 +1012,24 @@ content than the table digests it was cross-checked against.
 
 **Phase 5g is now active.** It is the web UI functional parity increment and is
 delivered through sub-increments `5g-0` and `5g-1a` .. `5g-7`; see "Phase 5g
-decomposition and active scope". `5g-0` is in progress and ships no runtime
-code.
+decomposition and active scope". `5g-0` merged to `develop` as PR #13 at
+`91c4c2029`. `5g-1a`, the legacy Business Partner CRUD write oracle, is now in
+progress; it ships no modern runtime code and, by ADR rule, cannot report parity.
+
+`phase5g1aFinalVerification` is the head of the phase-gate chain:
+
+```bash
+./gradlew phase5g1aFinalVerification --dependency-verification=strict
+```
+
+It verifies the `contracts/legacy-web-write-v1/` manifest and its required-file
+floor, re-derives the table-scoped callout and registered-validator attribution
+to prove `C_BPartner` carries neither, and scores the write-capture normalizer in
+**both** directions - ten defect classes must be detected and four volatility
+classes must be normalized away - against a committed raw fixture. The captured
+legacy write facts and the recorded domain review are **not yet frozen**;
+`contracts/legacy-web-write-v1/README.md` names each absent file rather than
+omitting it silently.
 
 **Regime:** Legacy ZK/Tomcat 9 remains lit; the modern ZK/Tomcat 10.1 slice
 crossed from dark to lit at Phase 5d and now expands.
@@ -1034,7 +1050,7 @@ crossed from dark to lit at Phase 5d and now expands.
 | 5d | Migrate the complete ZK compile closure and cross the Testability Milestone at login -> role -> menu -> read-only window | Web UI | 5c |
 | 5e | Prove concurrent client/org/role/user/language/session cleanup and add fail-closed cohort routing | Security/session | 5d (**merged and verified** at `6eda2bc8`; see "Phase 5e decisions and findings") |
 | 5f | Migrate all 82 deployed non-SOAP mappings by independently reversible context; disposition all 30 non-deployed mappings; build isolated generated Jakarta trees and five modern context WARs; preserve `/webui` while adding source-native `/timeline` and the exact static DSP compatibility resource | Web routes | 5e (**merged and verified** at `83aeb8536`; database-neutral gate green twice, six-shard database smoke green in run 33379849664) |
-| 5g | Complete read/write UI, process, report, upload/download, POS, dashboard, server-push, and extension parity. Delivered through sub-increments `5g-0` and `5g-1a` .. `5g-7`; see "Phase 5g decomposition" | Web UI/extensions | 5f (**active**; `5g-0` in progress) |
+| 5g | Complete read/write UI, process, report, upload/download, POS, dashboard, server-push, and extension parity. Delivered through sub-increments `5g-0` and `5g-1a` .. `5g-7`; see "Phase 5g decomposition" | Web UI/extensions | 5f (**active**; `5g-0` merged, `5g-1a` in progress) |
 | 5h | Finish source-native Jakarta, preserve both historical SOAP paths on final ingress, then remove the router, Tomcat 9, transformer, and ZK 3.6 | Runtime/source | 5g |
 
 #### Risks & mitigations
@@ -1601,7 +1617,7 @@ Two ordering rules bind every Phase 5g increment:
 | Increment | Scope | Ships modern code? |
 |---|---|---|
 | 5g-0 | Phase 5f reconciliation; the Phase 5g ADR; ZK-facing extension/callout/validator discovery; the dictionary-process classification and named 5g-1e fixture; the disabled-context governance amendment | No |
-| 5g-1a | The legacy Business Partner CRUD write oracle: a reusable legacy write capture harness, `contracts/legacy-web-write-v1/`, the keyed relational effect model, seed-restore isolation, normalizer mutation proofs, and the recorded domain review | **No** |
+| 5g-1a (**active**) | The legacy Business Partner CRUD write oracle: a reusable legacy write capture harness, `contracts/legacy-web-write-v1/`, the keyed relational effect model, seed-restore isolation, normalizer mutation proofs, and the recorded domain review. The database-neutral half is delivered and gated by `phase5g1aFinalVerification`, the new chain head; the captured facts and the domain review are **not yet frozen** | **No** |
 | 5g-1b | Modern Business Partner CRUD parity, scored **only** through the public routed `/webui` origin | Yes |
 | 5g-1c | Sales Order draft -> Complete: document status, document number, reservations and tax. **No accounting** | Yes |
 | 5g-1d | The explicit "Post Immediate" action: `Posted='Y'` and balanced `Fact_Acct` | Yes |
