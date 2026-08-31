@@ -114,13 +114,43 @@ on login. Do not describe Phase 5f route observation as write parity.
 `5g-0` is reconciliation, discovery and governance and ships no runtime code. It
 adds the reviewed `contracts/phase5g-web-parity-v1/` inventories - 351 classified
 dictionary processes, 174 callout columns, 197 extension surfaces - gated by
-`phase5g0FinalVerification`, which is now the head of the phase-gate chain. It
+`phase5g0FinalVerification`. It
 also opens, but does not close, a named disposition for `/mobile`, `/adempiere`
 and `/admin` in
 `docs/modernization/phase-5g-disabled-context-disposition.md`. Phase 5g does
 **not** enable those contexts; `phase5g-web-parity-gate` is defined there as the
 `5g-7` gate that requires a recorded disposition per context, and Phase 5h is
-blocked behind it.
+blocked behind it. `5g-0` merged to `develop` as PR #13 at `91c4c2029`.
+
+**`5g-1a` is active and is the legacy Business Partner CRUD write oracle.** It
+captures the expected answer for the first business write from the **legacy**
+Tomcat 9 / ZK 3.6 runtime, so that `5g-1b` can score the modern runtime against
+an answer it did not invent. By ADR rule it ships **no modern runtime code** and
+cannot report parity. Its contract tree is `contracts/legacy-web-write-v1/`,
+which is new rather than an extension of `contracts/legacy-web-browser-v1/`,
+because that tree's manifest hard-fails on any unmanifested file and its
+`modern-comparable-facts.tsv` is specifically the Phase 5d read-only comparison
+policy. Scope is create, update and deactivate on `C_BPartner` as `GardenAdmin`;
+`C_BPartner_Location` and hard delete are recorded exclusions with named closing
+increments. `C_BPartner` is chosen because it is the only reviewed table with
+neither a callout nor a registered model validator on its path, and that
+attribution is re-derived mechanically on every run rather than cross-referenced
+against the 5g-0 inventories, which record declarations and not table
+subscriptions.
+
+The database-neutral half is delivered and gated by
+`phase5g1aFinalVerification`, now the chain head. The captured facts
+(`effect-model.tsv`, `business-values.tsv`, `foreign-key-graph.tsv`,
+`semantic-facts.tsv`, `network-classes.tsv`, `concurrency-facts.tsv`,
+`allowed-browser-errors.tsv`, `write-flow.tsv`) and the recorded domain review
+are **not frozen yet**; the contract README names each absent file rather than
+omitting it. Two rules bind the capture: isolation is **full seed restore plus
+reviewed fixture plus container restart before every capture**, never surgical
+rollback, and effects are measured **per step**, because one before/after pair
+around create -> update -> deactivate shows only the final deactivated row. The
+effect model is two layers - a whole-database changed-table sentinel plus keyed
+relational extraction - because a measurement that queries only declared tables
+cannot see a write to an undeclared one.
 
 The accepted target is ZK CE `10.3.0.1-jakarta` from the public ZK repository.
 Do not introduce evaluation artifacts or commercial repository credentials.
@@ -153,7 +183,8 @@ by a phase become canonical only after that phase's exit criteria prove them.
 | Phase 5e handoff key | `./gradlew provisionPhase5eHandoffKey` | Generates the shared >=32-byte 0600 key from the OS CSPRNG, outside every archive under `ADEMPIERE_HOME`. The repository ships no key and no placeholder |
 | Phase 5f Jakarta route contracts and topology | `./gradlew phase5fFinalVerification --dependency-verification=strict` | Executed green twice. Verifies the 82 deployed/30 non-deployed contract and mutations, isolated generated Jakarta closures, five deterministic modern context WARs, 25 JSP precompiles, Servlet 6/discovery rules, `/timeline` and static DSP contracts, independent routing policies, installed/release topology, rollback, inventories, and Phase 4/5d/5e regressions. Does **not** prove runtime route/database-effect parity |
 | Phase 5f Jakarta route smoke | `./gradlew phase5fJakartaWebRoutesSmoke -Pphase3DbSystemPassword='<password>' --dependency-verification=strict` | Six-shard, marker-owned PostgreSQL public-origin replay for `/webui`, `/admin`, `/`, `/mobile`, `/adempiere`, and `/wstore`, plus exact 82-row effect validation and Phase 4 SOAP coexistence. Shards run in the explicit order `/`, `/wstore`, `/webui`, `/admin`, `/mobile`, `/adempiere`, record vector failures instead of aborting, and are driven with `--continue`. **Executed and green** in run 33379849664 on commit `9ba62875d`: 129 observations, zero vector failures across all six shards, and the strict aggregate `verifyPhase5fRuntimeEvidence` validated 82 legacy routes, all 37 eligible modern routes and 45 explicitly unexecuted modern routes |
-| Phase 5g-0 discovery inventories | `./gradlew phase5g0FinalVerification --dependency-verification=strict` | Database-neutral head of the phase-gate chain. Regenerates the Phase 5g-0 process-classification, callout-column and extension-surface inventories from `db/ddlutils/adempiere-data.xml` and the reactor sources, requires an exact match against the reviewed `contracts/phase5g-web-parity-v1/` tree including its commentary preamble, closes that directory listing, and chains `phase5fFinalVerification`. Ships no runtime code and proves no parity |
+| Phase 5g-1a legacy write oracle contracts | `./gradlew phase5g1aFinalVerification --dependency-verification=strict` | Database-neutral **head of the phase-gate chain**. Verifies the `contracts/legacy-web-write-v1/` manifest and its required-file floor, re-derives the table-scoped callout and registered-validator attribution from `db/ddlutils/adempiere-data.xml` and the reactor sources to prove `C_BPartner` carries neither a callout nor a registered model validator, scores the write-capture normalizer in both directions (10 defect classes detected, 4 volatility classes normalized) against the committed raw fixture, and chains `phase5g0FinalVerification`. Ships no modern runtime code and proves **no** write parity |
+| Phase 5g-0 discovery inventories | `./gradlew phase5g0FinalVerification --dependency-verification=strict` | Database-neutral gate, chained by `phase5g1aFinalVerification`. Regenerates the Phase 5g-0 process-classification, callout-column and extension-surface inventories from `db/ddlutils/adempiere-data.xml` and the reactor sources, requires an exact match against the reviewed `contracts/phase5g-web-parity-v1/` tree including its commentary preamble, closes that directory listing, and chains `phase5fFinalVerification`. Ships no runtime code and proves no parity |
 | Full product build, no DB restore | `ant build -Dnodbrestore=true` | Authoritative underlying Ant reactor; prefer the guarded Phase 3 lifecycle for CI |
 | Full product build with DB restore/migrations | `ant build -Dnodbrestore=false` | Database-affecting underlying reactor; run only against an approved disposable environment |
 | Gradle module build | `./gradlew build --dependency-verification=strict` | Reproducible Phase 2 gate on JDK 21 with Java 21 bytecode; omits quarantined Ant-only deployables |
@@ -203,9 +234,9 @@ checks to mark required are `Contracts` and `Current-phase database smoke`.
 **CI topology.** `.github/workflows/main.yml` runs two lanes, documented in
 `docs/modernization/ci-topology.md`. Every pull request runs `Contracts` - a
 single Gradle invocation of the head of the phase-gate chain - currently
-`phase5g0FinalVerification` - plus `phase5cFinalVerification`, which together
-schedule exactly the same task set as the eight notional per-phase jobs would
-(291 tasks, versus 1168 across those gates) - and
+`phase5g1aFinalVerification` - plus `phase5cFinalVerification`, which together
+schedule exactly the same task set as the nine notional per-phase jobs would
+(296 tasks, versus 1458 across those gates) - and
 `Current-phase database smoke`, the runtime gate for the phase under active
 development, currently `phase5fJakartaWebRoutesSmoke`, which is green. The remaining database-backed
 smokes run post-merge on `push` to `develop`, nightly, and on demand as
@@ -218,6 +249,41 @@ two phase-neutral jobs and re-run the coverage proof in the topology document;
 do not rename the jobs, because branch protection references them by name.
 Lane 2 is non-blocking in GitHub but is governed by a stop-the-line containment
 rule (residual risk R10).
+
+## Where to run gates: prefer GitHub Actions over local execution
+
+**Do not run heavy builds, Ant reactor builds, full Gradle gates, container
+lanes, browser lanes, or any database-backed smoke on the developer machine.**
+Push the branch and let GitHub Actions execute them. The Ant reactor build,
+`phase3InstalledProduct`, every `*FinalVerification` gate, and every `*Smoke`
+task are CI activities, not local ones. Phase 5f initial setup alone is roughly
+22 minutes and its full gate took 1h13m54s; a local run is slower still and can
+exhaust the machine.
+
+Local execution is for **fast, targeted, single-purpose checks** that finish in
+seconds. The verified fast loops in this repository are:
+
+| Check | Local command | Cost |
+|---|---|---|
+| Phase 5f database-neutral contract | `python3 scripts/phase5/generate-phase5f-oracle-contracts.py --repo-root . --output-dir /tmp/p5fgen` then `python3 scripts/phase5/validate-phase5f-oracle-contracts.py --repo-root . --contract-dir contracts/phase5f-jakarta-web-v1 --generated-dir /tmp/p5fgen --summary /tmp/p5fsum.tsv` | ~1s |
+| Phase 5g-0 inventories | `python3 scripts/phase5/generate-phase5g-inventories.py --repo-root . --output-dir /tmp/p5g` then `python3 scripts/phase5/validate-phase5g-inventories.py --repo-root .` | ~2s |
+| Phase 5f runtime evidence | Download a CI evidence artifact, rewrite each `provenance.json` `git_head` to local `HEAD`, then run `scripts/phase5/validate-phase5f-runtime-evidence.py` | seconds |
+| `org.adempiere.cohort` unit tests | `javac` the main and test source sets, then run `junit-platform-console-standalone` from the Gradle cache | ~1s |
+
+The pattern generalizes: a gate implemented as a Python generator plus a
+validator, or as plain JUnit over a small source set, can and should be
+reproduced locally by invoking that script or compiler directly rather than
+through its Gradle task. Prefer writing new gates that way, so they stay cheap
+to reproduce.
+
+Use `gh run watch`, `gh run view --log-failed`, and `gh run download` to drive
+and diagnose CI. Diagnose a failure from the run's **own uploaded evidence**
+before attempting any local reproduction; Phase 5f established that every
+failure mode was diagnosable that way.
+
+When a gate can only run in CI, say so plainly and report it as executed in CI
+with the run id and commit, exactly as `MODERNIZATION_PLAN.md` records run
+33379849664 on `9ba62875d`. Never present an unrun gate as green.
 
 ## Phase gating
 

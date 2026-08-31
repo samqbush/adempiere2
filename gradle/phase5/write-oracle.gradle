@@ -1,0 +1,271 @@
+import java.security.MessageDigest
+
+// Phase 5g-1a: the legacy Business Partner CRUD write oracle.
+//
+// This file registers the DATABASE-NEUTRAL half of the increment. It proves the
+// contract is internally consistent, that it still describes the repository, and
+// that the normalizer removes enough without removing too much. It deliberately
+// proves nothing about runtime behaviour: the capture itself needs a booted
+// Tomcat 9 lane and a marker-owned PostgreSQL, and lives in the database-backed
+// smoke.
+//
+// Nothing here ships modern runtime code. The Phase 5g ADR forbids a branch from
+// both inventing the expected answer and implementing the thing being scored, so
+// 5g-1a is an oracle increment only.
+
+def phase5g1aContractDir =
+	rootProject.layout.projectDirectory.dir('contracts/legacy-web-write-v1')
+def phase5g1aBuildRoot = rootProject.layout.buildDirectory.dir('phase5g1a')
+def phase5g1aGeneratedDir = phase5g1aBuildRoot.map { it.dir('generated') }
+def phase5g1aScript = { String name -> rootProject.file("scripts/phase5/${name}") }
+
+// The manifest cannot contain its own digest; it is excluded by construction and
+// its integrity comes from review, exactly as in the Phase 5b oracle manifest
+// and the Phase 5d browser contract manifest.
+def phase5g1aManifestName = 'manifest.sha256'
+
+def phase5g1aSha256 = { byte[] content ->
+	MessageDigest.getInstance('SHA-256').digest(content).encodeHex().toString()
+}
+
+tasks.register('generatePhase5gWriteAttribution', Exec) {
+	group = 'verification'
+	description = 'Generates the Phase 5g table-scoped callout and registered-validator attribution'
+	inputs.file rootProject.file('db/ddlutils/adempiere-data.xml')
+	inputs.file phase5g1aScript('generate-phase5g-write-attribution.py')
+	inputs.file phase5g1aContractDir.file('attribution-scope.tsv')
+	// The analyzer resolves validator superclass chains and model-class
+	// Table_Name constants through the core and extension source trees, so those
+	// trees are declared inputs. Declaring only the seed would let a source
+	// change that moves a validator onto a fixture table hide behind an
+	// UP-TO-DATE result.
+	inputs.file rootProject.file('gradle/phase5/phase5g-scan-roots.tsv')
+	['base/src', 'client/src'].each { root ->
+		inputs.files(rootProject.fileTree(rootProject.file(root)) {
+			include '**/*.java'
+			exclude '**/build/**'
+			exclude '**/bin/**'
+		}).withPropertyName("coreRoot_${root.replace('/', '_')}")
+	}
+	rootProject.file('gradle/phase5/phase5g-scan-roots.tsv').readLines()
+		.findAll { !it.trim().isEmpty() && !it.startsWith('#') }
+		.collect { it.split('\t')[0] }
+		.findAll { it != 'path' }
+		.each { root ->
+			inputs.files(rootProject.fileTree(rootProject.file(root)) {
+				include '**/*.java'
+				exclude '**/build/**'
+				exclude '**/bin/**'
+			}).withPropertyName("scanRoot_${root.replace('/', '_').replace('.', '_')}")
+		}
+	outputs.dir phase5g1aGeneratedDir
+	commandLine(
+		'python3',
+		phase5g1aScript('generate-phase5g-write-attribution.py').absolutePath,
+		'--repo-root', rootProject.projectDir,
+		'--output-dir', phase5g1aGeneratedDir.get().asFile,
+		'--scope', phase5g1aContractDir.file('attribution-scope.tsv').asFile)
+}
+
+tasks.register('verifyPhase5gWriteAttribution', Exec) {
+	group = 'verification'
+	description =
+		'Proves C_BPartner fires no callout and no registered model validator, and that the analyzer is actually looking'
+	dependsOn tasks.named('generatePhase5gWriteAttribution')
+	inputs.dir phase5g1aContractDir
+	inputs.dir phase5g1aGeneratedDir
+	inputs.file phase5g1aScript('validate-phase5g-write-attribution.py')
+	outputs.file phase5g1aBuildRoot.map { it.file('attribution-summary.tsv') }
+	commandLine(
+		'python3',
+		phase5g1aScript('validate-phase5g-write-attribution.py').absolutePath,
+		'--repo-root', rootProject.projectDir,
+		'--generated-dir', phase5g1aGeneratedDir.get().asFile,
+		'--summary', phase5g1aBuildRoot.get().file('attribution-summary.tsv').asFile)
+}
+
+tasks.register('verifyPhase5gWriteNormalizerMutationProof', Exec) {
+	group = 'verification'
+	description =
+		'Scores the write-capture normalizer in both directions against the committed raw fixture'
+	inputs.file phase5g1aScript('normalize_write_capture.py')
+	inputs.file phase5g1aScript('measure-write-effect.py')
+	inputs.file phase5g1aScript('verify-write-normalizer-mutation-proof.py')
+	inputs.dir phase5g1aContractDir.dir('raw')
+	outputs.file phase5g1aBuildRoot.map { it.file('normalizer-mutations.tsv') }
+	commandLine(
+		'python3',
+		phase5g1aScript('verify-write-normalizer-mutation-proof.py').absolutePath,
+		'--repo-root', rootProject.projectDir,
+		'--report', phase5g1aBuildRoot.get().file('normalizer-mutations.tsv').asFile)
+	doLast {
+		// The proof writes its report even when it fails, so a green Exec is not
+		// on its own evidence that every declared mutation ran. Re-read the
+		// report here and require the full declared set: an infrastructure
+		// failure that produced a short report must not pass as coverage.
+		def report = phase5g1aBuildRoot.get().file('normalizer-mutations.tsv').asFile
+		if (!report.isFile()) {
+			throw new GradleException('The normalizer mutation proof produced no report')
+		}
+		def rows = report.readLines()
+			.findAll { it && !it.startsWith('#') && !it.startsWith('mutation\t') }
+		def detect = rows.findAll { it.split('\t')[1] == 'must-detect' }
+		def normalize = rows.findAll { it.split('\t')[1] == 'must-normalize' }
+		if (detect.size() < 10 || normalize.size() < 4) {
+			throw new GradleException(
+				"The normalizer mutation proof scored ${detect.size()} must-detect and " +
+					"${normalize.size()} must-normalize mutation(s); the reviewed set is " +
+					'10 and 4. A shrinking proof is a weakening proof.')
+		}
+		logger.lifecycle(
+			"Normalizer mutation proof scored ${detect.size()} defect and " +
+				"${normalize.size()} volatility class(es)")
+	}
+}
+
+tasks.register('generatePhase5gWriteOracleManifest') {
+	group = 'verification'
+	description =
+		'Regenerates contracts/legacy-web-write-v1/manifest.sha256 over every contract file except itself'
+	doLast {
+		def dir = phase5g1aContractDir.asFile
+		def rows = []
+		dir.eachFileRecurse { file ->
+			if (!file.isFile()) {
+				return
+			}
+			def relative = dir.toPath().relativize(file.toPath()).toString()
+			if (relative == phase5g1aManifestName) {
+				return
+			}
+			rows << "${phase5g1aSha256(file.bytes)}\t${relative}"
+		}
+		rows.sort()
+		new File(dir, phase5g1aManifestName).withWriter('UTF-8') { writer ->
+			writer.println('# Phase 5g-1a legacy Business Partner write oracle manifest')
+			writer.println(
+				'# SHA-256 over every file in contracts/legacy-web-write-v1/ except this file.')
+			writer.println('# sha256\tpath')
+			rows.each { writer.println(it) }
+		}
+		logger.lifecycle("Wrote write oracle manifest covering ${rows.size()} files")
+	}
+}
+
+tasks.register('verifyPhase5gWriteOracleManifest') {
+	group = 'verification'
+	description =
+		'Fails when the write oracle contract has a missing, unexpected, or altered file'
+	inputs.dir phase5g1aContractDir
+	outputs.file phase5g1aBuildRoot.map { it.file('manifest-verified.txt') }
+	doLast {
+		def dir = phase5g1aContractDir.asFile
+		def manifest = new File(dir, phase5g1aManifestName)
+		if (!manifest.isFile()) {
+			throw new GradleException("Missing ${manifest}")
+		}
+		def expected = [:]
+		manifest.readLines().findAll { it && !it.startsWith('#') }.each { line ->
+			def fields = line.split('\t', -1)
+			expected[fields[1]] = fields[0]
+		}
+		def actual = [:]
+		dir.eachFileRecurse { file ->
+			if (!file.isFile()) {
+				return
+			}
+			def relative = dir.toPath().relativize(file.toPath()).toString()
+			if (relative == phase5g1aManifestName) {
+				return
+			}
+			actual[relative] = phase5g1aSha256(file.bytes)
+		}
+		def missing = (expected.keySet() - actual.keySet()).sort()
+		// An unexpected file is a real failure: an unreviewed fixture must never
+		// be able to join the contract silently.
+		def unexpected = (actual.keySet() - expected.keySet()).sort()
+		def altered = expected.keySet().intersect(actual.keySet())
+			.findAll { expected[it] != actual[it] }.sort()
+		def problems = []
+		if (missing) { problems << "missing: ${missing}" }
+		if (unexpected) { problems << "unexpected: ${unexpected}" }
+		if (altered) { problems << "altered: ${altered}" }
+		if (!problems.isEmpty()) {
+			throw new GradleException(
+				"contracts/legacy-web-write-v1 does not match ${phase5g1aManifestName} " +
+					"(${problems.join('; ')}). Re-review the change, then run " +
+					'generatePhase5gWriteOracleManifest.')
+		}
+
+		// A manifest that faithfully records a contract someone emptied is a
+		// green gate over no coverage. The files that carry the increment's claim
+		// must be present, and the ones that can be emptied without changing the
+		// file list must still have content.
+		// path -> minimum byte length. The floors are the reviewed content's order
+		// of magnitude, not its exact size, so ordinary edits do not trip them.
+		def required = [
+			'README.md': 4500,
+			'attribution-scope.tsv': 500,
+			'attribution.tsv': 2000,
+			'measurement-scope.tsv': 500,
+			'fixture.sql': 4000,
+			'exclusions.tsv': 1500,
+			'normalization-policy.md': 2500,
+			// Deliberately the smallest floor in the set: the "before" capture
+			// legitimately holds only the sentinel and empty scope tables,
+			// because the point of it is that the write has not happened yet.
+			'raw/before.json': 120,
+			'raw/after.json': 800,
+			'raw/README.md': 800,
+		]
+		def absent = required.keySet().findAll { !actual.containsKey(it) }
+		if (!absent.isEmpty()) {
+			throw new GradleException(
+				"The Phase 5g-1a write oracle contract is missing required file(s): ${absent}")
+		}
+
+		// Presence alone is not coverage. None of these files is read by any other
+		// task in this gate, so without a content floor any of them could be
+		// truncated to zero bytes, the manifest regenerated, and the gate would go
+		// green over a contract that had lost its recorded exclusions, its
+		// measurement scope and its preconditions.
+		def thin = required.findAll { path, floor -> new File(dir, path).length() < floor }
+		if (!thin.isEmpty()) {
+			throw new GradleException(
+				'The Phase 5g-1a write oracle contract has file(s) below their reviewed ' +
+					"content floor: ${thin.keySet()}. A manifest that faithfully records an " +
+					'emptied contract is a green gate over no coverage.')
+		}
+
+		// Each TSV must carry data rows, not only its commentary preamble. A scope
+		// or exclusion list reduced to comments asserts nothing while still looking
+		// substantial to a byte-length check.
+		['attribution-scope.tsv', 'attribution.tsv', 'measurement-scope.tsv',
+		 'exclusions.tsv'].each { name ->
+			def dataRows = new File(dir, name).readLines()
+				.findAll { !it.trim().isEmpty() && !it.startsWith('#') }
+			if (dataRows.size() < 2) {
+				throw new GradleException(
+					"contracts/legacy-web-write-v1/${name} carries ${dataRows.size()} " +
+						'non-comment line(s); a header plus at least one data row is required.')
+			}
+		}
+
+		phase5g1aBuildRoot.get().file('manifest-verified.txt').asFile.with {
+			parentFile.mkdirs()
+			text = "verified ${expected.size()} write oracle contract file(s)\n"
+		}
+		logger.lifecycle("Verified ${expected.size()} write oracle contract files")
+	}
+}
+
+tasks.register('phase5g1aFinalVerification') {
+	group = 'verification'
+	description =
+		'Runs the database-neutral Phase 5g-1a write oracle gate and every earlier phase gate'
+	dependsOn(
+		tasks.named('verifyPhase5gWriteOracleManifest'),
+		tasks.named('verifyPhase5gWriteAttribution'),
+		tasks.named('verifyPhase5gWriteNormalizerMutationProof'),
+		tasks.named('phase5g0FinalVerification'))
+}

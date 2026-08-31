@@ -72,3 +72,7 @@ utils_dev/mytest.properties
 .gradle/**
 **/bin/**
 /.gradle/
+
+# Python bytecode caches produced by the Phase 5 verification scripts.
+__pycache__/
+*.pyc

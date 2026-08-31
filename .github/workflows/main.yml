@@ -97,7 +97,8 @@ jobs:
           java-version: '21'
           cache: gradle
 
-      # One invocation, one task graph. phase5g0FinalVerification chains
+      # One invocation, one task graph. phase5g1aFinalVerification chains
+      # phase5g0FinalVerification, which chains
       # phase5fFinalVerification, which transitively covers
       # phase3NoDatabaseDistribution, phase4FinalVerification and the Phase
       # 5a/5b/5c/5d/5e gates; phase5cFinalVerification contributes only
@@ -105,7 +106,7 @@ jobs:
       - name: Verify every database-neutral phase gate
         uses: ./.github/actions/adempiere-build
         with:
-          task: phase5g0FinalVerification phase5cFinalVerification
+          task: phase5g1aFinalVerification phase5cFinalVerification
 
       # if-no-files-found: error is satisfied by any one matching path, so an
       # upload block that also matches an evidence directory cannot detect a

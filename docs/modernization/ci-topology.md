@@ -9,7 +9,7 @@ what that grouping deliberately gives up. This implements
 | Lane | Trigger | Blocking | Jobs |
 |---|---|---|---|
 | 1 | `pull_request` → `develop`/`master` | Yes | `Contracts`, `Current-phase database smoke` |
-| 2 | `push` → `develop`/`master`, nightly `schedule`, `workflow_dispatch` | No | `Regression matrix` (5 database-backed gates) |
+| 2 | `push` → `develop`/`master`, nightly `schedule`, `workflow_dispatch` | No | `Regression matrix` (6 database-backed gates) |
 
 Lane 1 is what a pull request must pass. Lane 2 records that the phases already
 merged still hold.
@@ -27,6 +27,8 @@ phase3NoDatabaseDistribution
         └── phase5dFinalVerification     (gradle/phase5/zk-functional-slice.gradle:388-395)
               └── phase5eFinalVerification   (gradle/phase5/cohort-routing.gradle:1048)
                     └── phase5fFinalVerification (gradle/phase5/phase5f-context-routing.gradle:749-751)
+                          └── phase5g0FinalVerification (gradle/phase5/phase5g-inventories.gradle:89-91)
+                                └── phase5g1aFinalVerification (gradle/phase5/write-oracle.gradle)
 ```
 
 Running each gate as its own CI job therefore re-executes work another job is
@@ -40,8 +42,8 @@ Gradle invocation share a single task graph, so common work executes once.
 ## Measured baseline
 
 Task counts from `./gradlew <task> --dry-run --dependency-verification=strict`,
-re-measured on `phase-5g-0-reconcile-and-discover` after the lane advanced to
-Phase 5g-0:
+re-measured on `phase-5g-1a-bp-write-oracle` after the lane advanced to Phase
+5g-1a:
 
 | Former job | Gradle task | Tasks scheduled |
 |---|---|---|
@@ -53,16 +55,18 @@ Phase 5g-0:
 | Phase 5e cohort routing contracts | `phase5eFinalVerification` | 196 |
 | Phase 5f Jakarta web contracts and topology | `phase5fFinalVerification` | 282 |
 | Phase 5g-0 discovery inventories | `phase5g0FinalVerification` | 285 |
-| **Sum across the 8 separate jobs** | | **1168** |
-| **`Contracts`, one invocation** | `phase5g0FinalVerification phase5cFinalVerification` | **291** |
+| Phase 5g-1a legacy write oracle contracts | `phase5g1aFinalVerification` | 290 |
+| **Sum across the 9 separate jobs** | | **1458** |
+| **`Contracts`, one invocation** | `phase5g1aFinalVerification phase5cFinalVerification` | **296** |
 
-**877 of 1168 task executions per pull request would be redundant (75.1%).**
+**1162 of 1458 task executions per pull request would be redundant (79.7%).**
 
-Earlier measurements on the same topology: 7 jobs at 882 against 287 merged on
-`develop` at `6eda2bc8c`, and 6 jobs at 600 against 201 merged before that - the
-same 66-75% redundancy at every lane position. Advancing the lane adds three
-tasks to the merged invocation and a whole gate to the notional per-job sum,
-which is exactly why the jobs are not split per phase.
+Earlier measurements on the same topology: 8 jobs at 1168 against 291 merged on
+`develop` at `91c4c2029`, 7 jobs at 882 against 287 merged at `6eda2bc8c`, and 6
+jobs at 600 against 201 merged before that - redundancy rising from 66% to 80%
+as the chain lengthens. Advancing the lane adds five tasks to the merged
+invocation and a whole gate to the notional per-job sum, which is exactly why
+the jobs are not split per phase.
 
 ### Coverage proof
 
@@ -72,27 +76,30 @@ Set equality was verified, not assumed:
 for t in phase3NoDatabaseDistribution phase4FinalVerification \
          phase5bFinalVerification phase5cFinalVerification \
          phase5dFinalVerification phase5eFinalVerification \
-         phase5fFinalVerification phase5g0FinalVerification; do
+         phase5fFinalVerification phase5g0FinalVerification \
+         phase5g1aFinalVerification; do
   ./gradlew $t --dry-run --dependency-verification=strict \
     | grep SKIPPED | sed 's/ SKIPPED//'
 done | sort -u > union.txt
 
-./gradlew phase5g0FinalVerification phase5cFinalVerification \
+./gradlew phase5g1aFinalVerification phase5cFinalVerification \
   --dry-run --dependency-verification=strict \
   | grep SKIPPED | sed 's/ SKIPPED//' | sort -u > merged.txt
 
 comm -23 union.txt merged.txt   # must print nothing
 ```
 
-Result: union 291 tasks, merged 291 tasks, `comm -23` empty. The merged
-invocation schedules **exactly** the same task set as the eight gates combined.
+Result: union 296 tasks, merged 296 tasks, `comm -23` empty. The merged
+invocation schedules **exactly** the same task set as the nine gates combined.
 
-The Phase 5g-0 advance was also diffed directly against the previous arguments
-on the same commit: `phase5fFinalVerification phase5cFinalVerification`
-scheduled 288 tasks, `phase5g0FinalVerification phase5cFinalVerification`
-scheduled 291, the three added tasks are exactly
-`:generatePhase5gInventories`, `:verifyPhase5gInventories` and
-`:phase5g0FinalVerification`, and **no task was removed**. Advancing the head of
+The Phase 5g-1a advance was also diffed directly against the previous arguments
+on the same commit: `phase5g0FinalVerification phase5cFinalVerification`
+scheduled 291 tasks, `phase5g1aFinalVerification phase5cFinalVerification`
+scheduled 296, the five added tasks are exactly
+`:generatePhase5gWriteAttribution`, `:verifyPhase5gWriteAttribution`,
+`:verifyPhase5gWriteNormalizerMutationProof`,
+`:verifyPhase5gWriteOracleManifest` and `:phase5g1aFinalVerification`, and **no
+task was removed**. Advancing the head of
 the chain must never drop coverage, so the removal set is checked as well as the
 addition set.
 

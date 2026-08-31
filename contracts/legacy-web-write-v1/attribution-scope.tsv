@@ -1,0 +1,18 @@
+# Phase 5g write-attribution scope.
+#
+# The tables whose callout and registered-model-validator surface the Phase 5g
+# write increments must be able to attribute. This is a REVIEWED input, not a
+# generated one: it states which tables the attribution claim covers.
+#
+# C_BPartner is the 5g-1a fixture table. The other three are carried so that the
+# attribution analyzer is exercised against tables that DO have hooks. A gate
+# whose only scope row is the table it claims has zero hooks cannot distinguish
+# "correctly found nothing" from "found nothing because it looks nowhere".
+#
+# C_BPartner_Location is in scope for attribution but is EXCLUDED from the 5g-1a
+# capture flow; see exclusions.tsv. Scope and flow are different questions.
+ad_table_id	table_name	phase5g_owner
+291	C_BPartner	5g-1a
+293	C_BPartner_Location	5g-1b
+259	C_Order	5g-1c
+260	C_OrderLine	5g-1c

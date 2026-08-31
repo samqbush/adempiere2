@@ -1,6 +1,7 @@
 # ADR: Phase 5g web UI functional parity
 
-Status: accepted; `5g-0` in progress on `phase-5g-0-reconcile-and-discover`
+Status: accepted; `5g-0` merged to `develop` as PR #13 at `91c4c2029`;
+`5g-1a` in progress on `phase-5g-1a-bp-write-oracle`
 
 Extends:
 

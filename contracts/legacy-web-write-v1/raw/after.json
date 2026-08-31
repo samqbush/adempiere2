@@ -1,0 +1,57 @@
+{
+ "scope": {
+  "ad_changelog": {
+   "900001": {
+    "ad_changelog_id": 900001,
+    "ad_column_id": 3499,
+    "ad_table_id": 291,
+    "created": "2026-03-01 10:15:22.200",
+    "createdby": 101,
+    "newvalue": "P5G1A-BP-001",
+    "oldvalue": null,
+    "record_id": 1000123,
+    "updated": "2026-03-01 10:15:22.200",
+    "updatedby": 101
+   }
+  },
+  "c_bpartner": {
+   "1000123": {
+    "ad_client_id": 11,
+    "ad_org_id": 0,
+    "c_bp_group_id": 103,
+    "c_bpartner_id": 1000123,
+    "created": "2026-03-01 10:15:22.113",
+    "createdby": 101,
+    "isactive": "Y",
+    "iscustomer": "Y",
+    "isvendor": "N",
+    "name": "Phase 5g-1a Fixture Partner",
+    "so_creditlimit": "1000.00",
+    "totalopenbalance": null,
+    "updated": "2026-03-01 10:15:22.113",
+    "updatedby": 101,
+    "value": "P5G1A-BP-001"
+   }
+  },
+  "c_bpartner_location": {
+   "1000456": {
+    "ad_client_id": 11,
+    "ad_org_id": 0,
+    "c_bpartner_id": 1000123,
+    "c_bpartner_location_id": 1000456,
+    "created": "2026-03-01 10:15:23.001",
+    "createdby": 101,
+    "isactive": "Y",
+    "name": "P5G1A-LOC",
+    "updated": "2026-03-01 10:15:23.001",
+    "updatedby": 101
+   }
+  }
+ },
+ "sentinel": {
+  "ad_changelog": 43,
+  "c_bpartner": 13,
+  "c_bpartner_location": 10,
+  "c_order": 5
+ }
+}

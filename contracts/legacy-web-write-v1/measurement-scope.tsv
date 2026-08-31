@@ -1,0 +1,18 @@
+# Phase 5g-1a write measurement scope: WHERE the keyed layer looks.
+#
+# Deliberately separate from effect-model.tsv, which says WHAT the answer must
+# be. Conflating the two would let a shrinking expectation quietly shrink the
+# measurement that produced it, and a contract that measures less can never
+# fail for measuring less.
+#
+# This is layer 2 only. Layer 1, the changed-table sentinel, covers EVERY table
+# in the schema and needs no declaration -- that is the point of it.
+#
+# C_BPartner_Location is measured even though the 5g-1a flow excludes its tab.
+# Measuring an excluded table is how the exclusion is proved rather than
+# asserted: if the flow ever starts writing locations, the sentinel flags the
+# table and this scope shows exactly which rows appeared.
+table	key_column	predicate
+C_BPartner	c_bpartner_id	Value LIKE 'P5G1A-%'
+C_BPartner_Location	c_bpartner_location_id	C_BPartner_ID IN (SELECT C_BPartner_ID FROM C_BPartner WHERE Value LIKE 'P5G1A-%')
+AD_ChangeLog	ad_changelog_id	AD_Table_ID = 291

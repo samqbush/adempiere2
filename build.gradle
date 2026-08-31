@@ -308,6 +308,9 @@ apply from: 'gradle/phase5/phase5f-context-routing.gradle'
 // Applied after phase5f-context-routing.gradle: phase5g0FinalVerification
 // chains phase5fFinalVerification, which that file registers.
 apply from: 'gradle/phase5/phase5g-inventories.gradle'
+// Applied after phase5g-inventories.gradle: phase5g1aFinalVerification chains
+// phase5g0FinalVerification, which that file registers.
+apply from: 'gradle/phase5/write-oracle.gradle'
 // Applied last: it registers a task that depends on phase5fJakartaWebWars and
 // on the zkwebui/webservice archives declared above.
 apply from: 'gradle/phase5/jar-scan.gradle'
