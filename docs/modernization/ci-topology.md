@@ -39,8 +39,9 @@ Gradle invocation share a single task graph, so common work executes once.
 
 ## Measured baseline
 
-Task counts from `./gradlew <task> --dry-run --dependency-verification=strict`
-on `develop` at `6eda2bc8c`:
+Task counts from `./gradlew <task> --dry-run --dependency-verification=strict`,
+re-measured on `phase-5g-0-reconcile-and-discover` after the lane advanced to
+Phase 5g-0:
 
 | Former job | Gradle task | Tasks scheduled |
 |---|---|---|
@@ -50,15 +51,18 @@ on `develop` at `6eda2bc8c`:
 | Phase 5c Jakarta web packaging beachhead | `phase5cFinalVerification` | 130 |
 | Phase 5d functional ZK CE 10 slice | `phase5dFinalVerification` | 164 |
 | Phase 5e cohort routing contracts | `phase5eFinalVerification` | 196 |
-| Phase 5f Jakarta web contracts and topology | `phase5fFinalVerification` | 281 |
-| **Sum across the 7 separate jobs** | | **882** |
-| **`Contracts`, one invocation** | `phase5fFinalVerification phase5cFinalVerification` | **287** |
+| Phase 5f Jakarta web contracts and topology | `phase5fFinalVerification` | 282 |
+| Phase 5g-0 discovery inventories | `phase5g0FinalVerification` | 285 |
+| **Sum across the 8 separate jobs** | | **1168** |
+| **`Contracts`, one invocation** | `phase5g0FinalVerification phase5cFinalVerification` | **291** |
 
-**595 of 882 task executions per pull request were redundant (67.5%).**
+**877 of 1168 task executions per pull request would be redundant (75.1%).**
 
-The measurement above was re-taken on `phase-5f-jakarta-web-routes` after the
-lane advanced to Phase 5f. The original `develop` measurement, with 6 jobs, was
-600 against 201 merged - the same 66-67% redundancy.
+Earlier measurements on the same topology: 7 jobs at 882 against 287 merged on
+`develop` at `6eda2bc8c`, and 6 jobs at 600 against 201 merged before that - the
+same 66-75% redundancy at every lane position. Advancing the lane adds three
+tasks to the merged invocation and a whole gate to the notional per-job sum,
+which is exactly why the jobs are not split per phase.
 
 ### Coverage proof
 
@@ -68,20 +72,29 @@ Set equality was verified, not assumed:
 for t in phase3NoDatabaseDistribution phase4FinalVerification \
          phase5bFinalVerification phase5cFinalVerification \
          phase5dFinalVerification phase5eFinalVerification \
-         phase5fFinalVerification; do
+         phase5fFinalVerification phase5g0FinalVerification; do
   ./gradlew $t --dry-run --dependency-verification=strict \
     | grep SKIPPED | sed 's/ SKIPPED//'
 done | sort -u > union.txt
 
-./gradlew phase5fFinalVerification phase5cFinalVerification \
+./gradlew phase5g0FinalVerification phase5cFinalVerification \
   --dry-run --dependency-verification=strict \
   | grep SKIPPED | sed 's/ SKIPPED//' | sort -u > merged.txt
 
 comm -23 union.txt merged.txt   # must print nothing
 ```
 
-Result: union 287 tasks, merged 287 tasks, `comm -23` empty. The merged
-invocation schedules **exactly** the same task set as the seven jobs combined.
+Result: union 291 tasks, merged 291 tasks, `comm -23` empty. The merged
+invocation schedules **exactly** the same task set as the eight gates combined.
+
+The Phase 5g-0 advance was also diffed directly against the previous arguments
+on the same commit: `phase5fFinalVerification phase5cFinalVerification`
+scheduled 288 tasks, `phase5g0FinalVerification phase5cFinalVerification`
+scheduled 291, the three added tasks are exactly
+`:generatePhase5gInventories`, `:verifyPhase5gInventories` and
+`:phase5g0FinalVerification`, and **no task was removed**. Advancing the head of
+the chain must never drop coverage, so the removal set is checked as well as the
+addition set.
 
 Re-run this whenever the `Contracts` task arguments change.
 

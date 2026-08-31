@@ -8,7 +8,7 @@ database-backed evidence both executed and green; branch not yet merged**.
 - Phase 5e merged to `develop` at `6eda2bc8`.
 - Phase 5e database-neutral and database-backed gates were executed and green
   before this phase began.
-- Phase 5f is active on `phase-5f-jakarta-web-routes`.
+- Phase 5f merged to `develop` as PR #11 at `83aeb8536`.
 - Phase 5f remains post-testability ("lit"), L3.
 
 ## Contract inventory

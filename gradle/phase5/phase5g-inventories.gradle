@@ -1,0 +1,92 @@
+// Phase 5g-0 discovery inventories.
+//
+// The inventories in contracts/phase5g-web-parity-v1/ are derived from the seed
+// application dictionary and the reactor sources. Every later Phase 5g
+// sub-increment designs its fixtures against them, so they must not be allowed
+// to drift silently from the repository they describe. This gate regenerates
+// them and requires an exact match.
+
+def phase5gContractDir =
+	rootProject.layout.projectDirectory.dir('contracts/phase5g-web-parity-v1')
+def phase5gGeneratedDir =
+	rootProject.layout.buildDirectory.dir('phase5g/inventories/generated')
+def phase5gSummary =
+	rootProject.layout.buildDirectory.file('phase5g/inventories/summary.tsv')
+
+// Read from the same file the generator reads. Duplicating the list here is
+// exactly the defect this indirection exists to prevent: an undeclared but
+// scanned tree lets a stale UP-TO-DATE result hide a new extension surface
+// while the gate stays green.
+def phase5gScanRootListing =
+	rootProject.file('gradle/phase5/phase5g-scan-roots.tsv')
+def phase5gInventorySourceRoots = phase5gScanRootListing.readLines()
+	.findAll { !it.trim().isEmpty() && !it.startsWith('#') }
+	.collect { it.split('\t')[0] }
+	.findAll { it != 'path' }
+
+// A declared root that does not exist is a stale entry, not a tolerable
+// absence: it means the list no longer describes the repository.
+def phase5gMissingRoots =
+	phase5gInventorySourceRoots.findAll { !rootProject.file(it).isDirectory() }
+if (!phase5gMissingRoots.isEmpty()) {
+	throw new GradleException(
+		"gradle/phase5/phase5g-scan-roots.tsv declares non-existent roots: " +
+		phase5gMissingRoots.join(', '))
+}
+
+
+tasks.register('generatePhase5gInventories', Exec) {
+	group = 'verification'
+	description = 'Generates the Phase 5g-0 process, callout and extension-surface inventories'
+	inputs.file rootProject.file('db/ddlutils/adempiere-data.xml')
+	inputs.file phase5gScanRootListing
+	// Declare exactly what the generator reads: Java sources under each scan
+	// root, with the same `build`, `bin` and `.git` pruning the generator
+	// applies at every directory level. Declaring the whole root instead would
+	// pull in sibling Gradle projects' build outputs, which makes this task
+	// consume another task's output without a dependency on it.
+	phase5gInventorySourceRoots.each { root ->
+		inputs.files(rootProject.fileTree(rootProject.file(root)) {
+			include '**/*.java'
+			exclude '**/build/**'
+			exclude '**/bin/**'
+			exclude '**/.git/**'
+		}).withPropertyName("scanRoot_${root.replace('/', '_').replace('.', '_')}")
+	}
+	inputs.file rootProject.file('scripts/phase5/generate-phase5g-inventories.py')
+	outputs.dir phase5gGeneratedDir
+	commandLine(
+		'python3',
+		rootProject.file('scripts/phase5/generate-phase5g-inventories.py'),
+		'--repo-root',
+		rootProject.projectDir,
+		'--output-dir',
+		phase5gGeneratedDir.get().asFile)
+}
+
+tasks.register('verifyPhase5gInventories', Exec) {
+	group = 'verification'
+	description = 'Validates the reviewed Phase 5g-0 inventories against the repository'
+	dependsOn tasks.named('generatePhase5gInventories')
+	inputs.dir phase5gContractDir
+	inputs.dir phase5gGeneratedDir
+	inputs.file rootProject.file('scripts/phase5/validate-phase5g-inventories.py')
+	outputs.file phase5gSummary
+	commandLine(
+		'python3',
+		rootProject.file('scripts/phase5/validate-phase5g-inventories.py'),
+		'--repo-root',
+		rootProject.projectDir,
+		'--generated-dir',
+		phase5gGeneratedDir.get().asFile,
+		'--summary',
+		phase5gSummary.get().asFile)
+}
+
+tasks.register('phase5g0FinalVerification') {
+	group = 'verification'
+	description = 'Runs the database-neutral Phase 5g-0 discovery gate and every earlier phase gate'
+	dependsOn(
+		tasks.named('verifyPhase5gInventories'),
+		tasks.named('phase5fFinalVerification'))
+}
