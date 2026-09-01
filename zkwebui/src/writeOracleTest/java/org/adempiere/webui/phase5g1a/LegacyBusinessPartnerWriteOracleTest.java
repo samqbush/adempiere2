@@ -161,6 +161,12 @@ class LegacyBusinessPartnerWriteOracleTest {
 				Page second = secondContext.newPage();
 				LegacyBrowserFlow.recordTraffic(second, requests, errors, this::normalizedUrl);
 
+				// Inner guard for the same reason as the primary session's: a
+				// try-with-resources closes its context BEFORE any catch runs,
+				// so a handler outside this block could only interrogate a dead
+				// page.
+				try {
+
 				Response secondLogin = LegacyBrowserFlow.login(
 						second, baseUrl, secondUser, secondPassword);
 				assertEquals(200, secondLogin.status(),
@@ -197,6 +203,15 @@ class LegacyBusinessPartnerWriteOracleTest {
 				flow.add(step(rendezvous, 6, "concurrency-conflicting-save"));
 
 				LegacyBrowserFlow.logout(second);
+				} catch (Throwable concurrencyFailure) {
+					// The second editor drives its OWN page. Run 33476264790
+					// failed here and the handler captured the primary page,
+					// which was perfectly healthy -- so the evidence described a
+					// session that was not the one that failed, and the
+					// screenshot sent the diagnosis in the wrong direction.
+					captureDiagnostics(second, "second-editor");
+					throw concurrencyFailure;
+				}
 			}
 
 			// The primary session's state after the conflicting save is exactly
@@ -212,7 +227,7 @@ class LegacyBusinessPartnerWriteOracleTest {
 			facts.put("logout-reached", "true");
 			flow.add(step(rendezvous, 8, "logged-out"));
 			} catch (Throwable failure) {
-				captureDiagnostics(page);
+				captureDiagnostics(page, "primary");
 				throw failure;
 			}
 		} catch (Throwable failure) {
@@ -267,13 +282,13 @@ class LegacyBusinessPartnerWriteOracleTest {
 	 * failing, so a fault here must never replace the real diagnosis with a
 	 * diagnostic's own stack trace.
 	 */
-	private void captureDiagnostics(Page page) {
+	private void captureDiagnostics(Page page, String label) {
 		if (page == null) {
 			return;
 		}
 		try {
 			page.screenshot(new Page.ScreenshotOptions()
-					.setPath(evidenceDir.resolve("failure.png"))
+					.setPath(evidenceDir.resolve("failure-" + label + ".png"))
 					.setFullPage(true));
 		} catch (RuntimeException ignored) {
 			// A screenshot is a convenience; the textual dump below is the
@@ -324,7 +339,7 @@ class LegacyBusinessPartnerWriteOracleTest {
 			lines.add(probe.getKey() + "\t" + observed.replace("\n", " "));
 		}
 		try {
-			Files.write(evidenceDir.resolve("failure-page.tsv"), lines,
+			Files.write(evidenceDir.resolve("failure-" + label + ".tsv"), lines,
 					StandardCharsets.UTF_8);
 		} catch (IOException ignored) {
 			// Nothing further can be reported; the screenshot still stands.
