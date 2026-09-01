@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.adempiere.webui.phase5d.BrowserSemanticContract;
 import org.adempiere.webui.phase5legacy.LegacyBrowserFlow;
@@ -105,6 +106,7 @@ class LegacyBusinessPartnerWriteOracleTest {
 	private final Path rendezvousDir = Path.of(SCRIPTS.property("rendezvousDir"));
 	private final String token = SCRIPTS.property("token");
 	private final String recordValue = SCRIPTS.property("recordValue");
+	private final String recordOrg = SCRIPTS.property("recordOrg");
 	private final String secondUser = SCRIPTS.property("secondUser");
 	private final String secondPassword = SCRIPTS.property("secondPassword");
 
@@ -476,6 +478,18 @@ class LegacyBusinessPartnerWriteOracleTest {
 		// intermittent, which is why run 33475295851 created the record
 		// successfully with the same code.
 		clickAwaitingServer(page, "New Record");
+		// The record is created in an organisation BOTH capture identities can
+		// write, rather than in the primary session's login default.
+		//
+		// Run 33482988481 created it in the shared '*' org and the second
+		// editor, logged into Fertilizer, was served a read-only form -- every
+		// editor carried z-textbox-readonly and the combos were disabled. That
+		// is ADempiere's org access control working correctly, and it is exactly
+		// the outcome fixture.sql's window-access assertions were written to
+		// rule out: they check AD_Window_Access, which was never the constraint.
+		// Left alone, the concurrency step would have captured an access refusal
+		// and frozen it as the product's conflict behaviour.
+		selectCombo(page, "AD_Org_ID", recordOrg);
 		// The C_BPartner.Value column is labelled "Search Key" in the dictionary;
 		// "Value" matches no cell in the rendered form.
 		fill(page, "Value", recordValue);
@@ -685,6 +699,31 @@ class LegacyBusinessPartnerWriteOracleTest {
 	 */
 	private String attemptSave(Page page) {
 		return awaitSaveOutcome(page);
+	}
+
+	/**
+	 * Chooses a value in a lookup combo, by column.
+	 *
+	 * <p>Addressed through the ids ZK derives from the editor's own id --
+	 * {@code !btn} opens the drop-down and {@code !pp} is that combo's popup --
+	 * so the item clicked is guaranteed to belong to this field. The rendered
+	 * page carries the items of every combo on the form, and a global
+	 * {@code tr.z-combo-item} match would happily click another field's.
+	 */
+	private void selectCombo(Page page, String column, String label) {
+		String marker = "[id*=\"_" + TABLE + "_" + column + "\"]";
+		Locator button = tabPanel(page).locator(marker + "[id$=\"!btn\"]").first();
+		button.waitFor();
+		button.click();
+		Locator item = page.locator(marker + "[id$=\"!pp\"] tr.z-combo-item")
+				.filter(new Locator.FilterOptions()
+						.setHasText(Pattern.compile("^" + Pattern.quote(label) + "$")));
+		int count = item.count();
+		assertEquals(1, count, "the combo for column " + column + " offered "
+				+ count + " items matching '" + label + "'");
+		item.first().click();
+		assertEquals(label, columnInput(page, column).inputValue(),
+				"the combo for column " + column + " did not take '" + label + "'");
 	}
 
 	/**

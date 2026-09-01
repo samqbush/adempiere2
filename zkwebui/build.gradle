@@ -1188,6 +1188,15 @@ tasks.register('phase5g1aWriteOracleCapture', Test) {
 		providers.gradleProperty('phase5g1aToken').getOrElse('')
 	systemProperty 'phase5g1a.browser.recordValue',
 		providers.gradleProperty('phase5g1aRecordValue').getOrElse('')
+	// The organisation the captured record is created in.
+	//
+	// It must be an org BOTH capture identities can write. Run 33482988481
+	// created the record in the shared '*' org, because that is GardenAdmin's
+	// login default, and the second editor -- logged into Fertilizer -- was
+	// then served a read-only form. The concurrency step would have captured an
+	// access refusal and frozen it as the product's conflict behaviour.
+	systemProperty 'phase5g1a.browser.recordOrg',
+		providers.gradleProperty('phase5g1aRecordOrg').getOrElse('Fertilizer')
 	systemProperty 'phase5g1a.browser.dbHost',
 		rootProject.providers.gradleProperty('phase3DbHost').getOrElse('127.0.0.1')
 	systemProperty 'phase5g1a.browser.dbPort',
