@@ -205,11 +205,13 @@ additionally refuses to write unless the A and B captures self-diff clean, which
 they did — two independently restored captures agreeing is what makes the
 re-derivation checkable rather than asserted.
 
-The control that closes this is the **separate acceptance run**: a later CI run
-with freezing off re-captures the flow from scratch and scores it against the
-bytes frozen here. If the re-derivation had produced anything the product does
-not actually do, that run fails. The two-run protocol is recorded with the
-acceptance run id in `MODERNIZATION_PLAN.md`.
+The control that closes this is the **separate acceptance run**,
+https://github.com/samqbush/adempiere2/actions/runs/33528308317: a CI run with
+freezing off that re-captured the flow from scratch and scored it against the
+bytes frozen here, reporting "A/B self-diff clean and both captures match the
+frozen contract". If the re-derivation had produced anything the product does
+not actually do, that run would have failed. The two-run protocol is also
+recorded in `MODERNIZATION_PLAN.md`.
 
 The digest is SHA-256 over the nine frozen fact files, in the order the gate
 declares them, followed by every per-step effect document in sorted order, each
