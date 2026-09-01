@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -94,12 +95,17 @@ class LegacyBusinessPartnerWriteOracleTest {
 		Map<String, String> facts = new LinkedHashMap<>();
 		List<String> flow = new ArrayList<>();
 
+		// Assigned inside the try so the failure handler can interrogate the
+		// live page; null until the browser exists, which is itself a fact worth
+		// recording if the lane dies that early.
+		Page diagnosticPage = null;
 		try (Playwright playwright = Playwright.create();
 				Browser browser = playwright.chromium().launch(
 						new BrowserType.LaunchOptions().setHeadless(true));
 				BrowserContext context = LegacyBrowserFlow.newContext(browser)) {
 			LegacyBrowserFlow.blockForeignOrigins(context, baseUrl);
 			Page page = context.newPage();
+			diagnosticPage = page;
 			LegacyBrowserFlow.recordTraffic(page, requests, errors, this::normalizedUrl);
 
 			Response login = LegacyBrowserFlow.login(page, baseUrl, user, password);
@@ -193,6 +199,13 @@ class LegacyBusinessPartnerWriteOracleTest {
 			// only RuntimeException would have published the reason for a
 			// Playwright timeout while losing it for the far more likely case --
 			// a save that did not take.
+			// A CI round trip for this lane costs roughly twelve minutes, and a
+			// Playwright timeout names only the locator it gave up on -- never
+			// what the page actually contained instead. Capturing that here
+			// turns "the tab never appeared" into "these are the tabs that did",
+			// so a selector defect is diagnosable from the run's own evidence
+			// instead of from another twelve-minute guess.
+			captureDiagnostics(diagnosticPage);
 			rendezvous.fail(failure.toString());
 			throw failure;
 		}
@@ -228,6 +241,48 @@ class LegacyBusinessPartnerWriteOracleTest {
 	 * 3.6 drives the lookup from key events and a programmatic assignment fires
 	 * no {@code onChanging}.
 	 */
+	/**
+	 * Records what the page actually contained when a step failed.
+	 *
+	 * <p>Best effort by construction: this runs while the lane is already
+	 * failing, so a fault here must never replace the real diagnosis with a
+	 * diagnostic's own stack trace.
+	 */
+	private void captureDiagnostics(Page page) {
+		if (page == null) {
+			return;
+		}
+		try {
+			page.screenshot(new Page.ScreenshotOptions()
+					.setPath(evidenceDir.resolve("failure.png"))
+					.setFullPage(true));
+		} catch (RuntimeException ignored) {
+			// A screenshot is a convenience; the textual dump below is the
+			// evidence that actually names a wrong selector.
+		}
+		try {
+			Object dump = page.evaluate(
+					"() => JSON.stringify({"
+					+ " url: location.href,"
+					+ " tabs: Array.prototype.map.call("
+					+ "   document.querySelectorAll('span.z-tab-text'), e => e.textContent),"
+					+ " comboItems: Array.prototype.map.call("
+					+ "   document.querySelectorAll('tr.z-combo-item'),"
+					+ "   e => e.getAttribute('z.label') || e.textContent),"
+					+ " labels: Array.prototype.slice.call("
+					+ "   document.querySelectorAll('span.z-label, td.z-row-cell span'), 0, 200)"
+					+ "   .map(e => e.textContent),"
+					+ " toolbar: Array.prototype.map.call("
+					+ "   document.querySelectorAll('a.toolbar-button'),"
+					+ "   e => e.getAttribute('title') + '|' + e.className)"
+					+ "}, null, 1)");
+			Files.write(evidenceDir.resolve("failure-page.json"),
+					String.valueOf(dump).getBytes(StandardCharsets.UTF_8));
+		} catch (RuntimeException | IOException ignored) {
+			// Same rationale.
+		}
+	}
+
 	private void openWindow(Page page) {
 		Locator lookup = page.locator(
 				"xpath=//span[@title='Enter text to search for in tree']"
@@ -240,10 +295,17 @@ class LegacyBusinessPartnerWriteOracleTest {
 		page.locator("tr.z-combo-item[z\\.label=\"" + WINDOW + "\"]").first().waitFor();
 		assertEquals(WINDOW, lookup.inputValue(),
 				"the menu lookup does not hold the exact window name");
+		// The AU response must be matched on the window NAME, not merely on
+		// `=onChange&`. ZK 3.6 posts onChange for a plain blur too, so the
+		// looser predicate can be satisfied by an unrelated round trip and let
+		// the step race ahead to wait for a tab that was never requested.
+		String encodedWindow = URLEncoder.encode(WINDOW, StandardCharsets.UTF_8)
+				.replace("+", "%20");
 		page.waitForResponse(
 				response -> response.request().url().contains("/zkau")
 						&& response.request().postData() != null
-						&& response.request().postData().contains("=onChange&"),
+						&& response.request().postData().contains("=onChange&")
+						&& response.request().postData().contains(encodedWindow),
 				() -> lookup.press("Enter"));
 		page.locator("span.z-tab-text:text-is('" + WINDOW + "')").first().waitFor();
 		tabPanel(page).waitFor();
