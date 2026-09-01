@@ -71,6 +71,12 @@ class LegacyBusinessPartnerWriteOracleTest {
 	 */
 	private static final Duration RENDEZVOUS_TIMEOUT = Duration.ofMinutes(10);
 
+	/**
+	 * How long a save is given to settle. A backstop against a hang, not a
+	 * performance expectation; a genuinely refused save spends all of it.
+	 */
+	private static final Duration SAVE_SETTLE = Duration.ofSeconds(30);
+
 	private static final String WINDOW = "Business Partner";
 	/** Editors carry ids of the form {@code unqField_<tab>_<row>_<Table>_<Column><n>}. */
 	private static final String TABLE = "C_BPartner";
@@ -332,13 +338,15 @@ class LegacyBusinessPartnerWriteOracleTest {
 				+ "  if (!label) { return caption + '=<no caption>'; }"
 				+ "  var row = label.closest('tr');"
 				+ "  if (!row) { return caption + '=<no row>'; }"
-				+ "  var cellIndex = Array.prototype.indexOf.call("
-				+ "    row.children, label.closest('td'));"
+				+ "  var cells = [], cellIndex = -1, own = label.closest('td');"
+				+ "  for (var i = 0; i < row.children.length; i++) {"
+				+ "    var td = row.children[i];"
+				+ "    if (td === own) { cellIndex = i; }"
+				+ "    var input = td.querySelector(\"input:not([type='hidden'])\");"
+				+ "    cells.push(input ? ('input#' + (input.id || '?') + '='"
+				+ "      + input.value) : 'none'); }"
 				+ "  return caption + '=cell' + cellIndex + '/' + row.children.length"
-				+ "    + ':' + Array.prototype.map.call(row.children, function (td) {"
-				+ "        var i = td.querySelector(\"input:not([type='hidden'])\");"
-				+ "        return i ? ('input#' + (i.id || '?') + '=' + i.value) : 'none';"
-				+ "      }).join(','); }).join(' ~~ ')");
+				+ "    + ':' + cells.join(','); }).join(' ~~ ')");
 		probes.put("tabPanels", "() => Array.from(document.querySelectorAll("
 				+ "'div.desktop-tabpanel')).map(e => (e.id || '?') + '#'"
 				+ " + e.className + '#toolbar=' + e.querySelectorAll("
@@ -536,17 +544,51 @@ class LegacyBusinessPartnerWriteOracleTest {
 	 * freeze an empty effect as the expected answer.
 	 */
 	private void save(Page page) {
-		page.waitForResponse(
-				response -> response.request().url().contains("/zkau"),
-				() -> click(page, "Save changes"));
+		String outcome = awaitSaveOutcome(page);
+		assertEquals("accepted", outcome, "the record was not saved: " + outcome);
+	}
+
+	/**
+	 * Clicks Save and waits for the window to settle into a save outcome.
+	 *
+	 * <p>Polled, not read once. Waiting for a single {@code /zkau} response and
+	 * then reading the toolbar reads whatever state the window happened to be in
+	 * at that instant: ZK answers with several round trips, and the response the
+	 * driver waited for can be one already in flight from the previous field's
+	 * blur rather than the save's own. Run 33480634946 filled both fields
+	 * correctly, saved, and observed "Inserted" -- the pre-save state -- because
+	 * it looked before the save had landed.
+	 *
+	 * <p>This is the difference between a flaky driver and a wrong oracle. The
+	 * same read backs the conflicting save, whose outcome is a captured fact
+	 * this increment exists to record; reading it early would freeze "the
+	 * product refused the save" when the product had simply not answered yet.
+	 *
+	 * <p>Exhausting the budget is itself an outcome, not a failure, because a
+	 * save that is genuinely refused never settles. Only {@code save} treats a
+	 * non-accepted outcome as an error.
+	 */
+	private String awaitSaveOutcome(Page page) {
+		click(page, "Save changes");
 		Locator error = page.locator("div.z-window-modal, div.popup-error");
-		assertEquals(0, error.count(), "the save raised a modal error dialog");
 		Locator saveButton = tabPanel(page)
 				.locator("a.toolbar-button[title='Save changes']").first();
-		saveButton.waitFor();
-		assertTrue(saveButton.getAttribute("class").contains("toolbar-button-disd")
-						|| !saveButton.isEnabled(),
-				"the Save control is still enabled, so the record was not saved");
+		long deadline = System.nanoTime() + SAVE_SETTLE.toNanos();
+		do {
+			if (error.count() > 0) {
+				return "error-dialog\t"
+						+ BrowserSemanticContract.normalizedText(error.first().innerText());
+			}
+			if (saveButton.count() > 0) {
+				String classes = saveButton.getAttribute("class");
+				if ((classes != null && classes.contains("toolbar-button-disd"))
+						|| !saveButton.isEnabled()) {
+					return "accepted";
+				}
+			}
+			page.waitForTimeout(250);
+		} while (System.nanoTime() < deadline);
+		return "rejected-save-still-enabled";
 	}
 
 	/**
@@ -600,30 +642,9 @@ class LegacyBusinessPartnerWriteOracleTest {
 	 * outcome is itself the fact being captured, so it is recorded, not judged.
 	 */
 	private String attemptSave(Page page) {
-		page.waitForResponse(
-				response -> response.request().url().contains("/zkau"),
-				() -> click(page, "Save changes"));
-		Locator error = page.locator("div.z-window-modal, div.popup-error");
-		if (error.count() > 0) {
-			return "error-dialog\t"
-					+ BrowserSemanticContract.normalizedText(error.first().innerText());
-		}
-		Locator saveButton = tabPanel(page)
-				.locator("a.toolbar-button[title='Save changes']").first();
-		saveButton.waitFor();
-		boolean disabled = saveButton.getAttribute("class").contains("toolbar-button-disd")
-				|| !saveButton.isEnabled();
-		return disabled ? "accepted" : "rejected-save-still-enabled";
+		return awaitSaveOutcome(page);
 	}
 
-	/**
-	 * The input beside a field label.
-	 *
-	 * <p>Matched on the cell's string value, not on a direct text child. Run
-	 * 33473508442 recorded the window's captions as the text of nested
-	 * {@code span} elements, and {@code normalize-space(text())} sees only a
-	 * cell's own text node -- so it would have matched nothing here.
-	 */
 	/**
 	 * The editor for a dictionary column.
 	 *
