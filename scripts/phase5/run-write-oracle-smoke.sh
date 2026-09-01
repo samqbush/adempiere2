@@ -27,7 +27,7 @@ contract_dir=$repo_root/contracts/legacy-web-write-v1
 
 mkdir -p "$evidence_root"
 
-"$scripts_dir/run-write-oracle-lane.sh" \
+bash "$scripts_dir/run-write-oracle-lane.sh" \
   "$db_host" "$db_port" "$db_name" "$db_user" "$system_user" "$marker" "$evidence_root"
 
 # Provenance mirrors the Phase 5f convention so a downloaded CI artifact can be

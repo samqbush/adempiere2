@@ -81,12 +81,16 @@ quiesce_state=$evidence_root/quiesce-state.tsv
 mkdir -p "$evidence_root"
 
 reset() {
-  "$scripts_dir/reset-write-oracle-fixture.sh" \
+  # Invoked through `bash` rather than directly: depending on a sibling
+  # script's execute bit means a lane that installs a database, quiesces it and
+  # only then fails with "Permission denied" -- eight minutes in, for a reason
+  # that has nothing to do with the oracle.
+  bash "$scripts_dir/reset-write-oracle-fixture.sh" \
     "$db_host" "$db_port" "$db_name" "$db_user" "$system_user" "$marker" "$@"
 }
 
 quiesce() {
-  "$scripts_dir/quiesce-phase5f-background-processors.sh" \
+  bash "$scripts_dir/quiesce-phase5f-background-processors.sh" \
     "$db_host" "$db_port" "$db_name" "$db_user" "$marker" "$1" "$quiesce_state"
 }
 
