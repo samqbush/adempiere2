@@ -1,0 +1,41 @@
+# Phase 5g-1a reviewed ambient-state classification.
+#
+# A table listed here is still MEASURED. It appears in the changed-table
+# sentinel and in every captured effect document exactly as any other table
+# does. What this file changes is only the completeness backstop: a change in a
+# listed table does not, by itself, fail the "changed but undeclared" check.
+#
+# WHY THIS IS A CONTRACT FILE AND NOT A CONSTANT
+#
+# This is the only list in the increment that can make an unexpected write
+# acceptable. Held as a Python frozenset inside measure-write-effect.py it sat
+# outside the contract tree, outside manifest.sha256 and outside the domain
+# review, so a single line added to a script could have silenced a real business
+# effect with nobody reviewing an oracle change. Here, widening it changes the
+# manifest digest, fails the frozen-manifest gate, and requires a reviewer.
+#
+# ADMISSION RULE
+#
+# A table belongs here only if its churn is session, audit, sequence or
+# workflow-engine bookkeeping that the runtime writes as a side effect of a user
+# being logged in and clicking, rather than a record of the business transition
+# under test. If a table's contents would differ between a correct and an
+# incorrect Business Partner write, it does NOT belong here -- it belongs in the
+# effect model as a declared expectation.
+#
+# Every row must carry a reason. The reader refuses a row without one, because
+# an unexplained exemption cannot be reviewed.
+#
+# ADempiere writes AD_ChangeLog only when a table has change logging enabled in
+# the dictionary, so the create/update/deactivate steps may or may not touch it.
+# It is classified rather than declared for that reason: its presence is a
+# property of dictionary configuration, not of the business transition.
+table_name	reason
+ad_session	Session bookkeeping written on login and refreshed while a session is alive. Present for any logged-in flow, correct or incorrect.
+ad_changelog	Dictionary-driven audit trail. Written as a side effect of change logging being enabled, not as part of the business transition.
+ad_recentitem	Per-user "recently viewed" convenience list, written by opening a window.
+ad_preference	Per-user UI preference state written by window and field interaction.
+ad_issue	Automatic error reporting. Quiesced before capture, but classified so a residual row diagnoses rather than fails the run.
+ad_sequence_no	Document and table sequence allocation counters. Advance as a consequence of any insert.
+ad_wf_eventaudit	Append-only audit of workflow transitions. Run 33489852922 disproved the earlier belief that the Business Partner window starts no document workflow: it does. AD_WF_Process and AD_WF_Activity were therefore MOVED OUT of this file and into the keyed measurement scope, where the workflow the create starts is asserted rather than exempted. The audit rows stay ambient because they restate transitions the process and activity rows already carry.
+ad_tree_favorite	Per-user menu favourites, written when a user first reaches the desktop.

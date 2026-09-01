@@ -12,7 +12,7 @@
 # location the sentinel sees it and the gate fails. An exclusion that also
 # stopped looking would be indistinguishable from an absence of evidence.
 excluded	reason	closing_increment
-C_BPartner_Location tab	The Business Partner header fires no callout, but C_BPartner_Location declares one (CalloutBPartnerLocation.formatPhone). Including it would put callout arithmetic between the window and the effect on the very first write oracle, so the simplest honest write stops being simple.	5g-1b
+C_BPartner_Location tab	The Business Partner header fires no callout, but C_BPartner_Location declares one (CalloutBPartnerLocation.formatPhone). Including it would put callout arithmetic between the window and the effect on the very first write oracle, so the simplest honest write stops being simple. This row originally named 5g-1b, which the Phase 5g ADR forbids: 5g-1b ships modern code, so it may not add the oracle fact it would be scored against. Callout-bearing writes are now increment 5g-1f, whose own oracle is unassigned and blocking (residual risk R11).	5g-1f
 hard delete of C_BPartner	ADempiere does not hard-delete a business partner in normal use; the product flow is deactivation. Freezing a delete oracle would freeze behaviour the application does not exercise.	not scheduled
 C_Order and document transitions	A document transition is a different behaviour class with two registered model validators on its path, one extension-owned.	5g-1c
 Fact_Acct and accounting facts	MOrder.completeIt() does not post, and the Phase 5f quiescence script disables the accounting processor. Accounting follows the explicit Post Immediate action.	5g-1d

@@ -46,6 +46,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -62,21 +63,31 @@ MARKER = "ADempiere Phase 3 disposable database"
 # Tables whose churn is session/audit state rather than a business effect. They
 # are still MEASURED -- they appear in the sentinel and in the scored output --
 # but a change in them does not by itself fail the "undeclared table" check.
-# They are listed here, once, rather than being silently skipped, so the set is
-# reviewable.
-AMBIENT_TABLES = frozenset(
-    {
-        "ad_session",
-        "ad_changelog",
-        "ad_recentitem",
-        "ad_preference",
-        "ad_issue",
-        "ad_sequence_no",
-        "ad_wf_process",
-        "ad_wf_activity",
-        "ad_wf_eventaudit",
-    }
-)
+#
+# This classification is NOT held here. It is a reviewed contract file,
+# contracts/legacy-web-write-v1/ambient-tables.tsv, covered by the oracle
+# manifest and the domain review, and `score` requires it to be passed in.
+# Holding it in this script would let anyone widen the exemption -- and thereby
+# make an unexpected business write acceptable -- without touching the frozen
+# oracle or asking a reviewer.
+def load_ambient_tables(path: Path) -> frozenset[str]:
+    tables: set[str] = set()
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        fields = line.split("\t")
+        if fields[0].lower() == "table_name":
+            continue
+        if len(fields) < 2 or not fields[1].strip():
+            raise SystemExit(
+                f"{path}: row {fields[0]!r} carries no reason. An ambient "
+                "classification without a stated reason is not reviewable."
+            )
+        tables.add(fields[0].strip().lower())
+    if not tables:
+        raise SystemExit(f"{path} classifies no table at all.")
+    return frozenset(tables)
 
 
 class Database:
@@ -115,6 +126,49 @@ class Database:
             raise SystemExit(f"psql failed: {result.stderr.strip()}")
         return result.stdout
 
+    def script_json(self, sql: str) -> dict:
+        """Run one statement inside one REPEATABLE READ READ ONLY transaction.
+
+        Every part of a snapshot must come from ONE database snapshot. Running a
+        separate `psql` per query cannot promise that: a capture racing a save
+        could take pre-commit counts for some tables and post-commit rows for
+        others, and per-step measurement is precisely this increment's claim.
+
+        `READ ONLY` is not decoration either -- it makes the server reject a
+        write from the measurement path rather than trusting this script to
+        contain only SELECTs.
+        """
+        script = (
+            "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;\n"
+            f"{sql};\n"
+            "COMMIT;\n"
+        )
+        command = list(self._base) + ["--tuples-only", "--quiet", "--file", "-"]
+        result = subprocess.run(
+            command,
+            env=self._env,
+            input=script,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise SystemExit(f"psql failed: {result.stderr.strip()}")
+        # Parse the WHOLE buffer, not the first `{` line. `json_agg` renders an
+        # array with a literal newline between elements, so the document spans
+        # several lines as soon as any scope table matches more than one row --
+        # which the real create/update/deactivate flow does by its second step.
+        # Line-wise parsing would truncate the document and raise a bare
+        # JSONDecodeError instead of anything diagnosable. `--tuples-only
+        # --quiet` means the buffer is the document and nothing else.
+        text = result.stdout.strip()
+        if not text.startswith("{"):
+            raise SystemExit(
+                "the consistent snapshot statement returned no JSON document; "
+                f"psql said: {text[:400]!r}"
+            )
+        return json.loads(text)
+
     def scalar(self, sql: str) -> str:
         return self._run(sql, True).strip()
 
@@ -132,52 +186,111 @@ class Database:
 
 SENTINEL_TABLE_FLOOR = 500
 
+# Layer 1 counts every ordinary base table in `current_schema()` -- those are the
+# tables ADempiere writes. It is not literally every relation in the database,
+# and the contract wording must not claim that it is.
+#
+# The counts are exact, not estimated: the sentinel's whole job is to notice a
+# single unexpected row, and `reltuples` is an estimate that would miss it. They
+# are produced by ONE query rather than one query per table, via `query_to_xml`,
+# because the previous shape launched a `psql` process for each of a thousand-odd
+# tables -- which was both slow in the blocking CI lane and, far worse, unable to
+# promise that the counts came from one database snapshot.
+_SENTINEL_SQL = (
+    "SELECT COALESCE(json_object_agg(lower(t.table_name), t.n), '{}'::json)"
+    " FROM ("
+    "  SELECT c.relname AS table_name,"
+    "   (xpath('/row/c/text()',"
+    "     query_to_xml(format('SELECT count(*) AS c FROM %I.%I', n.nspname, c.relname),"
+    "                  false, true, '')"
+    "   ))[1]::text::bigint AS n"
+    "  FROM pg_catalog.pg_class c"
+    "  JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace"
+    "  WHERE c.relkind = 'r' AND n.nspname = current_schema()"
+    " ) t"
+)
 
-def all_table_counts(db: Database) -> dict[str, int]:
-    """Layer 1. Row counts for every ordinary base table in `current_schema()`.
 
-    Scoped to `current_schema()` and `relkind = 'r'` deliberately: those are the
-    tables ADempiere writes. It is not literally every relation in the database,
-    and the contract wording must not claim that it is.
-    """
-    rows = db.json_rows(
-        "SELECT c.relname AS table_name"
-        " FROM pg_catalog.pg_class c"
-        " JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace"
-        " WHERE c.relkind = 'r' AND n.nspname = current_schema()"
+def consistent_snapshot(db: Database, scope: list[dict]) -> dict:
+    """Both layers, from one REPEATABLE READ READ ONLY transaction."""
+    scope_pairs: list[str] = []
+    for entry in scope:
+        table = entry["table"]
+        predicate = entry.get("predicate") or "TRUE"
+        # PostgreSQL folds unquoted identifiers to lower case, so ADempiere's
+        # relations exist as `c_bpartner`, not `C_BPartner`. The scope contract
+        # spells them in the dictionary's CamelCase, so the identifier must be
+        # lowered BEFORE it is quoted -- quoting the contract spelling verbatim
+        # asked for a relation that does not exist. Quoting is retained rather
+        # than dropped so a table name can never be read as SQL syntax.
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", table):
+            raise SystemExit(
+                f"measurement-scope.tsv declares {table!r}, which is not a plain "
+                "SQL identifier. Refusing to interpolate it into a query."
+            )
+        literal = table.lower().replace("'", "''")
+        scope_pairs.append(
+            f"'{literal}', (SELECT COALESCE(json_agg(x), '[]'::json) FROM"
+            f' (SELECT * FROM "{literal}" WHERE {predicate}) x)'
+        )
+    statement = (
+        "SELECT json_build_object("
+        f"'sentinel', ({_SENTINEL_SQL}),"
+        f"'scope', json_build_object({', '.join(scope_pairs)})"
+        ")::text"
     )
+    document = db.script_json(statement)
+
+    sentinel = {name: int(value) for name, value in document["sentinel"].items()}
     # An empty sentinel makes the undeclared-table completeness backstop
     # vacuous, which is precisely the falsely-green failure layer 1 exists to
     # close. The installed ADempiere seed has well over a thousand base tables,
     # so a schema with a handful means the connection landed somewhere
     # unexpected and the capture must not be trusted.
-    if len(rows) < SENTINEL_TABLE_FLOOR:
+    if len(sentinel) < SENTINEL_TABLE_FLOOR:
         raise SystemExit(
-            f"the changed-table sentinel found only {len(rows)} base table(s) in "
+            f"the changed-table sentinel found only {len(sentinel)} base table(s) in "
             f"current_schema(); at least {SENTINEL_TABLE_FLOOR} are expected in "
             "an installed ADempiere schema. Refusing to capture: an empty "
             "sentinel would report every undeclared write as no write at all."
         )
-    counts: dict[str, int] = {}
-    for row in rows:
-        table = row["table_name"]
-        # Counted individually rather than estimated: the sentinel's whole job is
-        # to notice a single unexpected row, and reltuples is an estimate that
-        # would miss it.
-        counts[table.lower()] = int(db.scalar(f'SELECT count(*) FROM "{table}"'))
-    return counts
 
-
-def scope_rows(db: Database, scope: list[dict]) -> dict[str, dict[str, dict]]:
-    """Layer 2. Full row content for each declared scope table, keyed."""
     captured: dict[str, dict[str, dict]] = {}
     for entry in scope:
-        table = entry["table"]
-        key = entry["key_column"]
-        predicate = entry.get("predicate") or "TRUE"
-        rows = db.json_rows(f'SELECT * FROM "{table}" WHERE {predicate}')
-        captured[table.lower()] = {str(row[key.lower()]): row for row in rows}
-    return captured
+        table = entry["table"].lower()
+        # A composite key is declared as `a+b`. AD_ChangeLog needs one:
+        # AD_ChangeLog_ID alone is NOT unique, because PO.save reuses a single
+        # id for every column changed in one save (PO.java feeds the first
+        # MChangeLog's id back into each subsequent column). Keying on it alone
+        # collapsed an N-column change into one arbitrarily chosen row, which
+        # would have frozen a single column-change per save as the oracle and
+        # scored a runtime that logged a different subset as green.
+        columns = [part.strip().lower() for part in entry["key_column"].split("+")]
+        rows = document["scope"].get(table) or []
+        keyed: dict[str, dict] = {}
+        for row in rows:
+            identity = "+".join(str(row[column]) for column in columns)
+            if identity in keyed:
+                raise SystemExit(
+                    f"two rows in {table} share the declared key {identity!r}. "
+                    "Silently keeping one of them would drop a real write from "
+                    "the measurement, so this is a failure: widen key_column in "
+                    "measurement-scope.tsv to the table's real identity."
+                )
+            keyed[identity] = row
+        captured[table] = keyed
+    return {"sentinel": sentinel, "scope": captured}
+
+
+def primary_component(key: str) -> str:
+    """The first component of a possibly-composite captured key.
+
+    A composite key exists so that two rows sharing an id are not collapsed.
+    Identity SYMBOLS, though, are keyed on the generated primary-key value alone,
+    because that is the value foreign keys in other rows actually carry -- a
+    foreign key never points at `900001+3499`.
+    """
+    return key.split("+", 1)[0]
 
 
 def load_table_ids(path: Path) -> dict[str, int]:
@@ -234,10 +347,7 @@ def load_scope(path: Path) -> list[dict]:
 def snapshot(args) -> int:
     db = Database(args.host, args.port, args.database, args.user, args.password)
     scope = load_scope(args.scope)
-    document = {
-        "sentinel": all_table_counts(db),
-        "scope": scope_rows(db, scope),
-    }
+    document = consistent_snapshot(db, scope)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(document, indent=1, sort_keys=True), encoding="utf-8")
     print(
@@ -249,6 +359,7 @@ def snapshot(args) -> int:
 
 def diff(args) -> int:
     """Normalized keyed effect for one step, plus the changed-table sentinel."""
+    ambient_tables = load_ambient_tables(args.ambient)
     before = json.loads(args.before.read_text(encoding="utf-8"))
     after = json.loads(args.after.read_text(encoding="utf-8"))
 
@@ -271,17 +382,35 @@ def diff(args) -> int:
     # Declare every created row's identity FIRST, across all tables, so a
     # foreign key in one created row can resolve to another created row's
     # symbol regardless of the order the tables happen to be captured in.
-    for table in sorted(after["scope"]):
-        before_rows = before["scope"].get(table, {})
-        for key in sorted(after["scope"][table]):
-            if key not in before_rows:
-                identities.declare(table, f"{table}_id", key)
+    #
+    # "Created" means created during this CAPTURE, not during this step. The
+    # reference is the capture's post-login baseline snapshot, which is why it
+    # is a required argument. Using the step's own before-snapshot instead made
+    # every step after the create resolve nothing: the row already existed by
+    # then, so the update and deactivate effects froze the raw sequence-allocated
+    # `c_bpartner  1000000` as their key. Taking the baseline as the reference is
+    # also what keeps a SEEDED row from being handed a capture-local symbol --
+    # the same rule derive-write-oracle-facts.py applies.
+    baseline = json.loads(args.baseline.read_text(encoding="utf-8"))["scope"]
+    for table in sorted(set(after["scope"]) | set(before["scope"])):
+        seeded = baseline.get(table, {})
+        for key in sorted(set(after["scope"].get(table, {})) | set(before["scope"].get(table, {}))):
+            if key not in seeded:
+                identities.declare(table, f"{table}_id", primary_component(key))
 
     for table in sorted(set(before["scope"]) | set(after["scope"])):
         before_rows = before["scope"].get(table, {})
         after_rows = after["scope"].get(table, {})
         for key in sorted(after_rows):
-            symbol = identities.symbol_for(f"{table}_id", key) or key
+            # The identity was declared under the key's PRIMARY component, so it
+            # must be looked up that way. Passing the full captured key made
+            # every composite-keyed row miss its own symbol and fall through to
+            # the `or key` branch, freezing a raw sequence-allocated integer --
+            # `c_bp_customer_acct  1000000+101` -- into the compared payload.
+            # That is under-normalization: a runtime that allocates a different
+            # identity for the same transition would fail for a reason that is
+            # about identity allocation rather than about the transition.
+            symbol = identities.symbol_for(f"{table}_id", primary_component(key)) or key
             if key not in before_rows:
                 created.append((table, symbol, normalize_row(table, after_rows[key], identities)))
             else:
@@ -300,6 +429,14 @@ def diff(args) -> int:
         "# never dropped: dropping them would erase a broken foreign-key edge and",
         "# a duplicated effect, which are the two defects this comparison exists",
         "# to catch.",
+        "",
+        # The step identity is a DATA row, not a comment. `score` strips comments
+        # before comparing, so a step id carried only in the header would never be
+        # compared -- and the create effect of step 1 would score cleanly against
+        # the frozen model of step 3. The step is what makes per-step measurement
+        # mean anything, so it must be in the compared payload.
+        "[step]",
+        args.step,
         "",
         "[identities]",
     ]
@@ -324,8 +461,42 @@ def diff(args) -> int:
                 )
     lines.append("")
     lines.append("[deleted]")
-    lines.extend(f"{t}\t{k}" for t, k in deleted)
+    # Symbolized on the same terms as [created] and [updated]. A row created
+    # earlier in the capture and deleted in this step is capture-created, so
+    # rendering its raw key here would reintroduce exactly the sequence-allocated
+    # integer the other sections stopped emitting.
+    lines.extend(
+        f"{t}\t{identities.symbol_for(f'{t}_id', primary_component(k)) or k}"
+        for t, k in deleted
+    )
     lines.append("")
+
+    # A step that wrote nothing has to say so, in the compared payload.
+    #
+    # Some steps in this flow genuinely have no database effect, and for one of
+    # them -- the conflicting save -- "nothing was written" IS the expected
+    # answer and the headline fact of the whole concurrency capture. But a model
+    # holding only section headers is also exactly what an accidentally-empty
+    # freeze produces, and that would match any run at all.
+    #
+    # The two are distinguished by declaring the emptiness rather than inferring
+    # it. `score` accepts a model with no effect rows only when it carries this
+    # marker, and fails a marked model whose observed run DID write, because the
+    # marker is compared like any other payload row.
+    non_ambient_changed = [
+        row for row in changed if row.split("\t")[0].lower() not in ambient_tables
+    ]
+    if not (created or updated or deleted or non_ambient_changed):
+        # The declaration states exactly what was measured, and no more. Layer 1
+        # is a row COUNT per table, so an UPDATE to a table outside the
+        # measurement scope produces neither a keyed row nor a count delta, and
+        # an insert paired with a delete in one step nets to zero. Writing
+        # "declared" here would turn that blind spot into a positive claim that
+        # nothing at all happened; naming the two measurements keeps the frozen
+        # assertion true. Narrowing the blind spot is tracked as residual R12.
+        lines.append("[no-effect]")
+        lines.append("no-keyed-change-in-scope\tno-row-count-delta-outside-ambient")
+        lines.append("")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text("\n".join(lines), encoding="utf-8")
@@ -338,6 +509,7 @@ def diff(args) -> int:
 
 def score(args) -> int:
     """Compare a captured effect against the frozen effect model."""
+    ambient_tables = load_ambient_tables(args.ambient)
     observed = args.effect.read_text(encoding="utf-8").splitlines()
     expected = args.contract.read_text(encoding="utf-8").splitlines()
 
@@ -345,7 +517,28 @@ def score(args) -> int:
         # Comment lines carry the identity mapping's raw values, which are
         # volatile by design. They are excluded from the comparison and retained
         # in the file for diagnosis.
-        return [line for line in lines if line and not line.startswith("#")]
+        #
+        # Ambient changed-table rows are excluded for the same reason, and this
+        # is what makes the classification mean anything at all. Left in, an
+        # ambient table's delta would have to match byte for byte, so a table
+        # that churns non-deterministically -- which is precisely what "ambient"
+        # describes -- would fail the comparison regardless of being classified,
+        # and the exemption below would be unreachable. They stay in the emitted
+        # file so a surprising delta is still diagnosable; they are simply not
+        # the thing being asserted.
+        kept: list[str] = []
+        in_changed = False
+        for line in lines:
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("["):
+                in_changed = line == "[changed-tables]"
+                kept.append(line)
+                continue
+            if in_changed and line.split("\t")[0].lower() in ambient_tables:
+                continue
+            kept.append(line)
+        return kept
 
     observed_body = payload(observed)
     expected_body = payload(expected)
@@ -360,11 +553,35 @@ def score(args) -> int:
         for line in expected_body
         if not line.startswith("[") and "\t" in line
     ]
-    if not effect_rows:
+    if not effect_rows and "[no-effect]" not in expected_body:
         problems.append(
             f"{args.contract} declares no effect row at all. A model containing "
             "only section headers matches a run in which nothing was written, "
             "so it is not an oracle."
+        )
+
+    # The frozen model must name the step it is the answer for. Without it, the
+    # model for one step would score cleanly against the capture of another, and
+    # per-step measurement would be decorative.
+    def step_of(body: list[str]) -> str | None:
+        for index, line in enumerate(body):
+            if line == "[step]" and index + 1 < len(body):
+                candidate = body[index + 1]
+                return None if candidate.startswith("[") else candidate
+        return None
+
+    expected_step = step_of(expected_body)
+    observed_step = step_of(observed_body)
+    if expected_step is None:
+        problems.append(
+            f"{args.contract} carries no [step] section. A frozen effect model "
+            "that does not name its step can be satisfied by the capture of a "
+            "different step."
+        )
+    elif observed_step != expected_step:
+        problems.append(
+            f"step identity diverged: the frozen model is the answer for "
+            f"{expected_step!r} but the capture is of {observed_step!r}."
         )
     if observed_body != expected_body:
         for index in range(max(len(observed_body), len(expected_body))):
@@ -380,11 +597,25 @@ def score(args) -> int:
     # The undeclared-table check. This is the completeness backstop: a write to a
     # table nobody declared is invisible to the keyed comparison, and it is
     # exactly the falsely-green failure the sentinel exists to close.
-    declared = {
-        line.split("\t")[0].lower()
-        for line in expected_body
-        if "\t" in line and not line.startswith("[")
-    }
+    #
+    # `declared` is built from the KEYED sections only. Reading it from every
+    # tabbed row would include the model's own `[changed-tables]` rows, so a
+    # table would declare itself simply by having changed, and the backstop
+    # could never be the sole cause of a failure -- it would fire only when the
+    # payload comparison had already failed for the same input, making it dead
+    # weight dressed as a safety net. Requiring a keyed declaration is also the
+    # right rule on its own terms: a table that changed but is outside the
+    # measurement scope cannot be examined at all, which is the precise
+    # condition this check exists to refuse.
+    declared: set[str] = set()
+    keyed_sections = {"[created]", "[updated]", "[deleted]"}
+    section = ""
+    for line in expected_body:
+        if line.startswith("["):
+            section = line
+            continue
+        if section in keyed_sections and "\t" in line:
+            declared.add(line.split("\t")[0].lower())
     in_changed = False
     for line in observed_body:
         if line.startswith("["):
@@ -393,7 +624,7 @@ def score(args) -> int:
         if not in_changed:
             continue
         table = line.split("\t")[0].lower()
-        if table not in declared and table not in AMBIENT_TABLES:
+        if table not in declared and table not in ambient_tables:
             problems.append(
                 f"table {table} changed but is neither declared in the effect model "
                 "nor classified as reviewed ambient state. The write set is larger "
@@ -432,12 +663,24 @@ def main() -> int:
     # qualified, and an unqualified one would either stay raw (flaky) or be
     # guessed (a fabricated foreign-key edge).
     d.add_argument("--attribution-scope", required=True, type=Path)
+    # The capture's post-login baseline snapshot. Identity is capture-scoped, not
+    # step-scoped; see diff().
+    d.add_argument("--baseline", required=True, type=Path)
+    # The ambient classification decides whether a step that touched only
+    # session and audit state counts as having written nothing. Required rather
+    # than optional: defaulting it would let a step be marked no-effect on a
+    # narrower classification than the one it is scored against.
+    d.add_argument("--ambient", required=True, type=Path)
     d.add_argument("--out", required=True, type=Path)
     d.set_defaults(func=diff)
 
     s = sub.add_parser("score")
     s.add_argument("--effect", required=True, type=Path)
     s.add_argument("--contract", required=True, type=Path)
+    # Required, not defaulted to a set held in this file: the ambient
+    # classification decides which unexpected writes are forgiven, so it belongs
+    # in the reviewed, manifest-covered contract and must be supplied explicitly.
+    s.add_argument("--ambient", required=True, type=Path)
     s.set_defaults(func=score)
 
     args = parser.parse_args()

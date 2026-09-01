@@ -20,6 +20,7 @@
 DO $fixture$
 DECLARE
     leaked integer;
+    role_id integer;
 BEGIN
     -- 1. The fixture key must be absent.
     --
@@ -116,6 +117,44 @@ BEGIN
     ) THEN
         RAISE EXCEPTION 'Phase 5g-1a fixture precondition failed: C_BPartner now declares a callout in the RUNTIME database, so the write effect is no longer attributable to the window and model layer alone.';
     END IF;
+
+    -- 7. The capture organisation must be writable by BOTH identities.
+    --
+    -- This is the constraint assertion 3 was written to rule out and did not.
+    -- AD_Window_Access governs whether a role may open the window; it says
+    -- nothing about whether a role may write a record belonging to a given
+    -- organisation. Run 33482988481 satisfied every window-access assertion
+    -- above and still served the second editor a read-only form, because the
+    -- record had been created in the shared '*' organisation while GardenUser
+    -- was logged into Fertilizer. The concurrency step would then have captured
+    -- ADempiere's org access refusal and frozen it as the product's conflict
+    -- behaviour -- wrong, and not obviously wrong.
+    --
+    -- The driver now creates the record in the organisation named here, so the
+    -- name and both roles' access to it are preconditions of the capture.
+    IF NOT EXISTS (
+        SELECT 1 FROM AD_Org
+        WHERE Name = 'Fertilizer' AND AD_Client_ID = 11 AND IsActive = 'Y'
+    ) THEN
+        RAISE EXCEPTION 'Phase 5g-1a fixture precondition failed: GardenWorld has no active organisation named Fertilizer to create the captured record in.';
+    END IF;
+    FOR role_id IN SELECT unnest(ARRAY[102, 103]) LOOP
+        IF NOT EXISTS (
+            SELECT 1 FROM AD_Role r
+            WHERE r.AD_Role_ID = role_id
+              AND (r.IsAccessAllOrgs = 'Y'
+                   OR EXISTS (
+                       SELECT 1 FROM AD_Role_OrgAccess oa
+                       JOIN AD_Org o ON o.AD_Org_ID = oa.AD_Org_ID
+                       WHERE oa.AD_Role_ID = r.AD_Role_ID
+                         AND oa.IsActive = 'Y' AND o.IsActive = 'Y'
+                         AND o.Name = 'Fertilizer' AND o.AD_Client_ID = 11))
+        ) THEN
+            RAISE EXCEPTION
+                'Phase 5g-1a fixture precondition failed: role % cannot write the Fertilizer organisation, so the captured record would be read-only for one of the two editors.',
+                role_id;
+        END IF;
+    END LOOP;
 
     RAISE NOTICE 'Phase 5g-1a fixture preconditions satisfied.';
 END

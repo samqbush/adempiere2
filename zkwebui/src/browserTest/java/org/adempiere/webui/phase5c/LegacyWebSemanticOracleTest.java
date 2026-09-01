@@ -19,6 +19,8 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.adempiere.webui.phase5d.BrowserSemanticContract;
+import org.adempiere.webui.phase5legacy.LegacyBrowserFlow;
+import org.adempiere.webui.phase5legacy.LegacyDatabaseScripts;
 import org.adempiere.webui.phase5d.ErrorMessageWindowFacts;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -34,6 +36,9 @@ import com.microsoft.playwright.options.WaitUntilState;
 
 @Tag("IntegrationTest")
 class LegacyWebSemanticOracleTest {
+
+	private static final LegacyDatabaseScripts SCRIPTS =
+			new LegacyDatabaseScripts("phase5c.browser.");
 
 	private final String baseUrl = requiredProperty("phase5c.browser.baseUrl")
 			.replaceFirst("/+$", "");
@@ -135,56 +140,24 @@ class LegacyWebSemanticOracleTest {
 		try (Playwright playwright = Playwright.create();
 				Browser browser = playwright.chromium().launch(
 						new BrowserType.LaunchOptions().setHeadless(true));
-				BrowserContext context = browser.newContext(
-						new Browser.NewContextOptions()
-								.setLocale("en-US")
-								.setTimezoneId("UTC"))) {
-			context.route("**/*", route -> {
-				if (route.request().url().startsWith(baseUrl)) {
-					route.resume();
-				} else {
-					route.abort();
-				}
-			});
+				BrowserContext context = LegacyBrowserFlow.newContext(browser)) {
+			LegacyBrowserFlow.blockForeignOrigins(context, baseUrl);
 			Page page = context.newPage();
-			page.onRequest(request -> requests.add(request.method() + "\t"
-					+ normalizedUrl(request.url())));
-			page.onResponse(response -> {
-				if (response.status() >= 400) {
-					errors.add("http\t" + response.status() + "\t"
-							+ normalizedUrl(response.url()));
-				}
-			});
-			page.onPageError(error -> errors.add("page\t"
-					+ normalizedUrl(page.url()) + "\t" + error));
-			page.onConsoleMessage(message -> {
-				if ("error".equals(message.type())
-						&& !message.text().startsWith("Failed to load resource:")) {
-					errors.add("console\t" + normalizedUrl(page.url())
-							+ "\t" + message.text());
-				}
-			});
+			LegacyBrowserFlow.recordTraffic(page, requests, errors, this::normalizedUrl);
 
-			Response login = page.navigate(baseUrl + "/webui/",
-					new Page.NavigateOptions()
-							.setWaitUntil(WaitUntilState.DOMCONTENTLOADED));
+			Response login = LegacyBrowserFlow.login(page, baseUrl, user, password);
 			assertEquals(200, login.status());
-			page.locator("#rowUser input").fill(user);
-			page.locator("#rowUser input").press("Tab");
-			page.locator("#rowPassword input").fill(password);
-			page.locator("[title='OK']").click();
 
-			page.locator("#grdChooseRole").waitFor();
-			String roleText = normalizedText(page.locator("#grdChooseRole").innerText());
+			String roleText = LegacyBrowserFlow.awaitRolePanel(
+					page, LegacyWebSemanticOracleTest::normalizedText);
 			assertTrue(roleText.contains("Role"));
 			assertTrue(roleText.contains("Client"));
 			assertTrue(roleText.contains("Organization"));
 			assertTrue(roleText.contains("Warehouse"));
 			facts.put("role-labels-visible", "true");
-			page.locator("[title='OK']").click();
+			LegacyBrowserFlow.confirmRole(page);
 
-			page.getByText(user + "@GardenWorld", new Page.GetByTextOptions().setExact(false))
-					.waitFor();
+			LegacyBrowserFlow.awaitDesktop(page, user, "GardenWorld");
 			facts.put("desktop-user",
 					normalizedText(page.getByText(user + "@GardenWorld",
 							new Page.GetByTextOptions().setExact(false)).first().innerText()));
@@ -194,8 +167,7 @@ class LegacyWebSemanticOracleTest {
 
 			facts.putAll(openErrorMessageWindow(page, captureDir));
 
-			page.getByText("Log Out", new Page.GetByTextOptions().setExact(true)).click();
-			page.getByText("Login", new Page.GetByTextOptions().setExact(true)).first().waitFor();
+			LegacyBrowserFlow.logout(page);
 			facts.put("logout-login-visible", "true");
 
 			assertContext(page, facts, "/adempiere/", "filter-adempiere");
@@ -424,30 +396,7 @@ class LegacyWebSemanticOracleTest {
 	 * failure is readable without re-running the whole lane.
 	 */
 	private String runScript(String script, String label, String... arguments) {
-		List<String> command = new ArrayList<>(List.of(
-				script,
-				requiredProperty("phase5c.browser.dbHost"),
-				requiredProperty("phase5c.browser.dbPort"),
-				requiredProperty("phase5c.browser.dbName"),
-				requiredProperty("phase5c.browser.dbUser")));
-		command.add(requiredProperty("phase5c.browser.dbMarker"));
-		command.addAll(List.of(arguments));
-		try {
-			Process process = new ProcessBuilder(command)
-					.redirectErrorStream(true)
-					.start();
-			String output = new String(process.getInputStream().readAllBytes(),
-					StandardCharsets.UTF_8);
-			int status = process.waitFor();
-			System.out.print(output);
-			assertEquals(0, status, label + " failed:\n" + output);
-			return output;
-		} catch (IOException exception) {
-			throw new IllegalStateException(label + " could not be started", exception);
-		} catch (InterruptedException exception) {
-			Thread.currentThread().interrupt();
-			throw new IllegalStateException(label + " was interrupted", exception);
-		}
+		return SCRIPTS.run(script, label, arguments);
 	}
 
 	private record Replay(
@@ -457,11 +406,7 @@ class LegacyWebSemanticOracleTest {
 	}
 
 	private static String requiredProperty(String name) {
-		String value = System.getProperty(name);
-		if (value == null || value.isBlank()) {
-			throw new IllegalStateException(name + " is required");
-		}
-		return value;
+		return SCRIPTS.property(name.substring("phase5c.browser.".length()));
 	}
 
 }

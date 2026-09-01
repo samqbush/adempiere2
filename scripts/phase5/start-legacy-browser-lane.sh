@@ -50,5 +50,5 @@ done
 
 echo "Tomcat 9 did not serve a healthy /webui/ response" >&2
 tail -80 "$CATALINA_BASE/logs/catalina.out" 2>/dev/null >&2 || true
-"$repo_root/scripts/phase5/stop-legacy-browser-lane.sh" "$port" || true
+bash "$repo_root/scripts/phase5/stop-legacy-browser-lane.sh" "$port" || true
 exit 70

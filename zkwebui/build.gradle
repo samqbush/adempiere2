@@ -44,6 +44,16 @@ sourceSets {
 			srcDirs = [rootProject.file('org.adempiere.test/src/test/resource')]
 		}
 	}
+	// Phase 5g-1a: the legacy ZK 3.6 browser primitives -- login, role
+	// selection, public-origin blocking, traffic recording, the marker-guarded
+	// script runner and the per-step rendezvous. Shared rather than duplicated,
+	// so the read oracle and the write oracle cannot drift into observing
+	// different products. It holds no contract facts and asserts nothing.
+	legacyBrowserSupport {
+		java {
+			srcDirs = ['src/legacyBrowserSupport/java']
+		}
+	}
 	browserContract {
 		java {
 			srcDirs = ['src/browserContract/java']
@@ -51,6 +61,22 @@ sourceSets {
 		resources {
 			srcDirs = [rootProject.file('contracts/legacy-web-browser-v1')]
 		}
+	}
+	// Phase 5g-1a: the destructive legacy write driver. Its own source set and
+	// its own Test task, so the Phase 5c read oracle can never discover it: a
+	// task that resets a fixture and asserts a zero-write delta must not have a
+	// business-write test swept into it.
+	writeOracleTest {
+		java {
+			srcDirs = ['src/writeOracleTest/java']
+		}
+		// No resources. The frozen contract deliberately stays OFF this
+		// classpath: the driver must not be able to read the expected answer,
+		// and once --freeze writes effect-model.tsv and business-values.tsv into
+		// contracts/legacy-web-write-v1/, putting that directory here would
+		// serve the whole oracle to the browser test. Keeping it off is the
+		// structural guarantee behind the "the driver must not know the answer"
+		// rule; the driver reads nothing from it today, and now it cannot.
 	}
 	browserTest {
 		java {
@@ -109,6 +135,10 @@ sourceSets {
 
 configurations {
 	phase5Transformer
+	legacyBrowserSupportImplementation.extendsFrom testImplementation
+	legacyBrowserSupportRuntimeOnly.extendsFrom testRuntimeOnly
+	writeOracleTestImplementation.extendsFrom testImplementation
+	writeOracleTestRuntimeOnly.extendsFrom testRuntimeOnly
 	browserContractImplementation.extendsFrom testImplementation
 	browserContractRuntimeOnly.extendsFrom testRuntimeOnly
 	browserTestImplementation.extendsFrom testImplementation
@@ -140,6 +170,13 @@ dependencies {
 	phase5Transformer "org.eclipse.transformer:org.eclipse.transformer.cli:${transformerVersion}"
 	browserContractImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
 	browserContractRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+	legacyBrowserSupportImplementation "com.microsoft.playwright:playwright:${playwrightVersion}"
+	writeOracleTestImplementation sourceSets.legacyBrowserSupport.output
+	writeOracleTestImplementation sourceSets.browserContract.output
+	writeOracleTestImplementation "com.microsoft.playwright:playwright:${playwrightVersion}"
+	writeOracleTestImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+	writeOracleTestRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+	browserTestImplementation sourceSets.legacyBrowserSupport.output
 	browserTestImplementation sourceSets.browserContract.output
 	browserTestImplementation "com.microsoft.playwright:playwright:${playwrightVersion}"
 	browserTestImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
@@ -1104,6 +1141,95 @@ tasks.register('browserTest', Test) {
 				.get().asFile.isFile()) {
 			throw new GradleException(
 				'The verified Phase 5c browser installation is missing')
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5g-1a
+// ---------------------------------------------------------------------------
+
+// A separate Test task, not a filter on browserTest. The Phase 5c oracle resets
+// its fixture and asserts a zero-write delta; discovering a destructive business
+// write inside that task would either fail it or, worse, be excluded by a filter
+// somebody later relaxes. Separate execution, shared drivers.
+tasks.register('phase5g1aWriteOracleCapture', Test) {
+	group = 'verification'
+	description = 'Captures the legacy Business Partner write flow through the public /webui origin'
+	testClassesDirs = sourceSets.writeOracleTest.output.classesDirs
+	classpath = sourceSets.writeOracleTest.runtimeClasspath
+	useJUnitPlatform()
+	systemProperty 'phase5g1a.browser.baseUrl',
+		providers.gradleProperty('phase5g1aBaseUrl').getOrElse('http://127.0.0.1:8888')
+	systemProperty 'phase5g1a.browser.user',
+		providers.gradleProperty('phase5g1aUser').getOrElse('GardenAdmin')
+	systemProperty 'phase5g1a.browser.password',
+		providers.gradleProperty('phase5g1aPassword').getOrElse('GardenAdmin')
+	systemProperty 'phase5g1a.browser.client',
+		providers.gradleProperty('phase5g1aClient').getOrElse('GardenWorld')
+	// The second editor in the concurrency step. It must be a different user
+	// from the primary: a user racing itself records no UpdatedBy transition, so
+	// the capture could not say which editor won.
+	systemProperty 'phase5g1a.browser.secondUser',
+		providers.gradleProperty('phase5g1aSecondUser').getOrElse('GardenUser')
+	systemProperty 'phase5g1a.browser.secondPassword',
+		providers.gradleProperty('phase5g1aSecondPassword').getOrElse('GardenUser')
+	// The capture directory is chosen by the orchestrator, because captures A
+	// and B must not overwrite each other and the self-diff compares them.
+	systemProperty 'phase5g1a.browser.evidenceDir',
+		providers.gradleProperty('phase5g1aEvidenceDir').getOrElse(
+			layout.buildDirectory.dir('phase5g1a/capture').get().asFile.absolutePath)
+	systemProperty 'phase5g1a.browser.rendezvousDir',
+		providers.gradleProperty('phase5g1aRendezvousDir').getOrElse(
+			layout.buildDirectory.dir('phase5g1a/rendezvous').get().asFile.absolutePath)
+	// No default. A shared token is what makes a surviving marker from an
+	// earlier capture detectable, and a constant default would defeat it.
+	systemProperty 'phase5g1a.browser.token',
+		providers.gradleProperty('phase5g1aToken').getOrElse('')
+	systemProperty 'phase5g1a.browser.recordValue',
+		providers.gradleProperty('phase5g1aRecordValue').getOrElse('')
+	// The organisation the captured record is created in.
+	//
+	// It must be an org BOTH capture identities can write. Run 33482988481
+	// created the record in the shared '*' org, because that is GardenAdmin's
+	// login default, and the second editor -- logged into Fertilizer -- was
+	// then served a read-only form. The concurrency step would have captured an
+	// access refusal and frozen it as the product's conflict behaviour.
+	systemProperty 'phase5g1a.browser.recordOrg',
+		providers.gradleProperty('phase5g1aRecordOrg').getOrElse('Fertilizer')
+	systemProperty 'phase5g1a.browser.dbHost',
+		rootProject.providers.gradleProperty('phase3DbHost').getOrElse('127.0.0.1')
+	systemProperty 'phase5g1a.browser.dbPort',
+		rootProject.providers.gradleProperty('phase3DbPort').getOrElse('5432')
+	systemProperty 'phase5g1a.browser.dbName',
+		rootProject.providers.gradleProperty('phase3DbName').getOrElse('adempiere_phase3_ci')
+	systemProperty 'phase5g1a.browser.dbUser',
+		rootProject.providers.gradleProperty('phase3DbUser').getOrElse('adempiere_phase3_ci')
+	systemProperty 'phase5g1a.browser.dbMarker',
+		'ADempiere Phase 3 disposable database'
+	environment 'ADEMPIERE_PHASE5D_DB_PASSWORD',
+		rootProject.providers.gradleProperty('phase3DbPassword')
+			.getOrElse('adempiere_phase3_ci')
+	// The same checksum-verified browser installation the Phase 5c lane uses.
+	// This increment adds no browser artifact.
+	environment 'PLAYWRIGHT_BROWSERS_PATH',
+		rootProject.layout.buildDirectory.dir('phase5c/playwright-browsers')
+			.get().asFile.absolutePath
+	environment 'PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD', '1'
+	doFirst {
+		if (!rootProject.layout.buildDirectory
+				.file('phase5c/playwright-browsers/verified-artifacts.tsv')
+				.get().asFile.isFile()) {
+			throw new GradleException(
+				'The verified Phase 5c browser installation is missing')
+		}
+		['phase5g1aToken', 'phase5g1aRecordValue'].each { name ->
+			if (!providers.gradleProperty(name).getOrElse('')) {
+				throw new GradleException(
+					"-P${name} is required: the write capture must be uniquely " +
+						'identifiable, and a defaulted value would let a stale ' +
+						'rendezvous marker or a previous run\'s record satisfy it.')
+			}
 		}
 	}
 }

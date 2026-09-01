@@ -1,0 +1,8 @@
+# child-table	column	parent-table
+ad_treenodebp	node_id	c_bpartner
+ad_wf_activity	ad_wf_process_id	ad_wf_process
+ad_wf_activity	record_id	c_bpartner
+ad_wf_process	record_id	c_bpartner
+c_bp_customer_acct	c_bpartner_id	c_bpartner
+c_bp_employee_acct	c_bpartner_id	c_bpartner
+c_bp_vendor_acct	c_bpartner_id	c_bpartner

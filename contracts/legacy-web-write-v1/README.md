@@ -67,20 +67,44 @@ subscriptions.
 | `fixture.sql` | present | Preconditions asserted before any capture |
 | `exclusions.tsv` | present | Owned exclusions, each with a reason and a closing increment |
 | `normalization-policy.md` | present | What is removed, what is deliberately kept, and why both directions are proved |
+| `ambient-tables.tsv` | present | The reviewed session/audit/workflow tables exempt from the undeclared-table backstop |
 | `raw/` | present | A committed raw capture sample; the input to the over-normalization mutation proof, **not** an oracle fact |
 | `manifest.sha256` | present | SHA-256 over every file except itself |
+| `write-flow.tsv` | present | The captured step ledger: ten steps, in the order the driver executed them |
+| `effect-model.tsv` | present | Index of the frozen per-step effect documents under `effect-model/` |
+| `effect-model/` | present | One frozen sectioned effect document per measured step |
+| `business-values.tsv` | present | The business column values the flow left behind |
+| `foreign-key-graph.tsv` | present | The edges this flow actually wired between rows it created |
+| `semantic-facts.tsv` | present | The UI-observable facts the driver asserted |
+| `network-classes.tsv` | present | Request classes, including the four third-party origins the legacy login page reaches |
+| `concurrency-facts.tsv` | present | The second editor's outcome and the conflicting save's verdict |
+| `allowed-browser-errors.tsv` | present | The browser errors the legacy runtime is permitted to produce |
 
-### Not yet present: the captured facts
+### The captured facts
 
-`effect-model.tsv`, `business-values.tsv`, `foreign-key-graph.tsv`,
-`semantic-facts.tsv`, `network-classes.tsv`, `concurrency-facts.tsv`,
-`allowed-browser-errors.tsv` and `write-flow.tsv` are **absent by design at this
-commit**. They are captured from the booted legacy runtime by
-`phase5g1aLegacyWriteOracleSmoke`, reviewed, and frozen here.
+Captured from the booted legacy Tomcat 9 / ZK 3.6 product through the public
+`/webui` origin, self-diffed across two fixture-isolated captures, and frozen
+here. See "Domain review" below for the run they came from.
 
-They are listed rather than silently omitted because an oracle tree that does not
-say what it is missing is indistinguishable from one that has decided it needs
-nothing. This section is the increment's own incompleteness, recorded.
+### The shape `effect-model.tsv` takes, decided before the driver was written
+
+`measure-write-effect.py` emits **one sectioned document per step**, not one row
+per step, so a single flat TSV cannot hold the frozen effects. Rather than
+flatten the documents — which would discard the section structure the scorer
+compares — `effect-model.tsv` is an **index**: one row per step, naming the step,
+the operation, and the per-step document under `effect-model/` that is its frozen
+answer. The documents keep the emitted format exactly, so what is reviewed is
+what is compared.
+
+The step identity is carried in the compared payload as a `[step]` section, not
+in a comment header. `score` strips comments before comparing, so a step id
+carried only in a header would never be compared, and the create effect of step 1
+would score cleanly against the frozen model of step 3 — which would make
+per-step measurement decorative. `score` fails a frozen model that carries no
+`[step]` section at all.
+
+Writing this down before the driver exists is deliberate: driver and contract
+cannot drift if the shape was agreed first.
 
 ## Two-layer effect model
 
@@ -95,8 +119,30 @@ So the capture is two layers:
 2. keyed relational extraction for each changed table.
 
 The gate fails when a changed table is neither declared in the effect model nor
-classified as reviewed ambient state. Layer 1 is what makes the exclusions in
-`exclusions.tsv` provable rather than merely asserted.
+classified as reviewed ambient state. "Declared" means declared in the **keyed**
+sections — `[created]`, `[updated]`, `[deleted]` — not merely present in the
+sentinel. Reading it from the sentinel too would let a table declare itself
+simply by having changed, and the backstop could then never be the sole cause of
+a failure. Requiring a keyed declaration is also the right rule on its own terms:
+a table that changed but sits outside the measurement scope cannot be examined at
+all, which is the precise condition this check exists to refuse. Layer 1 is what
+makes the exclusions in `exclusions.tsv` provable rather than merely asserted.
+
+That ambient classification lives in `ambient-tables.tsv`, in this tree, under
+the manifest and under the domain review — not as a constant in a script. It is
+the only list in the increment that can make an unexpected write acceptable, so
+widening it must change the manifest digest and require a reviewer. An ambient
+table is still measured and still appears in every captured effect document; it
+is excluded only from the compared payload, because a table that churns
+non-deterministically is exactly what "ambient" describes and requiring its delta
+to match byte for byte would make the classification unreachable.
+`verifyPhase5gAmbientClassificationMutationProof` scores four mutations across
+three directions: an undeclared business table must fail — proved twice, the
+second time with capture and contract byte-identical so that the backstop is
+demonstrably what failed the run rather than a payload diff — a classified table
+must be forgiven, and reclassifying a business table as ambient must actually
+turn the failure green, the last one proving in the repository that this file is
+load-bearing rather than cosmetic.
 
 Effects are measured **per step**, not once around the whole flow. A single
 before/after pair around create → update → deactivate shows only the final
@@ -116,7 +162,112 @@ background writer is indistinguishable from a route effect.
 
 ## Domain review
 
-**Not yet recorded.** The captured facts do not exist at this commit, and signing
-off on facts that have not been captured would make the sign-off meaningless. The
-review is recorded here, naming the reviewer and the date, before the facts are
-frozen and before 5g-1b begins.
+**Recorded.**
+
+| Field | Value |
+|---|---|
+| Reviewer | @samqbush |
+| Date | 2026-09-01 |
+| Capturing CI run | https://github.com/samqbush/adempiere2/actions/runs/33491714444 |
+| Captured commit | `3a0f5fd911d85a545661bdee067be710f47d2fda` |
+| Evidence digest | `edd369f6f6f5636d7459c251608d0cb39abb4d931aa673acd69b576d1cf4df20` |
+| Disposition | **Approved as the expected answer for Phase 5g-1b.** |
+
+The digest is SHA-256 over the eight frozen fact files and every per-step effect
+document, each preceded by its name, in sorted order. It is what ties this
+sign-off to specific bytes: re-freezing from a different capture changes it, and
+the change is visible in this file and in `manifest.sha256`.
+
+The captured snapshots are the raw evidence, and the frozen facts are derived
+from them. A review-driven change to the derivation therefore changes the frozen
+bytes without changing the run they came from, and this digest moved once for
+exactly that reason: code review found that composite-keyed rows, and every row
+in a step after the one that created it, were freezing raw sequence-allocated
+integers into the comparison, that a deleted capture-created row would still
+have done so, and that the edge scan skipped every composite key component --
+which is where the fan-out edges live, so `foreign-key-graph.tsv` recorded the
+three workflow edges and none of the four the create step actually wires. It now
+records all seven, including `ad_treenodebp node_id c_bpartner` and the three
+accounting rows. The facts above were re-derived from the same run's snapshots,
+both captures still agree, and both still score against the contract.
+
+What was reviewed, and what it says:
+
+* **The write is real and it fans out.** Creating a business partner writes
+  `C_BPartner` and starts a document workflow — `AD_WF_Process`, `AD_WF_Activity`
+  and `AD_WF_EventAudit` each gain a row — and creates the three default
+  accounting rows and the tree node. A modern runtime that writes only
+  `C_BPartner` has not reproduced this.
+* **The conflicting save is refused.** With a second editor holding the row, the
+  first editor's save is rejected, the status bar reads "Current record was
+  changed by another user, please ReQuery", and the step's measured effect is
+  empty: no created, updated or deleted row, and no changed table. The refusal is
+  a real refusal, not a silent last-write-wins.
+* **`UpdatedBy` moves to the second editor.** The concurrency capture can say
+  which editor won because `CreatedBy`/`UpdatedBy` are deliberately not
+  normalized.
+* **`AD_ChangeLog` is empty throughout.** GardenWorld does not log column changes
+  for `C_BPartner`. That is the legacy answer, recorded rather than assumed; the
+  table stays in the measurement scope so that a runtime which starts logging is
+  caught.
+* **The legacy login page reaches four third-party origins** —
+  `sfx-images.mozilla.org`, `www.google.com`, `www.zkoss.org` and
+  `fonts.googleapis.com`. These are product content, not browser noise, and they
+  are frozen as facts a modern runtime will be scored against.
+* **One error class is allowed**: repeated 404s for
+  `/webui/theme/default/css/themesaf.css.dsp`, the same missing DSP theme URL
+  Phase 5f registered.
+* **Five steps declare `[no-effect]`** — opening the window, the second editor's
+  login, the conflicting save, the deactivating session's login, and logout. The
+  emptiness is declared rather than inferred, so a step that later starts
+  writing fails.
+
+### What the frozen keys do and do not normalize
+
+No compared byte in this contract carries a raw sequence-allocated identity.
+Every row created during a capture is rendered through a capture-local symbol
+(`@c_bpartner#1`, `@c_bp_customer_acct#1`, `@ad_treenodebp#1`), and the
+`[identities]` legend that maps each symbol back to the observed integer is a
+comment, so it is stripped before comparison.
+
+Three resolution rules earn that, and each is a declared fact rather than a
+guess:
+
+- **Composite-keyed children** are declared and looked up under their own
+  table's primary key component, so `c_bp_customer_acct` gets its own symbol
+  instead of collapsing onto the business partner whose id is its first key
+  component.
+- **Identity is capture-scoped, not step-scoped.** The reference is the
+  capture's post-login baseline snapshot, so the row created in the create step
+  is still symbolic in the update and deactivate steps. A row present in the
+  baseline is seeded and is never handed a capture-local symbol.
+- **Generic pointers resolve only when something qualifies them.**
+  `Record_ID` resolves through its companion `AD_Table_ID`; `Node_ID` resolves
+  through its containing table, because `AD_TreeNodeBP` holds business-partner
+  nodes and nothing else. Neither ever resolves by bare value, which would
+  collide across tables sharing a sequence range.
+
+This matters because it is what makes the oracle scoreable by a runtime that
+allocates different integers. Without it, 5g-1b would fail this comparison for
+a reason that is about identity allocation rather than about the business
+transition.
+
+### A recorded limitation of the `[no-effect]` marker
+
+Five steps — `window-opened`, `concurrency-second-editor-authenticated`, `deactivate-editor-authenticated`, `concurrency-conflicting-save` and `logged-out` — carry `[no-effect]` with the explicit value
+`no-keyed-change-in-scope	no-row-count-delta-outside-ambient`.
+
+That value states precisely what was measured, and no more. The whole-database
+sentinel is a row **count** per table, so an `UPDATE` to a table outside the
+nine-table measurement scope produces neither a keyed row nor a count delta, and
+an insert paired with a delete inside one step nets to zero. The marker is
+therefore not a claim that nothing happened; it is a claim that these two
+measurements saw nothing. Narrowing the blind spot is residual **R12** in
+`MODERNIZATION_PLAN.md`.
+
+This is load-bearing for the headline concurrency fact: the refused save's
+entire content is that assertion, so the assertion has to be one the measurement
+can actually support.
+
+Human judgement is not automatable. This block is provenance; the governance
+control is the named reviewer's approval on the pull request that froze it.

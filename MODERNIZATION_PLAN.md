@@ -189,13 +189,15 @@ necessarily block merges.
 | R1 | Core | Phase 2 smoke and Phase 3 DB-backed metadata validation protect selected runtime and dictionary seams; broader business behavior remains | Phase 5 | Expand representative document, accounting, and UI behavior coverage. |
 | R2 | Swing/POS | Closed for the Phase 2 Garden World login/role/menu/process slice; broader operator workflows remain outside this phase | Closed in Phase 2; broader coverage Phase 5 | The semantic Xvfb smoke is now gated; expand coverage during the ZK/client modernization. |
 | R3 | Background jobs | Exact-once scheduler execution and context/transaction cleanup are proven; production discovery breadth and observability remain | Phase 6 | Expand processor discovery and add operational metrics/alerts. |
-| R4 | Web UI | Phase 5d replaces the 503 marker with a functional modern slice and crosses the Testability Milestone. Phase 5e adds proven fail-closed `/webui` cohort routing, concurrent identity isolation, and logout/timeout/container cleanup. Phase 5f merged at `83aeb8536` with both gates green: isolated generated Jakarta source/web trees, five source-native context WARs, the source-native `/timeline` route and exact static DSP compatibility resource, and independently reversible context routing for the closed 82-deployed/30-non-deployed scope, observed in run 33379849664 with 129 observations and zero vector failures across all six contexts. **No modern *business* write, document transition, process execution, report, or upload/download has ever been observed** - the modern runtime is proven only for login, role selection, menu and a read-only window (it does write `AD_Session` on login). Production customizations, 13 non-reproducible legacy entries, the four `/*` reachability-only vectors, disabled `/mobile` and `/adempiere`, unowned `/admin`, JasperReports interactive web, and screen-level visual parity remain residuals. | Phase 5g sub-increments `5g-1a`..`5g-7` for write/process/report/upload/dashboard/POS/extension parity and screen-level visual parity; `5g-0` for the governance amendment that opens a named disposition per disabled or unowned context and `5g-7` for the `phase5g-web-parity-gate` that closes it; Phase 7 for full artifact reproducibility | Do not treat implemented packaging or database-neutral contracts as runtime route parity. Production owners must validate custom overlays. Both Phase 5f gates are green; the 25 `/wstore` JSP precompile rows remain runtime-pending because only three of those pages are reached by a route vector. `contract-only-runtime-observation-pending` is **not** an acceptable disposition for a Phase 5g acceptance criterion. |
+| R4 | Web UI | Phase 5d replaces the 503 marker with a functional modern slice and crosses the Testability Milestone. Phase 5e adds proven fail-closed `/webui` cohort routing, concurrent identity isolation, and logout/timeout/container cleanup. Phase 5f merged at `83aeb8536` with both gates green: isolated generated Jakarta source/web trees, five source-native context WARs, the source-native `/timeline` route and exact static DSP compatibility resource, and independently reversible context routing for the closed 82-deployed/30-non-deployed scope, observed in run 33379849664 with 129 observations and zero vector failures across all six contexts. **No modern *business* write, document transition, process execution, report, or upload/download has ever been observed** - the modern runtime is proven only for login, role selection, menu and a read-only window (it does write `AD_Session` on login). `5g-1a` closed the other half of that gap: a frozen, domain-reviewed **legacy** write oracle now exists, so `5g-1b` scores the modern runtime against an answer it did not invent rather than against nothing. Production customizations, 13 non-reproducible legacy entries, the four `/*` reachability-only vectors, disabled `/mobile` and `/adempiere`, unowned `/admin`, JasperReports interactive web, and screen-level visual parity remain residuals. | Phase 5g sub-increments `5g-1a`..`5g-7` for write/process/report/upload/dashboard/POS/extension parity and screen-level visual parity; `5g-0` for the governance amendment that opens a named disposition per disabled or unowned context and `5g-7` for the `phase5g-web-parity-gate` that closes it; Phase 7 for full artifact reproducibility | Do not treat implemented packaging or database-neutral contracts as runtime route parity. Production owners must validate custom overlays. Both Phase 5f gates are green; the 25 `/wstore` JSP precompile rows remain runtime-pending because only three of those pages are reached by a route vector. `contract-only-runtime-observation-pending` is **not** an acceptable disposition for a Phase 5g acceptance criterion. |
 | R5 | SOAP/servlets | Unknown consumers and undocumented route classes may break | Phase 4 | Inventory consumers, freeze WSDL/HTTP fixtures, and run parallel replay. |
 | R6 | Database | Production size, custom schema, supported engines, and rollback windows are unknown | Phase 6 | Approve customer-specific migration runbook and rehearse on a sanitized copy. |
 | R7 | Extension metadata | The fail-closed validator names 16 pre-existing active `AD_Process` bindings with absent or incompatible classes | Phase 7 | Obtain usage evidence, then correct or retire every row in `gradle/phase3/metadata-quarantine.tsv`; additions and stale quarantine rows fail CI. |
 | R8 | CI governance | Checks may run without blocking merges. The two checks to mark required are now stably named `Contracts` and `Current-phase database smoke` | Human action after Phase 1 | Enable branch protection and required status checks on `develop`. |
 | R9 | JBoss facet | Checked-in `jboss.jar` implements removed JDK API `java.security.acl.Group`, so the unused-by-Phase-3 facet cannot emit Java 21 bytecode | Phase 7 | Establish deployable usage, then replace the dependency or retire the facet; `gradle/phase3/quarantine.txt` must remain explicit meanwhile. |
 | R10 | CI coverage | Six database-backed smokes (`phase3InstalledProduct`, `phase4InstalledApi`, `phase5bLegacyWebOracleSmoke`, `phase5cRollbackRehearsal`, `phase5dModernWebSmoke`, `phase5eCohortRoutingSmoke`) moved off the pull-request gate to the post-merge regression matrix, so a PR can regress the installed product, installed SOAP, the frozen legacy oracle, the 5c browser/rollback lane, the 5d modern slice, or 5e `/webui` cohort routing, isolation and session lifecycle while Lane 1 stays green. `phase5eCohortRoutingSmoke` joined the matrix when the current-phase slot advanced to Phase 5f, and it carries a recorded Playwright flake, so its post-merge signal is the only remaining check on cohort routing | Ongoing, under the containment rule | A red `Regression matrix` is a stop-the-line event: no further phase work merges until it is green or the failure is triaged and recorded. Owner @samqbush. If the matrix has not run green within a week, treat the affected phases as unverified rather than lit. See `docs/modernization/ci-topology.md`. |
+| R11 | Phase 5g governance | The Phase 5g decomposition names exactly one oracle increment (`5g-1a`). ADR decisions 2 and 3 require every new behaviour class to be captured from the legacy runtime and forbid a parity increment from adding oracle facts, so `5g-1c`, `5g-1d`, `5g-1e`, `5g-1f`, `5g-2`, `5g-3`, `5g-4`, `5g-5`, `5g-6` and `5g-7` each currently have **no** increment that captures the answer they would be scored against | Before each affected increment begins | The increment immediately preceding an `unassigned` row names and merges its oracle increment - frozen and domain-reviewed - before that row starts. An increment marked `unassigned - blocking` in the Phase 5g decomposition table may not begin. Owner @samqbush. |
+| R12 | Write-effect sentinel blind spot | The Phase 5g-1a whole-database sentinel (`measure-write-effect.py`) is a row **count** per table, so it cannot see an `UPDATE` to a table outside the nine-table keyed measurement scope, nor an insert paired with a delete that nets to zero within one step. Five frozen steps - `window-opened`, `concurrency-second-editor-authenticated`, `deactivate-editor-authenticated`, `concurrency-conflicting-save` and `logged-out` - assert `[no-effect]`, and the refused conflicting save is the increment's headline concurrency fact, so the blind spot sits underneath a compared positive assertion | `5g-1b`, before the modern runtime is scored on any step that asserts `[no-effect]` | Contained, not closed. The marker carries the explicit value `no-keyed-change-in-scope\tno-row-count-delta-outside-ambient`, so the frozen assertion states what was measured rather than claiming nothing happened, and the limitation is recorded in `contracts/legacy-web-write-v1/README.md`. `5g-1b` either adds a content component to the sentinel - a per-table checksum, not `pg_stat_user_tables`, whose collector is asynchronous and would flake - or widens the keyed scope to cover the tables its own flow touches. Owner @samqbush. |
 
 ### 3.6 Oracle decision
 
@@ -1013,8 +1015,26 @@ content than the table digests it was cross-checked against.
 **Phase 5g is now active.** It is the web UI functional parity increment and is
 delivered through sub-increments `5g-0` and `5g-1a` .. `5g-7`; see "Phase 5g
 decomposition and active scope". `5g-0` merged to `develop` as PR #13 at
-`91c4c2029`. `5g-1a`, the legacy Business Partner CRUD write oracle, is now in
-progress; it ships no modern runtime code and, by ADR rule, cannot report parity.
+`91c4c2029`. `5g-1a`, the legacy Business Partner CRUD write oracle, is
+**complete**: PR #16, reviewed head `1a761b55b4d43a1f28a87a7a4a3aae2483d01be8`,
+captured in run 33491714444 and **accepted in run 33497129519**, which scored
+the frozen contract with freezing switched off and reported "A/B self-diff clean
+and both captures match the frozen contract". The two runs are recorded
+separately on purpose: a run that writes the expected answer cannot also be the
+run that proves the expected answer holds. It ships no modern runtime code and,
+by ADR rule, reports no parity.
+
+`5g-1a` produced the programme's first observed business writes through a
+running ADempiere web UI. Creating a business partner writes `C_BPartner`,
+starts a document workflow (`AD_WF_Process`, `AD_WF_Activity`,
+`AD_WF_EventAudit`), creates the three default accounting rows and the menu tree
+node; updating it moves `Name`; a second editor's update moves `UpdatedBy`; the
+first editor's conflicting save is **refused** with "Current record was changed
+by another user, please ReQuery" and writes nothing; deactivation, measured from
+a third session that had only read the row, moves `IsActive`. Ten steps, eight
+frozen fact classes, nine per-step effect documents, two fixture-isolated
+captures that agree, and a recorded domain review. **No modern business write
+has still ever been observed.**
 
 `phase5g1aFinalVerification` is the head of the phase-gate chain:
 
@@ -1050,7 +1070,7 @@ crossed from dark to lit at Phase 5d and now expands.
 | 5d | Migrate the complete ZK compile closure and cross the Testability Milestone at login -> role -> menu -> read-only window | Web UI | 5c |
 | 5e | Prove concurrent client/org/role/user/language/session cleanup and add fail-closed cohort routing | Security/session | 5d (**merged and verified** at `6eda2bc8`; see "Phase 5e decisions and findings") |
 | 5f | Migrate all 82 deployed non-SOAP mappings by independently reversible context; disposition all 30 non-deployed mappings; build isolated generated Jakarta trees and five modern context WARs; preserve `/webui` while adding source-native `/timeline` and the exact static DSP compatibility resource | Web routes | 5e (**merged and verified** at `83aeb8536`; database-neutral gate green twice, six-shard database smoke green in run 33379849664) |
-| 5g | Complete read/write UI, process, report, upload/download, POS, dashboard, server-push, and extension parity. Delivered through sub-increments `5g-0` and `5g-1a` .. `5g-7`; see "Phase 5g decomposition" | Web UI/extensions | 5f (**active**; `5g-0` merged, `5g-1a` in progress) |
+| 5g | Complete read/write UI, process, report, upload/download, POS, dashboard, server-push, and extension parity. Delivered through sub-increments `5g-0` and `5g-1a` .. `5g-7`; see "Phase 5g decomposition" | Web UI/extensions | 5f (**active**; `5g-0` and `5g-1a` merged, `5g-1b` next) |
 | 5h | Finish source-native Jakarta, preserve both historical SOAP paths on final ingress, then remove the router, Tomcat 9, transformer, and ZK 3.6 | Runtime/source | 5g |
 
 #### Risks & mitigations
@@ -1614,25 +1634,54 @@ Two ordering rules bind every Phase 5g increment:
    scored.** Oracle increments ship no modern runtime code; parity increments
    add no new oracle facts.
 
-| Increment | Scope | Ships modern code? |
-|---|---|---|
-| 5g-0 | Phase 5f reconciliation; the Phase 5g ADR; ZK-facing extension/callout/validator discovery; the dictionary-process classification and named 5g-1e fixture; the disabled-context governance amendment | No |
-| 5g-1a (**active**) | The legacy Business Partner CRUD write oracle: a reusable legacy write capture harness, `contracts/legacy-web-write-v1/`, the keyed relational effect model, seed-restore isolation, normalizer mutation proofs, and the recorded domain review. The database-neutral half is delivered and gated by `phase5g1aFinalVerification`, the new chain head; the captured facts and the domain review are **not yet frozen** | **No** |
-| 5g-1b | Modern Business Partner CRUD parity, scored **only** through the public routed `/webui` origin | Yes |
-| 5g-1c | Sales Order draft -> Complete: document status, document number, reservations and tax. **No accounting** | Yes |
-| 5g-1d | The explicit "Post Immediate" action: `Posted='Y'` and balanced `Fact_Acct` | Yes |
-| 5g-1e | One named non-report dictionary process: `AD_PInstance`, parameters, log rows, and an observable completion signal | Yes |
-| 5g-2 | Report parity: `ZkReportViewer`, `ZkJRViewer`, PDF/print output, residual **R4-5d-1** (the JasperReports interactive web viewer), and the two deferred JasperReports `GetMD5File` mappings | Yes |
-| 5g-3 | Upload/download and attachment parity: `WAttachment`, `WMediaDialog`, `WImageDialog`, `WFileImport`, `SimplePDFViewer`, `WArchiveViewer`; byte-cap and content-type contracts | Yes |
-| 5g-4 | Dashboard and server push: `DashboardPanel`, `DPActivities`, `DPRecentItems`, `DashboardRunnable`, `ServerPushTemplate`; Comet -> polling under the existing ZK target ADR | Yes |
-| 5g-5 | Extension and plugin parity, implemented against the 5g-0 inventory | Yes |
-| 5g-6 | POS parity | Yes |
-| 5g-7 | The Phase 5g exit roll-up: screen-level visual comparison, parallel-run performance and error thresholds, full distribution/database CI, the complete rollback rehearsal, the `phase5g-web-parity-gate` disposition gate for `/mobile`, `/adempiere` and `/admin`, and residual/transitional reconciliation | Yes |
+| Increment | Scope | Ships modern code? | Expected answer captured by |
+|---|---|---|---|
+| 5g-0 | Phase 5f reconciliation; the Phase 5g ADR; ZK-facing extension/callout/validator discovery; the dictionary-process classification and named 5g-1e fixture; the disabled-context governance amendment | No | n/a - ships no runtime code |
+| 5g-1a (**complete**, PR #16 at `1a761b55b`) | The legacy Business Partner CRUD write oracle: a reusable legacy write capture harness, `contracts/legacy-web-write-v1/`, the keyed relational effect model, seed-restore isolation, normalizer and ambient-classification mutation proofs, the legacy two-user concurrency answer, and the recorded domain review. Captured in run 33491714444 and accepted in run 33497129519; frozen, self-diffed and scored | **No** | n/a - it *is* the oracle |
+| 5g-1b | Modern Business Partner CRUD parity, scored **only** through the public routed `/webui` origin, including the legacy two-user concurrency answer 5g-1a froze | Yes | **5g-1a** |
+| 5g-1c | Sales Order draft -> Complete: document status, document number, reservations and tax. **No accounting** | Yes | **unassigned - blocking** |
+| 5g-1d | The explicit "Post Immediate" action: `Posted='Y'` and balanced `Fact_Acct` | Yes | **unassigned - blocking** |
+| 5g-1e | One named non-report dictionary process: `AD_PInstance`, parameters, log rows, and an observable completion signal | Yes | **unassigned - blocking** |
+| 5g-1f | Callout-bearing write parity, of which the `C_BPartner_Location` tab (`CalloutBPartnerLocation.formatPhone`) is the first instance, implemented against the 174 callout columns the 5g-0 inventory classified | Yes | **unassigned - blocking** |
+| 5g-2 | Report parity: `ZkReportViewer`, `ZkJRViewer`, PDF/print output, residual **R4-5d-1** (the JasperReports interactive web viewer), and the two deferred JasperReports `GetMD5File` mappings | Yes | **unassigned - blocking** |
+| 5g-3 | Upload/download and attachment parity: `WAttachment`, `WMediaDialog`, `WImageDialog`, `WFileImport`, `SimplePDFViewer`, `WArchiveViewer`; byte-cap and content-type contracts | Yes | **unassigned - blocking** |
+| 5g-4 | Dashboard and server push: `DashboardPanel`, `DPActivities`, `DPRecentItems`, `DashboardRunnable`, `ServerPushTemplate`; Comet -> polling under the existing ZK target ADR | Yes | **unassigned - blocking** |
+| 5g-5 | Extension and plugin parity, implemented against the 5g-0 inventory | Yes | **unassigned - blocking** |
+| 5g-6 | POS parity | Yes | **unassigned - blocking** |
+| 5g-7 | The Phase 5g exit roll-up: screen-level visual comparison, parallel-run performance and error thresholds, full distribution/database CI, the complete rollback rehearsal, the `phase5g-web-parity-gate` disposition gate for `/mobile`, `/adempiere` and `/admin`, and residual/transitional reconciliation | Yes | **unassigned - blocking** |
 
 `5g-7` exists because the Phase 5 exit criteria below - screen-level parity,
 performance and error thresholds, full distribution/database CI, and the
 rollback rehearsal - were otherwise owned by no increment. Without it every
 sub-increment could merge while Phase 5g remained incomplete.
+
+**The "Expected answer captured by" column is new, and most of it is empty.**
+Decision 3 of the ADR forbids a parity increment from adding oracle facts, and
+decision 2 requires the expected answer to be captured from the legacy runtime
+first. Reading those two rules against the table exposes a gap the original
+decomposition did not state: it names exactly **one** oracle increment, `5g-1a`,
+and every increment after it ships modern code. So `5g-1b` has an oracle and
+`5g-1c` through `5g-7` do not.
+
+Each of those introduces a genuinely new behaviour class - a document
+transition, an accounting post, a dictionary process, a rendered report, a byte
+stream, a pushed dashboard update, an extension hook, a POS flow - and none of
+them can be scored against the Phase 5b read-only browser oracle or against
+`contracts/legacy-web-write-v1/`, which is a Business Partner CRUD oracle.
+
+`unassigned - blocking` is therefore a real prerequisite, not a formatting
+placeholder: **an increment marked `unassigned` may not begin.** Naming its
+oracle increment - and merging that oracle, frozen and domain-reviewed - is the
+first task of the increment that precedes it. This is registered as residual
+risk **R11**.
+
+`5g-1f` is new. `contracts/legacy-web-write-v1/exclusions.tsv` originally named
+`5g-1b` as the closing increment for the `C_BPartner_Location` tab, which is not
+possible: 5g-1a deliberately excludes that tab from its capture because
+`CalloutBPartnerLocation.formatPhone` puts callout arithmetic between the window
+and the effect, so 5g-1b would have to invent the expected answer for the very
+thing it scores. Callout-bearing writes are a distinct behaviour class - the
+5g-0 inventory classified 174 callout columns - and now have a named increment.
 
 **Constraints that bind every Phase 5g increment.**
 
@@ -1671,11 +1720,15 @@ sub-increment could merge while Phase 5g remained incomplete.
   and the seed's periods end in 2011, so any order fixture must use a reviewed
   historical date or a marker-owned open period.
 - **Write concurrency is new coverage.** Phase 5e proved identity isolation, not
-  transactional correctness. From 5g-1b onward, add two users editing one
-  record, concurrent writes in different client/org contexts, a
+  transactional correctness. The **legacy** answer for two users editing one
+  `C_BPartner` record is captured, domain-reviewed and frozen by `5g-1a` as
+  `concurrency-facts.tsv`; a parity increment may not invent it. From `5g-1b`
+  onward the modern runtime is scored against that frozen answer, and the matrix
+  additionally adds concurrent writes in different client/org contexts, a
   process-completion test that records the executing identity and proves
   thread-context cleanup, and duplicate-submit protection or an explicit
-  legacy-parity result.
+  legacy-parity result - each against the legacy answer its own oracle
+  increment froze.
 
 **Hazard red-team for Phase 5g.** H1 is not applicable - Phase 5g removes
 nothing. **H2 fires:** ZK CE 10 write-path work is real API work, not

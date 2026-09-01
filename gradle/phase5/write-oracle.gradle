@@ -111,15 +111,64 @@ tasks.register('verifyPhase5gWriteNormalizerMutationProof', Exec) {
 			.findAll { it && !it.startsWith('#') && !it.startsWith('mutation\t') }
 		def detect = rows.findAll { it.split('\t')[1] == 'must-detect' }
 		def normalize = rows.findAll { it.split('\t')[1] == 'must-normalize' }
-		if (detect.size() < 10 || normalize.size() < 4) {
+		if (detect.size() < 10 || normalize.size() < 7) {
 			throw new GradleException(
 				"The normalizer mutation proof scored ${detect.size()} must-detect and " +
 					"${normalize.size()} must-normalize mutation(s); the reviewed set is " +
-					'10 and 4. A shrinking proof is a weakening proof.')
+					'10 and 7. A shrinking proof is a weakening proof.')
 		}
 		logger.lifecycle(
 			"Normalizer mutation proof scored ${detect.size()} defect and " +
 				"${normalize.size()} volatility class(es)")
+	}
+}
+
+tasks.register('verifyPhase5gAmbientClassificationMutationProof', Exec) {
+	group = 'verification'
+	description =
+		'Proves the reviewed ambient-state classification is what decides the undeclared-table backstop'
+	inputs.file phase5g1aScript('measure-write-effect.py')
+	inputs.file phase5g1aScript('verify-ambient-classification-mutation-proof.py')
+	inputs.file phase5g1aContractDir.file('ambient-tables.tsv')
+	outputs.file phase5g1aBuildRoot.map { it.file('ambient-mutations.tsv') }
+	commandLine(
+		'python3',
+		phase5g1aScript('verify-ambient-classification-mutation-proof.py').absolutePath,
+		'--ambient', phase5g1aContractDir.file('ambient-tables.tsv').asFile,
+		'--report', phase5g1aBuildRoot.get().file('ambient-mutations.tsv').asFile)
+	doLast {
+		// Same reasoning as the normalizer proof: the report is written even on
+		// failure, so a green Exec is not on its own evidence that every declared
+		// direction ran. The three directions are re-read here because a proof
+		// that quietly stopped scoring one of them would leave the ambient list
+		// unguarded while still exiting zero.
+		def report = phase5g1aBuildRoot.get().file('ambient-mutations.tsv').asFile
+		if (!report.isFile()) {
+			throw new GradleException('The ambient-classification mutation proof produced no report')
+		}
+		def rows = report.readLines()
+			.findAll { it && !it.startsWith('#') && !it.startsWith('mutation\t') }
+		def directions = rows.collect { it.split('\t')[1] } as Set
+		def expected = ['must-detect', 'must-forgive', 'must-detect-reclassification'] as Set
+		if (directions != expected) {
+			throw new GradleException(
+				"The ambient-classification mutation proof scored ${directions.sort()}; " +
+					"the reviewed set is ${expected.sort()}. A shrinking proof is a " +
+					'weakening proof.')
+		}
+		// Named explicitly, not merely counted: this is the one mutation whose
+		// capture and contract are byte-identical, so it is the only one that
+		// can prove the undeclared-table backstop fires on its own rather than
+		// riding on a payload byte-diff. Losing it would leave three green
+		// directions and no backstop coverage at all.
+		def isolating = 'undeclared-business-table-fails-even-when-the-payload-matches'
+		if (!rows.any { it.startsWith("${isolating}\t") }) {
+			throw new GradleException(
+				"The ambient-classification mutation proof no longer scores '${isolating}', " +
+					'which is the only direction that isolates the undeclared-table backstop.')
+		}
+		logger.lifecycle(
+			"Ambient-classification mutation proof scored ${rows.size()} mutation(s) over ${directions.size()} direction(s)")
 	}
 }
 
@@ -211,12 +260,27 @@ tasks.register('verifyPhase5gWriteOracleManifest') {
 			'fixture.sql': 4000,
 			'exclusions.tsv': 1500,
 			'normalization-policy.md': 2500,
+			// The only file in the contract that can make an unexpected write
+			// acceptable, so it carries a floor and a data-row check like any
+			// other ledger, and a mutation proof besides.
+			'ambient-tables.tsv': 1500,
 			// Deliberately the smallest floor in the set: the "before" capture
 			// legitimately holds only the sentinel and empty scope tables,
 			// because the point of it is that the write has not happened yet.
 			'raw/before.json': 120,
 			'raw/after.json': 800,
 			'raw/README.md': 800,
+			// The captured facts. Floors are an order of magnitude below the
+			// frozen bytes, so ordinary re-capture does not trip them while
+			// truncation to a header does.
+			'write-flow.tsv': 100,
+			'effect-model.tsv': 400,
+			'business-values.tsv': 1000,
+			'foreign-key-graph.tsv': 60,
+			'semantic-facts.tsv': 100,
+			'network-classes.tsv': 80,
+			'concurrency-facts.tsv': 80,
+			'allowed-browser-errors.tsv': 100,
 		]
 		def absent = required.keySet().findAll { !actual.containsKey(it) }
 		if (!absent.isEmpty()) {
@@ -241,7 +305,10 @@ tasks.register('verifyPhase5gWriteOracleManifest') {
 		// or exclusion list reduced to comments asserts nothing while still looking
 		// substantial to a byte-length check.
 		['attribution-scope.tsv', 'attribution.tsv', 'measurement-scope.tsv',
-		 'exclusions.tsv'].each { name ->
+		 'exclusions.tsv', 'ambient-tables.tsv', 'write-flow.tsv',
+		 'effect-model.tsv', 'business-values.tsv', 'foreign-key-graph.tsv',
+		 'semantic-facts.tsv', 'network-classes.tsv', 'concurrency-facts.tsv',
+		 'allowed-browser-errors.tsv'].each { name ->
 			def dataRows = new File(dir, name).readLines()
 				.findAll { !it.trim().isEmpty() && !it.startsWith('#') }
 			if (dataRows.size() < 2) {
@@ -249,6 +316,89 @@ tasks.register('verifyPhase5gWriteOracleManifest') {
 					"contracts/legacy-web-write-v1/${name} carries ${dataRows.size()} " +
 						'non-comment line(s); a header plus at least one data row is required.')
 			}
+		}
+
+		// The step ledgers must agree. A step captured but undeclared, or declared
+		// but uncaptured, is exactly the drift that would let the oracle claim
+		// coverage it does not have -- and neither the byte floor nor the data-row
+		// check can see it, because both files stay substantial either way.
+		def flowRows = new File(dir, 'write-flow.tsv').readLines()
+			.findAll { it && !it.startsWith('#') }
+			.collect { it.split('\t', -1) }
+		// Step 0 is the post-login baseline snapshot. An effect is a diff between
+		// two snapshots, so the baseline has none by construction -- it is the
+		// thing everything else is measured against. Excluding it here is the only
+		// exemption; every other step must appear in both ledgers.
+		def baseline = flowRows.findAll { it[0] == '0' }.collect { it[1] } as Set
+		if (baseline.size() != 1) {
+			throw new GradleException(
+				"write-flow.tsv must declare exactly one step 0 baseline; found ${baseline}")
+		}
+		def flowSteps = (flowRows.collect { it[1] } as Set) - baseline
+		def modelRows = new File(dir, 'effect-model.tsv').readLines()
+			.findAll { it && !it.startsWith('#') && !it.startsWith('step_id\t') }
+		def modelSteps = modelRows.collect { it.split('\t', -1)[0] } as Set
+		if (flowSteps != modelSteps) {
+			throw new GradleException(
+				'The Phase 5g-1a step ledgers disagree. write-flow.tsv declares ' +
+					"${(flowSteps - modelSteps).sort()} that effect-model.tsv does not, and " +
+					"effect-model.tsv declares ${(modelSteps - flowSteps).sort()} that " +
+					'write-flow.tsv does not. A step can be neither captured undeclared nor ' +
+					'declared uncaptured.')
+		}
+
+		// Every indexed effect document must exist, must carry the [step] section
+		// the scorer compares, and must name its own step. `score` strips comments
+		// before comparing, so a document that identified itself only in a header
+		// would let one step's effect score cleanly against another's frozen model.
+		modelRows.each { row ->
+			def fields = row.split('\t', -1)
+			def stepId = fields[0]
+			def document = new File(dir, fields[2])
+			if (!document.isFile()) {
+				throw new GradleException(
+					"effect-model.tsv indexes ${fields[2]}, which does not exist")
+			}
+			def lines = document.readLines()
+			def marker = lines.indexOf('[step]')
+			if (marker < 0 || marker + 1 >= lines.size() || lines[marker + 1] != stepId) {
+				throw new GradleException(
+					"${fields[2]} does not carry a [step] section naming ${stepId}. " +
+						'Without it a step would score against another step\'s frozen answer.')
+			}
+		}
+
+		// The recorded domain review must describe the bytes that are actually
+		// committed. Re-freezing from a different capture changes this digest, so a
+		// sign-off cannot silently carry over to facts nobody reviewed.
+		def readme = new File(dir, 'README.md')
+		def readmeText = readme.text
+		['Not yet present', 'Not yet recorded'].each { phrase ->
+			if (readmeText.contains(phrase)) {
+				throw new GradleException(
+					"contracts/legacy-web-write-v1/README.md still says \"${phrase}\". The " +
+						'facts are frozen, so the increment\'s recorded incompleteness must be ' +
+						'replaced by its recorded review.')
+			}
+		}
+		def factFiles = ['effect-model.tsv', 'business-values.tsv', 'foreign-key-graph.tsv',
+			'semantic-facts.tsv', 'network-classes.tsv', 'concurrency-facts.tsv',
+			'allowed-browser-errors.tsv', 'write-flow.tsv']
+		def reviewDigest = java.security.MessageDigest.getInstance('SHA-256')
+		factFiles.each { name ->
+			reviewDigest.update(name.getBytes('UTF-8'))
+			reviewDigest.update(new File(dir, name).bytes)
+		}
+		new File(dir, 'effect-model').listFiles().sort { it.name }.each { document ->
+			reviewDigest.update(document.name.getBytes('UTF-8'))
+			reviewDigest.update(document.bytes)
+		}
+		def reviewed = reviewDigest.digest().encodeHex().toString()
+		if (!readmeText.contains(reviewed)) {
+			throw new GradleException(
+				"The Phase 5g-1a domain review does not record the committed facts: their " +
+					"digest is ${reviewed}, which README.md does not carry. Re-review the " +
+					'capture and record the new digest.')
 		}
 
 		phase5g1aBuildRoot.get().file('manifest-verified.txt').asFile.with {
@@ -267,5 +417,68 @@ tasks.register('phase5g1aFinalVerification') {
 		tasks.named('verifyPhase5gWriteOracleManifest'),
 		tasks.named('verifyPhase5gWriteAttribution'),
 		tasks.named('verifyPhase5gWriteNormalizerMutationProof'),
+		tasks.named('verifyPhase5gAmbientClassificationMutationProof'),
 		tasks.named('phase5g0FinalVerification'))
+}
+
+// ---------------------------------------------------------------------------
+// The database-backed capture lane.
+// ---------------------------------------------------------------------------
+//
+// Everything above is database-neutral. This is the half that actually observes
+// the legacy runtime, and it is the only half that can produce the oracle.
+
+def phase5g1aProperty = { String name, Object fallback ->
+	rootProject.providers.gradleProperty(name).getOrElse(fallback.toString())
+}
+
+// CI supplies the system password as an environment variable, not as a Gradle
+// property, exactly as every other database-backed gate accepts it. Reading
+// only the property would have made the gate fail in the one place it must run.
+def phase5g1aSystemPassword = rootProject.providers
+	.gradleProperty('phase3DbSystemPassword')
+	.orElse(rootProject.providers.environmentVariable(
+		'ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD'))
+	.getOrElse('')
+
+tasks.register('phase5g1aLegacyWriteOracleSmoke', Exec) {
+	group = 'verification'
+	description =
+		'Captures the legacy Business Partner write flow twice through the public /webui origin and scores both against the frozen oracle'
+	dependsOn tasks.named('phase3AntDatabaseBuild')
+	// The write driver runs in the checksum-verified Phase 5c browser
+	// installation. This increment adds no browser artifact.
+	dependsOn tasks.named('installPhase5cBrowser')
+	commandLine 'bash', phase5g1aScript('run-write-oracle-smoke.sh').absolutePath,
+		phase5g1aProperty('phase3DbHost', '127.0.0.1'),
+		phase5g1aProperty('phase3DbPort', '5432'),
+		phase5g1aProperty('phase3DbName', 'adempiere_phase3_ci'),
+		phase5g1aProperty('phase3DbUser', 'adempiere_phase3_ci'),
+		phase5g1aProperty('phase3DbSystemUser', 'postgres'),
+		'ADempiere Phase 3 disposable database',
+		phase5g1aBuildRoot.get().dir('runtime-evidence').asFile.absolutePath,
+		// Freeze mode is how the oracle is first produced. It is NOT an
+		// acceptance run and the gate never uses it: a run that invents the
+		// expected answer cannot also be the run that verifies it.
+		phase5g1aProperty('phase5g1aFreeze', 'false')
+	environment 'ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD', phase5g1aSystemPassword
+	environment 'ADEMPIERE_PHASE5D_DB_PASSWORD',
+		phase5g1aProperty('phase3DbPassword', 'adempiere_phase3_ci')
+	doFirst {
+		if (!phase5g1aSystemPassword) {
+			throw new GradleException(
+				'-Pphase3DbSystemPassword or ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD is ' +
+					'required: the write oracle lane restores a golden archive and ' +
+					'cannot do so without the system role.')
+		}
+	}
+}
+
+// The Phase 3 cleanup finalizer drops the disposable database. It is attached to
+// phase3AntDatabaseBuild, so without explicit ordering it can run before the
+// capture lane that needs the database still standing -- and the lane would then
+// fail against a database that no longer exists, for a reason that has nothing
+// to do with the oracle.
+tasks.matching { it.name == 'cleanupPhase3Database' }.configureEach { cleanup ->
+	cleanup.mustRunAfter(tasks.named('phase5g1aLegacyWriteOracleSmoke'))
 }

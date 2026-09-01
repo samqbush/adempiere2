@@ -38,19 +38,32 @@ on:
       debug_gate:
         description: >-
           Debug lane. `full` runs the ordinary manual matrix. Any other value
-          runs only that single Phase 5f shard on Current-phase database
-          smoke, and suppresses Contracts and the regression matrix.
+          runs only that single task on Current-phase database smoke, and
+          suppresses Contracts and the regression matrix.
         required: false
         default: full
         type: choice
         options:
           - full
-          - phase5fROOTRoutesSmokeShard
-          - phase5fWstoreRoutesSmokeShard
-          - phase5fWebuiRoutesSmokeShard
-          - phase5fAdminRoutesSmokeShard
-          - phase5fMobileRoutesSmokeShard
-          - phase5fAdempiereRoutesSmokeShard
+          # The whole capture lane, alone. This is the value a freeze run wants:
+          # `full` would also launch the contract graph and seven historical
+          # database-backed smokes, none of which the oracle capture needs.
+          - phase5g1aLegacyWriteOracleSmoke
+          # The browser capture alone, so a selector failure can be reproduced
+          # without the surrounding restore and scoring lane.
+          - phase5g1aWriteOracleCapture
+      # The Phase 5g-1a oracle has to come from somewhere, and a run that
+      # invents the expected answer must not also be the run that verifies it.
+      # Freeze mode is therefore MANUAL ONLY: no pull request, push or nightly
+      # run can reach it, and the acceptance run is a later, ordinary one
+      # against the committed and domain-reviewed files.
+      freeze_write_oracle:
+        description: >-
+          Capture the Phase 5g-1a write oracle and emit candidate contract
+          files instead of scoring against them. NOT an acceptance run.
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -189,14 +202,14 @@ jobs:
             zkwebui/build/libs/webui-modern.war
 
   # The runtime gate for the phase under active development. This slot holds
-  # phase5fJakartaWebRoutesSmoke, and this job is meant to reflect the state of
-  # the phase under development.
+  # phase5g1aLegacyWriteOracleSmoke; phase5fJakartaWebRoutesSmoke has been
+  # retired into the regression matrix below.
   #
-  # All six route shards execute in a single run. Run 33379849664 recorded 129
-  # observations with zero vector failures - / (16), /wstore (68), /webui (6),
-  # /admin (4), /mobile (14), /adempiere (21) - and passed the strict aggregate
-  # verifyPhase5fRuntimeEvidence. The gate is GREEN.
-  # See docs/modernization/phase-5f-evidence.md.
+  # The gate captures the legacy Business Partner write flow twice, from an
+  # independently restored database each time, and scores both against the
+  # frozen oracle. It observes the LEGACY runtime only: no modern business
+  # write is executed or claimed here.
+  # See docs/modernization/phase-5f-evidence.md for the outgoing gate.
   current-phase-smoke:
     name: Current-phase database smoke
     runs-on: ubuntu-24.04
@@ -207,10 +220,11 @@ jobs:
     # is deliberately loose enough that the always() evidence upload and the
     # marker-guarded database cleanup still run.
     #
-    # Raised from 90 with --continue below: the job no longer stops at the
-    # first failing shard, so a run now executes the whole matrix. Setup is
-    # roughly 22 minutes and the dump-backed observation matrix is roughly 81,
-    # which does not fit in 90. The GitHub-hosted ceiling is 360.
+    # Setup alone is roughly 22 minutes, and this lane then performs two full
+    # captures, each preceded by a golden-archive restore, a quiescence
+    # re-verification and a container restart, with a whole-schema snapshot
+    # between every one of nine steps. 180 is a backstop against a hang, not a
+    # budget; the GitHub-hosted ceiling is 360. Revisit once the gate has run.
     timeout-minutes: 180
     services:
       postgres:
@@ -248,8 +262,18 @@ jobs:
             ${{ (github.event_name == 'workflow_dispatch'
                  && inputs.debug_gate != 'full')
                 && inputs.debug_gate
-                || 'phase5fJakartaWebRoutesSmoke' }}
-          args: --continue
+                || 'phase5g1aLegacyWriteOracleSmoke' }}
+          # --continue is deliberately NOT inherited from the Phase 5f shard
+          # matrix. That gate had six independent shards and wanted every data
+          # point per run. This gate is one sequential lane whose later steps
+          # are meaningless once an earlier one fails: continuing past a failed
+          # capture would score a half-driven flow against the frozen oracle
+          # and report a second, derived failure that explains nothing.
+          args: >-
+            ${{ (github.event_name == 'workflow_dispatch'
+                 && inputs.freeze_write_oracle)
+                && '-Pphase5g1aFreeze=true'
+                || '' }}
       # build/phase5e/keys holds the generated handoff secret and is excluded
       # from every path below. A CI artifact is a published archive.
       - name: Upload current-phase runtime evidence
@@ -259,13 +283,12 @@ jobs:
           name: current-phase-smoke-evidence
           if-no-files-found: warn
           path: |
-            build/phase5f/runtime-evidence/
-            build/phase5f/tomcat10/logs/
-            build/phase5e/evidence/
+            build/phase5g1a/runtime-evidence/
+            build/phase5g1a/normalizer-mutations.tsv
+            build/phase5g1a/ambient-mutations.tsv
             build/phase3/runtime/Adempiere/tomcat/logs/
-            build/phase5e/tomcat10/logs/
-            zkwebui/build/test-results/routedBrowserTest/
-            zkwebui/build/reports/tests/routedBrowserTest/
+            zkwebui/build/test-results/writeOracleTest/
+            zkwebui/build/reports/tests/writeOracleTest/
 
   # --------------------------------------------------------------------------
   # Lane 2: post-merge regression matrix. Non-blocking by design.
@@ -285,7 +308,12 @@ jobs:
       && (github.event_name != 'workflow_dispatch'
           || inputs.debug_gate == 'full')
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    # Raised from 90 when phase5fJakartaWebRoutesSmoke was retired into this
+    # matrix. That gate needed 180 as the current-phase job, and a regression
+    # lane that times out the gate it inherited would report an infrastructure
+    # failure as a regression. The other five finish well inside it, and an
+    # unused ceiling costs nothing.
+    timeout-minutes: 180
     strategy:
       # One phase failing must not hide the state of the others.
       fail-fast: false
@@ -297,6 +325,7 @@ jobs:
           - phase5cRollbackRehearsal
           - phase5dModernWebSmoke
           - phase5eCohortRoutingSmoke
+          - phase5fJakartaWebRoutesSmoke
     services:
       postgres:
         image: postgres:14.6
@@ -323,6 +352,14 @@ jobs:
         uses: ./.github/actions/adempiere-build
         with:
           task: ${{ matrix.gate }}
+          # --continue belongs to the Phase 5f route matrix alone: it has six
+          # independent shards and verifyPhase5fRuntimeEvidence dependsOn all
+          # of them, so the build still fails while the run reports the whole
+          # matrix. Applying it to the sequential gates would only produce
+          # cascades of derived failures.
+          args: >-
+            ${{ matrix.gate == 'phase5fJakartaWebRoutesSmoke'
+                && '--continue' || '' }}
       - name: Upload ${{ matrix.gate }} evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -348,6 +385,8 @@ jobs:
             base/build/phase3/evidence/
             base/build/test-results/
             base/build/reports/tests/
+            build/phase5f/runtime-evidence/
+            build/phase5f/tomcat10/logs/
             zkwebui/build/phase5c/browser/
             zkwebui/build/test-results/
             zkwebui/build/reports/tests/
