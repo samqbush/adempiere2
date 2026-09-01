@@ -286,7 +286,8 @@ class LegacyBusinessPartnerWriteOracleTest {
 				+ " + e.className + '#toolbar=' + e.querySelectorAll("
 				+ "'a.toolbar-button').length).join('|')");
 		probes.put("labels", "() => Array.from(document.querySelectorAll("
-				+ "'span.z-label, td.z-row-cell span')).slice(0, 200)"
+				+ "'span.z-label, td.z-row-cell span, td.z-row-cell label, label'))"
+				+ ".slice(0, 400)"
 				+ ".map(e => e.textContent).join('|')");
 		List<String> lines = new ArrayList<>();
 		for (Map.Entry<String, String> probe : probes.entrySet()) {
@@ -381,7 +382,7 @@ class LegacyBusinessPartnerWriteOracleTest {
 		// an unfiltered .first() can resolve to a button nobody can click.
 		if (searchKey != null) {
 			Locator search = dialog
-					.locator("xpath=.//td[normalize-space(text())='Search Key']"
+					.locator("xpath=.//td[normalize-space(.)='Search Key']"
 							+ "/following-sibling::td[1]//input")
 					.first();
 			search.waitFor();
@@ -395,7 +396,7 @@ class LegacyBusinessPartnerWriteOracleTest {
 	}
 
 	private void create(Page page) {
-		click(page, "New record");
+		click(page, "New Record");
 		// The C_BPartner.Value column is labelled "Search Key" in the dictionary;
 		// "Value" matches no cell in the rendered form.
 		fill(page, "Search Key", recordValue);
@@ -415,7 +416,7 @@ class LegacyBusinessPartnerWriteOracleTest {
 	 */
 	private void deactivate(Page page) {
 		Locator active = tabPanel(page)
-				.locator("xpath=.//td[normalize-space(text())='Active']"
+				.locator("xpath=.//td[normalize-space(.)='Active']"
 						+ "/following-sibling::td[1]//input[@type='checkbox']")
 				.first();
 		active.waitFor();
@@ -482,11 +483,11 @@ class LegacyBusinessPartnerWriteOracleTest {
 		if (value.equals(valueField.inputValue())) {
 			return;
 		}
-		click(page, "Find record");
+		click(page, "Lookup Record");
 		Locator dialog = page.locator("div.z-window-modal").first();
 		dialog.waitFor();
 		Locator search = dialog
-				.locator("xpath=.//td[normalize-space(text())='Search Key']"
+				.locator("xpath=.//td[normalize-space(.)='Search Key']"
 						+ "/following-sibling::td[1]//input")
 				.first();
 		search.waitFor();
@@ -525,9 +526,17 @@ class LegacyBusinessPartnerWriteOracleTest {
 		return disabled ? "accepted" : "rejected-save-still-enabled";
 	}
 
+	/**
+	 * The input beside a field label.
+	 *
+	 * <p>Matched on the cell's string value, not on a direct text child. Run
+	 * 33473508442 recorded the window's captions as the text of nested
+	 * {@code span} elements, and {@code normalize-space(text())} sees only a
+	 * cell's own text node -- so it would have matched nothing here.
+	 */
 	private Locator labelledInput(Page page, String label) {
 		return tabPanel(page)
-				.locator("xpath=.//td[normalize-space(text())='" + label + "']"
+				.locator("xpath=.//td[normalize-space(.)='" + label + "']"
 						+ "/following-sibling::td[1]//input")
 				.first();
 	}
