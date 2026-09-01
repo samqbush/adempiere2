@@ -1,5 +1,4 @@
 # path	disposition	rationale
-.github/copilot-instructions.md	retain-evidence	Keep the completed XFire-to-CXF compatibility history synchronized.
 ARCHITECTURE.md	retain-evidence	Keep the historical architecture and migration decision explicit.
 docs/modernization/phase-4-evidence.md	retain-evidence	Retain the approved legacy oracle, rollback, and removal evidence.
 docs/modernization/phase-4-transitional-state.md	retain-evidence	Record the now-closed T4-1 dual-runtime state and controls.
