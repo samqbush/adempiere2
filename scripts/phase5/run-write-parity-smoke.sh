@@ -85,6 +85,12 @@ bash "$scripts_dir/run-write-parity-h6-matrix.sh" \
 # One comparable lifecycle model from the phases the lane and the matrix each
 # observed separately: before and after each capture's authenticated write, and
 # the logout/timeout cases H6 restores the seed for.
+#
+# The output is removed first because it lives in the directory the glob reads:
+# left in place, a second run against the same evidence root would fold the
+# previous run's rows back in, doubling every phase and leaving a reader unable
+# to tell which run a `post-A` row came from.
+rm -f "$evidence_root/session-evidence/session-lifecycle.tsv"
 cat "$evidence_root"/session-evidence/*.tsv \
   >"$evidence_root/session-evidence/session-lifecycle.tsv.partial"
 mv "$evidence_root/session-evidence/session-lifecycle.tsv.partial" \

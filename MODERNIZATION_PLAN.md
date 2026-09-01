@@ -1049,23 +1049,70 @@ first editor's conflicting save is **refused** with "Current record was changed
 by another user, please ReQuery" and writes nothing; deactivation, measured from
 a third session that had only read the row, moves `IsActive`. Ten steps, eight
 frozen fact classes, nine per-step effect documents, two fixture-isolated
-captures that agree, and a recorded domain review. **No modern business write
-has still ever been observed.**
+captures that agree, and a recorded domain review.
 
-`phase5g1aFinalVerification` is the head of the phase-gate chain:
+`5g-1b`, modern Business Partner CRUD parity, is **in progress**. It is the
+increment that finally observes a modern business write: the modern ZK CE
+`10.3.0.1-jakarta` / Tomcat 10.1 runtime, driven **only** through the public
+routed `/webui` origin, scored against the answer `5g-1a` froze and `5g-1a-x`
+amended. `contracts/legacy-web-write-v1/` is **read-only** in it, and there is
+deliberately **no** modern contract tree and **no** runtime-divergence list: a
+list of acceptable differences written after the modern runtime has been
+observed lets an increment decide, with the answers in front of it, which of its
+own failures do not count. If the modern conflicting save is not refused, that is
+a parity failure and a modern defect to fix.
+
+Its shape, in four parts. A **selector-dialect seam** reduced the 1036-line
+legacy driver to a 44-line binding over one shared, invariant flow, with
+`Zk36Dialect` (moved verbatim, then declared closed) and `ZkCe10Dialect` as
+siblings; a dialect may express only how a control is located, operated and
+awaited, never normalize a behavioural difference away. A **routed capture lane**
+reuses the legacy golden-dump/quiesce/restore/fixture cycle, taking its two
+container lifecycles as an adapter rather than as a lane name, confirming both
+runtimes are stopped before database sessions are terminated, and running an
+ambient census after every restore - because quiescence is a statement about
+configuration, the modern runtime is new to this database, and Phase 5f already
+found a first-touch writer no configuration disables. A **non-business
+`AD_Session` lifecycle model** records what the sentinel cannot see, since
+`AD_Session` is ambient and unkeyed. And a **fail-closed evidence validator**
+refuses, rather than repairs, anything that would let a green Gradle status be
+cited without proof of what produced it.
+
+The failure mode that shaped the design is that **a green can lie**. Every
+observation in a capture is runtime-blind - one public origin, normalized URLs,
+the product's own database effects - so a routed lane whose cohort decision,
+handoff or proxy failed **closed** would serve the legacy application, score a
+perfect green against the legacy oracle, and report modern parity. Both dialects
+therefore implement `identifyServingRuntime`, asserted per capture by the lane
+and again by the validator. Relatedly, `reset-cohort-config.sh verify` compares
+only the total `AD_SysConfig` row count and is recorded as a tamper check, not as
+proof of routing.
+
+`phase5g1bFinalVerification` is the head of the phase-gate chain:
 
 ```bash
-./gradlew phase5g1aFinalVerification --dependency-verification=strict
+./gradlew phase5g1bFinalVerification --dependency-verification=strict
 ```
 
-It verifies the `contracts/legacy-web-write-v1/` manifest and its required-file
-floor, re-derives the table-scoped callout and registered-validator attribution
-to prove `C_BPartner` carries neither, and scores the write-capture normalizer in
-**both** directions - ten defect classes must be detected and four volatility
-classes must be normalized away - against a committed raw fixture. The captured
-legacy write facts and the recorded domain review are **not yet frozen**;
-`contracts/legacy-web-write-v1/README.md` names each absent file rather than
-omitting it silently.
+It proves the runtime evidence validator rejects all 17 declared defect classes -
+a fail-closed check that silently never fires is worse than no check, because it
+accepts what it should refuse, quietly, forever - and asserts the lane invariants
+that keep a parity increment from producing the answer it is scored against. It
+chains `phase5g1aFinalVerification`, which verifies the
+`contracts/legacy-web-write-v1/` manifest and its required-file floor, re-derives
+the table-scoped callout and registered-validator attribution to prove
+`C_BPartner` carries neither, and scores the write-capture normalizer in **both**
+directions against a committed raw fixture.
+
+`phase5g1bModernWriteParitySmoke` is the current-phase database smoke and **has
+not yet been executed**. It deliberately depends on
+`phase5g1aLegacyWriteOracleSmoke`, so the legacy oracle is re-proven at pull
+request HEAD: `5g-1b` refactored the legacy driver, so the legacy answer now
+depends on code this branch touched, and proving it only on an intermediate
+commit or only post-merge would let the final PR silently move the answer it is
+scoring against. Modern write-path defects are **expected, not exceptional** -
+Phase 5d proved login, role, menu and a read-only window only. See
+`docs/modernization/phase-5g-1b-evidence.md`.
 
 **Regime:** Legacy ZK/Tomcat 9 remains lit; the modern ZK/Tomcat 10.1 slice
 crossed from dark to lit at Phase 5d and now expands.

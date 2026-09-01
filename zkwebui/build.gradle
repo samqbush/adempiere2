@@ -1314,6 +1314,34 @@ tasks.register('phase5g1bModernWriteParityCapture', Test) {
 	testClassesDirs = sourceSets.writeParityTest.output.classesDirs
 	classpath = sourceSets.writeParityTest.runtimeClasspath
 	phase5gWriteCaptureConfiguration(it)
+	// The writeParityTest source set now holds a second, unrelated control
+	// (ModernNoLegacyFallbackTest). Each capture task selects exactly its own
+	// class so adding the second one did not silently pull the whole set into
+	// this task and drive an H6 fault primitive during the write capture.
+	filter {
+		includeTestsMatching 'org.adempiere.webui.phase5g1b.ModernBusinessPartnerWriteParityTest'
+	}
+}
+
+// The H6 no-legacy-fallback control (design item E, row
+// h6-no-legacy-fallback-mid-write). It ports the mechanics of
+// RoutedCohortMatrixTest.backendOutageNeverFallsBack() into a class the H6
+// matrix can select on its own, reusing the same write-capture configuration
+// (same public origin, same credentials, same verified browser) plus the lane
+// script it needs to stop and start the modern backend. It writes its verdict
+// to no-legacy-fallback.tsv in the evidence directory the caller passes with
+// -Pphase5g1aEvidenceDir, so the H6 script reads a real result.
+tasks.register('phase5g1bNoLegacyFallbackCapture', Test) {
+	group = 'verification'
+	description = 'Asserts a modern write session never falls back to legacy when the backend dies'
+	testClassesDirs = sourceSets.writeParityTest.output.classesDirs
+	classpath = sourceSets.writeParityTest.runtimeClasspath
+	phase5gWriteCaptureConfiguration(it)
+	systemProperty 'phase5g1b.laneScript',
+		rootProject.file('scripts/phase5/capture-routed-lane.sh').absolutePath
+	filter {
+		includeTestsMatching 'org.adempiere.webui.phase5g1b.ModernNoLegacyFallbackTest'
+	}
 }
 
 // ---------------------------------------------------------------------------

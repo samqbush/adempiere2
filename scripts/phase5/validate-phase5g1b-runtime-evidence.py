@@ -21,6 +21,7 @@ import hashlib
 import json
 import subprocess
 from pathlib import Path
+from xml.etree import ElementTree
 
 CAPTURES = ("A", "B")
 
@@ -28,6 +29,20 @@ CAPTURES = ("A", "B")
 # mode. Phase 5g-1b may only ever have run in scoring mode; see
 # run-write-parity-smoke.sh for why it cannot even accept the argument.
 FREEZE_MARKER = ("mode", "freeze")
+
+# A full seed restore drops, recreates and reloads the database and restarts
+# both Tomcats. Nothing resembling that finishes in under a minute, so a
+# shorter recorded interval means the capture did not restore.
+MIN_RESTORE_SECONDS = 60
+
+# sha256 of contracts/legacy-web-write-v1/manifest.sha256 as Phase 5g-1a froze
+# it and its acceptance run scored it. Pinned here, OUTSIDE the contract tree,
+# so that re-freezing the legacy oracle inside a parity increment cannot be
+# done silently: regenerating the manifest would make the walk above agree
+# again, but it cannot make these bytes agree without an explicit edit to this
+# constant, which a reviewer sees in the diff. Change it only in an increment
+# whose own claim is to produce a new legacy answer.
+FROZEN_MANIFEST_SHA256 = "5fc4ee2960f94899656591e9e8f14e2d4f042e33c03e67ccd3df779dcb4c999a"
 
 H6_ROWS = (
     "h6-loopback-origin-unreached",
@@ -65,19 +80,30 @@ def keyed(path: Path) -> dict[str, str]:
 
 
 def contract_manifest_digest(contract: Path) -> tuple[str, str]:
-    """Recompute the frozen contract's manifest digest from its own bytes.
+    """Re-derive the frozen contract's manifest digest from its own bytes.
 
-    The manifest is what every other Phase 5g gate hashes, so re-deriving it
-    here catches the case this validator is really guarding: a branch that
-    edited the frozen legacy answer and then scored the modern runtime against
-    the edit. That is the cheapest possible way to turn a parity failure into a
-    parity pass, and it leaves no other trace in the runtime evidence.
+    Two distinct guards live here, and only together do they cover the case
+    this validator exists for -- a branch that edits the frozen legacy answer
+    and then scores the modern runtime against the edit, which is the cheapest
+    possible way to turn a parity failure into a parity pass and leaves no
+    other trace in the runtime evidence.
+
+    Walking the manifest catches an edit whose author forgot to regenerate it.
+    On its own that is only an honesty check, because regenerating the manifest
+    is a single Gradle command after which files and manifest agree again. So
+    the caller additionally compares the manifest's own bytes against
+    FROZEN_MANIFEST_SHA256 below, pinned from the 5g-1a acceptance run. Any
+    re-freeze inside a parity increment must then also edit that constant,
+    which is a reviewable act in the diff rather than a silent one.
     """
     manifest = contract / "manifest.sha256"
     recorded = hashlib.sha256(manifest.read_bytes()).hexdigest()
     digest = hashlib.sha256()
     for line in manifest.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
+        # The generator emits comment headers (write-oracle.gradle), which are
+        # not digest rows. verifyPhase5gWriteOracleManifest filters them the
+        # same way; a validator that parsed them would reject every real run.
+        if not line.strip() or line.lstrip().startswith("#"):
             continue
         expected_hex, name = line.split(None, 1)
         name = name.strip()
@@ -179,13 +205,16 @@ def check_capture(root: Path, label: str, contract: Path,
                 f"capture {label} step ledger differs from the frozen contract: "
                 f"missing {sorted(want - got)}, unexpected {sorted(got - want)}")
 
-    # Independently restored from the same verified archive. Two captures taken
-    # from one restore are not an A/B: they share every accident of the state
-    # they started in, so their agreement proves nothing about reproducibility.
+    # Which archive this capture restored, and when. The cross-capture
+    # comparison in check_restores() is what turns this into a statement about
+    # independence; here we only require that the capture recorded it at all.
     if not missing("restore.tsv"):
         restore = keyed(capture / "restore.tsv")
         if not restore.get("golden_sha256"):
             problems.append(f"capture {label} does not record the archive it restored")
+        if not restore.get("restored_at") or not restore.get("restore_started_at"):
+            problems.append(
+                f"capture {label} does not bracket the restore it performed")
 
     census = capture / "census" / "census.tsv"
     if not census.is_file():
@@ -195,6 +224,64 @@ def check_capture(root: Path, label: str, contract: Path,
     elif keyed(census).get("verdict") != "pass":
         problems.append(f"capture {label} ambient census did not pass")
 
+    return problems
+
+
+def check_restores(root: Path) -> list[str]:
+    """A/B must be two restores of ONE archive, not two captures of one restore.
+
+    Two captures taken from a single restore are not an A/B: they share every
+    accident of the state they started in, so their agreement proves nothing
+    about reproducibility. The archive digest alone cannot distinguish the two
+    cases -- it is byte-identical either way by construction -- so the lane
+    brackets each restore with the instants it started and finished.
+
+    Bracketing, rather than a single stamp taken beside the restore call, is
+    what binds the record to the restore having actually run: a full seed
+    restore takes minutes, so a capture that skipped it records a near-zero
+    interval, and two captures sharing one restore record overlapping
+    intervals.
+    """
+    problems: list[str] = []
+    seen: dict[str, dict[str, str]] = {}
+    for label in CAPTURES:
+        path = root / label / "restore.tsv"
+        if path.is_file():
+            seen[label] = keyed(path)
+    if len(seen) < len(CAPTURES):
+        return problems  # per-capture checks already reported the absence
+
+    digests = {label: values.get("golden_sha256", "") for label, values in seen.items()}
+    if len(set(digests.values())) != 1:
+        problems.append(
+            f"the captures restored different archives ({digests}), so they are "
+            "not an A/B of one verified seed")
+
+    intervals: dict[str, tuple[int, int]] = {}
+    for label, values in seen.items():
+        try:
+            started = int(values["restore_started_at"])
+            finished = int(values["restored_at"])
+        except (KeyError, ValueError):
+            problems.append(
+                f"capture {label} does not bracket its restore with readable "
+                "start and finish instants")
+            continue
+        if finished - started < MIN_RESTORE_SECONDS:
+            problems.append(
+                f"capture {label} records a {finished - started}s restore. A full "
+                f"seed restore takes minutes, so anything under "
+                f"{MIN_RESTORE_SECONDS}s means the capture did not restore")
+        intervals[label] = (started, finished)
+
+    if len(intervals) == len(CAPTURES):
+        (first_start, first_end), (second_start, second_end) = (
+            intervals[label] for label in CAPTURES)
+        if not (first_end <= second_start or second_end <= first_start):
+            problems.append(
+                f"the captures' restore intervals overlap ({intervals}), so the "
+                "second capture reused the first capture's restore rather than "
+                "independently restoring")
     return problems
 
 
@@ -210,8 +297,10 @@ def check_scoring(root: Path) -> list[str]:
             "answer cannot also be the run that verifies it")
     if summary.get("self-diff") != "pass":
         problems.append("the A/B self-diff did not pass, so the capture is not reproducible")
-    if summary.get("problems") not in (None, "0"):
-        problems.append(f"the scorer reported {summary['problems']} problem(s)")
+    if summary.get("problems") != "0":
+        problems.append(
+            "the scorer reported "
+            f"{summary.get('problems', 'an unreadable problem count')}")
     return problems
 
 
@@ -265,15 +354,45 @@ def check_lane(root: Path) -> list[str]:
     return problems
 
 
-def check_junit(root: Path, repo_root: Path) -> list[str]:
-    """A gate that reported success while executing no test is not coverage."""
-    reports = list((repo_root / "zkwebui" / "build" / "test-results").glob(
-        "phase5g1bModernWriteParityCapture/*.xml"))
-    if not reports:
-        return ["no JUnit XML was produced by the modern parity capture"]
-    if not any(report.stat().st_size > 0 for report in reports):
-        return ["the modern parity capture produced only empty JUnit reports"]
-    return []
+def check_junit(root: Path) -> list[str]:
+    """A gate that reported success while executing no test is not coverage.
+
+    Read the report the LANE copied into each capture directory, not the
+    shared Gradle build directory. Gradle does not clean `build/test-results`
+    between invocations, and the H6 matrix re-invokes the same capture task for
+    its session-lifecycle row, so the shared directory can hold a report from
+    an earlier run, an earlier commit, or a different row entirely -- any of
+    which would satisfy a mere existence check while proving nothing about
+    captures A and B.
+    """
+    problems: list[str] = []
+    for label in CAPTURES:
+        reports = sorted((root / label / "junit").glob("*.xml"))
+        if not reports:
+            problems.append(
+                f"capture {label} produced no JUnit XML, so nothing proves its "
+                "browser driver executed")
+            continue
+        tests = failures = errors = 0
+        for report in reports:
+            try:
+                suite = ElementTree.parse(report).getroot()
+            except ElementTree.ParseError as exc:
+                problems.append(f"capture {label} JUnit report {report.name} is malformed: {exc}")
+                continue
+            for element in ([suite] if suite.tag == "testsuite" else suite.iter("testsuite")):
+                tests += int(element.get("tests", "0"))
+                failures += int(element.get("failures", "0"))
+                errors += int(element.get("errors", "0"))
+        if tests < 1:
+            problems.append(
+                f"capture {label} JUnit reports declare {tests} tests. A suite "
+                "that executed nothing is not evidence that the write ran")
+        if failures or errors:
+            problems.append(
+                f"capture {label} JUnit reports declare {failures} failure(s) "
+                f"and {errors} error(s)")
+    return problems
 
 
 def main() -> int:
@@ -284,6 +403,13 @@ def main() -> int:
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--summary", required=True, type=Path)
     parser.add_argument("--modern-port", default=None)
+    parser.add_argument(
+        "--expect-manifest-sha256", default=FROZEN_MANIFEST_SHA256,
+        help="Expected sha256 of the frozen contract's manifest.sha256 bytes. "
+             "Defaults to the digest Phase 5g-1a froze and accepted. Overridden "
+             "ONLY by this validator's own mutation proof, which scores a "
+             "synthetic contract; verifyPhase5g1bLaneInvariants fails if the "
+             "smoke script ever passes it.")
     args = parser.parse_args()
 
     modern_port = args.modern_port
@@ -304,14 +430,20 @@ def main() -> int:
             f"the frozen legacy contract does not match its own manifest ({derived}). "
             "Scoring the modern runtime against an edited answer is the cheapest "
             "possible way to turn a parity failure into a parity pass")
+    if recorded != args.expect_manifest_sha256:
+        problems.append(
+            f"the frozen legacy contract manifest is {recorded}, not the "
+            f"{args.expect_manifest_sha256} Phase 5g-1a froze and accepted. A "
+            "parity increment may not re-freeze the answer it is scored against")
 
     for label in CAPTURES:
         problems += check_capture(
             args.evidence_root, label, args.contract, args.base_url, modern_port)
+    problems += check_restores(args.evidence_root)
     problems += check_scoring(args.evidence_root)
     problems += check_lane(args.evidence_root)
     problems += check_h6(args.evidence_root)
-    problems += check_junit(args.evidence_root, args.repo_root)
+    problems += check_junit(args.evidence_root)
 
     args.summary.parent.mkdir(parents=True, exist_ok=True)
     args.summary.write_text(

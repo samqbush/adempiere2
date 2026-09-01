@@ -64,13 +64,26 @@ def build_contract(contract: Path, steps: list[str]) -> None:
           "".join(f"{index}\t{step}\n" for index, step in enumerate(steps)))
     write(contract / "ambient-tables.tsv", "ad_session\n")
     # The manifest is the thing every other Phase 5g gate hashes, so the
-    # synthetic contract carries a real one rather than a placeholder.
-    lines = []
+    # synthetic contract carries a real one -- in the REAL generator's format,
+    # comment headers and tab separators included (write-oracle.gradle). A
+    # fixture in a format the generator never emits would let the validator's
+    # manifest parser drift away from the real contract undetected, which is
+    # exactly how a comment-line parsing defect survived earlier review.
+    import hashlib
+    rows = []
     for name in sorted(p.name for p in contract.iterdir() if p.is_file()):
-        import hashlib
         digest = hashlib.sha256((contract / name).read_bytes()).hexdigest()
-        lines.append(f"{digest}  {name}")
-    write(contract / "manifest.sha256", "\n".join(lines) + "\n")
+        rows.append(f"{digest}\t{name}")
+    write(contract / "manifest.sha256",
+          "# Phase 5g-1a legacy Business Partner write oracle manifest\n"
+          "# SHA-256 over every file in contracts/legacy-web-write-v1/ except this file.\n"
+          "# sha256\tpath\n"
+          + "".join(f"{row}\n" for row in rows))
+
+
+def manifest_sha256(contract: Path) -> str:
+    import hashlib
+    return hashlib.sha256((contract / "manifest.sha256").read_bytes()).hexdigest()
 
 
 def build_evidence(root: Path, contract: Path, head: str, steps: list[str]) -> None:
@@ -108,12 +121,24 @@ def build_evidence(root: Path, contract: Path, head: str, steps: list[str]) -> N
               "".join(f"{index}\t{step}\n" for index, step in enumerate(steps)))
         for name in FACT_CLASSES:
             write(capture / name, "key\tvalue\n")
-        write(capture / "restore.tsv", f"label\t{label}\ngolden_sha256\tdeadbeef\n")
+        # Bracketed, disjoint, and long enough to look like a real restore.
+        started = 1000 if label == "A" else 5000
+        write(capture / "restore.tsv",
+              f"label\t{label}\n"
+              f"restore_started_at\t{started}\n"
+              f"restored_at\t{started + 600}\n"
+              "golden_sha256\tdeadbeef\n")
+        # The lane copies each capture's JUnit report into the capture itself,
+        # so the fixture does too. Reading the shared Gradle build directory
+        # would let a stale report from an earlier run stand in for this one.
+        write(capture / "junit" / "results.xml",
+              '<testsuite tests="1" failures="0" errors="0"/>\n')
         write(capture / "census" / "census.tsv",
               "label\t%s\nquiet_seconds\t20\nverdict\tpass\n" % label)
 
 
-def run(root: Path, contract: Path, junit: Path) -> tuple[int, str]:
+def run(root: Path, contract: Path, junit: Path,
+        expect_manifest: str | None = None) -> tuple[int, str]:
     result = subprocess.run(
         [sys.executable, str(VALIDATOR),
          "--evidence-root", str(root),
@@ -121,12 +146,45 @@ def run(root: Path, contract: Path, junit: Path) -> tuple[int, str]:
          "--repo-root", str(junit),
          "--base-url", BASE_URL,
          "--modern-port", MODERN_PORT,
+         # The synthetic contract is not the frozen one, so the proof states
+         # its expected manifest digest explicitly rather than disabling the
+         # pinned check -- which would leave the increment's central
+         # anti-self-scoring guard unexercised.
+         "--expect-manifest-sha256", expect_manifest or manifest_sha256(contract),
          "--summary", str(root / "validation-summary.tsv")],
         capture_output=True, text=True)
     return result.returncode, result.stdout + result.stderr
 
 
 def main() -> int:
+    # The pinned constant is the increment's central governance guard, and the
+    # mutation proof always overrides it (it scores a synthetic contract), so
+    # nothing else on a pull request ever exercises its real value. Check it
+    # against the tree here. Otherwise a constant left stale by a legitimate
+    # re-freeze -- or a mistyped one -- stays green through every fast gate and
+    # surfaces only at the END of the hour-long lane, after both captures, the
+    # scorer and the whole H6 matrix have already run: exactly the failure
+    # shape this proof exists to catch, one level up.
+    import hashlib
+    import re
+    frozen_manifest = REPO_ROOT / "contracts" / "legacy-web-write-v1" / "manifest.sha256"
+    actual = hashlib.sha256(frozen_manifest.read_bytes()).hexdigest()
+    # Read the constant from the source text rather than importing the module.
+    # Importing it goes through __pycache__, which can serve a previously
+    # compiled copy of the very constant this check exists to re-read.
+    match = re.search(r'^FROZEN_MANIFEST_SHA256 = "([0-9a-f]+)"',
+                      VALIDATOR.read_text(encoding="utf-8"), re.MULTILINE)
+    if match is None:
+        print(f"{VALIDATOR.name} no longer pins FROZEN_MANIFEST_SHA256")
+        return 1
+    pinned = match.group(1)
+    if actual != pinned:
+        print("the pinned FROZEN_MANIFEST_SHA256 does not match the frozen contract:")
+        print(f"  contracts/legacy-web-write-v1/manifest.sha256 is {actual}")
+        print(f"  validate-phase5g1b-runtime-evidence.py pins  {pinned}")
+        print("Re-pin the constant in the same commit that re-freezes the oracle.")
+        return 1
+
     steps = ["baseline", "create", "update", "conflicting-save"]
     head = subprocess.run(
         ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"],
@@ -136,13 +194,9 @@ def main() -> int:
         base = Path(scratch)
         contract = base / "contract"
         pristine = base / "pristine"
-        # The validator reads JUnit XML from a repository-shaped tree, so the
-        # fixture supplies one rather than pointing at the real build directory,
-        # whose contents depend on what happened to run last.
+        # The validator resolves the modern port from a repository-shaped tree
+        # and pins evidence to its git HEAD, so the fixture supplies one.
         junit_root = base / "repo"
-        write(junit_root / "zkwebui" / "build" / "test-results"
-              / "phase5g1bModernWriteParityCapture" / "results.xml",
-              "<testsuite tests='1'/>\n")
         write(junit_root / "gradle" / "phase4" / "runtime.properties",
               f"api.port={MODERN_PORT}\n")
         subprocess.run(["git", "init", "-q", str(junit_root)], check=True)
@@ -186,6 +240,23 @@ def main() -> int:
              lambda root: write(root / "A" / "census" / "census.tsv", "verdict\tfail\n")),
             ("a capture that does not record the archive it restored",
              lambda root: write(root / "A" / "restore.tsv", "label\tA\n")),
+            ("two captures whose restore intervals overlap, so the second reused "
+             "the first's restore",
+             lambda root: write(root / "B" / "restore.tsv",
+                                "label\tB\nrestore_started_at\t1200\n"
+                                "restored_at\t1800\ngolden_sha256\tdeadbeef\n")),
+            ("a capture whose restore was too short to have happened",
+             lambda root: write(root / "B" / "restore.tsv",
+                                "label\tB\nrestore_started_at\t5000\n"
+                                "restored_at\t5001\ngolden_sha256\tdeadbeef\n")),
+            ("a capture that does not bracket its restore",
+             lambda root: write(root / "B" / "restore.tsv",
+                                "label\tB\nrestored_at\t5600\n"
+                                "golden_sha256\tdeadbeef\n")),
+            ("captures restored from different archives",
+             lambda root: write(root / "B" / "restore.tsv",
+                                "label\tB\nrestore_started_at\t5000\n"
+                                "restored_at\t5600\ngolden_sha256\tfeedface\n")),
             ("a missing H6 row",
              lambda root: write(root / "h6" / "h6-matrix.tsv", "".join(
                  f"{row}\tpass\tsynthetic\n" for row in H6_ROWS[:-1]))),
@@ -216,12 +287,14 @@ def main() -> int:
         ]
 
         undetected: list[str] = []
+        scored = 0
         for description, mutate in mutations:
             scratch_root = base / "mutant"
             shutil.rmtree(scratch_root, ignore_errors=True)
             shutil.copytree(pristine, scratch_root)
             mutate(scratch_root)
             status, _ = run(scratch_root, contract, junit_root)
+            scored += 1
             if status == 0:
                 undetected.append(description)
 
@@ -237,30 +310,71 @@ def main() -> int:
         shutil.rmtree(scratch_root, ignore_errors=True)
         shutil.copytree(pristine, scratch_root)
         status, _ = run(scratch_root, edited, junit_root)
+        scored += 1
         if status == 0:
             undetected.append("a frozen legacy contract edited out from under the scorer")
 
-        # A gate that reports success while executing no test is not coverage.
-        empty_repo = base / "empty-repo"
-        write(empty_repo / "gradle" / "phase4" / "runtime.properties",
-              f"api.port={MODERN_PORT}\n")
-        subprocess.run(["git", "init", "-q", str(empty_repo)], check=True)
-        subprocess.run(["git", "-C", str(empty_repo), "add", "-A"], check=True)
-        subprocess.run(
-            ["git", "-C", str(empty_repo), "-c", "user.email=t@t", "-c", "user.name=t",
-             "commit", "-qm", "fixture"], check=True)
-        empty_head = subprocess.run(
-            ["git", "-C", str(empty_repo), "rev-parse", "HEAD"],
-            capture_output=True, text=True, check=True).stdout.strip()
+        # ISOLATING the two manifest guards. The mutation above trips the step
+        # ledger as well as the manifest walk, so on its own it would stay
+        # green even if both manifest guards were dead code. These two do not:
+        # each is rejectable ONLY by the guard it names.
+        #
+        # (a) A re-freeze: the contract and its manifest agree perfectly, so
+        # the walk is satisfied, and every step, fact and row still matches.
+        # Only the pinned digest can notice.
+        refrozen = base / "refrozen-contract"
+        shutil.copytree(contract, refrozen)
+        (refrozen / "manifest.sha256").write_text(
+            (refrozen / "manifest.sha256").read_text(encoding="utf-8")
+            + "# regenerated in a parity increment\n", encoding="utf-8")
         scratch_root = base / "mutant"
         shutil.rmtree(scratch_root, ignore_errors=True)
         shutil.copytree(pristine, scratch_root)
-        write(scratch_root / "provenance.json", json.dumps({
-            "phase": "5g-1b", "git_head": empty_head, "captured_at": "x",
-            "mode": "false", "base_url": BASE_URL}) + "\n")
-        status, _ = run(scratch_root, contract, empty_repo)
+        status, _ = run(scratch_root, refrozen, junit_root,
+                        expect_manifest=manifest_sha256(contract))
+        scored += 1
         if status == 0:
-            undetected.append("a capture that produced no JUnit report")
+            undetected.append(
+                "a frozen legacy contract re-frozen so that it agrees with its "
+                "own regenerated manifest")
+
+        # (b) A manifest-listed file deleted: exercises the walk's `missing:`
+        # branch, which the edited-contract case never reaches.
+        truncated = base / "truncated-contract"
+        shutil.copytree(contract, truncated)
+        (truncated / "ambient-tables.tsv").unlink()
+        scratch_root = base / "mutant"
+        shutil.rmtree(scratch_root, ignore_errors=True)
+        shutil.copytree(pristine, scratch_root)
+        status, _ = run(scratch_root, truncated, junit_root,
+                        expect_manifest=manifest_sha256(truncated))
+        scored += 1
+        if status == 0:
+            undetected.append("a frozen legacy contract file the manifest still lists")
+
+        # A gate that reports success while executing no test is not coverage.
+        # These are capture-level now, because the lane binds each report to
+        # the capture that produced it. All three shapes below would satisfy a
+        # mere "a file exists and is non-empty" check.
+        junit_mutations: list[tuple[str, object]] = [
+            ("a capture that produced no JUnit report",
+             lambda root: shutil.rmtree(root / "A" / "junit")),
+            ("a capture whose JUnit suite executed zero tests",
+             lambda root: write(root / "A" / "junit" / "results.xml",
+                                '<testsuite tests="0" failures="0" errors="0"/>\n')),
+            ("a capture whose JUnit suite reported a failure",
+             lambda root: write(root / "A" / "junit" / "results.xml",
+                                '<testsuite tests="1" failures="1" errors="0"/>\n')),
+        ]
+        for description, mutate in junit_mutations:
+            scratch_root = base / "mutant"
+            shutil.rmtree(scratch_root, ignore_errors=True)
+            shutil.copytree(pristine, scratch_root)
+            mutate(scratch_root)
+            status, _ = run(scratch_root, contract, junit_root)
+            scored += 1
+            if status == 0:
+                undetected.append(description)
 
     if undetected:
         print("the Phase 5g-1b evidence validator ACCEPTED evidence it must refuse:")
@@ -269,7 +383,7 @@ def main() -> int:
         return 1
 
     print(f"Phase 5g-1b evidence validator rejected all "
-          f"{len(mutations) + 2} injected defect classes")
+          f"{scored} injected defect classes")
     return 0
 
 

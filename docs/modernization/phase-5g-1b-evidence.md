@@ -117,9 +117,75 @@ oracle. `AD_ChangeLog` is asserted to stay as 5g-1a froze it.
 Full seed restore, including for **every** H6 row. Running a destructive case on
 state left by the parity capture would violate ADR decision 4 and make results
 order-dependent. Surgical rollback is forbidden. Each capture records the digest
-of the archive it restored, so an independent restore can be told from a shared
-one after the fact - two captures from one restore are not an A/B, because they
-share every accident of the state they started in.
+of the archive it restored and **brackets** its own restore with the instants it
+started and finished. The digest is byte-identical for A and B by construction,
+so on its own it could never distinguish two independent restores from two
+captures sharing one; and a single timestamp stamped beside the restore call
+would be produced whether or not the restore actually ran.
+
+Bracketing is what binds the record to the restore having happened. A full seed
+restore takes minutes, so the validator requires the digests to agree, each
+interval to exceed a one-minute floor, and the two intervals to be **disjoint**
+- a capture that skipped its restore records a near-zero interval, and two
+captures sharing one restore record overlapping ones. Two captures from a single
+restore are not an A/B: they share every accident of the state they started in.
+
+## The H6 write-traffic matrix
+
+Six rows, each recorded to `h6/h6-matrix.tsv` and required by the validator.
+Destructive rows restore the golden archive first, so no row is scored on state
+another row left.
+
+| Row | How it is decided |
+|---|---|
+| `h6-loopback-origin-unreached` | The driver's context blocks the loopback modern port; a request that reached it is recorded |
+| `h6-cohort-decision-modern` | The router's own decision line, with a browser-observed fallback (see below) |
+| `h6-no-legacy-fallback-mid-write` | `ModernNoLegacyFallbackTest` (see below) |
+| `h6-ticket-replay-controls` | The T5e-1 handoff controls, re-run unchanged |
+| `h6-session-cleanup-after-inflight-write` | Session evidence before and after logout and timeout |
+| `h6-duplicate-submit` | Scored against the legacy answer `5g-1a-x` froze, not against a Phase 5e ticket-replay invariant, which is a different property |
+
+### `h6-no-legacy-fallback-mid-write` needs a browser, not a `curl`
+
+The contract is that when the modern backend dies mid-write, an **established**
+modern session gets an explicit failure and is never quietly served the legacy
+application instead.
+
+That assertion is only meaningful from a vantage point that actually holds a
+modern session. The router pins the cohort at login, so a shell request carries
+no modern session and is served the legacy **login page** - which itself links
+the `.dsp` theme. A browser-less check would therefore report "legacy marker
+present" and read a by-design login page as a fallback that never happened.
+
+So the row invokes `ModernNoLegacyFallbackTest`, which ports the mechanics of
+Phase 5e's proven `backendOutageNeverFallsBack()`: log in modern through the
+public origin, confirm `phase5d-modern.css` and no `.dsp`, stop the backend,
+re-navigate **on the same authenticated context**, and require `status >= 500`
+**and** no `.dsp`. A null response scores `-1`, so an absent observation fails
+the row rather than falling through it. The stop is inside the guarded region
+whose `finally` restarts the backend: were it outside, a stop that killed Tomcat
+but reported a non-zero exit would leave the backend dead for every row after
+it.
+
+Phase 5e's existing control could not be reused directly - it is a private
+method inside one large `@Test`, so it cannot be `--tests`-selected, and running
+the whole Phase 5e matrix to obtain one row is not acceptable.
+
+### One thing this increment does not prove
+
+`h6-cohort-decision-modern` prefers the router's own
+`phase5e-cohort runtime=MODERN reason=USER_ALLOWLISTED` decision line, which is
+the only record that carries the **reason**. Whether that `log.info` reaches the
+public ingress's `catalina.out` in this deployment is **not** established: every
+existing Phase 5e evidence asserts routing by browser observation, never by this
+line.
+
+The row therefore falls back to the driver's browser-observed served runtime,
+and says so in its evidence string. That fallback is a **served-runtime**
+observation, not a decision reason - a browser can see `MODERN`, never
+`USER_ALLOWLISTED` - and the two are never conflated in the record. A row with
+neither fails. The first CI run of the smoke will settle which branch fires;
+until then this is reported as a known limit of the row, not as coverage.
 
 ## Gates
 
@@ -134,11 +200,12 @@ A green Gradle status is not evidence. `validate-phase5g1b-runtime-evidence.py`
 refuses - rather than repairs - evidence that would otherwise let a green be
 cited: a wrong `git_head`; a base URL other than the public origin; a request
 that reached the loopback modern origin; a capture not served by the modern
-runtime; a capture that did not record its restore; a missing or failing ambient
-census; a step ledger short of the frozen one; a scorer left in freeze mode; a
-frozen contract edited out from under the scorer; a missing or failing H6 row; an
-unobserved session lifecycle; a second modern deployment; an absent or empty
-JUnit report.
+runtime; a capture that did not record its restore; two captures sharing one
+restore; a missing or failing ambient census; a step ledger short of the frozen
+one; a scorer left in freeze mode; a frozen contract edited out from under the
+scorer; a re-frozen contract that agrees with its own regenerated manifest; a
+missing or failing H6 row; an unobserved session lifecycle; a second modern
+deployment; a JUnit report that is absent, empty, ran zero tests, or failed.
 
 A fail-closed check that silently never fires is worse than no check: it accepts
 what it should refuse, quietly, forever. So
@@ -146,8 +213,34 @@ what it should refuse, quietly, forever. So
 tree the validator must accept, then mutates it once per defect class and
 requires a rejection each time.
 
-**17 injected defect classes, all rejected.** The proof was itself verified by
-weakening one validator check and confirming the proof went red.
+**25 injected defect classes, all rejected.**
+
+The proof was itself verified, not asserted. The increment's central governance
+guard - that a parity branch may not re-freeze the answer it is scored against -
+is two independent checks, and each was proven to be load-bearing by disabling
+it alone and confirming the proof went red with exactly one undetected class:
+
+| Check disabled | Class the proof then missed |
+|---|---|
+| pinned manifest digest | a contract re-frozen so that it agrees with its own regenerated manifest |
+| manifest walk | a contract file the manifest still lists |
+
+That isolation matters because the obvious mutation - editing a frozen contract
+file - also trips the step-ledger comparison, so it would have stayed green even
+if both manifest guards were dead code.
+
+The synthetic contract is built in the **real** generator's format, comment
+headers and tab separators included. An earlier fixture used a format
+`generatePhase5gWriteOracleManifest` never emits, which let a defect survive
+review: the validator parsed the manifest's `#` comment headers as digest rows
+and would have rejected **every** real run - after two captures, the scorer and
+the whole H6 matrix had already run - with a message falsely accusing the branch
+of editing the frozen oracle.
+
+The lane invariants are proven the same way, and match only non-comment lines:
+a whole-file substring search is satisfied by the very comment explaining the
+rule, so a change that deleted the behaviour and left its explanation behind
+would still have passed.
 
 It runs in about a second with no database, so the validator's correctness is
 checked on every pull request rather than only when the hour-long lane runs.

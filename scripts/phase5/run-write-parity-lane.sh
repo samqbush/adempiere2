@@ -201,14 +201,23 @@ capture() {
   mkdir -p "$rendezvous" "$snapshots" "$effects"
 
   echo "== capture $label: restoring, re-verifying quiescence and cohort, censusing =="
+  # WHICH archive this capture started from, and the interval its own restore
+  # occupied. The digest alone cannot distinguish two independent restores from
+  # two captures sharing one -- it is byte-identical either way by construction.
+  #
+  # The instants BRACKET the restore rather than being stamped beside it, so
+  # they are causally bound to the restore having actually run: a full seed
+  # restore takes minutes, so a capture that skipped it would record a
+  # near-zero interval, and two captures sharing one restore would record
+  # overlapping intervals. check_restores() requires the digests to agree, each
+  # interval to be non-trivial, and the two intervals to be disjoint.
+  local restore_started
+  restore_started=$(date -u +%s)
   reset restore "$golden_archive"
-  # WHICH archive this capture started from. Two captures taken from a single
-  # restore are not an A/B: they share every accident of the state they started
-  # in, so their agreement would prove nothing about reproducibility. Recording
-  # the digest per capture is what lets the validator tell an independent
-  # restore from a shared one after the fact.
   {
     printf 'label\t%s\n' "$label"
+    printf 'restore_started_at\t%s\n' "$restore_started"
+    printf 'restored_at\t%s\n' "$(date -u +%s)"
     printf 'golden_sha256\t%s\n' \
       "$(python3 -c 'import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$golden_archive")"
   } >"$capture_dir/restore.tsv"
@@ -241,6 +250,20 @@ capture() {
     tail -60 "$capture_dir/driver.log" >&2
     return 1
   }
+
+  # THIS capture's JUnit report, copied out of the shared Gradle build
+  # directory while it still belongs to this capture. Gradle does not clean
+  # build/test-results between invocations and the H6 matrix re-invokes the
+  # same capture task later, so a validator reading the shared directory could
+  # be shown a report from an earlier run, an earlier commit, or a different
+  # H6 row. Copying here binds the report to the capture that produced it.
+  mkdir -p "$capture_dir/junit"
+  local junit_src=$repo_root/zkwebui/build/test-results/phase5g1bModernWriteParityCapture
+  if ! compgen -G "$junit_src/*.xml" >/dev/null; then
+    echo "the modern write driver produced no JUnit XML in $junit_src" >&2
+    return 1
+  fi
+  cp "$junit_src"/*.xml "$capture_dir/junit/"
 
   # WHICH application served this capture.
   #

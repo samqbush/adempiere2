@@ -60,12 +60,28 @@ tasks.register('verifyPhase5g1bLaneInvariants') {
 	outputs.file marker
 	doLast {
 		def smokeText = smoke.text
-		if (smokeText.contains('--freeze')) {
+		// Every assertion below matches an EXECUTABLE line, never anywhere in the
+		// file. A whole-file substring search is satisfied by the very comment
+		// that explains the rule, so a change that deleted the behaviour while
+		// leaving its explanation behind would still pass the gate -- which is
+		// precisely the false green this task exists to prevent.
+		def code = smokeText.readLines().findAll { !it.trim().startsWith('#') }
+		def laneCode = lane.text.readLines().findAll { !it.trim().startsWith('#') }
+
+		if (code.any { it.contains('--freeze') }) {
 			throw new GradleException(
 				'run-write-parity-smoke.sh passes --freeze to the scorer. A parity ' +
 					'increment may never produce the answer it is scored against.')
 		}
-		if (!smokeText.contains('legacy-web-write-v1')) {
+		if (code.any { it.contains('--expect-manifest-sha256') }) {
+			throw new GradleException(
+				'run-write-parity-smoke.sh overrides --expect-manifest-sha256. That ' +
+					'seam exists only for the evidence validator\'s own mutation proof, ' +
+					'which scores a synthetic contract; on the real lane it would let a ' +
+					're-frozen legacy oracle be accepted as the frozen one.')
+		}
+		def contractLine = code.find { it.contains('legacy-web-write-v1') }
+		if (contractLine == null) {
 			throw new GradleException(
 				'run-write-parity-smoke.sh does not score against ' +
 					'contracts/legacy-web-write-v1. The modern runtime must be scored ' +
@@ -77,18 +93,14 @@ tasks.register('verifyPhase5g1bLaneInvariants') {
 		// cohort decision, the handoff and the proxy. A capture on
 		// /webui-modern would prove the modern application works with the whole
 		// routing layer bypassed, which is a different and much weaker claim.
-		//
-		// Matched on the ASSIGNMENT rather than anywhere in the file, so that
-		// explaining in a comment why the loopback origin is forbidden does not
-		// itself fail the gate.
-		def baseUrlLine = smokeText.readLines().find { it.trim().startsWith('base_url=') }
+		def baseUrlLine = code.find { it.trim().startsWith('base_url=') }
 		if (baseUrlLine == null || !baseUrlLine.contains('/webui')
 				|| baseUrlLine.contains('/webui-modern')) {
 			throw new GradleException(
 				'run-write-parity-smoke.sh must assign base_url to the public routed ' +
 					"/webui origin and never the direct loopback modern origin; found: ${baseUrlLine}")
 		}
-		if (!lane.text.contains('runtime-identification.tsv')) {
+		if (!laneCode.any { it.contains('runtime-identification.tsv') }) {
 			throw new GradleException(
 				'run-write-parity-lane.sh does not assert which runtime served the ' +
 					'capture. Every other observation in the capture is runtime-blind, ' +
