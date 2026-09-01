@@ -252,6 +252,7 @@ snapshot_loop() {
         --step "$step_id" \
         --attribution-scope "$contract_dir/attribution-scope.tsv" \
         --ambient "$contract_dir/ambient-tables.tsv" \
+        --baseline "$snapshots/step-0.json" \
         --out "$effects/$step_id.txt"
     fi
     previous=$current

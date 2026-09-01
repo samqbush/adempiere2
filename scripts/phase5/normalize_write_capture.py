@@ -121,7 +121,11 @@ class IdentityMap:
         return self._by_value[entry]
 
     def symbol_for(
-        self, column: str, value: str, row: dict | None = None
+        self,
+        column: str,
+        value: str,
+        row: dict | None = None,
+        container: str | None = None,
     ) -> str | None:
         """The symbol for a value, if this capture created the row it names.
 
@@ -150,6 +154,16 @@ class IdentityMap:
         exact = self._by_value.get((column.lower(), str(value)))
         if exact is not None:
             return exact
+        if column.lower() == "node_id" and container is not None:
+            target = self.NODE_TARGETS.get(container.lower())
+            if target is None:
+                return None
+            candidates = {
+                sym
+                for sym in self._by_raw.get(str(value), set())
+                if self.table_of(sym) == target
+            }
+            return candidates.pop() if len(candidates) == 1 else None
         if column.lower() != "record_id" or row is None:
             return None
         raw_table_id = row.get("ad_table_id")
@@ -173,13 +187,27 @@ class IdentityMap:
             return next(iter(candidates))
         return None
 
+    # A tree-node table is a generic pointer whose target is declared STATICALLY
+    # by the containing table rather than by a companion column: AD_TreeNodeBP
+    # holds business-partner nodes and nothing else. That makes `Node_ID`
+    # resolvable on exactly the same terms as `Record_ID` -- a qualifier that is
+    # a fact rather than a guess -- without ever resolving by bare value, which
+    # would collide across tables that share a sequence range.
+    NODE_TARGETS = {
+        "ad_treenodebp": "c_bpartner",
+    }
+
     def rows(self) -> list[tuple[str, str, str]]:
         """(table, raw_value, symbol), in declaration order."""
         return list(self._order)
 
 
 def normalize_value(
-    column: str, value, identities: IdentityMap | None = None, row: dict | None = None
+    column: str,
+    value,
+    identities: IdentityMap | None = None,
+    row: dict | None = None,
+    container: str | None = None,
 ) -> str:
     """Normalize one column value to its comparable string form."""
     name = column.lower()
@@ -201,7 +229,7 @@ def normalize_value(
     # `Record_ID` is included because it is a generic row pointer, but it only
     # resolves when its companion `AD_Table_ID` qualifies it. See symbol_for.
     if identities is not None and (name.endswith("_id") or name == "record_id"):
-        symbol = identities.symbol_for(name, text, row)
+        symbol = identities.symbol_for(name, text, row, container)
         if symbol is not None:
             return symbol
 
@@ -250,7 +278,7 @@ def normalize_row(
     return {
         # The whole row is passed through so that a generic `Record_ID` can be
         # qualified by its companion `AD_Table_ID` in the same row.
-        column: normalize_value(column, value, identities, row)
+        column: normalize_value(column, value, identities, row, table)
         for column, value in sorted(row.items())
         if column.lower() not in skip_columns
     }

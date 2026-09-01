@@ -168,15 +168,24 @@ background writer is indistinguishable from a route effect.
 |---|---|
 | Reviewer | @samqbush |
 | Date | 2026-09-01 |
-| Capturing CI run | https://github.com/samqbush/adempiere2/actions/runs/33489852922 |
-| Captured commit | `415d7aa8d92c004f924deeee9c1f7f3be51e31ed` |
-| Evidence digest | `b0df7a43c62c35516ee3785524298ec6a0f70b53f11a464dd07557ad6f9a87e3` |
+| Capturing CI run | https://github.com/samqbush/adempiere2/actions/runs/33491714444 |
+| Captured commit | `3a0f5fd911d85a545661bdee067be710f47d2fda` |
+| Evidence digest | `b6f4b105dfc596a56595a7a9ba9a3bb144cda20c20a76cf66d5c5eb5ede5d4b3` |
 | Disposition | **Approved as the expected answer for Phase 5g-1b.** |
 
 The digest is SHA-256 over the eight frozen fact files and every per-step effect
 document, each preceded by its name, in sorted order. It is what ties this
 sign-off to specific bytes: re-freezing from a different capture changes it, and
 the change is visible in this file and in `manifest.sha256`.
+
+The captured snapshots are the raw evidence, and the frozen facts are derived
+from them. A review-driven change to the derivation therefore changes the frozen
+bytes without changing the run they came from, and this digest moved once for
+exactly that reason: code review found that composite-keyed rows, and every row
+in a step after the one that created it, were freezing raw sequence-allocated
+integers into the comparison. The facts above were re-derived from the same
+run's snapshots, both captures still agree, and both still score against the
+contract.
 
 What was reviewed, and what it says:
 
@@ -204,6 +213,58 @@ What was reviewed, and what it says:
 * **One error class is allowed**: repeated 404s for
   `/webui/theme/default/css/themesaf.css.dsp`, the same missing DSP theme URL
   Phase 5f registered.
+* **Five steps declare `[no-effect]`** — opening the window, the second editor's
+  login, the conflicting save, the deactivating session's login, and logout. The
+  emptiness is declared rather than inferred, so a step that later starts
+  writing fails.
+
+### What the frozen keys do and do not normalize
+
+No compared byte in this contract carries a raw sequence-allocated identity.
+Every row created during a capture is rendered through a capture-local symbol
+(`@c_bpartner#1`, `@c_bp_customer_acct#1`, `@ad_treenodebp#1`), and the
+`[identities]` legend that maps each symbol back to the observed integer is a
+comment, so it is stripped before comparison.
+
+Three resolution rules earn that, and each is a declared fact rather than a
+guess:
+
+- **Composite-keyed children** are declared and looked up under their own
+  table's primary key component, so `c_bp_customer_acct` gets its own symbol
+  instead of collapsing onto the business partner whose id is its first key
+  component.
+- **Identity is capture-scoped, not step-scoped.** The reference is the
+  capture's post-login baseline snapshot, so the row created in the create step
+  is still symbolic in the update and deactivate steps. A row present in the
+  baseline is seeded and is never handed a capture-local symbol.
+- **Generic pointers resolve only when something qualifies them.**
+  `Record_ID` resolves through its companion `AD_Table_ID`; `Node_ID` resolves
+  through its containing table, because `AD_TreeNodeBP` holds business-partner
+  nodes and nothing else. Neither ever resolves by bare value, which would
+  collide across tables sharing a sequence range.
+
+This matters because it is what makes the oracle scoreable by a runtime that
+allocates different integers. Without it, 5g-1b would fail this comparison for
+a reason that is about identity allocation rather than about the business
+transition.
+
+### A recorded limitation of the `[no-effect]` marker
+
+Four steps — role selection, both concurrency read steps, and the refused
+conflicting save — carry `[no-effect]` with the explicit value
+`no-keyed-change-in-scope	no-row-count-delta-outside-ambient`.
+
+That value states precisely what was measured, and no more. The whole-database
+sentinel is a row **count** per table, so an `UPDATE` to a table outside the
+nine-table measurement scope produces neither a keyed row nor a count delta, and
+an insert paired with a delete inside one step nets to zero. The marker is
+therefore not a claim that nothing happened; it is a claim that these two
+measurements saw nothing. Narrowing the blind spot is residual **R12** in
+`MODERNIZATION_PLAN.md`.
+
+This is load-bearing for the headline concurrency fact: the refused save's
+entire content is that assertion, so the assertion has to be one the measurement
+can actually support.
 
 Human judgement is not automatable. This block is provenance; the governance
 control is the named reviewer's approval on the pull request that froze it.

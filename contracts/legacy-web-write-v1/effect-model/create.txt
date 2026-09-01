@@ -9,8 +9,12 @@
 create
 
 [identities]
+# @ad_treenodebp#1	ad_treenodebp	1000000
 # @ad_wf_activity#1	ad_wf_activity	1000000
 # @ad_wf_process#1	ad_wf_process	1000000
+# @c_bp_customer_acct#1	c_bp_customer_acct	1000000
+# @c_bp_employee_acct#1	c_bp_employee_acct	1000000
+# @c_bp_vendor_acct#1	c_bp_vendor_acct	1000000
 # @c_bpartner#1	c_bpartner	1000000
 
 [changed-tables]
@@ -24,8 +28,12 @@ c_bp_vendor_acct	+1
 c_bpartner	+1
 
 [created]
+ad_treenodebp	@ad_treenodebp#1	ad_client_id=11,ad_org_id=0,ad_tree_id=103,created=<volatile>,createdby=101,isactive=Y,node_id=@c_bpartner#1,parent_id=0,seqno=999,updated=<volatile>,updatedby=101,uuid=<volatile>
 ad_wf_activity	@ad_wf_activity#1	ad_client_id=0,ad_message_id=<null>,ad_org_id=0,ad_table_id=291,ad_user_id=100,ad_wf_activity_id=@ad_wf_activity#1,ad_wf_node_id=244,ad_wf_process_id=@ad_wf_process#1,ad_wf_responsible_id=100,ad_workflow_id=131,created=<volatile>,createdby=0,datelastalert=<null>,dynprioritystart=<null>,endwaittime=<null>,isactive=Y,priority=0,processed=N,processing=N,record_id=@c_bpartner#1,textmsg=<null>,updated=<volatile>,updatedby=0,uuid=<volatile>,wfstate=OS
 ad_wf_process	@ad_wf_process#1	ad_client_id=0,ad_message_id=<null>,ad_org_id=0,ad_table_id=291,ad_user_id=101,ad_wf_process_id=@ad_wf_process#1,ad_wf_responsible_id=101,ad_workflow_id=131,created=<volatile>,createdby=0,isactive=Y,priority=0,processed=N,processing=N,record_id=@c_bpartner#1,textmsg=<null>,updated=<volatile>,updatedby=0,uuid=<volatile>,wfstate=OS
+c_bp_customer_acct	@c_bp_customer_acct#1	ad_client_id=11,ad_org_id=0,c_acctschema_id=101,c_bpartner_id=@c_bpartner#1,c_prepayment_acct=235,c_receivable_acct=234,c_receivable_services_acct=234,created=<volatile>,createdby=101,isactive=Y,updated=<volatile>,updatedby=101,uuid=<volatile>
+c_bp_employee_acct	@c_bp_employee_acct#1	ad_client_id=11,ad_org_id=0,c_acctschema_id=101,c_bpartner_id=@c_bpartner#1,created=<volatile>,createdby=101,e_expense_acct=249,e_prepayment_acct=248,isactive=Y,updated=<volatile>,updatedby=101,uuid=<volatile>
+c_bp_vendor_acct	@c_bp_vendor_acct#1	ad_client_id=11,ad_org_id=0,c_acctschema_id=101,c_bpartner_id=@c_bpartner#1,created=<volatile>,createdby=101,isactive=Y,updated=<volatile>,updatedby=101,uuid=<volatile>,v_liability_acct=237,v_liability_services_acct=238,v_prepayment_acct=239
 c_bpartner	@c_bpartner#1	acqusitioncost=0,actuallifetimevalue=0,ad_client_id=11,ad_language=en_US,ad_org_id=50001,ad_orgbp_id=<null>,apenquiry=<null>,arenquiry=<null>,birthday=<null>,bloodgroup=<null>,bpartner_parent_id=<null>,c_bp_accounttype_id=<null>,c_bp_group_id=103,c_bp_industrytype_id=<null>,c_bp_salesgroup_id=<null>,c_bp_segment_id=<null>,c_bpartner_id=@c_bpartner#1,c_dunning_id=100,c_greeting_id=<null>,c_invoiceschedule_id=<null>,c_paymentterm_id=105,c_taxgroup_id=<null>,created=<volatile>,createdby=101,customeropeninvoices=<null>,deliveryrule=<null>,deliveryviarule=<null>,description=<null>,documentcopies=0,dunninggrace=<null>,duns=<null>,fathersname=<null>,firstsale=<null>,flatdiscount=0,freightcostrule=<null>,gender=<null>,invoice_printformat_id=<null>,invoicerule=<null>,isactive=Y,iscustomer=N,isdiscountprinted=N,isemployee=N,ismanufacturer=N,isonetime=N,ispotaxexempt=N,isprospect=N,issalesrep=N,issummary=N,istaxexempt=N,isvendor=N,logo_id=<null>,m_discountschema_id=<null>,m_pricelist_id=101,maritalstatus=<null>,naics=<null>,name=P5G1A-0001 Partner,name2=<null>,notposted=<null>,numberemployees=0,paymentrule=<null>,paymentrulepo=<null>,placeofbirth=<null>,placeofbirth_id=<null>,po_discountschema_id=<null>,po_paymentterm_id=<null>,po_pricelist_id=<null>,poreference=<null>,potentiallifetimevalue=0,rating=<null>,referenceno=<null>,salesrep_id=101,salesvolume=0,sendemail=N,shareofcustomer=0,shelflifeminpct=0,so_creditlimit=0,so_creditused=0,so_description=<null>,socreditstatus=X,taxid=<null>,totalopenbalance=0,unappliedpayments=<null>,updated=<volatile>,updatedby=101,url=<null>,uuid=<volatile>,value=P5G1A-0001,vendoropeninvoices=<null>
 
 [updated]

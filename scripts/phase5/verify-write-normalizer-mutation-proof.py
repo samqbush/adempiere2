@@ -177,6 +177,14 @@ def mutate_generated_identity(doc: dict) -> None:
     doc["scope"]["c_bpartner"]["2000999"]["c_bpartner_id"] = 2000999
     doc["scope"]["c_bpartner_location"]["1000456"]["c_bpartner_id"] = 2000999
     doc["scope"]["ad_changelog"]["900001+3499"]["record_id"] = 2000999
+    # The COMPOSITE key moves as well. Without this the proof only ever moved a
+    # single-component key, so a resolver that failed on composite keys -- and
+    # one did, freezing raw sequence integers into the payload -- passed
+    # must-normalize while being under-normalized in exactly the case the
+    # accounting and tree fan-out rows exercise.
+    doc["scope"]["ad_changelog"]["900002+3499"] = doc["scope"]["ad_changelog"].pop(
+        "900001+3499")
+    doc["scope"]["ad_changelog"]["900002+3499"]["ad_changelog_id"] = 900002
 
 
 MUTATIONS = [
@@ -216,6 +224,16 @@ def effect_for(
             "--step", "mutation-proof",
             "--attribution-scope",
             str(scope),
+            # `diff` needs the ambient classification to decide whether a step
+            # that touched only session and audit state wrote nothing at all.
+            # The proof passes the reviewed file, so a mutation is scored under
+            # exactly the classification the runtime capture is scored under.
+            "--ambient",
+            str(scope.parent / "ambient-tables.tsv"),
+            # The proof's "before" document IS the capture baseline: the fixture
+            # is a two-snapshot pair, so nothing pre-exists it.
+            "--baseline",
+            str(before),
             "--out", str(out),
         ],
         capture_output=True,

@@ -18,3 +18,6 @@ ad_recentitem	+1
 [updated]
 
 [deleted]
+
+[no-effect]
+no-keyed-change-in-scope	no-row-count-delta-outside-ambient

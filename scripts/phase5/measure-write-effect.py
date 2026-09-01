@@ -382,17 +382,35 @@ def diff(args) -> int:
     # Declare every created row's identity FIRST, across all tables, so a
     # foreign key in one created row can resolve to another created row's
     # symbol regardless of the order the tables happen to be captured in.
-    for table in sorted(after["scope"]):
-        before_rows = before["scope"].get(table, {})
-        for key in sorted(after["scope"][table]):
-            if key not in before_rows:
+    #
+    # "Created" means created during this CAPTURE, not during this step. The
+    # reference is the capture's post-login baseline snapshot, which is why it
+    # is a required argument. Using the step's own before-snapshot instead made
+    # every step after the create resolve nothing: the row already existed by
+    # then, so the update and deactivate effects froze the raw sequence-allocated
+    # `c_bpartner  1000000` as their key. Taking the baseline as the reference is
+    # also what keeps a SEEDED row from being handed a capture-local symbol --
+    # the same rule derive-write-oracle-facts.py applies.
+    baseline = json.loads(args.baseline.read_text(encoding="utf-8"))["scope"]
+    for table in sorted(set(after["scope"]) | set(before["scope"])):
+        seeded = baseline.get(table, {})
+        for key in sorted(set(after["scope"].get(table, {})) | set(before["scope"].get(table, {}))):
+            if key not in seeded:
                 identities.declare(table, f"{table}_id", primary_component(key))
 
     for table in sorted(set(before["scope"]) | set(after["scope"])):
         before_rows = before["scope"].get(table, {})
         after_rows = after["scope"].get(table, {})
         for key in sorted(after_rows):
-            symbol = identities.symbol_for(f"{table}_id", key) or key
+            # The identity was declared under the key's PRIMARY component, so it
+            # must be looked up that way. Passing the full captured key made
+            # every composite-keyed row miss its own symbol and fall through to
+            # the `or key` branch, freezing a raw sequence-allocated integer --
+            # `c_bp_customer_acct  1000000+101` -- into the compared payload.
+            # That is under-normalization: a runtime that allocates a different
+            # identity for the same transition would fail for a reason that is
+            # about identity allocation rather than about the transition.
+            symbol = identities.symbol_for(f"{table}_id", primary_component(key)) or key
             if key not in before_rows:
                 created.append((table, symbol, normalize_row(table, after_rows[key], identities)))
             else:
@@ -462,8 +480,15 @@ def diff(args) -> int:
         row for row in changed if row.split("\t")[0].lower() not in ambient_tables
     ]
     if not (created or updated or deleted or non_ambient_changed):
+        # The declaration states exactly what was measured, and no more. Layer 1
+        # is a row COUNT per table, so an UPDATE to a table outside the
+        # measurement scope produces neither a keyed row nor a count delta, and
+        # an insert paired with a delete in one step nets to zero. Writing
+        # "declared" here would turn that blind spot into a positive claim that
+        # nothing at all happened; naming the two measurements keeps the frozen
+        # assertion true. Narrowing the blind spot is tracked as residual R12.
         lines.append("[no-effect]")
-        lines.append("declared")
+        lines.append("no-keyed-change-in-scope\tno-row-count-delta-outside-ambient")
         lines.append("")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -631,6 +656,9 @@ def main() -> int:
     # qualified, and an unqualified one would either stay raw (flaky) or be
     # guessed (a fabricated foreign-key edge).
     d.add_argument("--attribution-scope", required=True, type=Path)
+    # The capture's post-login baseline snapshot. Identity is capture-scoped, not
+    # step-scoped; see diff().
+    d.add_argument("--baseline", required=True, type=Path)
     # The ambient classification decides whether a step that touched only
     # session and audit state counts as having written nothing. Required rather
     # than optional: defaulting it would let a step be marked no-effect on a

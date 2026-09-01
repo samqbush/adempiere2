@@ -9,6 +9,13 @@
 concurrency-second-editor-authenticated
 
 [identities]
+# @ad_treenodebp#1	ad_treenodebp	1000000
+# @ad_wf_activity#1	ad_wf_activity	1000000
+# @ad_wf_process#1	ad_wf_process	1000000
+# @c_bp_customer_acct#1	c_bp_customer_acct	1000000
+# @c_bp_employee_acct#1	c_bp_employee_acct	1000000
+# @c_bp_vendor_acct#1	c_bp_vendor_acct	1000000
+# @c_bpartner#1	c_bpartner	1000000
 
 [changed-tables]
 ad_changelog	+1
@@ -21,3 +28,6 @@ ad_tree_favorite	+1
 [updated]
 
 [deleted]
+
+[no-effect]
+no-keyed-change-in-scope	no-row-count-delta-outside-ambient

@@ -27,12 +27,33 @@ heuristic. "Ids above one million are generated" is a guess about the seed that
 would silently misclassify rows the moment a sequence moved. Membership in the
 created set is a fact about this capture.
 
-Resolution is by `(column, value)` first and by value alone as a fallback. The
-fallback is required for correctness, not convenience: `AD_ChangeLog.Record_ID`
-points at a created row without being named after its table, and a
-`(column, value)` lookup alone leaves it holding a raw generated id. The fallback
-refuses to resolve when a value maps to more than one symbol, because inventing a
-foreign-key edge that does not exist is worse than leaving a value literal.
+Resolution is by `(column, value)`, where the column is the target table's own
+primary key. That covers ordinary foreign keys, because an ADempiere key column
+is named after the table it points into.
+
+Two further rules exist, and each is qualified by a **declared fact** rather than
+by a bare value:
+
+- A **generic row pointer** resolves only when something says which table it
+  points into. `AD_ChangeLog.Record_ID` and `AD_WF_Process.Record_ID` are
+  qualified by the companion `AD_Table_ID` in the same row; `AD_TreeNodeBP.Node_ID`
+  is qualified by its containing table, which by definition holds business-partner
+  nodes and nothing else. Without a qualifier the value stays literal.
+- A **composite key** is declared and looked up under its primary component only.
+  Looking it up under the full composite string made every such row miss its own
+  symbol and freeze a raw sequence-allocated integer into the comparison;
+  declaring it under the shared first component instead would collapse it onto
+  the parent. `generated-identities-moved` moves a composite key precisely so
+  that this cannot regress unnoticed.
+
+Neither rule ever resolves by bare value, and both refuse to resolve when a value
+maps to more than one symbol: inventing a foreign-key edge that does not exist is
+worse than leaving a value literal.
+
+Identity is scoped to the **capture**, not to the step. The reference is the
+capture's post-login baseline snapshot, so a row created in the create step is
+still symbolic in the update and deactivate steps, while a row present in the
+baseline is seeded and never receives a capture-local symbol.
 
 ## What is removed
 

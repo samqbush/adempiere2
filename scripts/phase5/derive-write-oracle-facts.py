@@ -129,7 +129,7 @@ def build_identities(
             known = set(baseline.get(table) or {})
             for key in sorted((document.get(table) or {})):
                 if key not in known:
-                    identities.declare(table, entry["key_column"], primary_component(key))
+                    identities.declare(table, f"{table}_id", primary_component(key))
     return identities
 
 
@@ -149,8 +149,12 @@ def business_values(
     for entry in scope:
         table = entry["table"].lower()
         for key, row in sorted((document.get(table) or {}).items()):
+            # Looked up under the same synthetic `<table>_id` column the
+            # declaration used, so a composite-keyed child gets its OWN symbol
+            # instead of collapsing onto the parent whose id is its first key
+            # component. measure-write-effect.py resolves identically.
             symbol = identities.symbol_for(
-                entry["key_column"], primary_component(key)
+                f"{table}_id", primary_component(key)
             ) or key
             rows.append(
                 render_row(
@@ -179,7 +183,7 @@ def foreign_key_graph(
         key_column = entry["key_column"].lower()
         for key, row in (document.get(table) or {}).items():
             child = identities.symbol_for(
-                entry["key_column"], primary_component(key))
+                f"{table}_id", primary_component(key))
             if child is None:
                 continue
             for column, value in row.items():

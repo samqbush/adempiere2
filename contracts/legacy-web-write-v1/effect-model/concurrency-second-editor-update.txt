@@ -9,6 +9,13 @@
 concurrency-second-editor-update
 
 [identities]
+# @ad_treenodebp#1	ad_treenodebp	1000000
+# @ad_wf_activity#1	ad_wf_activity	1000000
+# @ad_wf_process#1	ad_wf_process	1000000
+# @c_bp_customer_acct#1	c_bp_customer_acct	1000000
+# @c_bp_employee_acct#1	c_bp_employee_acct	1000000
+# @c_bp_vendor_acct#1	c_bp_vendor_acct	1000000
+# @c_bpartner#1	c_bpartner	1000000
 
 [changed-tables]
 ad_recentitem	+1
@@ -16,7 +23,7 @@ ad_recentitem	+1
 [created]
 
 [updated]
-c_bpartner	1000000	name	P5G1A-0001 Partner Updated	P5G1A-0001 Partner By Second Editor
-c_bpartner	1000000	updatedby	101	102
+c_bpartner	@c_bpartner#1	name	P5G1A-0001 Partner Updated	P5G1A-0001 Partner By Second Editor
+c_bpartner	@c_bpartner#1	updatedby	101	102
 
 [deleted]
