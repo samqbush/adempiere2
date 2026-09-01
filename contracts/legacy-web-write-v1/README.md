@@ -67,6 +67,7 @@ subscriptions.
 | `fixture.sql` | present | Preconditions asserted before any capture |
 | `exclusions.tsv` | present | Owned exclusions, each with a reason and a closing increment |
 | `normalization-policy.md` | present | What is removed, what is deliberately kept, and why both directions are proved |
+| `ambient-tables.tsv` | present | The reviewed session/audit/workflow tables exempt from the undeclared-table backstop |
 | `raw/` | present | A committed raw capture sample; the input to the over-normalization mutation proof, **not** an oracle fact |
 | `manifest.sha256` | present | SHA-256 over every file except itself |
 
@@ -82,6 +83,26 @@ They are listed rather than silently omitted because an oracle tree that does no
 say what it is missing is indistinguishable from one that has decided it needs
 nothing. This section is the increment's own incompleteness, recorded.
 
+#### The shape `effect-model.tsv` will take, decided before the driver is written
+
+`measure-write-effect.py` emits **one sectioned document per step**, not one row
+per step, so a single flat TSV cannot hold the frozen effects. Rather than
+flatten the documents — which would discard the section structure the scorer
+compares — `effect-model.tsv` is an **index**: one row per step, naming the step,
+the operation, and the per-step document under `effect-model/` that is its frozen
+answer. The documents keep the emitted format exactly, so what is reviewed is
+what is compared.
+
+The step identity is carried in the compared payload as a `[step]` section, not
+in a comment header. `score` strips comments before comparing, so a step id
+carried only in a header would never be compared, and the create effect of step 1
+would score cleanly against the frozen model of step 3 — which would make
+per-step measurement decorative. `score` fails a frozen model that carries no
+`[step]` section at all.
+
+Writing this down before the driver exists is deliberate: driver and contract
+cannot drift if the shape was agreed first.
+
 ## Two-layer effect model
 
 Scoring against table digests is what Phase 5f did, and it can only ever prove
@@ -95,8 +116,30 @@ So the capture is two layers:
 2. keyed relational extraction for each changed table.
 
 The gate fails when a changed table is neither declared in the effect model nor
-classified as reviewed ambient state. Layer 1 is what makes the exclusions in
-`exclusions.tsv` provable rather than merely asserted.
+classified as reviewed ambient state. "Declared" means declared in the **keyed**
+sections — `[created]`, `[updated]`, `[deleted]` — not merely present in the
+sentinel. Reading it from the sentinel too would let a table declare itself
+simply by having changed, and the backstop could then never be the sole cause of
+a failure. Requiring a keyed declaration is also the right rule on its own terms:
+a table that changed but sits outside the measurement scope cannot be examined at
+all, which is the precise condition this check exists to refuse. Layer 1 is what
+makes the exclusions in `exclusions.tsv` provable rather than merely asserted.
+
+That ambient classification lives in `ambient-tables.tsv`, in this tree, under
+the manifest and under the domain review — not as a constant in a script. It is
+the only list in the increment that can make an unexpected write acceptable, so
+widening it must change the manifest digest and require a reviewer. An ambient
+table is still measured and still appears in every captured effect document; it
+is excluded only from the compared payload, because a table that churns
+non-deterministically is exactly what "ambient" describes and requiring its delta
+to match byte for byte would make the classification unreachable.
+`verifyPhase5gAmbientClassificationMutationProof` scores four mutations across
+three directions: an undeclared business table must fail — proved twice, the
+second time with capture and contract byte-identical so that the backstop is
+demonstrably what failed the run rather than a payload diff — a classified table
+must be forgiven, and reclassifying a business table as ambient must actually
+turn the failure green, the last one proving in the repository that this file is
+load-bearing rather than cosmetic.
 
 Effects are measured **per step**, not once around the whole flow. A single
 before/after pair around create → update → deactivate shows only the final

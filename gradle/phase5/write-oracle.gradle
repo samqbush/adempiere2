@@ -123,6 +123,55 @@ tasks.register('verifyPhase5gWriteNormalizerMutationProof', Exec) {
 	}
 }
 
+tasks.register('verifyPhase5gAmbientClassificationMutationProof', Exec) {
+	group = 'verification'
+	description =
+		'Proves the reviewed ambient-state classification is what decides the undeclared-table backstop'
+	inputs.file phase5g1aScript('measure-write-effect.py')
+	inputs.file phase5g1aScript('verify-ambient-classification-mutation-proof.py')
+	inputs.file phase5g1aContractDir.file('ambient-tables.tsv')
+	outputs.file phase5g1aBuildRoot.map { it.file('ambient-mutations.tsv') }
+	commandLine(
+		'python3',
+		phase5g1aScript('verify-ambient-classification-mutation-proof.py').absolutePath,
+		'--ambient', phase5g1aContractDir.file('ambient-tables.tsv').asFile,
+		'--report', phase5g1aBuildRoot.get().file('ambient-mutations.tsv').asFile)
+	doLast {
+		// Same reasoning as the normalizer proof: the report is written even on
+		// failure, so a green Exec is not on its own evidence that every declared
+		// direction ran. The three directions are re-read here because a proof
+		// that quietly stopped scoring one of them would leave the ambient list
+		// unguarded while still exiting zero.
+		def report = phase5g1aBuildRoot.get().file('ambient-mutations.tsv').asFile
+		if (!report.isFile()) {
+			throw new GradleException('The ambient-classification mutation proof produced no report')
+		}
+		def rows = report.readLines()
+			.findAll { it && !it.startsWith('#') && !it.startsWith('mutation\t') }
+		def directions = rows.collect { it.split('\t')[1] } as Set
+		def expected = ['must-detect', 'must-forgive', 'must-detect-reclassification'] as Set
+		if (directions != expected) {
+			throw new GradleException(
+				"The ambient-classification mutation proof scored ${directions.sort()}; " +
+					"the reviewed set is ${expected.sort()}. A shrinking proof is a " +
+					'weakening proof.')
+		}
+		// Named explicitly, not merely counted: this is the one mutation whose
+		// capture and contract are byte-identical, so it is the only one that
+		// can prove the undeclared-table backstop fires on its own rather than
+		// riding on a payload byte-diff. Losing it would leave three green
+		// directions and no backstop coverage at all.
+		def isolating = 'undeclared-business-table-fails-even-when-the-payload-matches'
+		if (!rows.any { it.startsWith("${isolating}\t") }) {
+			throw new GradleException(
+				"The ambient-classification mutation proof no longer scores '${isolating}', " +
+					'which is the only direction that isolates the undeclared-table backstop.')
+		}
+		logger.lifecycle(
+			"Ambient-classification mutation proof scored ${rows.size()} mutation(s) over ${directions.size()} direction(s)")
+	}
+}
+
 tasks.register('generatePhase5gWriteOracleManifest') {
 	group = 'verification'
 	description =
@@ -211,6 +260,10 @@ tasks.register('verifyPhase5gWriteOracleManifest') {
 			'fixture.sql': 4000,
 			'exclusions.tsv': 1500,
 			'normalization-policy.md': 2500,
+			// The only file in the contract that can make an unexpected write
+			// acceptable, so it carries a floor and a data-row check like any
+			// other ledger, and a mutation proof besides.
+			'ambient-tables.tsv': 1500,
 			// Deliberately the smallest floor in the set: the "before" capture
 			// legitimately holds only the sentinel and empty scope tables,
 			// because the point of it is that the write has not happened yet.
@@ -241,7 +294,7 @@ tasks.register('verifyPhase5gWriteOracleManifest') {
 		// or exclusion list reduced to comments asserts nothing while still looking
 		// substantial to a byte-length check.
 		['attribution-scope.tsv', 'attribution.tsv', 'measurement-scope.tsv',
-		 'exclusions.tsv'].each { name ->
+		 'exclusions.tsv', 'ambient-tables.tsv'].each { name ->
 			def dataRows = new File(dir, name).readLines()
 				.findAll { !it.trim().isEmpty() && !it.startsWith('#') }
 			if (dataRows.size() < 2) {
@@ -267,5 +320,6 @@ tasks.register('phase5g1aFinalVerification') {
 		tasks.named('verifyPhase5gWriteOracleManifest'),
 		tasks.named('verifyPhase5gWriteAttribution'),
 		tasks.named('verifyPhase5gWriteNormalizerMutationProof'),
+		tasks.named('verifyPhase5gAmbientClassificationMutationProof'),
 		tasks.named('phase5g0FinalVerification'))
 }
