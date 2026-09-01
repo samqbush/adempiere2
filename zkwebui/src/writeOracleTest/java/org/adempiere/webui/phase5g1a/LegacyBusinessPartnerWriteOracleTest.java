@@ -239,18 +239,52 @@ class LegacyBusinessPartnerWriteOracleTest {
 				}
 			}
 
+			// Deactivation is measured from a THIRD session rather than from the
+			// primary one.
+			//
 			// The primary session's state after the conflicting save is exactly
-			// what the conflict step exists to observe, and is therefore not a
-			// sound basis for measuring a further write. The record is reloaded
-			// from the database first, so the deactivate step measures
-			// deactivation and nothing else.
-			reloadRecord(page, recordValue);
-			deactivate(page);
-			flow.add(step(rendezvous, 7, "deactivate"));
+			// what the conflict step exists to observe, and is not a sound basis
+			// for measuring a further write. Run 33486692102 showed it is not a
+			// usable one either: the window it leaves behind reports "Current
+			// record was changed by another user, please ReQuery" and will not
+			// reopen its own lookup, so the reload that was supposed to clear
+			// the conflicted state cannot run from inside it.
+			//
+			// A session that has only ever read the current row measures
+			// deactivation and nothing else, which is what the step claims. Its
+			// login writes rows of its own, so those get their own step boundary
+			// rather than being folded into the deactivation, exactly as the
+			// second editor's do.
+			try (BrowserContext deactivateContext = LegacyBrowserFlow.newContext(browser)) {
+				LegacyBrowserFlow.blockForeignOrigins(deactivateContext, baseUrl);
+				Page third = deactivateContext.newPage();
+				LegacyBrowserFlow.recordTraffic(third, requests, errors, this::normalizedUrl);
+				try {
+					Response thirdLogin =
+							LegacyBrowserFlow.login(third, baseUrl, user, password);
+					assertEquals(200, thirdLogin.status(),
+							"the deactivating session's login page did not respond 200");
+					LegacyBrowserFlow.awaitRolePanel(third, BrowserSemanticContract::normalizedText);
+					LegacyBrowserFlow.confirmRole(third);
+					LegacyBrowserFlow.awaitDesktop(third, user, client);
+					flow.add(step(rendezvous, 7, "deactivate-editor-authenticated"));
+
+					openWindow(third, recordValue);
+					focusRecord(third, recordValue);
+					deactivate(third);
+					facts.put("deactivated", "true");
+					flow.add(step(rendezvous, 8, "deactivate"));
+
+					LegacyBrowserFlow.logout(third);
+				} catch (Throwable deactivateFailure) {
+					captureDiagnostics(third, "deactivate-editor");
+					throw deactivateFailure;
+				}
+			}
 
 			LegacyBrowserFlow.logout(page);
 			facts.put("logout-reached", "true");
-			flow.add(step(rendezvous, 8, "logged-out"));
+			flow.add(step(rendezvous, 9, "logged-out"));
 			} catch (Throwable failure) {
 				captureDiagnostics(page, "primary");
 				throw failure;
