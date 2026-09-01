@@ -1,6 +1,7 @@
 package org.adempiere.webui.phase5g1a;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -73,6 +74,15 @@ class LegacyBusinessPartnerWriteOracleTest {
 	private static final String WINDOW = "Business Partner";
 	/** Editors carry ids of the form {@code unqField_<tab>_<row>_<Table>_<Column><n>}. */
 	private static final String TABLE = "C_BPartner";
+	/**
+	 * Captions for the columns ADempiere does not give a column-named id.
+	 *
+	 * <p>Declared, not guessed: an undeclared column fails rather than falling
+	 * back to a proximity rule. {@code C_BPartner.Value} is captioned "Search
+	 * Key" in the dictionary and "Value" matches no cell in the rendered form.
+	 */
+	private static final Map<String, String> CAPTIONS =
+			Map.of("Value", "Search Key", "Name", "Name");
 	/** {@code FindWindow.java:274} titles the dialog {@code Msg("Find") + ": " + window}. */
 	private static final String FIND_TITLE_PREFIX = "Lookup Record: ";
 	/** Accepts either message spelling; see enterWindowThroughFindDialog. */
@@ -315,16 +325,20 @@ class LegacyBusinessPartnerWriteOracleTest {
 		probes.put("editorIds",
 				"() => Array.from(document.querySelectorAll(\"[id*='_C_BPartner_']\"))"
 						+ ".map(e => e.tagName.toLowerCase() + '#' + e.id).join('|')");
-		probes.put("fieldMarkup", "() => ['Search Key','Name','Active']"
-				+ ".map(function (caption) {"
-				+ "  var node = Array.from(document.querySelectorAll("
-				+ "    'td, span, label, div')).filter(function (e) {"
-				+ "      return e.textContent.trim() === caption"
-				+ "        && e.children.length === 0; })[0];"
-				+ "  if (!node) { return caption + '=<no exact caption node>'; }"
-				+ "  var row = node.closest('tr') || node.parentElement;"
-				+ "  return caption + '=' + row.outerHTML.slice(0, 600);"
-				+ "}).join(' ~~ ')");
+		probes.put("fieldRows", "() => ['Search Key','Name'].map(function (caption) {"
+				+ "  var label = Array.from(document.querySelectorAll("
+				+ "    'div.field-label > *')).filter(function (e) {"
+				+ "      return e.textContent.trim() === caption; })[0];"
+				+ "  if (!label) { return caption + '=<no caption>'; }"
+				+ "  var row = label.closest('tr');"
+				+ "  if (!row) { return caption + '=<no row>'; }"
+				+ "  var cellIndex = Array.prototype.indexOf.call("
+				+ "    row.children, label.closest('td'));"
+				+ "  return caption + '=cell' + cellIndex + '/' + row.children.length"
+				+ "    + ':' + Array.prototype.map.call(row.children, function (td) {"
+				+ "        var i = td.querySelector(\"input:not([type='hidden'])\");"
+				+ "        return i ? ('input#' + (i.id || '?') + '=' + i.value) : 'none';"
+				+ "      }).join(','); }).join(' ~~ ')");
 		probes.put("tabPanels", "() => Array.from(document.querySelectorAll("
 				+ "'div.desktop-tabpanel')).map(e => (e.id || '?') + '#'"
 				+ " + e.className + '#toolbar=' + e.querySelectorAll("
@@ -611,37 +625,57 @@ class LegacyBusinessPartnerWriteOracleTest {
 	 * cell's own text node -- so it would have matched nothing here.
 	 */
 	/**
-	 * The editor for a dictionary column, addressed by the id ADempiere gives it.
+	 * The editor for a dictionary column.
 	 *
-	 * <p>Resolved by COLUMN, not by caption or by grid structure. Both earlier
-	 * strategies failed on this form: the adjacent-cell rule found nothing (run
-	 * 33474413799) and the document-order rule silently resolved "Search Key" to
-	 * the Partner Parent combo beside it, so the driver typed the record's key
-	 * into the wrong control and saved a blank one (run 33478439643). A rule that
-	 * can resolve to a neighbouring field is not usable here: the failure it
-	 * produces is a plausible wrong record, not an error.
+	 * <p>Resolved by COLUMN, never by proximity. Both proximity rules tried
+	 * earlier failed on this form, and the second failed silently: the
+	 * document-order rule resolved "Search Key" to the Partner Parent combo
+	 * beside it, so the driver typed the record's key into the wrong control and
+	 * saved a blank one (run 33478439643). A rule that can drift onto a
+	 * neighbouring field is unusable here, because its failure is a plausible
+	 * wrong record rather than an error.
 	 *
-	 * <p>The diagnostics of that run showed ADempiere gives every editor cell an
-	 * id of the form {@code unqField_<tab>_<row>_<Table>_<Column><n>}. That names
-	 * the column the oracle actually cares about, is independent of how the grid
-	 * nests its cells, and cannot drift onto the next field. Ambiguity is a hard
-	 * failure rather than a {@code first()}.
+	 * <p>Two resolutions, because ADempiere only gives some editors a
+	 * column-named id. {@code WEditor.java:127-132} asks for
+	 * {@code unqField_<window>_<tab>_<table>_<column>}, and run 33479498656
+	 * showed the request is honoured for combos, checkboxes and dates but not
+	 * for plain text editors -- {@code IsActive} carries the id and {@code Value}
+	 * and {@code Name} do not.
+	 *
+	 * <p>The fallback is exact rather than approximate.
+	 * {@code ADTabPanel.java:488-500} appends the caption div and then the
+	 * editor as adjacent children of one {@code Row}, so they are adjacent cells
+	 * of that row -- which is what run 33474413799's rule assumed and got wrong
+	 * only because it tested {@code text()} on the cell, while the caption lives
+	 * in a nested label. Matched on the label itself, the relationship is the one
+	 * the layout code actually builds.
+	 *
+	 * <p>Either way an ambiguous or missing match is a hard failure, never a
+	 * {@code first()} that picks something.
 	 */
 	private Locator columnInput(Page page, String column) {
-		String marker = "_" + TABLE + "_" + column;
-		Locator direct = tabPanel(page).locator(
-				"xpath=.//input[contains(@id,'" + marker + "')][not(@type='hidden')]");
-		if (direct.count() == 0) {
-			// The id may sit on the editor's wrapper rather than on the input.
-			direct = tabPanel(page).locator(
-					"xpath=.//*[contains(@id,'" + marker + "')]"
-							+ "[not(.//*[contains(@id,'" + marker + "')])]"
-							+ "//input[not(@type='hidden')]");
+		Locator byId = tabPanel(page).locator(
+				"xpath=.//input[contains(@id,'_" + TABLE + "_" + column + "')]"
+						+ "[not(@type='hidden')]");
+		int byIdCount = byId.count();
+		assertTrue(byIdCount <= 1,
+				"column " + column + " matched " + byIdCount + " editor ids");
+		if (byIdCount == 1) {
+			return byId.first();
 		}
-		int count = direct.count();
-		assertEquals(1, count,
-				"expected exactly one editor for column " + column + ", found " + count);
-		return direct.first();
+
+		String caption = CAPTIONS.get(column);
+		assertNotNull(caption,
+				"column " + column + " carries no editor id and no declared caption");
+		Locator byCaption = tabPanel(page).locator(
+				"xpath=.//div[contains(@class,'field-label')]"
+						+ "/*[normalize-space(text())='" + caption + "']"
+						+ "/ancestor::td[1]/following-sibling::td[1]"
+						+ "//input[not(@type='hidden')]");
+		int byCaptionCount = byCaption.count();
+		assertEquals(1, byCaptionCount, "the caption '" + caption + "' for column "
+				+ column + " resolved to " + byCaptionCount + " editors");
+		return byCaption.first();
 	}
 
 	/**
