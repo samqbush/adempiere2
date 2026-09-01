@@ -67,6 +67,28 @@ Oracle increments (`5g-1a`) ship no modern runtime code. Parity increments
 Without this rule a single green PR could author the expectation and the
 implementation together, and the gate would be a tautology.
 
+#### 3a. Every increment that ships modern code names the increment that captured its expected answer
+
+*Amended during `5g-1a`.* Decisions 2 and 3 are only enforceable if each parity
+increment can point at a specific, merged, frozen, domain-reviewed oracle. The
+Phase 5g decomposition table in `MODERNIZATION_PLAN.md` therefore carries an
+**"Expected answer captured by"** column, and an increment whose entry reads
+`unassigned - blocking` **may not begin**. Naming and merging its oracle is the
+first task of the increment that precedes it.
+
+Applying this to the table exposed a gap the original decomposition did not
+state: it names exactly one oracle increment, `5g-1a`, and every increment after
+it ships modern code. Only `5g-1b` has an oracle. This is registered as residual
+risk **R11**.
+
+The first concrete casualty was the `C_BPartner_Location` tab, which
+`contracts/legacy-web-write-v1/exclusions.tsv` originally assigned to `5g-1b`.
+5g-1a excludes that tab from its capture because
+`CalloutBPartnerLocation.formatPhone` puts callout arithmetic between the window
+and the effect, so 5g-1b would have had to invent the answer it scores.
+Callout-bearing writes are a distinct behaviour class - the 5g-0 inventory
+classified 174 callout columns - and are now increment `5g-1f`.
+
 ### 4. Isolation is full seed restore, not surgical rollback
 
 `scripts/phase5/reset-oracle-fixture.sh` cannot reset a write workload. It is
@@ -207,11 +229,19 @@ explicitly excluded until `5g-2`.
 Phase 5e proved client/org/role/user/language identity isolation. It did not
 prove transactional correctness under concurrent edits or process execution.
 
-From `5g-1b` onward the matrix adds: two users editing the same record (proving
-the legacy conflict behaviour), concurrent writes in different client/org
-contexts, a process-completion test that records the executing identity and
-verifies thread-context cleanup, and duplicate-submit protection or an explicit
-legacy-parity result.
+From `5g-1b` onward the matrix adds: two users editing the same record,
+concurrent writes in different client/org contexts, a process-completion test
+that records the executing identity and verifies thread-context cleanup, and
+duplicate-submit protection or an explicit legacy-parity result.
+
+*Amended during `5g-1a`.* "From `5g-1b` onward" describes where the **modern**
+comparison runs, not where the expected answer comes from. Decisions 2 and 3
+apply to concurrency exactly as they apply to any other behaviour class, so the
+**legacy** conflict behaviour for two users editing one `C_BPartner` record is
+captured, domain-reviewed and frozen by `5g-1a` as `concurrency-facts.tsv`, and
+`5g-1b` scores the modern runtime against it. The remaining matrix rows above
+each require the legacy answer their own oracle increment freezes; see decision
+3a and residual risk R11.
 
 ### 13. `5g-7` owns the Phase 5 exit criteria that no increment otherwise claims
 
