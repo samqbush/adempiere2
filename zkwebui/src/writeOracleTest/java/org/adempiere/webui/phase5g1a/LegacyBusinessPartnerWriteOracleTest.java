@@ -281,6 +281,16 @@ class LegacyBusinessPartnerWriteOracleTest {
 				+ "'div.z-window-modal')).map(e => e.textContent.slice(0, 120)).join('|')");
 		probes.put("titles", "() => Array.from(document.querySelectorAll('[title]'))"
 				+ ".map(e => e.getAttribute('title')).join('|')");
+		probes.put("fieldMarkup", "() => ['Search Key','Name','Active']"
+				+ ".map(function (caption) {"
+				+ "  var node = Array.from(document.querySelectorAll("
+				+ "    'td, span, label, div')).filter(function (e) {"
+				+ "      return e.textContent.trim() === caption"
+				+ "        && e.children.length === 0; })[0];"
+				+ "  if (!node) { return caption + '=<no exact caption node>'; }"
+				+ "  var row = node.closest('tr') || node.parentElement;"
+				+ "  return caption + '=' + row.outerHTML.slice(0, 600);"
+				+ "}).join(' ~~ ')");
 		probes.put("tabPanels", "() => Array.from(document.querySelectorAll("
 				+ "'div.desktop-tabpanel')).map(e => (e.id || '?') + '#'"
 				+ " + e.className + '#toolbar=' + e.querySelectorAll("
@@ -415,9 +425,13 @@ class LegacyBusinessPartnerWriteOracleTest {
 	 * increment and is recorded in {@code exclusions.tsv}.
 	 */
 	private void deactivate(Page page) {
+		// The Active control is a checkbox whose box PRECEDES its caption, so it
+		// cannot use labelledInput's document-order rule. ZK renders the box and
+		// its caption inside one wrapper, which is what is matched here.
 		Locator active = tabPanel(page)
-				.locator("xpath=.//td[normalize-space(.)='Active']"
-						+ "/following-sibling::td[1]//input[@type='checkbox']")
+				.locator("xpath=.//input[@type='checkbox']"
+						+ "[following-sibling::*[normalize-space(.)='Active']"
+						+ " or ../*[normalize-space(text())='Active']]")
 				.first();
 		active.waitFor();
 		assertTrue(active.isChecked(), "the record was not active before deactivation");
@@ -535,9 +549,19 @@ class LegacyBusinessPartnerWriteOracleTest {
 	 * cell's own text node -- so it would have matched nothing here.
 	 */
 	private Locator labelledInput(Page page, String label) {
+		// Resolved by DOCUMENT ORDER, not by table structure. Run 33474413799
+		// created the record successfully -- the form was on screen with a
+		// "Search Key" caption and its empty field beside it -- and still could
+		// not resolve `td[...]/following-sibling::td[1]//input`. ADempiere's
+		// form grid does not put the caption and its editor in adjacent cells
+		// of one row in the way that assumed.
+		//
+		// The caption is immediately followed by its own editor visually and in
+		// the markup, so the first non-hidden input after the caption is that
+		// editor. This holds regardless of how the grid nests its cells.
 		return tabPanel(page)
-				.locator("xpath=.//td[normalize-space(.)='" + label + "']"
-						+ "/following-sibling::td[1]//input")
+				.locator("xpath=.//*[normalize-space(text())='" + label + "']"
+						+ "/following::input[not(@type='hidden')][1]")
 				.first();
 	}
 
