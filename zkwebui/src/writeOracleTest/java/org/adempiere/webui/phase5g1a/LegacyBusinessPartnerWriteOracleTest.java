@@ -343,9 +343,14 @@ class LegacyBusinessPartnerWriteOracleTest {
 	 * selection and the rendered window.
 	 *
 	 * @param searchKey the record to load, or {@code null} to enter the window
-	 *                  with no record loaded -- which is what the create step
-	 *                  needs, and is reached by cancelling rather than by
-	 *                  running an empty query that would load every partner.
+	 *                  on an unconstrained query.
+	 *
+	 * <p>{@code null} must NOT be answered by cancelling. Run 33471012956
+	 * proved cancelling aborts opening the window altogether: the dialog closed,
+	 * no modal remained, and the desktop was left holding its single
+	 * {@code Menu (1)} tab. Cancel means "never mind", not "open it empty".
+	 * The create step therefore runs the query the way a user would and then
+	 * uses the window's own New Record action.
 	 */
 	private void enterWindowThroughFindDialog(Page page, String searchKey) {
 		Locator dialog = page.locator("div.z-window-modal").first();
@@ -358,11 +363,7 @@ class LegacyBusinessPartnerWriteOracleTest {
 		// (WAppsAction.java:96-106). They therefore carry a title attribute and
 		// NO text, so they are addressed the same way the proven role-panel
 		// confirmation addresses its own OK (LegacyBrowserFlow.confirmRole).
-		if (searchKey == null) {
-			page.waitForResponse(
-					response -> response.request().url().contains("/zkau"),
-					() -> dialog.locator("[title='Cancel']").first().click());
-		} else {
+		if (searchKey != null) {
 			Locator search = dialog
 					.locator("xpath=.//td[normalize-space(text())='Search Key']"
 							+ "/following-sibling::td[1]//input")
@@ -370,10 +371,10 @@ class LegacyBusinessPartnerWriteOracleTest {
 			search.waitFor();
 			search.fill(searchKey);
 			search.press("Tab");
-			page.waitForResponse(
-					response -> response.request().url().contains("/zkau"),
-					() -> dialog.locator("[title='OK']").first().click());
 		}
+		page.waitForResponse(
+				response -> response.request().url().contains("/zkau"),
+				() -> dialog.locator("[title='OK']").first().click());
 		dialog.waitFor(new Locator.WaitForOptions().setState(WaitForSelectorState.DETACHED));
 	}
 
