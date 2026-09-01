@@ -1,7 +1,8 @@
 # ADR: Phase 5g web UI functional parity
 
 Status: accepted; `5g-0` merged to `develop` as PR #13 at `91c4c2029`;
-`5g-1a` in progress on `phase-5g-1a-bp-write-oracle`
+`5g-1a` merged as PR #16 at `1a761b55b`; amended by decision 15, added by
+increment `5g-1a-x`
 
 Extends:
 
@@ -277,6 +278,60 @@ enabling the context nor by leaving the decision open. It is implemented in
 `5g-0` does not *settle* any of the three dispositions, and cannot: none can be
 decided from this repository. The one outcome this ADR forbids is arriving at
 Phase 5h with three legacy-only contexts and no decision.
+
+### Decision 15: an oracle may be amended, but only by an oracle increment
+
+Added by increment `5g-1a-x`, after `5g-1a` merged and before `5g-1b` began.
+
+A frozen oracle is not infallible. Planning `5g-1b` surfaced three obligations
+that could not be discharged inside a parity increment without breaking
+decision 3:
+
+1. **R12, the sentinel blind spot.** `MODERNIZATION_PLAN.md` had assigned the
+   repair to `5g-1b`. But giving the whole-database sentinel a content component
+   changes the emitted effect-document format, so every frozen
+   `effect-model/*.txt` has to be re-captured with `--freeze`. That is an oracle
+   act, and a branch that both re-froze the answer and implemented the runtime
+   scored against it would be scoring itself.
+2. **A duplicate-submit answer that did not exist.** `concurrency-facts.tsv`
+   captured a stale-editor conflicting save, not a repeated non-idempotent AU
+   request. `5g-1b`'s write-traffic security matrix needs the second property,
+   and Phase 5e's replay coverage does not supply it: that covers the
+   single-use T5e-1 handoff ticket, which is not a runtime browser request.
+   Asserting duplicate-submit *parity* from `5g-1a` would have been inventing
+   the answer.
+3. **Two fact classes that were not product facts.**
+   `allowed-browser-errors.tsv` was compared by exact list equality and froze
+   six repetitions of a 404 for a Safari theme stylesheet the ZK 3.6 theme
+   directory does not ship. The Phase 5d modern slice already replaces that
+   entire `.dsp` theme, so the modern runtime would have failed the class by
+   construction. Left to `5g-1b`, the sequence would have been: observe the
+   modern runtime, discover the inconvenient difference, then decide it was
+   acceptable. That is the tautology decision 3 exists to forbid.
+
+The rule this establishes:
+
+> When a parity increment discovers that its oracle is wrong, incomplete, or
+> unscoreable, it does not fix it. It stops, and a **named oracle amendment
+> increment** repairs the oracle on legacy evidence alone, on its own branch and
+> pull request, following the same two-run protocol as the original capture: a
+> freeze run that writes the answer and a **separate** acceptance run, with
+> freezing off, that scores it. The amendment is domain-reviewed, merged to
+> `develop`, and only then does the parity increment resume.
+
+An amendment increment ships no modern runtime code, and is recorded in the
+Phase 5g decomposition table as its own row with `Ships modern code? No`.
+
+Two corollaries, because an amendment is a weakening opportunity:
+
+- **A relaxation carries its own proof.** `transport-class-policy.tsv` declares
+  per-class comparison semantics, is inside the domain-review digest so
+  relaxing it forces a re-review, and fails closed on an undeclared class. Its
+  proof asserts what the allowlist still rejects, what the exact classes still
+  reject, and that a byte-identical capture scores clean.
+- **The A/B self-diff is never relaxed.** Reproducibility of one runtime against
+  itself is a different property from parity between two runtimes, so every
+  fact class stays exact there regardless of policy.
 
 ## Consequences
 
