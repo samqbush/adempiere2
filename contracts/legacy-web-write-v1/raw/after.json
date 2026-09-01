@@ -13,7 +13,8 @@
     "record_id": 1000123,
     "trxname": "POSave_0f8c2a41-9d3e-4b7a-8c56-1e2f3a4b5c6d",
     "updated": "2026-03-01 10:15:22.200",
-    "updatedby": 101
+    "updatedby": 101,
+    "uuid": "00000000-0000-4000-8000-703100734579"
    }
   },
   "c_bpartner": {
@@ -32,6 +33,7 @@
     "totalopenbalance": null,
     "updated": "2026-03-01 10:15:22.113",
     "updatedby": 101,
+    "uuid": "00000000-0000-4000-8000-480717883798",
     "value": "P5G1A-BP-001"
    }
   },
@@ -46,7 +48,8 @@
     "isactive": "Y",
     "name": "P5G1A-LOC",
     "updated": "2026-03-01 10:15:23.001",
-    "updatedby": 101
+    "updatedby": 101,
+    "uuid": "00000000-0000-4000-8000-437146170149"
    }
   }
  },

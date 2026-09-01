@@ -111,11 +111,11 @@ tasks.register('verifyPhase5gWriteNormalizerMutationProof', Exec) {
 			.findAll { it && !it.startsWith('#') && !it.startsWith('mutation\t') }
 		def detect = rows.findAll { it.split('\t')[1] == 'must-detect' }
 		def normalize = rows.findAll { it.split('\t')[1] == 'must-normalize' }
-		if (detect.size() < 10 || normalize.size() < 6) {
+		if (detect.size() < 10 || normalize.size() < 7) {
 			throw new GradleException(
 				"The normalizer mutation proof scored ${detect.size()} must-detect and " +
 					"${normalize.size()} must-normalize mutation(s); the reviewed set is " +
-					'10 and 6. A shrinking proof is a weakening proof.')
+					'10 and 7. A shrinking proof is a weakening proof.')
 		}
 		logger.lifecycle(
 			"Normalizer mutation proof scored ${detect.size()} defect and " +

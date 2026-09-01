@@ -156,6 +156,19 @@ def mutate_transaction_name(doc: dict) -> None:
     )
 
 
+def mutate_record_uuid(doc: dict) -> None:
+    """The per-row generated UUID moves, as it does on every capture.
+
+    `must-normalize`: ADempiere allocates a fresh random `UUID` to every row it
+    inserts, so two captures of the same flow always disagree on it. It carries
+    no business meaning and no in-scope row references it, so the disagreement
+    is pure volatility.
+    """
+    doc["scope"]["c_bpartner"]["1000123"]["uuid"] = (
+        "ffffffff-eeee-4ddd-8ccc-bbbbbbbbbbbb"
+    )
+
+
 def mutate_generated_identity(doc: dict) -> None:
     # The identity VALUES move, as they would between two real captures, but the
     # graph shape is unchanged. This must normalize away, or every capture would
@@ -183,6 +196,7 @@ MUTATIONS = [
     ("generated-identities-moved", "must-normalize", mutate_generated_identity),
     ("session-identity-moved", "must-normalize", mutate_session_identity),
     ("transaction-name-moved", "must-normalize", mutate_transaction_name),
+    ("record-uuid-moved", "must-normalize", mutate_record_uuid),
 ]
 
 

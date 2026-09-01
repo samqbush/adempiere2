@@ -41,6 +41,7 @@ foreign-key edge that does not exist is worse than leaving a value literal.
 | `Created`, `Updated` | replaced with `<volatile>` | Wall-clock timestamps. They differ between any two captures and mean nothing to a transition. |
 | Numeric scale | canonicalized by value | `10` and `10.00` are the same quantity. `10.5` and `10.6` still differ, and `numeric-value-changed` proves it. |
 | Whitespace, non-breaking spaces | collapsed | Rendering volatility. Interior structure is preserved. |
+| `UUID` | replaced with `<volatile>` | ADempiere allocates a fresh random identifier to every row it inserts, so two captures of the same flow always disagree. It carries no business meaning and no in-scope row references it. Scored as `record-uuid-moved`. |
 | Generated identities | mapped to symbols | See above. Never dropped. |
 
 ## What is deliberately kept

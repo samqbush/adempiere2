@@ -52,6 +52,14 @@ VOLATILE_COLUMNS = frozenset(
         # to a capture-local symbol and would otherwise be frozen as a raw
         # integer that changes on every capture.
         "ad_session_id",
+        # Every ADempiere table carries a `UUID` column whose value is a freshly
+        # generated random identifier, allocated per row at insert. Run
+        # 33486692102 captured one on the created business partner. It is not a
+        # business fact, it is not a foreign key any in-scope row references, and
+        # it differs between any two captures of the same flow, so left literal
+        # it would make the A/B self-diff fail permanently for a reason that says
+        # nothing about the runtime.
+        "uuid",
     }
 )
 
