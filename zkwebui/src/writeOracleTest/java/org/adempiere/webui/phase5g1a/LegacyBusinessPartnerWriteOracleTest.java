@@ -281,6 +281,10 @@ class LegacyBusinessPartnerWriteOracleTest {
 				+ "'div.z-window-modal')).map(e => e.textContent.slice(0, 120)).join('|')");
 		probes.put("titles", "() => Array.from(document.querySelectorAll('[title]'))"
 				+ ".map(e => e.getAttribute('title')).join('|')");
+		probes.put("tabPanels", "() => Array.from(document.querySelectorAll("
+				+ "'div.desktop-tabpanel')).map(e => (e.id || '?') + '#'"
+				+ " + e.className + '#toolbar=' + e.querySelectorAll("
+				+ "'a.toolbar-button').length).join('|')");
 		probes.put("labels", "() => Array.from(document.querySelectorAll("
 				+ "'span.z-label, td.z-row-cell span')).slice(0, 200)"
 				+ ".map(e => e.textContent).join('|')");
@@ -535,10 +539,20 @@ class LegacyBusinessPartnerWriteOracleTest {
 		button.click();
 	}
 
+	/**
+	 * The open window's content panel.
+	 *
+	 * <p>Filtered by the record toolbar, NOT by the tab caption. The caption
+	 * lives in the desktop's tab bar, outside every content panel, so a filter
+	 * on it matches nothing -- run 33472649370 opened the window correctly and
+	 * then timed out here, with the probes reporting the tab present and no
+	 * modal left. The Menu panel carries no record toolbar, so the toolbar is
+	 * what actually distinguishes a window panel from it.
+	 */
 	private Locator tabPanel(Page page) {
 		return page.locator("div.desktop-tabpanel")
 				.filter(new Locator.FilterOptions()
-						.setHas(page.locator("span.z-tab-text:text-is('" + WINDOW + "')")))
+						.setHas(page.locator("a.toolbar-button[title='Save changes']")))
 				.first();
 	}
 
