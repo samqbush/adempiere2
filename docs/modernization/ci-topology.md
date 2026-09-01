@@ -256,8 +256,10 @@ manual matrix. Any other value names a single task, runs only `Current-phase
 database smoke`, and suppresses `Contracts` and the regression matrix - without
 that suppression, asking for one task would also launch a half-hour contract
 graph and seven historical database-backed smokes. The allowlist currently
-holds `phase5g1aWriteOracleCapture`, the browser capture alone, so a selector
-failure can be reproduced without the surrounding restore and scoring lane.
+holds `phase5g1aLegacyWriteOracleSmoke`, the whole capture lane - which is the
+value a freeze run wants - and `phase5g1aWriteOracleCapture`, the browser
+capture alone, so a selector failure can be reproduced without the surrounding
+restore and scoring lane.
 
 The input is a typed `choice` over a fixed allowlist rather than free text
 because `.github/actions/adempiere-build` expands its `task` and `args` inputs

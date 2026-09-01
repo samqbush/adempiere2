@@ -45,6 +45,12 @@ on:
         type: choice
         options:
           - full
+          # The whole capture lane, alone. This is the value a freeze run wants:
+          # `full` would also launch the contract graph and seven historical
+          # database-backed smokes, none of which the oracle capture needs.
+          - phase5g1aLegacyWriteOracleSmoke
+          # The browser capture alone, so a selector failure can be reproduced
+          # without the surrounding restore and scoring lane.
           - phase5g1aWriteOracleCapture
       # The Phase 5g-1a oracle has to come from somewhere, and a run that
       # invents the expected answer must not also be the run that verifies it.
