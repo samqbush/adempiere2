@@ -73,7 +73,7 @@ def mutate_isactive(doc: dict) -> None:
 
 
 def mutate_drop_changelog(doc: dict) -> None:
-    del doc["scope"]["ad_changelog"]["900001"]
+    del doc["scope"]["ad_changelog"]["900001+3499"]
     doc["sentinel"]["ad_changelog"] -= 1
 
 
@@ -121,13 +121,39 @@ def mutate_colliding_unrelated_identity(doc: dict) -> None:
     exist -- and would then be flaky, because the collision holds in one capture
     and not the next.
 
-    `AD_ChangeLog.AD_Session_ID` is the realistic carrier: it is a large
-    sequence-allocated value in the same range as `C_BPartner_ID`.
+    `C_BPartner.C_BP_Group_ID` is the carrier. It was deliberately moved here
+    from `AD_ChangeLog.AD_Session_ID`, which is a better illustration of the
+    collision but is now classified volatile -- the session identity is
+    allocated at login and changes between any two captures, so a proof built on
+    it would be asserting that a genuinely unstable value must survive. It is
+    NOT carried on a key component either, so the mutation changes a value
+    without changing the row's captured identity.
 
     This is `must-detect`: the colliding value must survive into the comparison
     as a literal, so changing it changes the effect.
     """
-    doc["scope"]["ad_changelog"]["900001"]["ad_session_id"] = 1000123
+    doc["scope"]["c_bpartner"]["1000123"]["c_bp_group_id"] = 1000123
+
+
+def mutate_session_identity(doc: dict) -> None:
+    """The login-allocated session identity moves, as it does on every capture.
+
+    `must-normalize`: AD_Session is outside the measurement scope, so this value
+    can never resolve to a capture-local symbol. Left literal it would make the
+    A/B self-diff fail permanently for a reason that is not about the runtime.
+    """
+    doc["scope"]["ad_changelog"]["900001+3499"]["ad_session_id"] = 987654
+
+
+def mutate_transaction_name(doc: dict) -> None:
+    """The per-save transaction name moves.
+
+    `must-normalize`: Trx.createTrxName appends a fresh UUID to the "POSave"
+    prefix on every save, so two captures of the same flow always disagree here.
+    """
+    doc["scope"]["ad_changelog"]["900001+3499"]["trxname"] = (
+        "POSave_11111111-2222-3333-4444-555555555555"
+    )
 
 
 def mutate_generated_identity(doc: dict) -> None:
@@ -137,7 +163,7 @@ def mutate_generated_identity(doc: dict) -> None:
     doc["scope"]["c_bpartner"]["2000999"] = doc["scope"]["c_bpartner"].pop("1000123")
     doc["scope"]["c_bpartner"]["2000999"]["c_bpartner_id"] = 2000999
     doc["scope"]["c_bpartner_location"]["1000456"]["c_bpartner_id"] = 2000999
-    doc["scope"]["ad_changelog"]["900001"]["record_id"] = 2000999
+    doc["scope"]["ad_changelog"]["900001+3499"]["record_id"] = 2000999
 
 
 MUTATIONS = [
@@ -155,6 +181,8 @@ MUTATIONS = [
     ("numeric-scale-changed", "must-normalize", mutate_numeric_scale),
     ("whitespace-volatility", "must-normalize", mutate_whitespace),
     ("generated-identities-moved", "must-normalize", mutate_generated_identity),
+    ("session-identity-moved", "must-normalize", mutate_session_identity),
+    ("transaction-name-moved", "must-normalize", mutate_transaction_name),
 ]
 
 

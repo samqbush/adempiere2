@@ -111,11 +111,11 @@ tasks.register('verifyPhase5gWriteNormalizerMutationProof', Exec) {
 			.findAll { it && !it.startsWith('#') && !it.startsWith('mutation\t') }
 		def detect = rows.findAll { it.split('\t')[1] == 'must-detect' }
 		def normalize = rows.findAll { it.split('\t')[1] == 'must-normalize' }
-		if (detect.size() < 10 || normalize.size() < 4) {
+		if (detect.size() < 10 || normalize.size() < 6) {
 			throw new GradleException(
 				"The normalizer mutation proof scored ${detect.size()} must-detect and " +
 					"${normalize.size()} must-normalize mutation(s); the reviewed set is " +
-					'10 and 4. A shrinking proof is a weakening proof.')
+					'10 and 6. A shrinking proof is a weakening proof.')
 		}
 		logger.lifecycle(
 			"Normalizer mutation proof scored ${detect.size()} defect and " +
@@ -322,4 +322,57 @@ tasks.register('phase5g1aFinalVerification') {
 		tasks.named('verifyPhase5gWriteNormalizerMutationProof'),
 		tasks.named('verifyPhase5gAmbientClassificationMutationProof'),
 		tasks.named('phase5g0FinalVerification'))
+}
+
+// ---------------------------------------------------------------------------
+// The database-backed capture lane.
+// ---------------------------------------------------------------------------
+//
+// Everything above is database-neutral. This is the half that actually observes
+// the legacy runtime, and it is the only half that can produce the oracle.
+
+def phase5g1aProperty = { String name, Object fallback ->
+	rootProject.providers.gradleProperty(name).getOrElse(fallback.toString())
+}
+
+tasks.register('phase5g1aLegacyWriteOracleSmoke', Exec) {
+	group = 'verification'
+	description =
+		'Captures the legacy Business Partner write flow twice through the public /webui origin and scores both against the frozen oracle'
+	dependsOn tasks.named('phase3AntDatabaseBuild')
+	// The write driver runs in the checksum-verified Phase 5c browser
+	// installation. This increment adds no browser artifact.
+	dependsOn tasks.named('installPhase5cBrowser')
+	commandLine 'bash', phase5g1aScript('run-write-oracle-smoke.sh').absolutePath,
+		phase5g1aProperty('phase3DbHost', '127.0.0.1'),
+		phase5g1aProperty('phase3DbPort', '5432'),
+		phase5g1aProperty('phase3DbName', 'adempiere_phase3_ci'),
+		phase5g1aProperty('phase3DbUser', 'adempiere_phase3_ci'),
+		phase5g1aProperty('phase3DbSystemUser', 'postgres'),
+		'ADempiere Phase 3 disposable database',
+		phase5g1aBuildRoot.get().dir('runtime-evidence').asFile.absolutePath,
+		// Freeze mode is how the oracle is first produced. It is NOT an
+		// acceptance run and the gate never uses it: a run that invents the
+		// expected answer cannot also be the run that verifies it.
+		phase5g1aProperty('phase5g1aFreeze', 'false')
+	environment 'ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD',
+		phase5g1aProperty('phase3DbSystemPassword', '')
+	environment 'ADEMPIERE_PHASE5D_DB_PASSWORD',
+		phase5g1aProperty('phase3DbPassword', 'adempiere_phase3_ci')
+	doFirst {
+		if (!phase5g1aProperty('phase3DbSystemPassword', '')) {
+			throw new GradleException(
+				'-Pphase3DbSystemPassword is required: the write oracle lane restores ' +
+					'a golden archive and cannot do so without the system role.')
+		}
+	}
+}
+
+// The Phase 3 cleanup finalizer drops the disposable database. It is attached to
+// phase3AntDatabaseBuild, so without explicit ordering it can run before the
+// capture lane that needs the database still standing -- and the lane would then
+// fail against a database that no longer exists, for a reason that has nothing
+// to do with the oracle.
+tasks.matching { it.name == 'cleanupPhase3Database' }.configureEach { cleanup ->
+	cleanup.mustRunAfter(tasks.named('phase5g1aLegacyWriteOracleSmoke'))
 }

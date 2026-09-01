@@ -229,11 +229,14 @@ case "$command" in
     # the fixture instead of the window. What DOES belong here is state the flow
     # depends on but does not itself create.
     #
-    # GardenUser is primed because the concurrency step needs two users whose
-    # first-login behaviour is already spent. First login creates AD_Preference
-    # rows and change-logs them (see reset-oracle-fixture.sh), so an unprimed
-    # second user makes the concurrency capture differ from every later replay
-    # for a reason that has nothing to do with concurrency.
+    # The fixture is assertion-only: it creates nothing and primes nothing. The
+    # second editor's first-login writes -- AD_Session, AD_Preference and their
+    # change logs -- are therefore real, and they are handled where they belong,
+    # by giving that login its own step boundary in the driver
+    # ("concurrency-second-editor-authenticated") so they are never attributed
+    # to the concurrency update. Priming them away in SQL would have meant
+    # reproducing application behaviour in the fixture, which is the one thing
+    # this file exists not to do.
     require_marked_database
     db_password=${ADEMPIERE_PHASE5D_DB_PASSWORD:?fixture requires the application database password}
     PGPASSWORD=$db_password psql \

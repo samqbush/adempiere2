@@ -246,10 +246,39 @@ def consistent_snapshot(db: Database, scope: list[dict]) -> dict:
     captured: dict[str, dict[str, dict]] = {}
     for entry in scope:
         table = entry["table"].lower()
-        key = entry["key_column"].lower()
+        # A composite key is declared as `a+b`. AD_ChangeLog needs one:
+        # AD_ChangeLog_ID alone is NOT unique, because PO.save reuses a single
+        # id for every column changed in one save (PO.java feeds the first
+        # MChangeLog's id back into each subsequent column). Keying on it alone
+        # collapsed an N-column change into one arbitrarily chosen row, which
+        # would have frozen a single column-change per save as the oracle and
+        # scored a runtime that logged a different subset as green.
+        columns = [part.strip().lower() for part in entry["key_column"].split("+")]
         rows = document["scope"].get(table) or []
-        captured[table] = {str(row[key]): row for row in rows}
+        keyed: dict[str, dict] = {}
+        for row in rows:
+            identity = "+".join(str(row[column]) for column in columns)
+            if identity in keyed:
+                raise SystemExit(
+                    f"two rows in {table} share the declared key {identity!r}. "
+                    "Silently keeping one of them would drop a real write from "
+                    "the measurement, so this is a failure: widen key_column in "
+                    "measurement-scope.tsv to the table's real identity."
+                )
+            keyed[identity] = row
+        captured[table] = keyed
     return {"sentinel": sentinel, "scope": captured}
+
+
+def primary_component(key: str) -> str:
+    """The first component of a possibly-composite captured key.
+
+    A composite key exists so that two rows sharing an id are not collapsed.
+    Identity SYMBOLS, though, are keyed on the generated primary-key value alone,
+    because that is the value foreign keys in other rows actually carry -- a
+    foreign key never points at `900001+3499`.
+    """
+    return key.split("+", 1)[0]
 
 
 def load_table_ids(path: Path) -> dict[str, int]:
@@ -344,7 +373,7 @@ def diff(args) -> int:
         before_rows = before["scope"].get(table, {})
         for key in sorted(after["scope"][table]):
             if key not in before_rows:
-                identities.declare(table, f"{table}_id", key)
+                identities.declare(table, f"{table}_id", primary_component(key))
 
     for table in sorted(set(before["scope"]) | set(after["scope"])):
         before_rows = before["scope"].get(table, {})

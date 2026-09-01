@@ -41,6 +41,17 @@ VOLATILE_COLUMNS = frozenset(
     {
         "created",
         "updated",
+        # `AD_ChangeLog.TrxName` is a per-save random value: Trx.createTrxName
+        # appends a UUID (base/src/org/compiere/util/Trx.java), PO.save uses
+        # "POSave" as its prefix, and MChangeLog persists the result. Two
+        # captures of the same flow therefore always disagree on it, and the
+        # disagreement says nothing about the runtime.
+        "trxname",
+        # The session identity is allocated at login. It is a real foreign key,
+        # but AD_Session is not in the measurement scope, so it cannot resolve
+        # to a capture-local symbol and would otherwise be frozen as a raw
+        # integer that changes on every capture.
+        "ad_session_id",
     }
 )
 
