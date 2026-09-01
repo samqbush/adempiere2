@@ -14,7 +14,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 import org.adempiere.webui.phase5d.BrowserSemanticContract;
 import org.adempiere.webui.phase5legacy.LegacyBrowserFlow;
@@ -336,6 +335,11 @@ class LegacyBusinessPartnerWriteOracleTest {
 		probes.put("editorIds",
 				"() => Array.from(document.querySelectorAll(\"[id*='_C_BPartner_']\"))"
 						+ ".map(e => e.tagName.toLowerCase() + '#' + e.id).join('|')");
+		probes.put("orgComboItems",
+				"() => Array.from(document.querySelectorAll("
+						+ "\"[id*='_C_BPartner_AD_Org_ID'][id$='!pp'] tr\"))"
+						+ ".map(e => (e.getAttribute('z.label') || '<no z.label>')"
+						+ " + '/' + e.className + '/' + e.textContent.trim()).join('|')");
 		probes.put("fieldRows", "() => ['Search Key','Name'].map(function (caption) {"
 				+ "  var label = Array.from(document.querySelectorAll("
 				+ "    'div.field-label > *')).filter(function (e) {"
@@ -715,9 +719,17 @@ class LegacyBusinessPartnerWriteOracleTest {
 		Locator button = tabPanel(page).locator(marker + "[id$=\"!btn\"]").first();
 		button.waitFor();
 		button.click();
-		Locator item = page.locator(marker + "[id$=\"!pp\"] tr.z-combo-item")
-				.filter(new Locator.FilterOptions()
-						.setHasText(Pattern.compile("^" + Pattern.quote(label) + "$")));
+		// Matched on ZK's own z.label as well as on the rendered text. Run
+		// 33484416830 offered Fertilizer -- the probe listed it among the
+		// organisation items -- and a text-only match still found nothing,
+		// because a combo item's text is assembled from its cells and carries
+		// the label the attribute states exactly.
+		Locator popup = page.locator(marker + "[id$=\"!pp\"]");
+		Locator item = popup.locator("xpath=.//tr[contains(@class,'z-combo-item')]"
+				+ "[@z.label='" + label + "' or normalize-space(.)='" + label + "']");
+		// The popup renders on demand, so the item is waited for rather than
+		// counted the instant the drop-down is clicked.
+		item.first().waitFor();
 		int count = item.count();
 		assertEquals(1, count, "the combo for column " + column + " offered "
 				+ count + " items matching '" + label + "'");
