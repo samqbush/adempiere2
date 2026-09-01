@@ -9,6 +9,8 @@ concurrency-second-editor-update	concurrency-second-editor-update	effect-model/c
 create	create	effect-model/create.txt
 deactivate	deactivate	effect-model/deactivate.txt
 deactivate-editor-authenticated	deactivate-editor-authenticated	effect-model/deactivate-editor-authenticated.txt
+duplicate-submit	duplicate-submit	effect-model/duplicate-submit.txt
+duplicate-submit-editor-authenticated	duplicate-submit-editor-authenticated	effect-model/duplicate-submit-editor-authenticated.txt
 logged-out	logged-out	effect-model/logged-out.txt
 update	update	effect-model/update.txt
 window-opened	window-opened	effect-model/window-opened.txt

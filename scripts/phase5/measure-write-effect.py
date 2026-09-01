@@ -17,10 +17,18 @@ measurement that queries only contract-declared tables cannot see a write to an
 undeclared one, which is a falsely-green gate and exactly what the "complete
 transitive write set" rule exists to prevent. So:
 
-  Layer 1, the sentinel: row counts for EVERY table in the database. It answers
-    "which tables changed at all", and the score fails when a changed table is
-    neither declared in the effect model nor classified as reviewed ambient
-    state.
+  Layer 1, the sentinel: a row count AND a content fingerprint for EVERY table
+    in the database. It answers "which tables changed at all", and the score
+    fails when a changed table is neither declared in the effect model nor
+    classified as reviewed ambient state.
+
+    The content component is the Phase 5g-1a-x repair of residual risk R12. A
+    count-only sentinel cannot see an `UPDATE` to a table outside the keyed
+    measurement scope, nor an insert paired with a delete that nets to zero
+    within one step. Five of the ten frozen steps assert `[no-effect]`, and one
+    of them -- the refused conflicting save -- is the headline concurrency fact
+    of the whole oracle, so the blind spot sat directly underneath a compared
+    positive assertion.
 
   Layer 2, the keyed facts: full row content for the declared scope tables,
     keyed by fixture identity, so created / updated / deleted rows, the
@@ -137,9 +145,20 @@ class Database:
         `READ ONLY` is not decoration either -- it makes the server reject a
         write from the measurement path rather than trusting this script to
         contain only SELECTs.
+
+        The `SET LOCAL` lines pin every session setting that changes how a row
+        renders as text. The R12 content fingerprint is `md5(row::text)`, so an
+        unpinned `TimeZone` or `DateStyle` would make two captures of identical
+        data disagree -- an under-normalization defect reported as a write.
+        `SET LOCAL` scopes them to this transaction, so the measurement never
+        alters the connection any other caller sees.
         """
         script = (
             "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;\n"
+            "SET LOCAL DateStyle = 'ISO, YMD';\n"
+            "SET LOCAL IntervalStyle = 'postgres';\n"
+            "SET LOCAL TimeZone = 'UTC';\n"
+            "SET LOCAL extra_float_digits = 3;\n"
             f"{sql};\n"
             "COMMIT;\n"
         )
@@ -196,19 +215,87 @@ SENTINEL_TABLE_FLOOR = 500
 # because the previous shape launched a `psql` process for each of a thousand-odd
 # tables -- which was both slow in the blocking CI lane and, far worse, unable to
 # promise that the counts came from one database snapshot.
+#
+# THE CONTENT COMPONENT (R12)
+#
+# Each table also yields a content fingerprint, rendered as `count:s1:s2`:
+#
+#   s1 = sum of the high 64 bits of md5(row::text) over every row
+#   s2 = sum of the low  64 bits of md5(row::text) over every row
+#
+# Both are order-independent aggregates computed in a single pass, so no sort is
+# needed over a schema with a thousand tables in a blocking CI lane. `sum` is
+# used rather than `bit_xor` on purpose: XOR cancels a duplicated pair of
+# identical rows to zero, so inserting two identical rows would leave an
+# XOR-based fingerprint unchanged -- reintroducing a blind spot while appearing
+# to close one.
+#
+# This is a fingerprint, not a full digest, and the contract wording must say so.
+# Two 64-bit sums plus an exact row count are overwhelmingly sufficient to
+# detect an accidental or defective write, which is what this gate exists to
+# catch. They are not a defence against an adversary constructing a deliberate
+# collision, and nothing in the programme claims they are.
+#
+# `md5(x::text)` renders the whole row, so the fingerprint is only reproducible
+# if the session's rendering settings are pinned. `Database.script_json` pins
+# `DateStyle`, `IntervalStyle`, `TimeZone` and `extra_float_digits` inside the
+# same transaction for exactly that reason.
+_SENTINEL_ROW_SQL = (
+    "SELECT count(*)::text"
+    " || '':'' || coalesce(sum(((''x'' || substr(md5(x::text), 1, 16))"
+    "::bit(64)::bigint)::numeric), 0)::text"
+    " || '':'' || coalesce(sum(((''x'' || substr(md5(x::text), 17, 16))"
+    "::bit(64)::bigint)::numeric), 0)::text AS c FROM %I.%I x"
+)
+
 _SENTINEL_SQL = (
-    "SELECT COALESCE(json_object_agg(lower(t.table_name), t.n), '{}'::json)"
+    "SELECT COALESCE(json_object_agg(lower(t.table_name), t.c), '{}'::json)"
     " FROM ("
     "  SELECT c.relname AS table_name,"
     "   (xpath('/row/c/text()',"
-    "     query_to_xml(format('SELECT count(*) AS c FROM %I.%I', n.nspname, c.relname),"
+    f"     query_to_xml(format('{_SENTINEL_ROW_SQL}', n.nspname, c.relname),"
     "                  false, true, '')"
-    "   ))[1]::text::bigint AS n"
+    "   ))[1]::text AS c"
     "  FROM pg_catalog.pg_class c"
     "  JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace"
     "  WHERE c.relkind = 'r' AND n.nspname = current_schema()"
     " ) t"
 )
+
+
+def sentinel_count(fingerprint: str) -> int:
+    """The row-count component of a `count:s1:s2` sentinel fingerprint."""
+    head = fingerprint.split(":", 1)[0]
+    try:
+        return int(head)
+    except ValueError as malformed:
+        raise SystemExit(
+            f"malformed sentinel fingerprint {fingerprint!r}: its first component "
+            "must be an exact row count."
+        ) from malformed
+
+
+def assert_sentinel_shape(document: dict, origin: str) -> None:
+    """Rejects a sentinel that is not in the R12 `count:s1:s2` shape.
+
+    Called at capture time AND again when `diff` loads a snapshot off disk.
+    Validating only at capture leaves a silent downgrade path: two pre-amendment
+    snapshots carrying bare integer counts compare equal whenever the counts
+    match, so the comparison reverts to exactly the R12 blind spot with no
+    diagnostic at all, and a mixed pair raises an unhelpful AttributeError
+    instead of saying what is wrong.
+    """
+    for name, value in document.get("sentinel", {}).items():
+        text = str(value)
+        if len(text.split(":")) != 3:
+            raise SystemExit(
+                f"{origin} carries the sentinel fingerprint {text!r} for {name}, "
+                "which is not the expected count:s1:s2 shape. A snapshot taken "
+                "before the R12 content repair cannot be compared: it records "
+                "only row counts, so a content-only write would read as no "
+                "write. Re-capture it."
+            )
+        sentinel_count(text)
 
 
 def consistent_snapshot(db: Database, scope: list[dict]) -> dict:
@@ -241,7 +328,11 @@ def consistent_snapshot(db: Database, scope: list[dict]) -> dict:
     )
     document = db.script_json(statement)
 
-    sentinel = {name: int(value) for name, value in document["sentinel"].items()}
+    sentinel = {name: str(value) for name, value in document["sentinel"].items()}
+    # Every fingerprint is parsed once here rather than lazily at diff time, so
+    # a malformed value fails the capture that produced it instead of the run
+    # that consumes it hours later.
+    assert_sentinel_shape({"sentinel": sentinel}, "this capture")
     # An empty sentinel makes the undeclared-table completeness backstop
     # vacuous, which is precisely the falsely-green failure layer 1 exists to
     # close. The installed ADempiere seed has well over a thousand base tables,
@@ -362,15 +453,33 @@ def diff(args) -> int:
     ambient_tables = load_ambient_tables(args.ambient)
     before = json.loads(args.before.read_text(encoding="utf-8"))
     after = json.loads(args.after.read_text(encoding="utf-8"))
+    for label, document, path in (
+            ("before", before, args.before), ("after", after, args.after)):
+        assert_sentinel_shape(document, f"the {label} snapshot {path}")
 
     changed: list[str] = []
     # The UNION of both sides, not just `after`. Iterating `after` alone would
     # miss a table that existed before the step and is gone after it, which is
     # the largest effect a step could possibly have.
+    #
+    # The comparison is on the whole `count:s1:s2` fingerprint, not on the count
+    # alone. That is the R12 repair: an `UPDATE` outside the keyed scope and an
+    # insert/delete pair that nets to zero both leave the count untouched and
+    # both move the content sums.
+    #
+    # The emitted row names WHICH component moved, because the two are
+    # diagnostically different -- a row-count move is a create or a delete, a
+    # content-only move is an update or a net-zero churn -- and because a frozen
+    # model that recorded only `+0` could be satisfied by a run whose content
+    # changed for an entirely different reason.
     for table in sorted(set(before["sentinel"]) | set(after["sentinel"])):
-        if before["sentinel"].get(table) != after["sentinel"].get(table):
-            delta = after["sentinel"].get(table, 0) - before["sentinel"].get(table, 0)
-            changed.append(f"{table}\t{delta:+d}")
+        was = before["sentinel"].get(table)
+        now = after["sentinel"].get(table)
+        if was == now:
+            continue
+        delta = (sentinel_count(now) if now else 0) - (sentinel_count(was) if was else 0)
+        kind = "rows" if delta else "content"
+        changed.append(f"{table}\t{delta:+d}\t{kind}")
 
     identities = IdentityMap()
     for table, table_id in load_table_ids(args.attribution_scope).items():
@@ -487,15 +596,22 @@ def diff(args) -> int:
         row for row in changed if row.split("\t")[0].lower() not in ambient_tables
     ]
     if not (created or updated or deleted or non_ambient_changed):
-        # The declaration states exactly what was measured, and no more. Layer 1
-        # is a row COUNT per table, so an UPDATE to a table outside the
-        # measurement scope produces neither a keyed row nor a count delta, and
-        # an insert paired with a delete in one step nets to zero. Writing
-        # "declared" here would turn that blind spot into a positive claim that
-        # nothing at all happened; naming the two measurements keeps the frozen
-        # assertion true. Narrowing the blind spot is tracked as residual R12.
+        # The declaration states exactly what was measured, and no more. Before
+        # the Phase 5g-1a-x amendment, layer 1 was a row COUNT per table, so an
+        # UPDATE to a table outside the measurement scope produced neither a
+        # keyed row nor a count delta, and an insert paired with a delete in one
+        # step netted to zero. That was residual risk R12, and the marker named
+        # the limitation rather than claiming nothing had happened.
+        #
+        # R12 is now closed: the sentinel carries a content fingerprint as well
+        # as a count, so a content-only change in any non-ambient table produces
+        # a `content` changed-table row and this marker is not emitted at all.
+        # The marker therefore states the stronger measured fact. It is still a
+        # statement about what was measured -- the fingerprint is two 64-bit
+        # sums, not a full digest -- and not a claim that the database is
+        # provably untouched.
         lines.append("[no-effect]")
-        lines.append("no-keyed-change-in-scope\tno-row-count-delta-outside-ambient")
+        lines.append("no-keyed-change-in-scope\tno-content-change-outside-ambient")
         lines.append("")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)

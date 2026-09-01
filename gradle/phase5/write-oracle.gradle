@@ -111,15 +111,55 @@ tasks.register('verifyPhase5gWriteNormalizerMutationProof', Exec) {
 			.findAll { it && !it.startsWith('#') && !it.startsWith('mutation\t') }
 		def detect = rows.findAll { it.split('\t')[1] == 'must-detect' }
 		def normalize = rows.findAll { it.split('\t')[1] == 'must-normalize' }
-		if (detect.size() < 10 || normalize.size() < 7) {
+		if (detect.size() < 12 || normalize.size() < 7) {
 			throw new GradleException(
 				"The normalizer mutation proof scored ${detect.size()} must-detect and " +
 					"${normalize.size()} must-normalize mutation(s); the reviewed set is " +
-					'10 and 7. A shrinking proof is a weakening proof.')
+					'12 and 7. A shrinking proof is a weakening proof.')
 		}
 		logger.lifecycle(
 			"Normalizer mutation proof scored ${detect.size()} defect and " +
 				"${normalize.size()} volatility class(es)")
+	}
+}
+
+tasks.register('verifyPhase5gTransportClassPolicyProof', Exec) {
+	group = 'verification'
+	description =
+		'Proves the 5g-1a-x transport-class relaxation still rejects what it must reject'
+	inputs.file phase5g1aScript('score-write-oracle-capture.py')
+	inputs.file phase5g1aScript('verify-transport-class-policy-proof.py')
+	inputs.file phase5g1aContractDir.file('transport-class-policy.tsv')
+	inputs.file phase5g1aContractDir.file('network-classes.tsv')
+	inputs.file phase5g1aContractDir.file('allowed-browser-errors.tsv')
+	outputs.file phase5g1aBuildRoot.map { it.file('transport-class-policy-proof.tsv') }
+	commandLine(
+		'python3',
+		phase5g1aScript('verify-transport-class-policy-proof.py').absolutePath,
+		'--repo-root', rootProject.projectDir,
+		'--report', phase5g1aBuildRoot.get().file('transport-class-policy-proof.tsv').asFile)
+	doLast {
+		// Same reason the normalizer proof re-reads its own report: a relaxation
+		// whose proof scored nothing would look exactly like a relaxation whose
+		// proof passed.
+		def report = phase5g1aBuildRoot.get().file('transport-class-policy-proof.tsv').asFile
+		if (!report.isFile()) {
+			throw new GradleException('The transport-class policy proof produced no report')
+		}
+		def rows = report.readLines()
+			.findAll { it && !it.startsWith('#') && !it.startsWith('case\t') }
+		def mustFail = rows.findAll { it.split('\t')[1] == 'must-fail' }
+		def mustPass = rows.findAll { it.split('\t')[1] == 'must-pass' }
+		if (mustFail.size() < 10 || mustPass.size() < 6) {
+			throw new GradleException(
+				"The transport-class policy proof scored ${mustFail.size()} must-fail and " +
+					"${mustPass.size()} must-pass case(s); the reviewed set is 10 and 6. " +
+					'A relaxation is exactly the change whose proof must not be allowed to ' +
+					'shrink alongside it.')
+		}
+		logger.lifecycle(
+			"Transport-class policy proof enforced ${mustFail.size()} rejection(s) over " +
+				"${mustPass.size()} accepted capture shape(s)")
 	}
 }
 
@@ -281,6 +321,10 @@ tasks.register('verifyPhase5gWriteOracleManifest') {
 			'network-classes.tsv': 80,
 			'concurrency-facts.tsv': 80,
 			'allowed-browser-errors.tsv': 100,
+			// The reviewed comparison semantics for every fact class. Without it
+			// the scorer has no declared policy and fails closed, so it carries a
+			// floor like every other reviewed ledger.
+			'transport-class-policy.tsv': 1500,
 		]
 		def absent = required.keySet().findAll { !actual.containsKey(it) }
 		if (!absent.isEmpty()) {
@@ -308,7 +352,7 @@ tasks.register('verifyPhase5gWriteOracleManifest') {
 		 'exclusions.tsv', 'ambient-tables.tsv', 'write-flow.tsv',
 		 'effect-model.tsv', 'business-values.tsv', 'foreign-key-graph.tsv',
 		 'semantic-facts.tsv', 'network-classes.tsv', 'concurrency-facts.tsv',
-		 'allowed-browser-errors.tsv'].each { name ->
+		 'transport-class-policy.tsv'].each { name ->
 			def dataRows = new File(dir, name).readLines()
 				.findAll { !it.trim().isEmpty() && !it.startsWith('#') }
 			if (dataRows.size() < 2) {
@@ -316,6 +360,22 @@ tasks.register('verifyPhase5gWriteOracleManifest') {
 					"contracts/legacy-web-write-v1/${name} carries ${dataRows.size()} " +
 						'non-comment line(s); a header plus at least one data row is required.')
 			}
+		}
+
+		// allowed-browser-errors.tsv is held to one data row rather than two. It
+		// is an allowlist with no header row -- every line is a declared error --
+		// and 5g-1a-x deduplicated it, because freezing the run's repetitions
+		// froze a count that tracked how many browser sessions the flow opened.
+		// Emptying it entirely still fails: an empty allowlist would permit no
+		// error at all, which is a real assertion, but it would also mean the
+		// legacy theme defect had gone unrecorded.
+		def allowedErrors = new File(dir, 'allowed-browser-errors.tsv').readLines()
+			.findAll { !it.trim().isEmpty() && !it.startsWith('#') }
+		if (allowedErrors.isEmpty()) {
+			throw new GradleException(
+				'contracts/legacy-web-write-v1/allowed-browser-errors.tsv carries no ' +
+					'declared error. Its content is the record of which browser errors the ' +
+					'legacy runtime was reviewed to produce.')
 		}
 
 		// The step ledgers must agree. A step captured but undeclared, or declared
@@ -381,9 +441,49 @@ tasks.register('verifyPhase5gWriteOracleManifest') {
 						'replaced by its recorded review.')
 			}
 		}
+		// The R12 repair changed the shape of two things every frozen effect
+		// document carries: a changed-table row now names WHY it changed, and the
+		// no-effect marker now claims content stability rather than mere row-count
+		// stability. A document still written in the old shape is a stale answer,
+		// and a stale answer must fail here -- in the database-neutral gate that
+		// runs on every pull request -- rather than hours later in the capture
+		// lane, or worse, never, because the neutral gate only ever hashed bytes.
+		def noEffectMarker = 'no-keyed-change-in-scope\tno-content-change-outside-ambient'
+		new File(dir, 'effect-model').listFiles().sort { it.name }.each { document ->
+			def section = null
+			document.readLines().eachWithIndex { line, index ->
+				if (line.startsWith('[')) {
+					section = line
+					return
+				}
+				if (line.isEmpty() || line.startsWith('#')) {
+					return
+				}
+				if (section == '[changed-tables]') {
+					def fields = line.split('\t', -1)
+					if (fields.length != 3 || !(fields[2] in ['rows', 'content'])) {
+						throw new GradleException(
+							"${document.name}:${index + 1} carries a changed-table row in the " +
+								"pre-R12 shape: ${line}. A frozen row must name its change kind " +
+								'(rows or content). Re-capture the legacy answer with --freeze.')
+					}
+				} else if (section == '[no-effect]' && line != noEffectMarker) {
+					throw new GradleException(
+						"${document.name}:${index + 1} asserts no-effect with the pre-R12 marker: " +
+							"${line}. That marker claimed only that no row COUNT changed outside " +
+							'ambient tables, so a content-only write underneath this step was ' +
+							'invisible. Re-capture the legacy answer with --freeze.')
+				}
+			}
+		}
+
 		def factFiles = ['effect-model.tsv', 'business-values.tsv', 'foreign-key-graph.tsv',
 			'semantic-facts.tsv', 'network-classes.tsv', 'concurrency-facts.tsv',
-			'allowed-browser-errors.tsv', 'write-flow.tsv']
+			'allowed-browser-errors.tsv', 'write-flow.tsv',
+			// In the digest because it decides HOW every other fact class is
+			// compared. A relaxation that did not force a re-review would be the
+			// cheapest way to make a failing oracle pass.
+			'transport-class-policy.tsv']
 		def reviewDigest = java.security.MessageDigest.getInstance('SHA-256')
 		factFiles.each { name ->
 			reviewDigest.update(name.getBytes('UTF-8'))
@@ -417,6 +517,7 @@ tasks.register('phase5g1aFinalVerification') {
 		tasks.named('verifyPhase5gWriteOracleManifest'),
 		tasks.named('verifyPhase5gWriteAttribution'),
 		tasks.named('verifyPhase5gWriteNormalizerMutationProof'),
+		tasks.named('verifyPhase5gTransportClassPolicyProof'),
 		tasks.named('verifyPhase5gAmbientClassificationMutationProof'),
 		tasks.named('phase5g0FinalVerification'))
 }

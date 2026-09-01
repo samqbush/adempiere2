@@ -18,14 +18,17 @@ create
 # @c_bpartner#1	c_bpartner	1000000
 
 [changed-tables]
-ad_treenodebp	+1
-ad_wf_activity	+1
-ad_wf_eventaudit	+1
-ad_wf_process	+1
-c_bp_customer_acct	+1
-c_bp_employee_acct	+1
-c_bp_vendor_acct	+1
-c_bpartner	+1
+ad_recentitem	+0	content
+ad_sequence	+0	content
+ad_session	+0	content
+ad_treenodebp	+1	rows
+ad_wf_activity	+1	rows
+ad_wf_eventaudit	+1	rows
+ad_wf_process	+1	rows
+c_bp_customer_acct	+1	rows
+c_bp_employee_acct	+1	rows
+c_bp_vendor_acct	+1	rows
+c_bpartner	+1	rows
 
 [created]
 ad_treenodebp	@ad_treenodebp#1	ad_client_id=11,ad_org_id=0,ad_tree_id=103,created=<volatile>,createdby=101,isactive=Y,node_id=@c_bpartner#1,parent_id=0,seqno=999,updated=<volatile>,updatedby=101,uuid=<volatile>

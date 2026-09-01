@@ -1,0 +1,23 @@
+# Declared comparison semantics for each frozen fact class.
+#
+# Decided in increment 5g-1a-x on LEGACY evidence alone, before any modern
+# capture existed. The Phase 5g ADR forbids observing the modern runtime and
+# then classifying the inconvenient differences, so this file is frozen and
+# domain-reviewed as part of the oracle rather than adjusted during parity.
+#
+# semantics:
+#   exact             the captured rows for this class must equal the frozen
+#                     rows exactly, in order. Used for product facts.
+#   declared-subset   every captured row must appear in the frozen list; a
+#                     frozen row that did not recur is not a failure. Used only
+#                     for artifacts whose multiplicity tracks how many browser
+#                     sessions the flow opened. Requires a reason.
+#
+# The A/B self-diff is unaffected and stays exact for every class: that measures
+# reproducibility of one runtime against itself, which is a different property
+# from parity between two runtimes.
+fact_file	class	semantics	reason
+allowed-browser-errors.tsv	http	declared-subset	The only frozen browser error is a 404 for /webui/theme/default/css/themesaf.css.dsp. zkwebui/theme/default/css ships theme.css.dsp, themeie.css.dsp and thememoz.css.dsp but no Safari variant, so Chromium requests a stylesheet the deployment does not contain. That is a packaging defect of the ZK 3.6 theme, not an ADempiere business fact, and its row count is a function of how many browser sessions the flow opens.
+network-classes.tsv	context	exact	The public /webui origin the browser was served from is a product fact and a security fact. A runtime that stopped serving it, or served a different one, must fail.
+network-classes.tsv	zkau	exact	The AU transport is what carried every write in the flow. A runtime whose writes stopped travelling over it is not the same product, and the concurrency and duplicate-submit steps would be measuring something else.
+network-classes.tsv	external	declared-subset	The external hosts are referenced by the same legacy ZK 3.6 theme: fonts.googleapis.com, sfx-images.mozilla.org, www.google.com and www.zkoss.org are branding and font references, not ADempiere behaviour. Their identity is a theme artifact; the fact worth asserting is that the browser reached for no external origin that had not been declared.

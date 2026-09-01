@@ -22,13 +22,16 @@ import org.adempiere.webui.phase5legacy.StepRendezvous;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
+import com.microsoft.playwright.Request;
 import com.microsoft.playwright.Response;
+import com.microsoft.playwright.options.RequestOptions;
 import com.microsoft.playwright.options.WaitForSelectorState;
 
 /**
@@ -239,6 +242,50 @@ class LegacyBusinessPartnerWriteOracleTest {
 				}
 			}
 
+			// The duplicate submission is measured from its OWN session, for the
+			// same reason deactivation is: if replaying an AU request desyncs or
+			// invalidates the session that issued it, that must not silently
+			// corrupt any other step's measurement. A session that has only read
+			// the current row, saved once and replayed that save measures the
+			// duplicate submission and nothing else.
+			//
+			// It runs BEFORE deactivation because a deactivated record renders
+			// read-only, so a duplicate submit attempted afterwards would measure
+			// the product refusing to edit a disabled row -- a different fact.
+			//
+			// It logs in as the SECOND editor, not the primary one. The frozen
+			// deactivate step records a c_bpartner updatedby transition from 102
+			// to 101, which exists only because the last writer before
+			// deactivation was the second editor. Inserting a primary-user write
+			// here would erase that transition and silently weaken a step this
+			// increment is not claiming to change.
+			try (BrowserContext duplicateContext = LegacyBrowserFlow.newContext(browser)) {
+				LegacyBrowserFlow.blockForeignOrigins(duplicateContext, baseUrl);
+				Page fourth = duplicateContext.newPage();
+				LegacyBrowserFlow.recordTraffic(fourth, requests, errors, this::normalizedUrl);
+				try {
+					Response fourthLogin = LegacyBrowserFlow.login(
+							fourth, baseUrl, secondUser, secondPassword);
+					assertEquals(200, fourthLogin.status(),
+							"the duplicate-submitting session's login page did not respond 200");
+					LegacyBrowserFlow.awaitRolePanel(
+							fourth, BrowserSemanticContract::normalizedText);
+					LegacyBrowserFlow.confirmRole(fourth);
+					LegacyBrowserFlow.awaitDesktop(fourth, secondUser, client);
+					flow.add(step(rendezvous, 7, "duplicate-submit-editor-authenticated"));
+
+					openWindow(fourth, recordValue);
+					focusRecord(fourth, recordValue);
+					duplicateSubmit(fourth, facts);
+					flow.add(step(rendezvous, 8, "duplicate-submit"));
+
+					LegacyBrowserFlow.logout(fourth);
+				} catch (Throwable duplicateFailure) {
+					captureDiagnostics(fourth, "duplicate-submit-editor");
+					throw duplicateFailure;
+				}
+			}
+
 			// Deactivation is measured from a THIRD session rather than from the
 			// primary one.
 			//
@@ -267,13 +314,13 @@ class LegacyBusinessPartnerWriteOracleTest {
 					LegacyBrowserFlow.awaitRolePanel(third, BrowserSemanticContract::normalizedText);
 					LegacyBrowserFlow.confirmRole(third);
 					LegacyBrowserFlow.awaitDesktop(third, user, client);
-					flow.add(step(rendezvous, 7, "deactivate-editor-authenticated"));
+					flow.add(step(rendezvous, 9, "deactivate-editor-authenticated"));
 
 					openWindow(third, recordValue);
 					focusRecord(third, recordValue);
 					deactivate(third);
 					facts.put("deactivated", "true");
-					flow.add(step(rendezvous, 8, "deactivate"));
+					flow.add(step(rendezvous, 10, "deactivate"));
 
 					LegacyBrowserFlow.logout(third);
 				} catch (Throwable deactivateFailure) {
@@ -284,7 +331,7 @@ class LegacyBusinessPartnerWriteOracleTest {
 
 			LegacyBrowserFlow.logout(page);
 			facts.put("logout-reached", "true");
-			flow.add(step(rendezvous, 9, "logged-out"));
+			flow.add(step(rendezvous, 11, "logged-out"));
 			} catch (Throwable failure) {
 				captureDiagnostics(page, "primary");
 				throw failure;
@@ -667,6 +714,18 @@ class LegacyBusinessPartnerWriteOracleTest {
 	 */
 	private String awaitSaveOutcome(Page page) {
 		click(page, "Save changes");
+		return pollSaveOutcome(page);
+	}
+
+	/**
+	 * Waits for an already-clicked Save to settle into an outcome.
+	 *
+	 * <p>Split out of {@link #awaitSaveOutcome} so the duplicate-submit step can
+	 * intercept the save's own {@code /zkau} request between the click and the
+	 * settle. Every existing caller reaches it through {@code awaitSaveOutcome}
+	 * and is unaffected.
+	 */
+	private String pollSaveOutcome(Page page) {
 		Locator error = page.locator("div.z-window-modal, div.popup-error");
 		Locator saveButton = tabPanel(page)
 				.locator("a.toolbar-button[title='Save changes']").first();
@@ -686,6 +745,87 @@ class LegacyBusinessPartnerWriteOracleTest {
 			page.waitForTimeout(250);
 		} while (System.nanoTime() < deadline);
 		return "rejected-save-still-enabled";
+	}
+
+	/**
+	 * Saves once, then re-issues that save's own {@code /zkau} request verbatim.
+	 *
+	 * <p>This is the legacy answer to the question Phase 5g-1b's H6 matrix must
+	 * ask and cannot invent: what does the product do when a non-idempotent save
+	 * is submitted twice? A proxy retry, a double-click or a replayed request in
+	 * the routed dual-runtime lane all produce exactly this shape, and the
+	 * property it probes -- ZK's desync/sequence handling -- is one of the things
+	 * that genuinely differs between ZK 3.6's Comet transport and ZK CE 10's
+	 * polling transport. Phase 5e's replay coverage does not answer it: that
+	 * covers the single-use T5e-1 handoff ticket, which is not a runtime browser
+	 * request at all.
+	 *
+	 * <p>The replay goes through the page's own API request context, so it
+	 * carries the same session cookies as the browser that issued the original.
+	 * A replay from a fresh client would only prove that an unauthenticated
+	 * request is rejected, which nobody doubts.
+	 *
+	 * <p>The replay's HTTP status is recorded; its response BODY deliberately is
+	 * not. ZK echoes desktop and request ids that differ on every run, so
+	 * freezing the body would freeze volatility and fail the A/B self-diff. The
+	 * business answer -- whether the duplicate submission wrote a second time --
+	 * is the step's database effect, which is measured at the step boundary and
+	 * is not a fact this driver is allowed to assert.
+	 */
+	private void duplicateSubmit(Page page, Map<String, String> facts) {
+		fill(page, "Name", recordValue + " Partner By Duplicate Submitter");
+
+		// The replayed request is bound to the Save button's own ZK component id,
+		// not merely to the first /zkau POST that follows the click.
+		//
+		// ZK 3.6 posts a field's onChange on blur, and clicking Save is what
+		// blurs the Name editor. Whether ZK batches that blur into the same AU
+		// request as the toolbar command or sends it first is queue- and
+		// timing-dependent, so a first-match predicate can capture the field
+		// update instead. Replaying a field assignment is idempotent, so the step
+		// would report a benign status and an empty effect while claiming to have
+		// measured a duplicate submission -- a plausible wrong answer, which is
+		// the worst failure mode an oracle has.
+		Locator saveButton = tabPanel(page)
+				.locator("a.toolbar-button[title='Save changes']").first();
+		saveButton.waitFor();
+		String saveComponentId = saveButton.getAttribute("id");
+		assertNotNull(saveComponentId,
+				"the Save control carries no ZK component id, so the replayed request "
+						+ "could not be bound to the save command");
+
+		Request saveRequest = page.waitForRequest(
+				request -> request.url().contains("/zkau")
+						&& "POST".equals(request.method())
+						&& request.postData() != null
+						&& request.postData().contains(saveComponentId),
+				() -> click(page, "Save changes"));
+		assertEquals("accepted", pollSaveOutcome(page),
+				"the duplicate-submit step's first save was not accepted, so the "
+						+ "replay would not have been a duplicate of a real write");
+
+		String body = saveRequest.postData();
+		assertNotNull(body, "the save round trip carried no request body to replay");
+
+		RequestOptions replay = RequestOptions.create()
+				.setHeader("content-type", contentTypeOf(saveRequest))
+				.setHeader("referer", page.url())
+				.setData(body);
+		APIResponse replayed = page.request().post(saveRequest.url(), replay);
+		facts.put("duplicate-submit-replay-http-status",
+				Integer.toString(replayed.status()));
+		replayed.dispose();
+	}
+
+	/**
+	 * The recorded request's own content type, so the replay is byte-for-byte the
+	 * same submission rather than a guess at how ZK encodes one.
+	 */
+	private String contentTypeOf(Request request) {
+		String declared = request.headers().get("content-type");
+		return declared == null
+				? "application/x-www-form-urlencoded;charset=UTF-8"
+				: declared;
 	}
 
 	/**

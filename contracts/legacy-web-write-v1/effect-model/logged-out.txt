@@ -26,4 +26,4 @@ logged-out
 [deleted]
 
 [no-effect]
-no-keyed-change-in-scope	no-row-count-delta-outside-ambient
+no-keyed-change-in-scope	no-content-change-outside-ambient

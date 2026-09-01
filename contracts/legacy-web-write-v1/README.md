@@ -70,7 +70,7 @@ subscriptions.
 | `ambient-tables.tsv` | present | The reviewed session/audit/workflow tables exempt from the undeclared-table backstop |
 | `raw/` | present | A committed raw capture sample; the input to the over-normalization mutation proof, **not** an oracle fact |
 | `manifest.sha256` | present | SHA-256 over every file except itself |
-| `write-flow.tsv` | present | The captured step ledger: ten steps, in the order the driver executed them |
+| `write-flow.tsv` | present | The captured step ledger: twelve steps, in the order the driver executed them |
 | `effect-model.tsv` | present | Index of the frozen per-step effect documents under `effect-model/` |
 | `effect-model/` | present | One frozen sectioned effect document per measured step |
 | `business-values.tsv` | present | The business column values the flow left behind |
@@ -79,6 +79,7 @@ subscriptions.
 | `network-classes.tsv` | present | Request classes, including the four third-party origins the legacy login page reaches |
 | `concurrency-facts.tsv` | present | The second editor's outcome and the conflicting save's verdict |
 | `allowed-browser-errors.tsv` | present | The browser errors the legacy runtime is permitted to produce |
+| `transport-class-policy.tsv` | present | The reviewed comparison semantics for each fact class, decided on legacy evidence before any modern capture existed |
 
 ### The captured facts
 
@@ -168,13 +169,55 @@ background writer is indistinguishable from a route effect.
 |---|---|
 | Reviewer | @samqbush |
 | Date | 2026-09-01 |
-| Capturing CI run | https://github.com/samqbush/adempiere2/actions/runs/33491714444 |
-| Captured commit | `3a0f5fd911d85a545661bdee067be710f47d2fda` |
-| Evidence digest | `edd369f6f6f5636d7459c251608d0cb39abb4d931aa673acd69b576d1cf4df20` |
+| Capturing CI run | https://github.com/samqbush/adempiere2/actions/runs/33513391616 |
+| Captured commit | `a250709cbbea4d063e3e8eb6b26420e800c9e664` |
+| Effect documents | Re-derived locally from that run's snapshots — see "How these bytes were produced" below |
+| Evidence digest | `c3ffc902ccca93e149e6984e95240ec0bfc3c7b409cb3cc5ad323ce673ce0ce3` |
 | Disposition | **Approved as the expected answer for Phase 5g-1b.** |
 
-The digest is SHA-256 over the eight frozen fact files and every per-step effect
-document, each preceded by its name, in sorted order. It is what ties this
+### How these bytes were produced
+
+The browser-and-database observation came from the CI run above. The frozen
+effect documents did **not** come directly from that run's `--freeze` output, and
+saying so plainly is the point of this block.
+
+That run captured the flow successfully — twelve steps, both the A and B
+captures, self-diff clean — but its `Contracts` job concluded `failure` at
+`verifyPhase5gWriteOracleManifest`, which is expected for a freeze run, since a
+freeze run rewrites the very files the manifest pins. More importantly,
+`ad_sequence` was not yet classified ambient at `a250709`, so on the four steps
+whose every changed table is ambient the run emitted effect documents with no
+`[no-effect]` marker, and `score` would have rejected them for an undeclared
+table. Those bytes were wrong.
+
+Rather than re-run the capture, the run's snapshot artifacts were downloaded and
+every effect document was re-derived by re-running
+`scripts/phase5/measure-write-effect.py diff` over **those same snapshots** with
+the corrected `ambient-tables.tsv`, for both the A and B captures, and the result
+re-frozen with `score-write-oracle-capture.py --freeze`.
+
+This is legitimate because `diff` is a pure function of the before snapshot, the
+after snapshot, the step baseline, the attribution scope and the ambient list: it
+opens no database and no network, and the scripts are byte-identical to those at
+`a250709`. The classification is an *input* to the derivation, not an
+observation, so correcting it does not require re-observing the product. `freeze`
+additionally refuses to write unless the A and B captures self-diff clean, which
+they did — two independently restored captures agreeing is what makes the
+re-derivation checkable rather than asserted.
+
+The control that closes this is the **separate acceptance run**,
+https://github.com/samqbush/adempiere2/actions/runs/33528308317: a CI run with
+freezing off that re-captured the flow from scratch and scored it against the
+bytes frozen here, reporting "A/B self-diff clean and both captures match the
+frozen contract". If the re-derivation had produced anything the product does
+not actually do, that run would have failed. The two-run protocol is also
+recorded in `MODERNIZATION_PLAN.md`.
+
+The digest is SHA-256 over the nine frozen fact files, in the order the gate
+declares them, followed by every per-step effect document in sorted order, each
+preceded by its name. The ninth file is `transport-class-policy.tsv`, which is
+in the digest because it decides *how* every other fact class is compared, so
+relaxing a class must move the reviewed digest. It is what ties this
 sign-off to specific bytes: re-freezing from a different capture changes it, and
 the change is visible in this file and in `manifest.sha256`.
 
@@ -190,6 +233,74 @@ three workflow edges and none of the four the create step actually wires. It now
 records all seven, including `ad_treenodebp node_id c_bpartner` and the three
 accounting rows. The facts above were re-derived from the same run's snapshots,
 both captures still agree, and both still score against the contract.
+
+### Amendment in increment `5g-1a-x`
+
+This answer was re-captured and re-frozen once more, and the digest moved a
+second time. The amendment shipped no modern runtime code, and every decision
+below was taken on legacy evidence alone — which is the point of doing it in its
+own increment rather than during parity.
+
+* **The `[no-effect]` marker became content-aware (residual R12, now closed).**
+  The whole-database sentinel was a row **count** per table, so it could not see
+  an `UPDATE` outside the nine-table measurement scope, and an insert paired with
+  a delete inside one step netted to zero. It now also carries a per-table
+  content fingerprint taken inside the same consistent snapshot, and the marker
+  reads `no-keyed-change-in-scope  no-content-change-outside-ambient`. This
+  changed the emitted document format, which is why the answer had to be
+  re-captured rather than edited.
+
+  The repair immediately produced signal that had been invisible: `ad_recentitem`,
+  `ad_session`, `c_bpartner` and `ad_sequence` all now show `+0 content` rows on
+  steps where the row count did not move.
+
+* **`AD_Sequence` is classified ambient.** `MSequence.getNextID` issues
+  `UPDATE AD_Sequence SET CurrentNext = ...`
+  (`base/src/org/compiere/model/MSequence.java:205`), so every id allocation
+  mutates the row without changing the row count. It was always written; it was
+  never before *visible*. It is classified for the same reason `AD_Sequence_No`
+  already was, and the classification is bounded: ambient status affects only the
+  undeclared-table backstop and the `[no-effect]` marker, and `AD_Sequence` is not
+  one of the nine measurement-scope tables, so it cannot hide a keyed effect.
+
+* **A duplicate-submit step was added, so the answer exists before parity asks
+  for it.** The flow is now twelve steps. A repeated, non-idempotent AU save
+  request is replayed against the running legacy runtime. The legacy answer is
+  that the replay returns **HTTP 200**, the step's total effect is exactly one
+  `c_bpartner.name` transition, and no table's row count moved — that is, the
+  replay created no duplicate record and left no other trace.
+
+  What that does **and does not** assert is worth stating, because the step will
+  be scored for parity. The replayed request sets `Name` to a fixed value, so
+  re-applying it is idempotent by value; `updated` is normalized volatile,
+  `updatedby` is unchanged either way, and `C_BPartner` has change logging off,
+  so a second application of the same `UPDATE` would produce a byte-identical
+  effect document. The oracle therefore asserts *no duplicate row and no
+  additional effect*, not *the server declined to execute the statement twice*.
+  Phase 5g-1b scores the modern runtime against *this*, rather
+  than against the Phase 5e single-use ticket invariant, which is a different
+  property. The step runs as the second editor, which preserves the `deactivate`
+  step's frozen `updatedby 102 -> 101` transition.
+
+* **Comparison semantics are declared per fact class, in
+  `transport-class-policy.tsv`.** Two classes are legacy-theme transport
+  artifacts rather than product facts, and were being compared by exact list
+  equality, which a modern capture would fail by construction and for no product
+  reason. `themesaf.css.dsp` does not exist anywhere in this repository or in the
+  shipped ZK jars — `theme.css.dsp`, `themeie.css.dsp` and `thememoz.css.dsp` do
+  — so Chromium requests a Safari stylesheet the deployment does not contain and
+  is answered 404. The row count of that error tracks how many browser sessions
+  the flow opened, and re-capturing with two more sessions moved it from six rows
+  to eight, which is the empirical demonstration that it was never a product
+  fact. The four external origins are the same theme's font and branding
+  references. Both classes move to `declared-subset`; every other class, including
+  both `network-classes.tsv` classes that carry product and security meaning,
+  stays `exact`. The A/B self-diff stays exact for every class.
+
+  The relaxation is bounded by its own gate,
+  `verifyPhase5gTransportClassPolicyProof`, which proves among other things that
+  an undeclared row still fails, that a class absent from the policy is still
+  compared exactly, and that a byte-identical capture scores clean.
 
 What was reviewed, and what it says:
 
@@ -252,18 +363,34 @@ allocates different integers. Without it, 5g-1b would fail this comparison for
 a reason that is about identity allocation rather than about the business
 transition.
 
-### A recorded limitation of the `[no-effect]` marker
+### What the `[no-effect]` marker now measures, and what it still does not
 
-Five steps — `window-opened`, `concurrency-second-editor-authenticated`, `deactivate-editor-authenticated`, `concurrency-conflicting-save` and `logged-out` — carry `[no-effect]` with the explicit value
-`no-keyed-change-in-scope	no-row-count-delta-outside-ambient`.
+Six steps — `window-opened`, `concurrency-second-editor-authenticated`,
+`duplicate-submit-editor-authenticated`, `deactivate-editor-authenticated`,
+`concurrency-conflicting-save` and `logged-out` — carry `[no-effect]` with the
+explicit value
+`no-keyed-change-in-scope	no-content-change-outside-ambient`.
 
-That value states precisely what was measured, and no more. The whole-database
-sentinel is a row **count** per table, so an `UPDATE` to a table outside the
-nine-table measurement scope produces neither a keyed row nor a count delta, and
-an insert paired with a delete inside one step nets to zero. The marker is
-therefore not a claim that nothing happened; it is a claim that these two
-measurements saw nothing. Narrowing the blind spot is residual **R12** in
-`MODERNIZATION_PLAN.md`.
+That value states precisely what was measured, and no more. Residual **R12**
+closed the two blind spots the earlier row-count sentinel had: an `UPDATE`
+outside the nine-table measurement scope, and an insert paired with a delete
+netting to zero, are both now visible, because the sentinel carries a per-table
+content fingerprint alongside the count and both are taken in the same
+consistent snapshot. `concurrency-conflicting-save` demonstrates the layering: it
+reports `ad_recentitem +0 content` and still emits `[no-effect]`, because
+`ad_recentitem` is classified ambient.
+
+Two limits remain, and are recorded rather than papered over:
+
+* The fingerprint is a **fingerprint, not a cryptographic digest**. It sums a
+  pair of 64-bit halves of each row's `md5(row::text)`, which is adequate against
+  accidental and defective writes — the failure mode this oracle exists to catch
+  — and is not a defence against a deliberately constructed collision. Summation
+  is used rather than XOR on purpose: XOR cancels a duplicated identical row pair
+  to zero, which would reintroduce a blind spot while appearing to close one.
+* A change confined to an **ambient** table is still not asserted, by design.
+  That is what the classification means, and `ambient-tables.tsv` is
+  manifest-covered so widening it requires a reviewer.
 
 This is load-bearing for the headline concurrency fact: the refused save's
 entire content is that assertion, so the assertion has to be one the measurement

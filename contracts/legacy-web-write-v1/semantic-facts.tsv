@@ -3,5 +3,6 @@ window-opened	Business Partner
 concurrency-second-editor-desktop-reached	true
 concurrency-second-editor-saved	true
 concurrency-conflicting-save-outcome	rejected-save-still-enabled
+duplicate-submit-replay-http-status	200
 deactivated	true
 logout-reached	true

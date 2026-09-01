@@ -18,6 +18,9 @@ update
 # @c_bpartner#1	c_bpartner	1000000
 
 [changed-tables]
+ad_recentitem	+0	content
+ad_session	+0	content
+c_bpartner	+0	content
 
 [created]
 

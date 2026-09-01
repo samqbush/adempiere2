@@ -18,6 +18,7 @@ concurrency-conflicting-save
 # @c_bpartner#1	c_bpartner	1000000
 
 [changed-tables]
+ad_recentitem	+0	content
 
 [created]
 
@@ -26,4 +27,4 @@ concurrency-conflicting-save
 [deleted]
 
 [no-effect]
-no-keyed-change-in-scope	no-row-count-delta-outside-ambient
+no-keyed-change-in-scope	no-content-change-outside-ambient

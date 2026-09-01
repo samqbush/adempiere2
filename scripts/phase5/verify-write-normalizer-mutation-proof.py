@@ -47,6 +47,35 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 MEASURE = SCRIPT_DIR / "measure-write-effect.py"
 
 
+def move_sentinel(doc: dict, table: str, rows: int) -> None:
+    """Move a sentinel fingerprint by `rows`, adjusting the content sums too.
+
+    The sentinel value is `count:s1:s2`. A mutation that changed only the count
+    would describe a database state that cannot exist -- rows cannot appear or
+    vanish without moving the content sums -- and a fixture that encodes an
+    impossible state proves nothing about a real one.
+
+    The sums are moved by an arbitrary but deterministic amount. Their magnitude
+    carries no meaning: `diff` compares fingerprints for equality and never
+    interprets them.
+    """
+    count, s1, s2 = doc["sentinel"][table].split(":")
+    doc["sentinel"][table] = (
+        f"{int(count) + rows}:{int(s1) + rows * 7717}:{int(s2) - rows * 6113}"
+    )
+
+
+def move_sentinel_content(doc: dict, table: str) -> None:
+    """Move a sentinel fingerprint's CONTENT sums while its row count stands.
+
+    This is the state an `UPDATE` outside the keyed measurement scope leaves, and
+    the state an insert paired with a delete leaves within one step. Both were
+    invisible to the count-only sentinel, which was residual risk R12.
+    """
+    count, s1, s2 = doc["sentinel"][table].split(":")
+    doc["sentinel"][table] = f"{count}:{int(s1) + 4241}:{int(s2) - 3739}"
+
+
 def mutate_business_value(doc: dict) -> None:
     doc["scope"]["c_bpartner"]["1000123"]["name"] = "A Different Partner Name"
 
@@ -64,7 +93,7 @@ def mutate_duplicate_effect(doc: dict) -> None:
     duplicate = copy.deepcopy(doc["scope"]["c_bpartner"]["1000123"])
     duplicate["c_bpartner_id"] = 1000124
     doc["scope"]["c_bpartner"]["1000124"] = duplicate
-    doc["sentinel"]["c_bpartner"] += 1
+    move_sentinel(doc, "c_bpartner", 1)
 
 
 def mutate_isactive(doc: dict) -> None:
@@ -74,7 +103,7 @@ def mutate_isactive(doc: dict) -> None:
 
 def mutate_drop_changelog(doc: dict) -> None:
     del doc["scope"]["ad_changelog"]["900001+3499"]
-    doc["sentinel"]["ad_changelog"] -= 1
+    move_sentinel(doc, "ad_changelog", -1)
 
 
 def mutate_updatedby(doc: dict) -> None:
@@ -95,7 +124,38 @@ def mutate_null_to_empty(doc: dict) -> None:
 def mutate_undeclared_table(doc: dict) -> None:
     # A write to a table the keyed layer does not look at. Only the sentinel can
     # see this, which is the entire reason the sentinel exists.
-    doc["sentinel"]["c_order"] += 1
+    move_sentinel(doc, "c_order", 1)
+
+
+def mutate_undeclared_table_updated(doc: dict) -> None:
+    """An `UPDATE` to an undeclared table. The row count does not move.
+
+    R12 case 1. Before the Phase 5g-1a-x amendment this mutation was
+    undetectable: layer 1 was a row count, so a table whose rows were rewritten
+    in place reported no delta, and layer 2 never looks at `C_Order` at all. A
+    step asserting `[no-effect]` would have stayed green while an out-of-scope
+    business row was rewritten underneath it.
+    """
+    move_sentinel_content(doc, "c_order")
+
+
+def mutate_undeclared_table_net_zero(doc: dict) -> None:
+    """An insert and a delete in one step, netting to zero rows.
+
+    R12 case 2. The count returns to where it started, so a count-only sentinel
+    reports nothing at all. The content sums do not return, because the inserted
+    row and the deleted row are different rows.
+
+    It is expressed as a content-only move for exactly that reason: the fixture
+    encodes the state such a step LEAVES, which is a table whose row count is
+    unchanged and whose content is not.
+    """
+    move_sentinel_content(doc, "c_order")
+    # A second, independent content move on a different undeclared table, so
+    # this mutation is distinguishable from `undeclared-table-updated` in the
+    # emitted effect. Two mutations that produced byte-identical output would
+    # let one of them be deleted without the proof noticing.
+    move_sentinel_content(doc, "c_bpartner_location")
 
 
 def mutate_timestamps(doc: dict) -> None:
@@ -197,6 +257,8 @@ MUTATIONS = [
     ("numeric-value-changed", "must-detect", mutate_numeric_value),
     ("null-became-empty", "must-detect", mutate_null_to_empty),
     ("undeclared-table-written", "must-detect", mutate_undeclared_table),
+    ("undeclared-table-updated", "must-detect", mutate_undeclared_table_updated),
+    ("undeclared-table-net-zero-churn", "must-detect", mutate_undeclared_table_net_zero),
     ("colliding-unrelated-identity", "must-detect", mutate_colliding_unrelated_identity),
     ("timestamps-moved", "must-normalize", mutate_timestamps),
     ("numeric-scale-changed", "must-normalize", mutate_numeric_scale),
@@ -321,6 +383,51 @@ def assert_deleted_rows_are_symbolic(
         )
 
 
+def assert_no_effect_marker_is_content_aware(
+    before: Path, workdir: Path, scope: Path
+) -> None:
+    """A content-only write to an undeclared table must suppress `[no-effect]`.
+
+    This is R12 case 3, and the one that matters most. Five of the ten frozen
+    steps assert `[no-effect]`, and one of them -- the refused conflicting save
+    -- is the headline concurrency fact of the entire oracle. If a hidden write
+    could sit underneath that marker, the oracle's strongest claim would be its
+    weakest measurement.
+
+    The mutation table cannot reach this path: its fixture's before/after pair is
+    a create, which never emits the marker, so mutating it would only prove that
+    a create is still a create. The pair is synthesized here instead.
+
+    Both directions are asserted. An unmutated no-effect pair MUST emit the
+    marker -- otherwise the probe would "detect" the mutation for the trivial
+    reason that the marker is never emitted at all.
+    """
+    quiet = json.loads(before.read_text(encoding="utf-8"))
+
+    unchanged = effect_for(before, copy.deepcopy(quiet), workdir, "no-effect-quiet", scope)
+    if "[no-effect]" not in unchanged:
+        raise SystemExit(
+            "the no-effect probe's unmutated pair did not emit [no-effect], so a "
+            "mutation that suppressed the marker would prove nothing."
+        )
+
+    hidden = copy.deepcopy(quiet)
+    move_sentinel_content(hidden, "c_order")
+    mutated = effect_for(before, hidden, workdir, "no-effect-hidden", scope)
+    if "[no-effect]" in mutated:
+        raise SystemExit(
+            "R12 regression: a content-only write to the undeclared table c_order "
+            "left the [no-effect] marker standing. A step whose frozen answer is "
+            "'nothing was written' would score green while an out-of-scope row "
+            "was rewritten underneath it."
+        )
+    if "c_order\t+0\tcontent" not in mutated:
+        raise SystemExit(
+            "the content-only write was not reported as a content change: the "
+            f"emitted changed-tables section was {mutated!r}"
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", default=".", type=Path)
@@ -358,6 +465,7 @@ def main() -> int:
             return 1
 
         assert_deleted_rows_are_symbolic(before, baseline_doc, workdir, scope)
+        assert_no_effect_marker_is_content_aware(before, workdir, scope)
 
         for name, direction, apply_mutation in MUTATIONS:
             mutated_doc = json.loads(after.read_text(encoding="utf-8"))

@@ -59,6 +59,135 @@ def read(path: Path) -> list[str]:
     ]
 
 
+POLICY_FILE = "transport-class-policy.tsv"
+SEMANTICS = {"exact", "declared-subset"}
+
+
+def load_policy(contract: Path) -> tuple[dict[tuple[str, str], str], list[str]]:
+    """Reads the declared comparison semantics for each fact class.
+
+    Two of the frozen fact classes are not product facts and cannot be compared
+    by list equality without making the oracle unscoreable by construction:
+
+      * `allowed-browser-errors.tsv` froze six repetitions of a 404 for
+        `/webui/theme/default/css/themesaf.css.dsp`. The legacy theme directory
+        ships `theme.css.dsp`, `themeie.css.dsp` and `thememoz.css.dsp` but no
+        Safari variant, so Chromium asks for a stylesheet the deployment does not
+        contain. That is a packaging defect of the ZK 3.6 theme, and its ROW
+        COUNT is a function of how many browser sessions the flow opens -- so
+        even the legacy answer changes when a step is added, which is what a
+        stable product fact never does.
+      * the `external` rows of `network-classes.tsv` name hosts referenced by
+        that same legacy theme. Their identity is a branding artifact; the fact
+        worth asserting is that every external origin the browser reached for was
+        one the capture had declared.
+
+    Making these classes an allowlist is what the file name
+    `allowed-browser-errors.tsv` always claimed and the comparison never
+    implemented. Everything else stays exact, because `context` and `zkau` are
+    real product facts about which origin was used and which transport carried
+    the writes, and a runtime that stopped using them must fail.
+
+    The policy is fail-closed in both directions: an undeclared class is an
+    error rather than a pass, and a `declared-subset` row must carry a reason and
+    a concrete target, so the allowlist cannot quietly become a wildcard.
+    """
+    path = contract / POLICY_FILE
+    if not path.is_file():
+        return {}, [
+            f"{POLICY_FILE} is absent from the frozen contract, so no fact class "
+            "has declared comparison semantics."
+        ]
+
+    policy: dict[tuple[str, str], str] = {}
+    problems: list[str] = []
+    for line in read(path):
+        fields = line.split("\t")
+        if fields[0] == "fact_file":
+            continue
+        if len(fields) < 4:
+            problems.append(f"malformed {POLICY_FILE} row: {line!r}")
+            continue
+        fact_file, klass, semantics, reason = (
+            fields[0], fields[1], fields[2], fields[3].strip()
+        )
+        if semantics not in SEMANTICS:
+            problems.append(
+                f"{POLICY_FILE} declares unknown semantics {semantics!r} for "
+                f"{fact_file}/{klass}; expected one of {sorted(SEMANTICS)}"
+            )
+            continue
+        if semantics == "declared-subset" and not reason:
+            problems.append(
+                f"{POLICY_FILE} relaxes {fact_file}/{klass} to an allowlist "
+                "without recording why. A relaxation nobody had to justify is "
+                "the one that gets abused."
+            )
+            continue
+        policy[(fact_file, klass)] = semantics
+    return policy, problems
+
+
+def compare_fact_file(
+    name: str,
+    contract_name: str,
+    captured: list[str],
+    frozen: list[str],
+    policy: dict[tuple[str, str], str],
+) -> list[str]:
+    """Compares one fact class-by-class under its declared semantics."""
+    problems: list[str] = []
+
+    def by_class(rows: list[str]) -> dict[str, list[str]]:
+        grouped: dict[str, list[str]] = {}
+        for row in rows:
+            grouped.setdefault(row.split("\t")[0], []).append(row)
+        return grouped
+
+    captured_classes = by_class(captured)
+    frozen_classes = by_class(frozen)
+
+    for klass in sorted(set(captured_classes) | set(frozen_classes)):
+        semantics = policy.get((contract_name, klass))
+        if semantics is None:
+            problems.append(
+                f"{contract_name} carries class {klass!r}, which {POLICY_FILE} "
+                "does not declare. An undeclared class has no reviewed "
+                "comparison semantics, so it cannot be scored."
+            )
+            continue
+        observed = captured_classes.get(klass, [])
+        expected = frozen_classes.get(klass, [])
+        if semantics == "exact":
+            if observed != expected:
+                problems.append(
+                    f"{name} class {klass!r} diverged from the frozen "
+                    f"{contract_name}: captured {observed}, frozen {expected}"
+                )
+            continue
+
+        # declared-subset. Every observed row must have been declared; a
+        # declared row that did not recur is not a failure, because these
+        # classes are artifacts whose multiplicity tracks how many sessions the
+        # flow happened to open.
+        for row in observed:
+            fields = row.split("\t")
+            if len(fields) < 2 or not fields[-1].strip():
+                problems.append(
+                    f"{name} class {klass!r} carries a row with no concrete "
+                    f"target: {row!r}. An allowlist entry that matches anything "
+                    "asserts nothing."
+                )
+                continue
+            if row not in expected:
+                problems.append(
+                    f"{name} class {klass!r} observed an undeclared row: {row!r}. "
+                    f"Add it to {contract_name} with a reviewed reason, or fix "
+                    "the runtime that produced it."
+                )
+    return problems
+
+
 def steps(capture: Path) -> list[tuple[str, Path]]:
     effects = capture / "effects"
     if not effects.is_dir():
@@ -150,6 +279,23 @@ def score_against_contract(capture: Path, contract: Path, ambient: Path) -> list
                 + (result.stdout + result.stderr).strip()
             )
 
+    policy, policy_problems = load_policy(contract)
+    problems.extend(policy_problems)
+
+    # Only the fact files the policy actually governs go through the class-aware
+    # comparison. Everything else keeps whole-file list equality, which is what
+    # it always had: routing all seven through the class-aware path would derive
+    # a "class" from a step number, a table name or a fact name, find no policy
+    # row for it, and fail a byte-identical capture in five files at once.
+    class_aware = {fact_file for fact_file, _klass in policy}
+    unknown = class_aware - set(FACT_FILES.values())
+    if unknown:
+        problems.append(
+            f"{POLICY_FILE} declares semantics for {sorted(unknown)}, which is not "
+            "a scored fact file. A policy row that governs nothing is either a "
+            "typo or a relaxation aimed at the wrong file."
+        )
+
     for capture_name, contract_name in FACT_FILES.items():
         frozen = contract / contract_name
         if not frozen.is_file():
@@ -161,7 +307,12 @@ def score_against_contract(capture: Path, contract: Path, ambient: Path) -> list
                 f"the frozen {contract_name} carries no data row. A header-only "
                 "expectation is satisfied by any capture, so it asserts nothing."
             )
-        if read(capture / capture_name) != frozen_rows:
+        captured_rows = read(capture / capture_name)
+        if contract_name in class_aware:
+            problems.extend(compare_fact_file(
+                capture_name, contract_name, captured_rows, frozen_rows, policy,
+            ))
+        elif captured_rows != frozen_rows:
             problems.append(f"{capture_name} diverged from the frozen {contract_name}")
     return problems
 
@@ -183,12 +334,34 @@ def freeze(capture: Path, contract: Path) -> None:
         + "\n".join(index_rows) + "\n",
         encoding="utf-8",
     )
+    policy, _ = load_policy(contract)
     for capture_name, contract_name in FACT_FILES.items():
         source = capture / capture_name
-        if source.is_file():
-            (contract / contract_name).write_text(
-                source.read_text(encoding="utf-8"), encoding="utf-8"
-            )
+        if not source.is_file():
+            continue
+        text = source.read_text(encoding="utf-8")
+        # A class compared as an allowlist is frozen as a SET of declared rows,
+        # not as the run's repetition list. Freezing the repetitions would freeze
+        # a count that tracks how many browser sessions the flow opened, so
+        # adding a step would invalidate an answer that did not change.
+        subset_classes = {
+            klass for (fact_file, klass), semantics in policy.items()
+            if fact_file == contract_name and semantics == "declared-subset"
+        }
+        if subset_classes:
+            kept: list[str] = []
+            seen: set[str] = set()
+            for line in text.splitlines():
+                if not line or line.startswith("#"):
+                    kept.append(line)
+                    continue
+                if line.split("\t")[0] in subset_classes:
+                    if line in seen:
+                        continue
+                    seen.add(line)
+                kept.append(line)
+            text = "\n".join(kept) + "\n"
+        (contract / contract_name).write_text(text, encoding="utf-8")
     print(f"froze candidate oracle facts from {capture} into {contract}")
 
 

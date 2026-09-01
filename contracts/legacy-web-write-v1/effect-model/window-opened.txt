@@ -11,7 +11,9 @@ window-opened
 [identities]
 
 [changed-tables]
-ad_recentitem	+1
+ad_recentitem	+1	rows
+ad_sequence	+0	content
+ad_session	+0	content
 
 [created]
 
@@ -20,4 +22,4 @@ ad_recentitem	+1
 [deleted]
 
 [no-effect]
-no-keyed-change-in-scope	no-row-count-delta-outside-ambient
+no-keyed-change-in-scope	no-content-change-outside-ambient
