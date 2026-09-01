@@ -73,6 +73,8 @@ class LegacyBusinessPartnerWriteOracleTest {
 	private static final String WINDOW = "Business Partner";
 	/** {@code FindWindow.java:274} titles the dialog {@code Msg("Find") + ": " + window}. */
 	private static final String FIND_TITLE_PREFIX = "Lookup Record: ";
+	/** Accepts either message spelling; see enterWindowThroughFindDialog. */
+	private static final String OK_BUTTON = "[title='Ok']:visible, [title='OK']:visible";
 
 	private final String baseUrl = SCRIPTS.property("baseUrl").replaceFirst("/+$", "");
 	private final String user = SCRIPTS.property("user");
@@ -361,8 +363,18 @@ class LegacyBusinessPartnerWriteOracleTest {
 		// The dialog's controls are ConfirmPanel actions built by WAppsAction,
 		// which sets a tooltip and an image and clears the label
 		// (WAppsAction.java:96-106). They therefore carry a title attribute and
-		// NO text, so they are addressed the same way the proven role-panel
-		// confirmation addresses its own OK (LegacyBrowserFlow.confirmRole).
+		// NO text.
+		//
+		// The title is "Ok", NOT "OK". The role panel's confirmation really is
+		// "OK" (LegacyBrowserFlow.confirmRole), so the two are not
+		// interchangeable -- run 33471818401 timed out on `[title='OK']` while
+		// its own probe recorded the dialog offering "New", "Cancel" and "Ok".
+		// Both spellings are accepted here so neither message key can break the
+		// capture.
+		//
+		// :visible is required, not decorative. FindWindow builds a second
+		// confirmation pair for the Advanced tab (FindWindow.java:435-441), so
+		// an unfiltered .first() can resolve to a button nobody can click.
 		if (searchKey != null) {
 			Locator search = dialog
 					.locator("xpath=.//td[normalize-space(text())='Search Key']"
@@ -374,7 +386,7 @@ class LegacyBusinessPartnerWriteOracleTest {
 		}
 		page.waitForResponse(
 				response -> response.request().url().contains("/zkau"),
-				() -> dialog.locator("[title='OK']").first().click());
+				() -> dialog.locator(OK_BUTTON).first().click());
 		dialog.waitFor(new Locator.WaitForOptions().setState(WaitForSelectorState.DETACHED));
 	}
 
@@ -478,7 +490,7 @@ class LegacyBusinessPartnerWriteOracleTest {
 		search.press("Tab");
 		page.waitForResponse(
 				response -> response.request().url().contains("/zkau"),
-				() -> dialog.locator("[title='OK']").first().click());
+				() -> dialog.locator(OK_BUTTON).first().click());
 		dialog.waitFor(new Locator.WaitForOptions().setState(WaitForSelectorState.DETACHED));
 		assertEquals(value, labelledInput(page, "Search Key").inputValue(),
 				"the window is not positioned on the captured record");
