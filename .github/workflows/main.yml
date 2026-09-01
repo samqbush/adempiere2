@@ -52,15 +52,28 @@ on:
           # The browser capture alone, so a selector failure can be reproduced
           # without the surrounding restore and scoring lane.
           - phase5g1aWriteOracleCapture
+          # The Phase 5g-1b routed parity lane, alone.
+          - phase5g1bModernWriteParitySmoke
+          # The modern browser capture alone. ZK CE 10 selector work is the
+          # expected failure mode of 5g-1b, and reproducing it should not also
+          # require the legacy regression the smoke depends on.
+          - phase5g1bModernWriteParityCapture
       # The Phase 5g-1a oracle has to come from somewhere, and a run that
       # invents the expected answer must not also be the run that verifies it.
       # Freeze mode is therefore MANUAL ONLY: no pull request, push or nightly
       # run can reach it, and the acceptance run is a later, ordinary one
       # against the committed and domain-reviewed files.
+      #
+      # It applies to the Phase 5g-1a LEGACY lane only. It cannot reach a 5g-1b
+      # task, and not merely by convention: the expansion below is guarded on
+      # the selected gate, and run-write-parity-smoke.sh does not accept a
+      # freeze argument at all, so even a mis-edited expansion could not
+      # produce a frozen modern answer.
       freeze_write_oracle:
         description: >-
           Capture the Phase 5g-1a write oracle and emit candidate contract
           files instead of scoring against them. NOT an acceptance run.
+          Ignored unless the selected debug gate is a Phase 5g-1a task.
         required: false
         default: false
         type: boolean
@@ -110,16 +123,23 @@ jobs:
           java-version: '21'
           cache: gradle
 
-      # One invocation, one task graph. phase5g1aFinalVerification chains
-      # phase5g0FinalVerification, which chains
-      # phase5fFinalVerification, which transitively covers
+      # One invocation, one task graph. phase5g1bFinalVerification chains
+      # phase5g1aFinalVerification, which chains phase5g0FinalVerification,
+      # which chains phase5fFinalVerification, which transitively covers
       # phase3NoDatabaseDistribution, phase4FinalVerification and the Phase
       # 5a/5b/5c/5d/5e gates; phase5cFinalVerification contributes only
       # :zkwebui:check, which is not on that chain.
+      #
+      # Re-derived when 5g-1b landed, not merely re-headed: the addition set is
+      # {phase5g1bFinalVerification} and the removal set is
+      # {phase5g1aFinalVerification}, which is safe ONLY because the new head
+      # chains the old one. phase5cFinalVerification stays on the list for the
+      # reason it was ever on it -- it is deliberately off the chain, so
+      # dropping it would silently drop its coverage rather than move it.
       - name: Verify every database-neutral phase gate
         uses: ./.github/actions/adempiere-build
         with:
-          task: phase5g1aFinalVerification phase5cFinalVerification
+          task: phase5g1bFinalVerification phase5cFinalVerification
 
       # if-no-files-found: error is satisfied by any one matching path, so an
       # upload block that also matches an evidence directory cannot detect a
@@ -223,9 +243,25 @@ jobs:
     # Setup alone is roughly 22 minutes, and this lane then performs two full
     # captures, each preceded by a golden-archive restore, a quiescence
     # re-verification and a container restart, with a whole-schema snapshot
-    # between every one of nine steps. 180 is a backstop against a hang, not a
-    # budget; the GitHub-hosted ceiling is 360. Revisit once the gate has run.
-    timeout-minutes: 180
+    # between every one of ten steps.
+    #
+    # Raised to 330 when phase5g1bModernWriteParitySmoke took this slot. That
+    # gate deliberately dependsOn phase5g1aLegacyWriteOracleSmoke, so this one
+    # job now runs BOTH write lanes end to end -- roughly an hour of legacy
+    # capture before the routed parity capture even starts -- plus an H6 matrix
+    # whose destructive rows each take their own full seed restore.
+    #
+    # That cost is accepted rather than designed around. 5g-1b refactored the
+    # legacy driver into a shared flow plus a dialect, so the legacy oracle now
+    # depends on code this branch touched; re-proving it only on an intermediate
+    # commit, or only post-merge in a non-blocking lane, would let the final PR
+    # silently move the answer it is scoring against. Splitting it into a
+    # separate job would need a new required status check, and branch protection
+    # is administered manually and references jobs by name.
+    #
+    # 330 is a backstop against a hang, not a budget; the GitHub-hosted ceiling
+    # is 360.
+    timeout-minutes: 330
     services:
       postgres:
         image: postgres:14.6
@@ -262,16 +298,22 @@ jobs:
             ${{ (github.event_name == 'workflow_dispatch'
                  && inputs.debug_gate != 'full')
                 && inputs.debug_gate
-                || 'phase5g1aLegacyWriteOracleSmoke' }}
+                || 'phase5g1bModernWriteParitySmoke' }}
           # --continue is deliberately NOT inherited from the Phase 5f shard
           # matrix. That gate had six independent shards and wanted every data
           # point per run. This gate is one sequential lane whose later steps
           # are meaningless once an earlier one fails: continuing past a failed
           # capture would score a half-driven flow against the frozen oracle
           # and report a second, derived failure that explains nothing.
+          #
+          # The freeze property is emitted only when the selected gate is the
+          # Phase 5g-1a legacy lane. A parity increment may never produce the
+          # answer it is scored against, so the input is inert for every 5g-1b
+          # gate rather than merely unused by it.
           args: >-
             ${{ (github.event_name == 'workflow_dispatch'
-                 && inputs.freeze_write_oracle)
+                 && inputs.freeze_write_oracle
+                 && startsWith(inputs.debug_gate, 'phase5g1a'))
                 && '-Pphase5g1aFreeze=true'
                 || '' }}
       # build/phase5e/keys holds the generated handoff secret and is excluded
@@ -290,6 +332,12 @@ jobs:
             build/phase3/runtime/Adempiere/tomcat/logs/
             zkwebui/build/test-results/writeOracleTest/
             zkwebui/build/reports/tests/writeOracleTest/
+            build/phase5g1b/runtime-evidence/
+            build/phase5g1b/evidence-validator-verified.txt
+            build/phase5g1b/lane-invariants-verified.txt
+            zkwebui/build/test-results/writeParityTest/
+            zkwebui/build/reports/tests/writeParityTest/
+            build/phase5e/tomcat10/logs/
 
   # --------------------------------------------------------------------------
   # Lane 2: post-merge regression matrix. Non-blocking by design.
@@ -312,8 +360,11 @@ jobs:
     # Raised from 90 when phase5fJakartaWebRoutesSmoke was retired into this
     # matrix. That gate needed 180 as the current-phase job, and a regression
     # lane that times out the gate it inherited would report an infrastructure
-    # failure as a regression. The other five finish well inside it, and an
-    # unused ceiling costs nothing.
+    # failure as a regression. The others finish well inside it, and an unused
+    # ceiling costs nothing.
+    #
+    # phase5g1aLegacyWriteOracleSmoke is the exception to "well inside": it is a
+    # full two-capture write lane and has run close to 75 minutes.
     timeout-minutes: 180
     strategy:
       # One phase failing must not hide the state of the others.
@@ -327,6 +378,12 @@ jobs:
           - phase5dModernWebSmoke
           - phase5eCohortRoutingSmoke
           - phase5fJakartaWebRoutesSmoke
+          # Retired into the matrix when 5g-1b took the current-phase slot. It
+          # is ALSO a dependency of phase5g1bModernWriteParitySmoke, so on a
+          # pull request the legacy oracle is re-proven inside the required
+          # check; this row keeps it covered post-merge once a later increment
+          # takes the current-phase slot and that dependency goes away.
+          - phase5g1aLegacyWriteOracleSmoke
     services:
       postgres:
         image: postgres:14.6

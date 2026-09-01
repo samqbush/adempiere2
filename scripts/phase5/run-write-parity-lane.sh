@@ -98,7 +98,7 @@ export PHASE5G_CONFIRM_PORTS="$public_port $api_port"
 
 golden_archive=$evidence_root/golden.dump
 quiesce_state=$evidence_root/quiesce-state.tsv
-mkdir -p "$evidence_root"
+mkdir -p "$evidence_root" "$evidence_root/session-evidence"
 
 reset() {
   bash "$scripts_dir/reset-write-oracle-fixture.sh" \
@@ -118,6 +118,16 @@ cohort() {
 census() {
   bash "$scripts_dir/routed-ambient-census.sh" \
     "$db_host" "$db_port" "$db_name" "$db_user" "$1" "$2"
+}
+
+# AD_Session is listed in ambient-tables.tsv, so a modern change to an EXISTING
+# session row is invisible to the business oracle's sentinel by design. This
+# records it separately, as its own non-business model, rather than widening the
+# oracle with volatile rows.
+session_evidence() {
+  bash "$scripts_dir/capture-session-evidence.sh" \
+    "$db_host" "$db_port" "$db_name" "$db_user" "$marker" "$1" \
+    "$evidence_root/session-evidence/$1.tsv"
 }
 
 measure() {
@@ -192,12 +202,24 @@ capture() {
 
   echo "== capture $label: restoring, re-verifying quiescence and cohort, censusing =="
   reset restore "$golden_archive"
+  # WHICH archive this capture started from. Two captures taken from a single
+  # restore are not an A/B: they share every accident of the state they started
+  # in, so their agreement would prove nothing about reproducibility. Recording
+  # the digest per capture is what lets the validator tell an independent
+  # restore from a shared one after the fact.
+  {
+    printf 'label\t%s\n' "$label"
+    printf 'golden_sha256\t%s\n' \
+      "$(python3 -c 'import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$golden_archive")"
+  } >"$capture_dir/restore.tsv"
   quiesce verify
   cohort verify "$evidence_root/cohort-config.tsv"
   census "$label" "$capture_dir/census"
   reset fixture
 
   echo "== capture $label: driving the browser through the public routed origin =="
+
+  session_evidence "pre-$label"
 
   printf '%s\n' "$$" >"$rendezvous/orchestrator.pid.partial"
   mv "$rendezvous/orchestrator.pid.partial" "$rendezvous/orchestrator.pid"
@@ -246,6 +268,8 @@ capture() {
     cat "$identification" >&2
     return 1
   fi
+
+  session_evidence "post-$label"
 
   python3 "$scripts_dir/derive-write-oracle-facts.py" \
     --capture "$capture_dir" \
