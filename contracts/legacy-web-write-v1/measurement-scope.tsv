@@ -12,7 +12,28 @@
 # Measuring an excluded table is how the exclusion is proved rather than
 # asserted: if the flow ever starts writing locations, the sentinel flags the
 # table and this scope shows exactly which rows appeared.
+#
+# AD_WF_Process and AD_WF_Activity are measured because run 33488213231 showed
+# that creating a business partner starts a document workflow: the create step's
+# sentinel reported ad_wf_process, ad_wf_activity and ad_wf_eventaudit each
+# gaining a row. Starting that workflow is a business fact a modern runtime must
+# reproduce, and it is the only fan-out this flow produces that the keyed layer
+# can express as EDGES rather than as counts.
+#
+# The accounting fan-out -- C_BP_Customer_Acct, C_BP_Vendor_Acct and
+# C_BP_Employee_Acct, which the same step also creates -- is deliberately left
+# to the sentinel. Those tables are keyed on (C_BPartner_ID, C_AcctSchema_ID),
+# so their primary key component IS the parent reference; the identity map keys
+# symbols by (column, value), so such a row resolves to the parent's own symbol
+# and can never produce an edge distinct from itself. Declaring them would add
+# rows that look measured and prove nothing about the graph.
+#
+# AD_WF_EventAudit is left to the sentinel as well: it is an append-only audit
+# of workflow transitions, carrying free text, and it adds no edge the process
+# and activity rows do not already carry.
 table	key_column	predicate
 C_BPartner	c_bpartner_id	Value LIKE 'P5G1A-%'
 C_BPartner_Location	c_bpartner_location_id	C_BPartner_ID IN (SELECT C_BPartner_ID FROM C_BPartner WHERE Value LIKE 'P5G1A-%')
 AD_ChangeLog	ad_changelog_id+ad_column_id	AD_Table_ID = 291
+AD_WF_Process	ad_wf_process_id	AD_Table_ID = 291 AND Record_ID IN (SELECT C_BPartner_ID FROM C_BPartner WHERE Value LIKE 'P5G1A-%')
+AD_WF_Activity	ad_wf_activity_id	AD_WF_Process_ID IN (SELECT AD_WF_Process_ID FROM AD_WF_Process WHERE AD_Table_ID = 291 AND Record_ID IN (SELECT C_BPartner_ID FROM C_BPartner WHERE Value LIKE 'P5G1A-%'))
