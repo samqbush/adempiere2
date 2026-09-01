@@ -159,14 +159,25 @@ case "$command" in
     mkdir -p "$(dirname "$archive")"
     # Custom format so the restore is a single parallelisable operation and the
     # archive is not a 100 MiB text file the CI log could accidentally echo.
+    # Ownership and privileges are PRESERVED, not stripped. Source and target
+    # are the same database name on the same cluster, and --no-owner would
+    # re-own every object to the restoring superuser -- leaving the application
+    # role unable to read the schema it is about to be measured through.
     PGPASSWORD=$system_password pg_dump \
       --host="$db_host" --port="$db_port" --username="$system_user" \
-      --dbname="$db_name" --format=custom --no-owner --no-privileges \
+      --dbname="$db_name" --format=custom \
       --file="$archive"
     # Record what the archive is OF. An archive with no provenance is one that a
     # later run cannot prove was taken from the installed product rather than
     # from a database some earlier capture had already written to.
-    run_system_psql --dbname="$db_name" --tuples-only --no-align --command="
+    # Run as the APPLICATION role. ADempiere's objects are not in `public`, and
+    # only the application role's search_path resolves them -- as the system
+    # role this failed with `relation "ad_table" does not exist` after a full
+    # install had already succeeded.
+    app_password=${ADEMPIERE_PHASE5D_DB_PASSWORD:?baseline requires the application database password}
+    PGPASSWORD=$app_password psql -X -v ON_ERROR_STOP=1 \
+      --host="$db_host" --port="$db_port" --username="$db_user" \
+      --dbname="$db_name" --tuples-only --no-align --command="
       SELECT 'ad_table_count=' || count(*) FROM AD_Table" >"$archive.provenance"
     {
       printf 'captured_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -210,12 +221,11 @@ case "$command" in
 
     PGPASSWORD=$system_password pg_restore \
       --host="$db_host" --port="$db_port" --username="$system_user" \
-      --dbname="$db_name" --no-owner --no-privileges --exit-on-error "$archive"
-    run_system_psql --dbname="$db_name" --command="
-      GRANT ALL ON SCHEMA public TO $db_user;
-      GRANT ALL ON ALL TABLES IN SCHEMA public TO $db_user;
-      GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO $db_user;
-      GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO $db_user" >/dev/null
+      --dbname="$db_name" --exit-on-error "$archive"
+    # No GRANT fixup. The archive carries ownership and privileges, so the
+    # restored database is the one that was dumped. The previous form granted on
+    # `public`, which is not where ADempiere's objects live, and so granted
+    # nothing while appearing to.
 
     start_container
     echo "Reseeded $db_name from $archive"
