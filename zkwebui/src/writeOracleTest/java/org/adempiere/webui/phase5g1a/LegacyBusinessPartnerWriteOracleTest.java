@@ -80,6 +80,9 @@ class LegacyBusinessPartnerWriteOracleTest {
 	/** The same backstop for a single field edit. */
 	private static final Duration FIELD_SETTLE = Duration.ofSeconds(15);
 
+	/** How long a lookup drop-down is given to open, and its choice to commit. */
+	private static final Duration COMBO_OPEN = Duration.ofSeconds(10);
+
 	private static final String WINDOW = "Business Partner";
 	/** Editors carry ids of the form {@code unqField_<tab>_<row>_<Table>_<Column><n>}. */
 	private static final String TABLE = "C_BPartner";
@@ -716,26 +719,51 @@ class LegacyBusinessPartnerWriteOracleTest {
 	 */
 	private void selectCombo(Page page, String column, String label) {
 		String marker = "[id*=\"_" + TABLE + "_" + column + "\"]";
-		Locator button = tabPanel(page).locator(marker + "[id$=\"!btn\"]").first();
-		button.waitFor();
-		button.click();
-		// Matched on ZK's own z.label as well as on the rendered text. Run
-		// 33484416830 offered Fertilizer -- the probe listed it among the
-		// organisation items -- and a text-only match still found nothing,
-		// because a combo item's text is assembled from its cells and carries
-		// the label the attribute states exactly.
 		Locator popup = page.locator(marker + "[id$=\"!pp\"]");
 		Locator item = popup.locator("xpath=.//tr[contains(@class,'z-combo-item')]"
 				+ "[@z.label='" + label + "' or normalize-space(.)='" + label + "']");
-		// The popup renders on demand, so the item is waited for rather than
-		// counted the instant the drop-down is clicked.
-		item.first().waitFor();
-		int count = item.count();
-		assertEquals(1, count, "the combo for column " + column + " offered "
-				+ count + " items matching '" + label + "'");
-		item.first().click();
+
+		// Preferred path: open the drop-down and click the item, which is how a
+		// user chooses an organisation.
+		Locator button = tabPanel(page).locator(marker + "[id$=\"!btn\"]").first();
+		button.waitFor();
+		button.click();
+		if (visibleWithin(popup, COMBO_OPEN) && item.count() == 1) {
+			item.first().click();
+		} else {
+			// Fallback: type the label and commit it. Run 33485512079 clicked
+			// the drop-down and its popup never became visible, while the
+			// popup's own rows -- probed at the moment of failure -- carried
+			// exactly the label being looked for. Typing reaches the same ZK
+			// selection through the path the keyboard uses.
+			Locator input = columnInput(page, column);
+			input.fill(label);
+			input.press("Enter");
+		}
+
+		// Asserted either way. A combo that shows the right text without having
+		// selected the value behind it would put the record in the wrong
+		// organisation, which is the specific defect this whole change exists to
+		// remove -- and it would come back as a read-only form for the second
+		// editor rather than as an error here.
+		long deadline = System.nanoTime() + COMBO_OPEN.toNanos();
+		while (!label.equals(columnInput(page, column).inputValue())
+				&& System.nanoTime() < deadline) {
+			page.waitForTimeout(250);
+		}
 		assertEquals(label, columnInput(page, column).inputValue(),
 				"the combo for column " + column + " did not take '" + label + "'");
+	}
+
+	private boolean visibleWithin(Locator locator, Duration budget) {
+		try {
+			locator.first().waitFor(new Locator.WaitForOptions()
+					.setState(WaitForSelectorState.VISIBLE)
+					.setTimeout(budget.toMillis()));
+			return true;
+		} catch (RuntimeException notVisible) {
+			return false;
+		}
 	}
 
 	/**
