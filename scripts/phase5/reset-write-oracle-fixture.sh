@@ -133,12 +133,12 @@ require_marked_database() {
 
 stop_container() {
   [[ "${PHASE5G_SKIP_CONTAINER:-0}" == "1" ]] && return 0
-  "$repo_root/scripts/phase5/stop-legacy-browser-lane.sh" "$lane_port" >/dev/null 2>&1 || true
+  bash "$repo_root/scripts/phase5/stop-legacy-browser-lane.sh" "$lane_port" >/dev/null 2>&1 || true
 }
 
 start_container() {
   [[ "${PHASE5G_SKIP_CONTAINER:-0}" == "1" ]] && return 0
-  "$repo_root/scripts/phase5/start-legacy-browser-lane.sh" "$lane_port"
+  bash "$repo_root/scripts/phase5/start-legacy-browser-lane.sh" "$lane_port"
 }
 
 # Any open connection blocks DROP DATABASE. Terminating them is done explicitly
