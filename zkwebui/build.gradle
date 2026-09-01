@@ -62,6 +62,22 @@ sourceSets {
 			srcDirs = [rootProject.file('contracts/legacy-web-browser-v1')]
 		}
 	}
+	// Phase 5g-1b: the runtime-INDEPENDENT half of the write capture -- the flow
+	// orchestration, the step ledger and the dialect seam. Shared by the legacy
+	// oracle lane and the modern parity lane so both execute the same step
+	// order, the same fact keys and the same session choreography; only the
+	// ZkDialect implementation differs.
+	//
+	// A support source set rather than a test one: it carries no @Test, so no
+	// Test task may discover it directly. Its behaviour is proved by the lanes
+	// that use it.
+	writeParitySupport {
+		java {
+			srcDirs = ['src/writeParitySupport/java']
+		}
+		// No resources, for the same reason writeOracleTest has none: the frozen
+		// contract must stay off the driver's classpath.
+	}
 	// Phase 5g-1a: the destructive legacy write driver. Its own source set and
 	// its own Test task, so the Phase 5c read oracle can never discover it: a
 	// task that resets a fixture and asserts a zero-write delta must not have a
@@ -137,6 +153,8 @@ configurations {
 	phase5Transformer
 	legacyBrowserSupportImplementation.extendsFrom testImplementation
 	legacyBrowserSupportRuntimeOnly.extendsFrom testRuntimeOnly
+	writeParitySupportImplementation.extendsFrom testImplementation
+	writeParitySupportRuntimeOnly.extendsFrom testRuntimeOnly
 	writeOracleTestImplementation.extendsFrom testImplementation
 	writeOracleTestRuntimeOnly.extendsFrom testRuntimeOnly
 	browserContractImplementation.extendsFrom testImplementation
@@ -171,6 +189,11 @@ dependencies {
 	browserContractImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
 	browserContractRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
 	legacyBrowserSupportImplementation "com.microsoft.playwright:playwright:${playwrightVersion}"
+	writeParitySupportImplementation sourceSets.legacyBrowserSupport.output
+	writeParitySupportImplementation sourceSets.browserContract.output
+	writeParitySupportImplementation "com.microsoft.playwright:playwright:${playwrightVersion}"
+	writeParitySupportImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+	writeOracleTestImplementation sourceSets.writeParitySupport.output
 	writeOracleTestImplementation sourceSets.legacyBrowserSupport.output
 	writeOracleTestImplementation sourceSets.browserContract.output
 	writeOracleTestImplementation "com.microsoft.playwright:playwright:${playwrightVersion}"
