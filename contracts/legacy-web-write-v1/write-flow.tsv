@@ -5,6 +5,8 @@
 4	concurrency-second-editor-authenticated
 5	concurrency-second-editor-update
 6	concurrency-conflicting-save
-7	deactivate-editor-authenticated
-8	deactivate
-9	logged-out
+7	duplicate-submit-editor-authenticated
+8	duplicate-submit
+9	deactivate-editor-authenticated
+10	deactivate
+11	logged-out
