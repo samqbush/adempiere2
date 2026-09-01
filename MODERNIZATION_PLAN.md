@@ -1016,8 +1016,8 @@ content than the table digests it was cross-checked against.
 delivered through sub-increments `5g-0` and `5g-1a` .. `5g-7`; see "Phase 5g
 decomposition and active scope". `5g-0` merged to `develop` as PR #13 at
 `91c4c2029`. `5g-1a`, the legacy Business Partner CRUD write oracle, is
-**complete**: PR #16, reviewed head `dc446254b245db0040cee385e6b4f2df1f2df903`,
-captured in run 33491714444 and **accepted in run 33494910110**, which scored
+**complete**: PR #16, reviewed head `1a761b55b4d43a1f28a87a7a4a3aae2483d01be8`,
+captured in run 33491714444 and **accepted in run 33497129519**, which scored
 the frozen contract with freezing switched off and reported "A/B self-diff clean
 and both captures match the frozen contract". The two runs are recorded
 separately on purpose: a run that writes the expected answer cannot also be the
@@ -1637,7 +1637,7 @@ Two ordering rules bind every Phase 5g increment:
 | Increment | Scope | Ships modern code? | Expected answer captured by |
 |---|---|---|---|
 | 5g-0 | Phase 5f reconciliation; the Phase 5g ADR; ZK-facing extension/callout/validator discovery; the dictionary-process classification and named 5g-1e fixture; the disabled-context governance amendment | No | n/a - ships no runtime code |
-| 5g-1a (**complete**, PR #16 at `dc446254b`) | The legacy Business Partner CRUD write oracle: a reusable legacy write capture harness, `contracts/legacy-web-write-v1/`, the keyed relational effect model, seed-restore isolation, normalizer and ambient-classification mutation proofs, the legacy two-user concurrency answer, and the recorded domain review. Captured in run 33491714444 and accepted in run 33494910110; frozen, self-diffed and scored | **No** | n/a - it *is* the oracle |
+| 5g-1a (**complete**, PR #16 at `1a761b55b`) | The legacy Business Partner CRUD write oracle: a reusable legacy write capture harness, `contracts/legacy-web-write-v1/`, the keyed relational effect model, seed-restore isolation, normalizer and ambient-classification mutation proofs, the legacy two-user concurrency answer, and the recorded domain review. Captured in run 33491714444 and accepted in run 33497129519; frozen, self-diffed and scored | **No** | n/a - it *is* the oracle |
 | 5g-1b | Modern Business Partner CRUD parity, scored **only** through the public routed `/webui` origin, including the legacy two-user concurrency answer 5g-1a froze | Yes | **5g-1a** |
 | 5g-1c | Sales Order draft -> Complete: document status, document number, reservations and tax. **No accounting** | Yes | **unassigned - blocking** |
 | 5g-1d | The explicit "Post Immediate" action: `Posted='Y'` and balanced `Fact_Acct` | Yes | **unassigned - blocking** |
