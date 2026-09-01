@@ -1,0 +1,14 @@
+# Phase 5g-1a frozen effect model index.
+# One row per measured step. The frozen answer for a step is the named
+# document, which keeps the emitted section format exactly, so what is
+# reviewed is what is compared.
+step_id	operation	document
+concurrency-conflicting-save	concurrency-conflicting-save	effect-model/concurrency-conflicting-save.txt
+concurrency-second-editor-authenticated	concurrency-second-editor-authenticated	effect-model/concurrency-second-editor-authenticated.txt
+concurrency-second-editor-update	concurrency-second-editor-update	effect-model/concurrency-second-editor-update.txt
+create	create	effect-model/create.txt
+deactivate	deactivate	effect-model/deactivate.txt
+deactivate-editor-authenticated	deactivate-editor-authenticated	effect-model/deactivate-editor-authenticated.txt
+logged-out	logged-out	effect-model/logged-out.txt
+update	update	effect-model/update.txt
+window-opened	window-opened	effect-model/window-opened.txt

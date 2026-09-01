@@ -21,19 +21,25 @@
 # can express as EDGES rather than as counts.
 #
 # The accounting fan-out -- C_BP_Customer_Acct, C_BP_Vendor_Acct and
-# C_BP_Employee_Acct, which the same step also creates -- is deliberately left
-# to the sentinel. Those tables are keyed on (C_BPartner_ID, C_AcctSchema_ID),
-# so their primary key component IS the parent reference; the identity map keys
-# symbols by (column, value), so such a row resolves to the parent's own symbol
-# and can never produce an edge distinct from itself. Declaring them would add
-# rows that look measured and prove nothing about the graph.
+# C_BP_Employee_Acct -- and the menu tree node AD_TreeNodeBP are declared for a
+# different reason: the undeclared-table backstop requires every non-ambient
+# changed table to be declared in the KEYED sections, and classifying real
+# business fan-out as ambient would be exactly the move that makes an unexpected
+# write acceptable. They contribute rows, not edges: each accounting table is
+# keyed on (C_BPartner_ID, C_AcctSchema_ID), so its primary key component IS the
+# parent reference, and since the identity map keys symbols by (column, value)
+# such a row resolves to its own parent's symbol and can never express an edge
+# distinct from itself.
 #
-# AD_WF_EventAudit is left to the sentinel as well: it is an append-only audit
-# of workflow transitions, carrying free text, and it adds no edge the process
-# and activity rows do not already carry.
+# AD_WF_EventAudit stays ambient: it is an append-only audit of workflow
+# transitions, and it restates what the process and activity rows already carry.
 table	key_column	predicate
 C_BPartner	c_bpartner_id	Value LIKE 'P5G1A-%'
 C_BPartner_Location	c_bpartner_location_id	C_BPartner_ID IN (SELECT C_BPartner_ID FROM C_BPartner WHERE Value LIKE 'P5G1A-%')
 AD_ChangeLog	ad_changelog_id+ad_column_id	AD_Table_ID = 291
 AD_WF_Process	ad_wf_process_id	AD_Table_ID = 291 AND Record_ID IN (SELECT C_BPartner_ID FROM C_BPartner WHERE Value LIKE 'P5G1A-%')
 AD_WF_Activity	ad_wf_activity_id	AD_WF_Process_ID IN (SELECT AD_WF_Process_ID FROM AD_WF_Process WHERE AD_Table_ID = 291 AND Record_ID IN (SELECT C_BPartner_ID FROM C_BPartner WHERE Value LIKE 'P5G1A-%'))
+AD_TreeNodeBP	node_id+ad_tree_id	Node_ID IN (SELECT C_BPartner_ID FROM C_BPartner WHERE Value LIKE 'P5G1A-%')
+C_BP_Customer_Acct	c_bpartner_id+c_acctschema_id	C_BPartner_ID IN (SELECT C_BPartner_ID FROM C_BPartner WHERE Value LIKE 'P5G1A-%')
+C_BP_Vendor_Acct	c_bpartner_id+c_acctschema_id	C_BPartner_ID IN (SELECT C_BPartner_ID FROM C_BPartner WHERE Value LIKE 'P5G1A-%')
+C_BP_Employee_Acct	c_bpartner_id+c_acctschema_id	C_BPartner_ID IN (SELECT C_BPartner_ID FROM C_BPartner WHERE Value LIKE 'P5G1A-%')

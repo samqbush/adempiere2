@@ -1,0 +1,22 @@
+# Phase 5g write effect for step: concurrency-second-editor-update
+#
+# Generated identities are normalized THROUGH the mapping below and are
+# never dropped: dropping them would erase a broken foreign-key edge and
+# a duplicated effect, which are the two defects this comparison exists
+# to catch.
+
+[step]
+concurrency-second-editor-update
+
+[identities]
+
+[changed-tables]
+ad_recentitem	+1
+
+[created]
+
+[updated]
+c_bpartner	1000000	name	P5G1A-0001 Partner Updated	P5G1A-0001 Partner By Second Editor
+c_bpartner	1000000	updatedby	101	102
+
+[deleted]

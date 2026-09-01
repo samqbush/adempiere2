@@ -37,6 +37,5 @@ ad_recentitem	Per-user "recently viewed" convenience list, written by opening a 
 ad_preference	Per-user UI preference state written by window and field interaction.
 ad_issue	Automatic error reporting. Quiesced before capture, but classified so a residual row diagnoses rather than fails the run.
 ad_sequence_no	Document and table sequence allocation counters. Advance as a consequence of any insert.
-ad_wf_process	Workflow engine process state. The Business Partner window starts no document workflow, but the engine is live in the runtime.
-ad_wf_activity	Workflow engine activity state, same rationale as ad_wf_process.
-ad_wf_eventaudit	Workflow engine event audit, same rationale as ad_wf_process.
+ad_wf_eventaudit	Append-only audit of workflow transitions. Run 33489852922 disproved the earlier belief that the Business Partner window starts no document workflow: it does. AD_WF_Process and AD_WF_Activity were therefore MOVED OUT of this file and into the keyed measurement scope, where the workflow the create starts is asserted rather than exempted. The audit rows stay ambient because they restate transitions the process and activity rows already carry.
+ad_tree_favorite	Per-user menu favourites, written when a user first reaches the desktop.

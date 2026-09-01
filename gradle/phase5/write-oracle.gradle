@@ -270,6 +270,17 @@ tasks.register('verifyPhase5gWriteOracleManifest') {
 			'raw/before.json': 120,
 			'raw/after.json': 800,
 			'raw/README.md': 800,
+			// The captured facts. Floors are an order of magnitude below the
+			// frozen bytes, so ordinary re-capture does not trip them while
+			// truncation to a header does.
+			'write-flow.tsv': 100,
+			'effect-model.tsv': 400,
+			'business-values.tsv': 1000,
+			'foreign-key-graph.tsv': 60,
+			'semantic-facts.tsv': 100,
+			'network-classes.tsv': 80,
+			'concurrency-facts.tsv': 80,
+			'allowed-browser-errors.tsv': 100,
 		]
 		def absent = required.keySet().findAll { !actual.containsKey(it) }
 		if (!absent.isEmpty()) {
@@ -294,7 +305,10 @@ tasks.register('verifyPhase5gWriteOracleManifest') {
 		// or exclusion list reduced to comments asserts nothing while still looking
 		// substantial to a byte-length check.
 		['attribution-scope.tsv', 'attribution.tsv', 'measurement-scope.tsv',
-		 'exclusions.tsv', 'ambient-tables.tsv'].each { name ->
+		 'exclusions.tsv', 'ambient-tables.tsv', 'write-flow.tsv',
+		 'effect-model.tsv', 'business-values.tsv', 'foreign-key-graph.tsv',
+		 'semantic-facts.tsv', 'network-classes.tsv', 'concurrency-facts.tsv',
+		 'allowed-browser-errors.tsv'].each { name ->
 			def dataRows = new File(dir, name).readLines()
 				.findAll { !it.trim().isEmpty() && !it.startsWith('#') }
 			if (dataRows.size() < 2) {
@@ -302,6 +316,89 @@ tasks.register('verifyPhase5gWriteOracleManifest') {
 					"contracts/legacy-web-write-v1/${name} carries ${dataRows.size()} " +
 						'non-comment line(s); a header plus at least one data row is required.')
 			}
+		}
+
+		// The step ledgers must agree. A step captured but undeclared, or declared
+		// but uncaptured, is exactly the drift that would let the oracle claim
+		// coverage it does not have -- and neither the byte floor nor the data-row
+		// check can see it, because both files stay substantial either way.
+		def flowRows = new File(dir, 'write-flow.tsv').readLines()
+			.findAll { it && !it.startsWith('#') }
+			.collect { it.split('\t', -1) }
+		// Step 0 is the post-login baseline snapshot. An effect is a diff between
+		// two snapshots, so the baseline has none by construction -- it is the
+		// thing everything else is measured against. Excluding it here is the only
+		// exemption; every other step must appear in both ledgers.
+		def baseline = flowRows.findAll { it[0] == '0' }.collect { it[1] } as Set
+		if (baseline.size() != 1) {
+			throw new GradleException(
+				"write-flow.tsv must declare exactly one step 0 baseline; found ${baseline}")
+		}
+		def flowSteps = (flowRows.collect { it[1] } as Set) - baseline
+		def modelRows = new File(dir, 'effect-model.tsv').readLines()
+			.findAll { it && !it.startsWith('#') && !it.startsWith('step_id\t') }
+		def modelSteps = modelRows.collect { it.split('\t', -1)[0] } as Set
+		if (flowSteps != modelSteps) {
+			throw new GradleException(
+				'The Phase 5g-1a step ledgers disagree. write-flow.tsv declares ' +
+					"${(flowSteps - modelSteps).sort()} that effect-model.tsv does not, and " +
+					"effect-model.tsv declares ${(modelSteps - flowSteps).sort()} that " +
+					'write-flow.tsv does not. A step can be neither captured undeclared nor ' +
+					'declared uncaptured.')
+		}
+
+		// Every indexed effect document must exist, must carry the [step] section
+		// the scorer compares, and must name its own step. `score` strips comments
+		// before comparing, so a document that identified itself only in a header
+		// would let one step's effect score cleanly against another's frozen model.
+		modelRows.each { row ->
+			def fields = row.split('\t', -1)
+			def stepId = fields[0]
+			def document = new File(dir, fields[2])
+			if (!document.isFile()) {
+				throw new GradleException(
+					"effect-model.tsv indexes ${fields[2]}, which does not exist")
+			}
+			def lines = document.readLines()
+			def marker = lines.indexOf('[step]')
+			if (marker < 0 || marker + 1 >= lines.size() || lines[marker + 1] != stepId) {
+				throw new GradleException(
+					"${fields[2]} does not carry a [step] section naming ${stepId}. " +
+						'Without it a step would score against another step\'s frozen answer.')
+			}
+		}
+
+		// The recorded domain review must describe the bytes that are actually
+		// committed. Re-freezing from a different capture changes this digest, so a
+		// sign-off cannot silently carry over to facts nobody reviewed.
+		def readme = new File(dir, 'README.md')
+		def readmeText = readme.text
+		['Not yet present', 'Not yet recorded'].each { phrase ->
+			if (readmeText.contains(phrase)) {
+				throw new GradleException(
+					"contracts/legacy-web-write-v1/README.md still says \"${phrase}\". The " +
+						'facts are frozen, so the increment\'s recorded incompleteness must be ' +
+						'replaced by its recorded review.')
+			}
+		}
+		def factFiles = ['effect-model.tsv', 'business-values.tsv', 'foreign-key-graph.tsv',
+			'semantic-facts.tsv', 'network-classes.tsv', 'concurrency-facts.tsv',
+			'allowed-browser-errors.tsv', 'write-flow.tsv']
+		def reviewDigest = java.security.MessageDigest.getInstance('SHA-256')
+		factFiles.each { name ->
+			reviewDigest.update(name.getBytes('UTF-8'))
+			reviewDigest.update(new File(dir, name).bytes)
+		}
+		new File(dir, 'effect-model').listFiles().sort { it.name }.each { document ->
+			reviewDigest.update(document.name.getBytes('UTF-8'))
+			reviewDigest.update(document.bytes)
+		}
+		def reviewed = reviewDigest.digest().encodeHex().toString()
+		if (!readmeText.contains(reviewed)) {
+			throw new GradleException(
+				"The Phase 5g-1a domain review does not record the committed facts: their " +
+					"digest is ${reviewed}, which README.md does not carry. Re-review the " +
+					'capture and record the new digest.')
 		}
 
 		phase5g1aBuildRoot.get().file('manifest-verified.txt').asFile.with {

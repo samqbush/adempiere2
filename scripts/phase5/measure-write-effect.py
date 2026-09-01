@@ -359,6 +359,7 @@ def snapshot(args) -> int:
 
 def diff(args) -> int:
     """Normalized keyed effect for one step, plus the changed-table sentinel."""
+    ambient_tables = load_ambient_tables(args.ambient)
     before = json.loads(args.before.read_text(encoding="utf-8"))
     after = json.loads(args.after.read_text(encoding="utf-8"))
 
@@ -445,6 +446,26 @@ def diff(args) -> int:
     lines.extend(f"{t}\t{k}" for t, k in deleted)
     lines.append("")
 
+    # A step that wrote nothing has to say so, in the compared payload.
+    #
+    # Some steps in this flow genuinely have no database effect, and for one of
+    # them -- the conflicting save -- "nothing was written" IS the expected
+    # answer and the headline fact of the whole concurrency capture. But a model
+    # holding only section headers is also exactly what an accidentally-empty
+    # freeze produces, and that would match any run at all.
+    #
+    # The two are distinguished by declaring the emptiness rather than inferring
+    # it. `score` accepts a model with no effect rows only when it carries this
+    # marker, and fails a marked model whose observed run DID write, because the
+    # marker is compared like any other payload row.
+    non_ambient_changed = [
+        row for row in changed if row.split("\t")[0].lower() not in ambient_tables
+    ]
+    if not (created or updated or deleted or non_ambient_changed):
+        lines.append("[no-effect]")
+        lines.append("declared")
+        lines.append("")
+
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text("\n".join(lines), encoding="utf-8")
     print(
@@ -500,7 +521,7 @@ def score(args) -> int:
         for line in expected_body
         if not line.startswith("[") and "\t" in line
     ]
-    if not effect_rows:
+    if not effect_rows and "[no-effect]" not in expected_body:
         problems.append(
             f"{args.contract} declares no effect row at all. A model containing "
             "only section headers matches a run in which nothing was written, "
@@ -610,6 +631,11 @@ def main() -> int:
     # qualified, and an unqualified one would either stay raw (flaky) or be
     # guessed (a fabricated foreign-key edge).
     d.add_argument("--attribution-scope", required=True, type=Path)
+    # The ambient classification decides whether a step that touched only
+    # session and audit state counts as having written nothing. Required rather
+    # than optional: defaulting it would let a step be marked no-effect on a
+    # narrower classification than the one it is scored against.
+    d.add_argument("--ambient", required=True, type=Path)
     d.add_argument("--out", required=True, type=Path)
     d.set_defaults(func=diff)
 

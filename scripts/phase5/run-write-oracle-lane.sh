@@ -251,6 +251,7 @@ snapshot_loop() {
         --before "$previous" --after "$current" \
         --step "$step_id" \
         --attribution-scope "$contract_dir/attribution-scope.tsv" \
+        --ambient "$contract_dir/ambient-tables.tsv" \
         --out "$effects/$step_id.txt"
     fi
     previous=$current

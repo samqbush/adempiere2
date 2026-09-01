@@ -1,0 +1,10 @@
+0	authenticated-baseline
+1	window-opened
+2	create
+3	update
+4	concurrency-second-editor-authenticated
+5	concurrency-second-editor-update
+6	concurrency-conflicting-save
+7	deactivate-editor-authenticated
+8	deactivate
+9	logged-out

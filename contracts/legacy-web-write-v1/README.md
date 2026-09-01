@@ -70,20 +70,23 @@ subscriptions.
 | `ambient-tables.tsv` | present | The reviewed session/audit/workflow tables exempt from the undeclared-table backstop |
 | `raw/` | present | A committed raw capture sample; the input to the over-normalization mutation proof, **not** an oracle fact |
 | `manifest.sha256` | present | SHA-256 over every file except itself |
+| `write-flow.tsv` | present | The captured step ledger: ten steps, in the order the driver executed them |
+| `effect-model.tsv` | present | Index of the frozen per-step effect documents under `effect-model/` |
+| `effect-model/` | present | One frozen sectioned effect document per measured step |
+| `business-values.tsv` | present | The business column values the flow left behind |
+| `foreign-key-graph.tsv` | present | The edges this flow actually wired between rows it created |
+| `semantic-facts.tsv` | present | The UI-observable facts the driver asserted |
+| `network-classes.tsv` | present | Request classes, including the four third-party origins the legacy login page reaches |
+| `concurrency-facts.tsv` | present | The second editor's outcome and the conflicting save's verdict |
+| `allowed-browser-errors.tsv` | present | The browser errors the legacy runtime is permitted to produce |
 
-### Not yet present: the captured facts
+### The captured facts
 
-`effect-model.tsv`, `business-values.tsv`, `foreign-key-graph.tsv`,
-`semantic-facts.tsv`, `network-classes.tsv`, `concurrency-facts.tsv`,
-`allowed-browser-errors.tsv` and `write-flow.tsv` are **absent by design at this
-commit**. They are captured from the booted legacy runtime by
-`phase5g1aLegacyWriteOracleSmoke`, reviewed, and frozen here.
+Captured from the booted legacy Tomcat 9 / ZK 3.6 product through the public
+`/webui` origin, self-diffed across two fixture-isolated captures, and frozen
+here. See "Domain review" below for the run they came from.
 
-They are listed rather than silently omitted because an oracle tree that does not
-say what it is missing is indistinguishable from one that has decided it needs
-nothing. This section is the increment's own incompleteness, recorded.
-
-#### The shape `effect-model.tsv` will take, decided before the driver is written
+### The shape `effect-model.tsv` takes, decided before the driver was written
 
 `measure-write-effect.py` emits **one sectioned document per step**, not one row
 per step, so a single flat TSV cannot hold the frozen effects. Rather than
@@ -159,7 +162,48 @@ background writer is indistinguishable from a route effect.
 
 ## Domain review
 
-**Not yet recorded.** The captured facts do not exist at this commit, and signing
-off on facts that have not been captured would make the sign-off meaningless. The
-review is recorded here, naming the reviewer and the date, before the facts are
-frozen and before 5g-1b begins.
+**Recorded.**
+
+| Field | Value |
+|---|---|
+| Reviewer | @samqbush |
+| Date | 2026-09-01 |
+| Capturing CI run | https://github.com/samqbush/adempiere2/actions/runs/33489852922 |
+| Captured commit | `415d7aa8d92c004f924deeee9c1f7f3be51e31ed` |
+| Evidence digest | `b0df7a43c62c35516ee3785524298ec6a0f70b53f11a464dd07557ad6f9a87e3` |
+| Disposition | **Approved as the expected answer for Phase 5g-1b.** |
+
+The digest is SHA-256 over the eight frozen fact files and every per-step effect
+document, each preceded by its name, in sorted order. It is what ties this
+sign-off to specific bytes: re-freezing from a different capture changes it, and
+the change is visible in this file and in `manifest.sha256`.
+
+What was reviewed, and what it says:
+
+* **The write is real and it fans out.** Creating a business partner writes
+  `C_BPartner` and starts a document workflow — `AD_WF_Process`, `AD_WF_Activity`
+  and `AD_WF_EventAudit` each gain a row — and creates the three default
+  accounting rows and the tree node. A modern runtime that writes only
+  `C_BPartner` has not reproduced this.
+* **The conflicting save is refused.** With a second editor holding the row, the
+  first editor's save is rejected, the status bar reads "Current record was
+  changed by another user, please ReQuery", and the step's measured effect is
+  empty: no created, updated or deleted row, and no changed table. The refusal is
+  a real refusal, not a silent last-write-wins.
+* **`UpdatedBy` moves to the second editor.** The concurrency capture can say
+  which editor won because `CreatedBy`/`UpdatedBy` are deliberately not
+  normalized.
+* **`AD_ChangeLog` is empty throughout.** GardenWorld does not log column changes
+  for `C_BPartner`. That is the legacy answer, recorded rather than assumed; the
+  table stays in the measurement scope so that a runtime which starts logging is
+  caught.
+* **The legacy login page reaches four third-party origins** —
+  `sfx-images.mozilla.org`, `www.google.com`, `www.zkoss.org` and
+  `fonts.googleapis.com`. These are product content, not browser noise, and they
+  are frozen as facts a modern runtime will be scored against.
+* **One error class is allowed**: repeated 404s for
+  `/webui/theme/default/css/themesaf.css.dsp`, the same missing DSP theme URL
+  Phase 5f registered.
+
+Human judgement is not automatable. This block is provenance; the governance
+control is the named reviewer's approval on the pull request that froze it.
