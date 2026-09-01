@@ -435,7 +435,15 @@ class LegacyBusinessPartnerWriteOracleTest {
 	}
 
 	private void create(Page page) {
-		click(page, "New Record");
+		// The New Record round trip must COMPLETE before anything is typed. Run
+		// 33477382192 clicked New and filled immediately; ZK's re-render of the
+		// freshly inserted row then landed between the two fills and wiped the
+		// first one, so the record reached save with an empty Search Key and a
+		// correct Name. That is the worst failure mode available to an oracle --
+		// it is not an error, it is a plausible wrong answer -- and it is
+		// intermittent, which is why run 33475295851 created the record
+		// successfully with the same code.
+		clickAwaitingServer(page, "New Record");
 		// The C_BPartner.Value column is labelled "Search Key" in the dictionary;
 		// "Value" matches no cell in the rendered form.
 		fill(page, "Search Key", recordValue);
@@ -479,6 +487,20 @@ class LegacyBusinessPartnerWriteOracleTest {
 	 * just typed, and the capture would record a real -- but wrong -- effect.
 	 */
 	private void fill(Page page, String label, String value) {
+		typeInto(page, label, value);
+		// Read the field back. A field that silently did not take the value is
+		// the one defect this driver must never pass on: the save would succeed,
+		// the effect would be measured, and a wrong row would be frozen as the
+		// expected answer. One retry covers a lost race with a ZK re-render; a
+		// second failure is a hard failure, never a shrug.
+		if (!value.equals(labelledInput(page, label).inputValue())) {
+			typeInto(page, label, value);
+		}
+		assertEquals(value, labelledInput(page, label).inputValue(),
+				"the field '" + label + "' did not hold the value that was typed into it");
+	}
+
+	private void typeInto(Page page, String label, String value) {
 		Locator field = labelledInput(page, label);
 		field.waitFor();
 		field.fill(value);
@@ -600,6 +622,18 @@ class LegacyBusinessPartnerWriteOracleTest {
 				.locator("xpath=.//*[normalize-space(text())='" + label + "']"
 						+ "/following::input[not(@type='hidden')][1]")
 				.first();
+	}
+
+	/**
+	 * Clicks a toolbar control and waits for the round trip it causes.
+	 *
+	 * <p>Used where the server's response re-renders the form. Typing into a
+	 * form that is about to be re-rendered loses whatever was typed first.
+	 */
+	private void clickAwaitingServer(Page page, String title) {
+		page.waitForResponse(
+				response -> response.request().url().contains("/zkau"),
+				() -> click(page, title));
 	}
 
 	private void click(Page page, String title) {
