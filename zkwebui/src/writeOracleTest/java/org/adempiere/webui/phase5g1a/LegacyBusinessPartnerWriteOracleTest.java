@@ -71,6 +71,8 @@ class LegacyBusinessPartnerWriteOracleTest {
 	private static final Duration RENDEZVOUS_TIMEOUT = Duration.ofMinutes(10);
 
 	private static final String WINDOW = "Business Partner";
+	/** Editors carry ids of the form {@code unqField_<tab>_<row>_<Table>_<Column><n>}. */
+	private static final String TABLE = "C_BPartner";
 	/** {@code FindWindow.java:274} titles the dialog {@code Msg("Find") + ": " + window}. */
 	private static final String FIND_TITLE_PREFIX = "Lookup Record: ";
 	/** Accepts either message spelling; see enterWindowThroughFindDialog. */
@@ -310,6 +312,9 @@ class LegacyBusinessPartnerWriteOracleTest {
 				+ "'div.z-window-modal')).map(e => e.textContent.slice(0, 120)).join('|')");
 		probes.put("titles", "() => Array.from(document.querySelectorAll('[title]'))"
 				+ ".map(e => e.getAttribute('title')).join('|')");
+		probes.put("editorIds",
+				"() => Array.from(document.querySelectorAll(\"[id*='_C_BPartner_']\"))"
+						+ ".map(e => e.tagName.toLowerCase() + '#' + e.id).join('|')");
 		probes.put("fieldMarkup", "() => ['Search Key','Name','Active']"
 				+ ".map(function (caption) {"
 				+ "  var node = Array.from(document.querySelectorAll("
@@ -446,7 +451,7 @@ class LegacyBusinessPartnerWriteOracleTest {
 		clickAwaitingServer(page, "New Record");
 		// The C_BPartner.Value column is labelled "Search Key" in the dictionary;
 		// "Value" matches no cell in the rendered form.
-		fill(page, "Search Key", recordValue);
+		fill(page, "Value", recordValue);
 		fill(page, "Name", recordValue + " Partner");
 		save(page);
 	}
@@ -462,14 +467,11 @@ class LegacyBusinessPartnerWriteOracleTest {
 	 * increment and is recorded in {@code exclusions.tsv}.
 	 */
 	private void deactivate(Page page) {
-		// The Active control is a checkbox whose box PRECEDES its caption, so it
-		// cannot use labelledInput's document-order rule. ZK renders the box and
-		// its caption inside one wrapper, which is what is matched here.
-		Locator active = tabPanel(page)
-				.locator("xpath=.//input[@type='checkbox']"
-						+ "[following-sibling::*[normalize-space(.)='Active']"
-						+ " or ../*[normalize-space(text())='Active']]")
-				.first();
+		// Addressed by column, like every other editor. The caption-based rule
+		// this replaced was doubly unsafe here: the Active box PRECEDES its
+		// caption, so a document-order rule walks past it into the next field
+		// and clears the wrong control without erroring.
+		Locator active = columnInput(page, "IsActive");
 		active.waitFor();
 		assertTrue(active.isChecked(), "the record was not active before deactivation");
 		page.waitForResponse(
@@ -486,22 +488,23 @@ class LegacyBusinessPartnerWriteOracleTest {
 	 * blur; saving without it would save the record without the value that was
 	 * just typed, and the capture would record a real -- but wrong -- effect.
 	 */
-	private void fill(Page page, String label, String value) {
-		typeInto(page, label, value);
+	private void fill(Page page, String column, String value) {
+		typeInto(page, column, value);
 		// Read the field back. A field that silently did not take the value is
 		// the one defect this driver must never pass on: the save would succeed,
 		// the effect would be measured, and a wrong row would be frozen as the
 		// expected answer. One retry covers a lost race with a ZK re-render; a
 		// second failure is a hard failure, never a shrug.
-		if (!value.equals(labelledInput(page, label).inputValue())) {
-			typeInto(page, label, value);
+		if (!value.equals(columnInput(page, column).inputValue())) {
+			typeInto(page, column, value);
 		}
-		assertEquals(value, labelledInput(page, label).inputValue(),
-				"the field '" + label + "' did not hold the value that was typed into it");
+		assertEquals(value, columnInput(page, column).inputValue(),
+				"the editor for column " + column
+						+ " did not hold the value that was typed into it");
 	}
 
-	private void typeInto(Page page, String label, String value) {
-		Locator field = labelledInput(page, label);
+	private void typeInto(Page page, String column, String value) {
+		Locator field = columnInput(page, column);
 		field.waitFor();
 		field.fill(value);
 		page.waitForResponse(
@@ -543,7 +546,7 @@ class LegacyBusinessPartnerWriteOracleTest {
 	 * meaningless -- conflict measurement.
 	 */
 	private void focusRecord(Page page, String value) {
-		Locator valueField = labelledInput(page, "Search Key");
+		Locator valueField = columnInput(page, "Value");
 		valueField.waitFor();
 		if (value.equals(valueField.inputValue())) {
 			return;
@@ -570,7 +573,7 @@ class LegacyBusinessPartnerWriteOracleTest {
 				response -> response.request().url().contains("/zkau"),
 				() -> dialog.locator(OK_BUTTON).first().click());
 		dialog.waitFor(new Locator.WaitForOptions().setState(WaitForSelectorState.DETACHED));
-		assertEquals(value, labelledInput(page, "Search Key").inputValue(),
+		assertEquals(value, columnInput(page, "Value").inputValue(),
 				"the window is not positioned on the captured record");
 	}
 
@@ -607,21 +610,38 @@ class LegacyBusinessPartnerWriteOracleTest {
 	 * {@code span} elements, and {@code normalize-space(text())} sees only a
 	 * cell's own text node -- so it would have matched nothing here.
 	 */
-	private Locator labelledInput(Page page, String label) {
-		// Resolved by DOCUMENT ORDER, not by table structure. Run 33474413799
-		// created the record successfully -- the form was on screen with a
-		// "Search Key" caption and its empty field beside it -- and still could
-		// not resolve `td[...]/following-sibling::td[1]//input`. ADempiere's
-		// form grid does not put the caption and its editor in adjacent cells
-		// of one row in the way that assumed.
-		//
-		// The caption is immediately followed by its own editor visually and in
-		// the markup, so the first non-hidden input after the caption is that
-		// editor. This holds regardless of how the grid nests its cells.
-		return tabPanel(page)
-				.locator("xpath=.//*[normalize-space(text())='" + label + "']"
-						+ "/following::input[not(@type='hidden')][1]")
-				.first();
+	/**
+	 * The editor for a dictionary column, addressed by the id ADempiere gives it.
+	 *
+	 * <p>Resolved by COLUMN, not by caption or by grid structure. Both earlier
+	 * strategies failed on this form: the adjacent-cell rule found nothing (run
+	 * 33474413799) and the document-order rule silently resolved "Search Key" to
+	 * the Partner Parent combo beside it, so the driver typed the record's key
+	 * into the wrong control and saved a blank one (run 33478439643). A rule that
+	 * can resolve to a neighbouring field is not usable here: the failure it
+	 * produces is a plausible wrong record, not an error.
+	 *
+	 * <p>The diagnostics of that run showed ADempiere gives every editor cell an
+	 * id of the form {@code unqField_<tab>_<row>_<Table>_<Column><n>}. That names
+	 * the column the oracle actually cares about, is independent of how the grid
+	 * nests its cells, and cannot drift onto the next field. Ambiguity is a hard
+	 * failure rather than a {@code first()}.
+	 */
+	private Locator columnInput(Page page, String column) {
+		String marker = "_" + TABLE + "_" + column;
+		Locator direct = tabPanel(page).locator(
+				"xpath=.//input[contains(@id,'" + marker + "')][not(@type='hidden')]");
+		if (direct.count() == 0) {
+			// The id may sit on the editor's wrapper rather than on the input.
+			direct = tabPanel(page).locator(
+					"xpath=.//*[contains(@id,'" + marker + "')]"
+							+ "[not(.//*[contains(@id,'" + marker + "')])]"
+							+ "//input[not(@type='hidden')]");
+		}
+		int count = direct.count();
+		assertEquals(1, count,
+				"expected exactly one editor for column " + column + ", found " + count);
+		return direct.first();
 	}
 
 	/**
