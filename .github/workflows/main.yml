@@ -286,6 +286,7 @@ jobs:
             build/phase5g1a/runtime-evidence/
             build/phase5g1a/normalizer-mutations.tsv
             build/phase5g1a/ambient-mutations.tsv
+            build/phase5g1a/transport-class-policy-proof.tsv
             build/phase3/runtime/Adempiere/tomcat/logs/
             zkwebui/build/test-results/writeOracleTest/
             zkwebui/build/reports/tests/writeOracleTest/
