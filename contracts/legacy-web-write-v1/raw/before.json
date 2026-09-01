@@ -5,9 +5,9 @@
   "c_bpartner_location": {}
  },
  "sentinel": {
-  "ad_changelog": 40,
-  "c_bpartner": 12,
-  "c_bpartner_location": 9,
-  "c_order": 5
+  "ad_changelog": "40:4001000000000000001:-4002000000000000002",
+  "c_bpartner": "12:1201000000000000003:-1202000000000000004",
+  "c_bpartner_location": "9:901000000000000005:-902000000000000006",
+  "c_order": "5:501000000000000007:-502000000000000008"
  }
 }
