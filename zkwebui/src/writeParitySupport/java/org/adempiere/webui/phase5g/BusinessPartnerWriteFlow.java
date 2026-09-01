@@ -110,6 +110,18 @@ public final class BusinessPartnerWriteFlow {
 					"legacy");
 			facts.put("desktop-reached", "true");
 
+			// WHICH application served this session, recorded before any
+			// business step. Not a compared fact and not part of `facts`: it is
+			// written to its own file, so the frozen answer is unchanged and the
+			// legacy freeze-off regression still scores clean.
+			//
+			// It is here because every other observation in this flow is
+			// runtime-blind -- same public origin, normalized URLs, the
+			// product's own database effects -- so a routed lane that fell back
+			// to the legacy application would score a perfect green against the
+			// legacy oracle and report modern parity.
+			dialect.identifyServingRuntime(page, evidenceDir);
+
 			// Step 0 is the baseline: the orchestrator snapshots an authenticated
 			// session that has not yet written any business row. Without it, the
 			// create step's effect would include the login's own AD_Session write

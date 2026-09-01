@@ -73,6 +73,30 @@ public interface ZkDialect {
 	void logout(Page page);
 
 	/**
+	 * Records WHICH application actually served this authenticated session.
+	 *
+	 * <p>Not a business fact, and deliberately not one of the compared fact
+	 * classes: it is written to its own {@code runtime-identification.tsv} and
+	 * is never scored against the frozen contract.
+	 *
+	 * <p>It exists because every other observation in this flow is
+	 * runtime-blind. The browser only ever sees the public origin, the recorded
+	 * URLs are normalized against it, and the database effects are the product's
+	 * -- so a routed lane in which the cohort decision, the handoff or the proxy
+	 * failed closed would serve the LEGACY application and score a perfect green
+	 * against the legacy oracle while reporting modern parity. That is the
+	 * worst failure available to a parity increment, and nothing else in the
+	 * capture can see it.
+	 *
+	 * <p>Both dialects implement it, and each identifies its own runtime from
+	 * markup only that runtime emits. Two lines are written: {@code expected},
+	 * the runtime this dialect drives, and {@code served}, the runtime the page
+	 * says answered. The lane fails when they disagree, which is why the
+	 * comparison is not made here.
+	 */
+	void identifyServingRuntime(Page page, Path evidenceDir) throws java.io.IOException;
+
+	/**
 	 * Opens the capture's window, optionally positioned on {@code searchKey}.
 	 *
 	 * @param searchKey the record to load, or {@code null} to enter the window
