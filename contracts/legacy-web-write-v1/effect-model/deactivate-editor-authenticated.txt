@@ -18,7 +18,8 @@ deactivate-editor-authenticated
 # @c_bpartner#1	c_bpartner	1000000
 
 [changed-tables]
-ad_session	+1
+ad_sequence	+0	content
+ad_session	+1	rows
 
 [created]
 
@@ -27,4 +28,4 @@ ad_session	+1
 [deleted]
 
 [no-effect]
-no-keyed-change-in-scope	no-row-count-delta-outside-ambient
+no-keyed-change-in-scope	no-content-change-outside-ambient

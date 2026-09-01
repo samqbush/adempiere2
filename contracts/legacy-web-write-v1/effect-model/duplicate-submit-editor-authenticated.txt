@@ -1,4 +1,4 @@
-# Phase 5g write effect for step: deactivate
+# Phase 5g write effect for step: duplicate-submit-editor-authenticated
 #
 # Generated identities are normalized THROUGH the mapping below and are
 # never dropped: dropping them would erase a broken foreign-key edge and
@@ -6,7 +6,7 @@
 # to catch.
 
 [step]
-deactivate
+duplicate-submit-editor-authenticated
 
 [identities]
 # @ad_treenodebp#1	ad_treenodebp	1000000
@@ -18,14 +18,14 @@ deactivate
 # @c_bpartner#1	c_bpartner	1000000
 
 [changed-tables]
-ad_recentitem	+0	content
-ad_session	+0	content
-c_bpartner	+0	content
+ad_sequence	+0	content
+ad_session	+1	rows
 
 [created]
 
 [updated]
-c_bpartner	@c_bpartner#1	isactive	Y	N
-c_bpartner	@c_bpartner#1	updatedby	102	101
 
 [deleted]
+
+[no-effect]
+no-keyed-change-in-scope	no-content-change-outside-ambient

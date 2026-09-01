@@ -18,7 +18,10 @@ concurrency-second-editor-update
 # @c_bpartner#1	c_bpartner	1000000
 
 [changed-tables]
-ad_recentitem	+1
+ad_recentitem	+1	rows
+ad_sequence	+0	content
+ad_session	+0	content
+c_bpartner	+0	content
 
 [created]
 
