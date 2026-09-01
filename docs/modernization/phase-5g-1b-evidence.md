@@ -187,6 +187,30 @@ observation, not a decision reason - a browser can see `MODERN`, never
 neither fails. The first CI run of the smoke will settle which branch fires;
 until then this is reported as a known limit of the row, not as coverage.
 
+## What the first capture run found
+
+Run [33570169991](https://github.com/samqbush/adempiere2/actions/runs/33570169991)
+failed at 25m24s, before any modern write, with:
+
+> `Phase 5g-1a fixture precondition failed: 1 business partner row(s) with a
+> P5G1A- key survived the reseed. The database was not restored from the golden
+> archive.`
+
+The lane's own fixture guard caught a defect in the **lane**, not the modern
+runtime. `phase5g1bModernWriteParitySmoke` depends on the legacy freeze-off
+regression so the oracle is re-proven at PR HEAD, and that regression finishes
+with capture B's post-write state - `P5G1A-0001` included - still in the
+database. The parity lane then took its "golden" baseline from exactly that
+state.
+
+The failure was the smaller half of the problem. A lane that seeded itself this
+way would have scored the modern runtime **from a starting state the legacy
+oracle never ran from**, and parity between two runtimes is only meaningful from
+a bit-identical seed. The lane now restores the archive the legacy lane captured
+from the quiesced installed product - the same verified state that produced the
+frozen answer - and takes its own golden archive from there, failing closed if
+that archive is absent rather than seeding itself from whatever ran before it.
+
 ## Gates
 
 | Gate | Kind | Status |

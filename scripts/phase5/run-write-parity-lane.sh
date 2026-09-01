@@ -97,6 +97,9 @@ export PHASE5G1B_HANDOFF_KEY=$handoff_key
 export PHASE5G_CONFIRM_PORTS="$public_port $api_port"
 
 golden_archive=$evidence_root/golden.dump
+# The archive the LEGACY lane captured from the quiesced installed product: the
+# starting state the frozen answer itself was produced from. See prepare().
+seed_archive=${PHASE5G1B_SEED_ARCHIVE:-$repo_root/build/phase5g1a/runtime-evidence/golden.dump}
 quiesce_state=$evidence_root/quiesce-state.tsv
 mkdir -p "$evidence_root" "$evidence_root/session-evidence"
 
@@ -158,6 +161,30 @@ trap teardown EXIT
 # capture, because a configuration is not a decision.
 prepare() {
   echo "== preparing the modern write-parity lane =="
+  # Begin from the SEED, not from whatever ran before this lane.
+  #
+  # phase5g1bModernWriteParitySmoke depends on the legacy freeze-off regression
+  # so that the oracle is re-proven at PR HEAD. That regression finishes with
+  # capture B's post-write state still in the database, P5G1A-0001 included, so
+  # a baseline dump taken here would archive the legacy oracle's own business
+  # partner and every capture restoring it would trip the fixture's
+  # `a P5G1A- key survived the reseed` precondition.
+  #
+  # Worse than the failure is what a lane without this restore would have been
+  # measuring: the modern runtime scored from a starting state the legacy
+  # oracle never ran from. Parity between two runtimes is only meaningful from
+  # a bit-identical seed. So restore the archive the LEGACY lane captured from
+  # the quiesced installed product -- the same verified starting state that
+  # produced the frozen answer -- and take this lane's own golden archive from
+  # there.
+  if [[ ! -f "$seed_archive" ]]; then
+    echo "the legacy lane's golden archive is absent at $seed_archive." >&2
+    echo "The parity lane must start from the same verified seed the frozen" >&2
+    echo "answer was captured from; it may not seed itself from whatever" >&2
+    echo "state the preceding lane happened to leave behind." >&2
+    return 1
+  fi
+  reset restore "$seed_archive"
   quiesce quiesce
   quiesce verify
   cohort apply user-allowlisted
