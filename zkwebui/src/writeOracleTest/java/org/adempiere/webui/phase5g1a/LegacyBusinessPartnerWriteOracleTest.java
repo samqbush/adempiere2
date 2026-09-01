@@ -95,18 +95,22 @@ class LegacyBusinessPartnerWriteOracleTest {
 		Map<String, String> facts = new LinkedHashMap<>();
 		List<String> flow = new ArrayList<>();
 
-		// Assigned inside the try so the failure handler can interrogate the
-		// live page; null until the browser exists, which is itself a fact worth
-		// recording if the lane dies that early.
-		Page diagnosticPage = null;
 		try (Playwright playwright = Playwright.create();
 				Browser browser = playwright.chromium().launch(
 						new BrowserType.LaunchOptions().setHeadless(true));
 				BrowserContext context = LegacyBrowserFlow.newContext(browser)) {
 			LegacyBrowserFlow.blockForeignOrigins(context, baseUrl);
 			Page page = context.newPage();
-			diagnosticPage = page;
 			LegacyBrowserFlow.recordTraffic(page, requests, errors, this::normalizedUrl);
+
+			// Diagnostics are captured HERE, inside the resource scope, not in
+			// the outer handler. A try-with-resources closes its resources
+			// BEFORE any catch clause runs, so an outer handler interrogates a
+			// browser that is already gone -- which is exactly what happened in
+			// run 33469214157: the capture ran, every Playwright call threw
+			// against a closed context, and the best-effort swallow left no
+			// evidence at all.
+			try {
 
 			Response login = LegacyBrowserFlow.login(page, baseUrl, user, password);
 			assertEquals(200, login.status(), "the legacy login page did not respond 200");
@@ -189,6 +193,10 @@ class LegacyBusinessPartnerWriteOracleTest {
 			LegacyBrowserFlow.logout(page);
 			facts.put("logout-reached", "true");
 			flow.add(step(rendezvous, 8, "logged-out"));
+			} catch (Throwable failure) {
+				captureDiagnostics(page);
+				throw failure;
+			}
 		} catch (Throwable failure) {
 			// Publish before rethrowing. An orchestrator blocked on the next
 			// rendezvous has no other way to learn the browser has died, and a
@@ -199,13 +207,6 @@ class LegacyBusinessPartnerWriteOracleTest {
 			// only RuntimeException would have published the reason for a
 			// Playwright timeout while losing it for the far more likely case --
 			// a save that did not take.
-			// A CI round trip for this lane costs roughly twelve minutes, and a
-			// Playwright timeout names only the locator it gave up on -- never
-			// what the page actually contained instead. Capturing that here
-			// turns "the tab never appeared" into "these are the tabs that did",
-			// so a selector defect is diagnosable from the run's own evidence
-			// instead of from another twelve-minute guess.
-			captureDiagnostics(diagnosticPage);
 			rendezvous.fail(failure.toString());
 			throw failure;
 		}
