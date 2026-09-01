@@ -77,6 +77,9 @@ class LegacyBusinessPartnerWriteOracleTest {
 	 */
 	private static final Duration SAVE_SETTLE = Duration.ofSeconds(30);
 
+	/** The same backstop for a single field edit. */
+	private static final Duration FIELD_SETTLE = Duration.ofSeconds(15);
+
 	private static final String WINDOW = "Business Partner";
 	/** Editors carry ids of the form {@code unqField_<tab>_<row>_<Table>_<Column><n>}. */
 	private static final String TABLE = "C_BPartner";
@@ -344,7 +347,9 @@ class LegacyBusinessPartnerWriteOracleTest {
 				+ "    if (td === own) { cellIndex = i; }"
 				+ "    var input = td.querySelector(\"input:not([type='hidden'])\");"
 				+ "    cells.push(input ? ('input#' + (input.id || '?') + '='"
-				+ "      + input.value) : 'none'); }"
+				+ "      + input.value + '[' + (input.className || '') + ']'"
+				+ "      + (input.readOnly ? '{readonly}' : '')"
+				+ "      + (input.disabled ? '{disabled}' : '')) : 'none'); }"
 				+ "  return caption + '=cell' + cellIndex + '/' + row.children.length"
 				+ "    + ':' + cells.join(','); }).join(' ~~ ')");
 		probes.put("tabPanels", "() => Array.from(document.querySelectorAll("
@@ -512,26 +517,63 @@ class LegacyBusinessPartnerWriteOracleTest {
 	 */
 	private void fill(Page page, String column, String value) {
 		typeInto(page, column, value);
-		// Read the field back. A field that silently did not take the value is
-		// the one defect this driver must never pass on: the save would succeed,
-		// the effect would be measured, and a wrong row would be frozen as the
-		// expected answer. One retry covers a lost race with a ZK re-render; a
-		// second failure is a hard failure, never a shrug.
-		if (!value.equals(columnInput(page, column).inputValue())) {
+		if (!settledOn(page, column, value)) {
+			// One retype absorbs a lost race with a ZK re-render. It cannot
+			// absorb a product that refuses the edit, which is why the second
+			// attempt is followed by a hard failure rather than another retry.
 			typeInto(page, column, value);
 		}
-		assertEquals(value, columnInput(page, column).inputValue(),
-				"the editor for column " + column
-						+ " did not hold the value that was typed into it");
+		assertTrue(settledOn(page, column, value),
+				"the editor for column " + column + " did not take the typed value."
+						+ " It holds '" + columnInput(page, column).inputValue()
+						+ "' and its classes are '" + editorClasses(page, column) + "'");
 	}
 
+	/**
+	 * Types into an editor and lets ZK see it.
+	 *
+	 * <p>Deliberately does NOT wait for a round trip. Run 33481777679 filled the
+	 * second editor's Name and timed out waiting for one, while the field itself
+	 * still held its previous value -- so the round trip was never the thing
+	 * worth waiting for. ZK may answer the change event the fill itself
+	 * dispatches, leaving the blur with nothing to send, and a driver that waits
+	 * for a response it will never receive fails on a session that is perfectly
+	 * healthy.
+	 */
 	private void typeInto(Page page, String column, String value) {
 		Locator field = columnInput(page, column);
 		field.waitFor();
 		field.fill(value);
-		page.waitForResponse(
-				response -> response.request().url().contains("/zkau"),
-				() -> field.press("Tab"));
+		field.press("Tab");
+	}
+
+	/**
+	 * Whether the edit has settled: the editor holds the value AND the window
+	 * reports a pending change.
+	 *
+	 * <p>Both halves are needed. The value alone can sit in the browser without
+	 * ZK having registered it, and a save then writes the previous value -- a
+	 * wrong record that looks entirely plausible. The pending change alone does
+	 * not say which value is pending.
+	 */
+	private boolean settledOn(Page page, String column, String value) {
+		Locator saveButton = tabPanel(page)
+				.locator("a.toolbar-button[title='Save changes']").first();
+		long deadline = System.nanoTime() + FIELD_SETTLE.toNanos();
+		do {
+			String classes = saveButton.count() > 0 ? saveButton.getAttribute("class") : null;
+			boolean pending = classes != null && !classes.contains("toolbar-button-disd");
+			if (pending && value.equals(columnInput(page, column).inputValue())) {
+				return true;
+			}
+			page.waitForTimeout(250);
+		} while (System.nanoTime() < deadline);
+		return false;
+	}
+
+	private String editorClasses(Page page, String column) {
+		String classes = columnInput(page, column).getAttribute("class");
+		return classes == null ? "" : classes;
 	}
 
 	/**
