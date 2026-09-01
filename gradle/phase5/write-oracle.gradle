@@ -335,6 +335,15 @@ def phase5g1aProperty = { String name, Object fallback ->
 	rootProject.providers.gradleProperty(name).getOrElse(fallback.toString())
 }
 
+// CI supplies the system password as an environment variable, not as a Gradle
+// property, exactly as every other database-backed gate accepts it. Reading
+// only the property would have made the gate fail in the one place it must run.
+def phase5g1aSystemPassword = rootProject.providers
+	.gradleProperty('phase3DbSystemPassword')
+	.orElse(rootProject.providers.environmentVariable(
+		'ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD'))
+	.getOrElse('')
+
 tasks.register('phase5g1aLegacyWriteOracleSmoke', Exec) {
 	group = 'verification'
 	description =
@@ -355,15 +364,15 @@ tasks.register('phase5g1aLegacyWriteOracleSmoke', Exec) {
 		// acceptance run and the gate never uses it: a run that invents the
 		// expected answer cannot also be the run that verifies it.
 		phase5g1aProperty('phase5g1aFreeze', 'false')
-	environment 'ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD',
-		phase5g1aProperty('phase3DbSystemPassword', '')
+	environment 'ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD', phase5g1aSystemPassword
 	environment 'ADEMPIERE_PHASE5D_DB_PASSWORD',
 		phase5g1aProperty('phase3DbPassword', 'adempiere_phase3_ci')
 	doFirst {
-		if (!phase5g1aProperty('phase3DbSystemPassword', '')) {
+		if (!phase5g1aSystemPassword) {
 			throw new GradleException(
-				'-Pphase3DbSystemPassword is required: the write oracle lane restores ' +
-					'a golden archive and cannot do so without the system role.')
+				'-Pphase3DbSystemPassword or ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD is ' +
+					'required: the write oracle lane restores a golden archive and ' +
+					'cannot do so without the system role.')
 		}
 	}
 }

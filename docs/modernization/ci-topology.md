@@ -42,8 +42,7 @@ Gradle invocation share a single task graph, so common work executes once.
 ## Measured baseline
 
 Task counts from `./gradlew <task> --dry-run --dependency-verification=strict`,
-re-measured on `phase-5g-1a-bp-write-oracle` after the lane advanced to Phase
-5g-1a:
+re-measured on `phase-5g-1a-write-capture` after the write capture lane landed:
 
 | Former job | Gradle task | Tasks scheduled |
 |---|---|---|
@@ -55,18 +54,19 @@ re-measured on `phase-5g-1a-bp-write-oracle` after the lane advanced to Phase
 | Phase 5e cohort routing contracts | `phase5eFinalVerification` | 196 |
 | Phase 5f Jakarta web contracts and topology | `phase5fFinalVerification` | 282 |
 | Phase 5g-0 discovery inventories | `phase5g0FinalVerification` | 285 |
-| Phase 5g-1a legacy write oracle contracts | `phase5g1aFinalVerification` | 290 |
-| **Sum across the 9 separate jobs** | | **1458** |
-| **`Contracts`, one invocation** | `phase5g1aFinalVerification phase5cFinalVerification` | **296** |
+| Phase 5g-1a legacy write oracle contracts | `phase5g1aFinalVerification` | 291 |
+| **Sum across the 9 separate jobs** | | **1459** |
+| **`Contracts`, one invocation** | `phase5g1aFinalVerification phase5cFinalVerification` | **297** |
 
-**1162 of 1458 task executions per pull request would be redundant (79.7%).**
+**1162 of 1459 task executions per pull request would be redundant (79.6%).**
 
-Earlier measurements on the same topology: 8 jobs at 1168 against 291 merged on
-`develop` at `91c4c2029`, 7 jobs at 882 against 287 merged at `6eda2bc8c`, and 6
-jobs at 600 against 201 merged before that - redundancy rising from 66% to 80%
-as the chain lengthens. Advancing the lane adds five tasks to the merged
-invocation and a whole gate to the notional per-job sum, which is exactly why
-the jobs are not split per phase.
+Earlier measurements on the same topology: 9 jobs at 1458 against 296 merged
+when the Phase 5g-1a database-neutral half landed, 8 jobs at 1168 against 291
+merged on `develop` at `91c4c2029`, 7 jobs at 882 against 287 merged at
+`6eda2bc8c`, and 6 jobs at 600 against 201 merged before that - redundancy
+rising from 66% to 80% as the chain lengthens. Adding a gate to the chain adds
+one task to the merged invocation and a whole gate to the notional per-job sum,
+which is exactly why the jobs are not split per phase.
 
 ### Coverage proof
 
@@ -89,19 +89,20 @@ done | sort -u > union.txt
 comm -23 union.txt merged.txt   # must print nothing
 ```
 
-Result: union 296 tasks, merged 296 tasks, `comm -23` empty. The merged
+Result: union 297 tasks, merged 297 tasks, `comm -23` empty. The merged
 invocation schedules **exactly** the same task set as the nine gates combined.
 
-The Phase 5g-1a advance was also diffed directly against the previous arguments
-on the same commit: `phase5g0FinalVerification phase5cFinalVerification`
-scheduled 291 tasks, `phase5g1aFinalVerification phase5cFinalVerification`
-scheduled 296, the five added tasks are exactly
-`:generatePhase5gWriteAttribution`, `:verifyPhase5gWriteAttribution`,
-`:verifyPhase5gWriteNormalizerMutationProof`,
-`:verifyPhase5gWriteOracleManifest` and `:phase5g1aFinalVerification`, and **no
-task was removed**. Advancing the head of
-the chain must never drop coverage, so the removal set is checked as well as the
-addition set.
+The `Contracts` arguments did not change here - the write capture lane is a
+runtime gate, not a contract gate. What changed is the chain behind them: the
+merged invocation grew from 296 to 297, and the single added task is exactly
+`:verifyPhase5gAmbientClassificationMutationProof`. **No task was removed.**
+Advancing the chain must never drop coverage, so the removal set is checked as
+well as the addition set.
+
+The capture lane itself, `phase5g1aLegacyWriteOracleSmoke`, is deliberately
+**not** on this chain. It needs a disposable PostgreSQL, the installed Tomcat 9
+product and a browser, so it belongs to the `Current-phase database smoke` lane
+described below.
 
 Re-run this whenever the `Contracts` task arguments change.
 
@@ -123,6 +124,16 @@ A remaining line is acceptable only when a broader new path is a prefix of it
 (for example `zkwebui/build/test-results/` subsuming
 `zkwebui/build/test-results/modernUiTest/`), or when a glob was replaced by the
 literal filename it matched.
+
+Result on the Phase 5g-1a advance: two lines remained,
+`zkwebui/build/test-results/routedBrowserTest/` and its reports directory. Both
+are subsumed - `phase5fJakartaWebRoutesSmoke` moved into the regression matrix,
+whose block already uploads the broader `zkwebui/build/test-results/` and
+`zkwebui/build/reports/tests/`, and which gained `build/phase5f/runtime-evidence/`
+and `build/phase5f/tomcat10/logs/` in the same change so the outgoing gate's
+evidence is still published. Five paths were added for the incoming gate. This
+is the check that catches the common failure of retiring a smoke into the
+regression lane while leaving its evidence behind in the job it left.
 
 ### What the count does *not* mean
 
@@ -197,47 +208,56 @@ It is recorded rather than fixed here because raising a timeout inside a phase
 contract is a phase change, not a CI change. If it recurs, the fix belongs in
 the Phase 5e test's own wait configuration.
 
-`phase5eCohortRoutingSmoke` has since moved to the regression matrix, because
-the current-phase slot now belongs to `phase5fJakartaWebRoutesSmoke`. The flake
-therefore no longer blocks a pull request, but it still gates the post-merge
-lane and is still worth fixing.
+`phase5eCohortRoutingSmoke` has since moved to the regression matrix, and
+`phase5fJakartaWebRoutesSmoke` has now followed it. The flake therefore no
+longer blocks a pull request, but it still gates the post-merge lane and is
+still worth fixing.
 
-## The current-phase smoke is green on this branch
+## The current-phase smoke has not yet run
 
-`Current-phase database smoke` runs `phase5fJakartaWebRoutesSmoke`, which **is
-green.** All six route shards execute in one run and all six report zero vector
-failures: run 33379849664, on commit `9ba62875d`, recorded 129 observations and
-passed `verifyPhase5fSwitchBaseline`, `capturePhase5fSoapCoexistence`,
-`verifyPhase5fBackgroundProcessorsQuiesced` and the strict aggregate
-`verifyPhase5fRuntimeEvidence`. Every failure mode was diagnosed from a run's own
-evidence and fixed rather than worked around.
+`Current-phase database smoke` now runs `phase5g1aLegacyWriteOracleSmoke`. It
+**has not been executed**, and must not be reported as green until it has. It
+replaces `phase5fJakartaWebRoutesSmoke`, which is green - run 33379849664 on
+commit `9ba62875d` recorded 129 observations with zero vector failures across
+all six shards - and which has been retired into the regression matrix along
+with its evidence paths.
 
 The job must continue to point at the phase under development rather than at a
-known-green earlier task. See
-`docs/modernization/phase-5f-evidence.md` for every observed failure mode and
-the evidence each fix was derived from.
+known-green earlier task. See `docs/modernization/phase-5f-evidence.md` for the
+outgoing gate's observed failure modes and the evidence each fix was derived
+from.
 
-The job carries two deliberate deviations from the other lanes:
+The job's two Phase 5f deviations have been reconsidered rather than inherited:
 
-- **`--continue`.** At roughly two runner-hours per attempt, a run that stops
-  at the first failing shard yields one data point. `--continue` yields six.
-  It weakens nothing: `verifyPhase5fRuntimeEvidence` depends on all six shards,
-  so a failed shard skips the strict aggregate and the build still fails, and
-  both the lane shutdown and the marker-guarded database cleanup are
-  finalizers.
-- **`timeout-minutes: 180`.** With fail-fast removed a run executes the whole
-  matrix: roughly 22 minutes of setup plus roughly 81 minutes of dump-backed
-  observations. That does not fit in 90. The GitHub-hosted ceiling is 360, and
-  the remaining headroom is deliberate so that the `always()` evidence upload
-  is not cut off by the job timeout.
+- **`--continue` is dropped.** It earned its place against six independent
+  shards, where a failed shard still left five real data points. The write
+  oracle is one sequential lane: capture B is meaningless if capture A failed,
+  and scoring is meaningless if either did. Continuing would produce cascades
+  of derived failures that explain nothing.
+- **`timeout-minutes: 180` is kept**, as a backstop rather than a budget. The
+  lane performs two full captures, each preceded by a golden-archive restore, a
+  quiescence re-verification and a container restart, with a whole-schema
+  snapshot between every one of nine steps. The real duration is unknown until
+  the gate runs, and the value should be revisited from observed data then.
+
+### Freeze mode is manual only
+
+`workflow_dispatch` carries a `freeze_write_oracle` boolean that passes
+`-Pphase5g1aFreeze=true`. That run emits candidate contract files instead of
+scoring against them, and it is **not an acceptance run**: the run that invents
+the expected answer must not also be the run that verifies it. No pull request,
+push or scheduled run can reach it. The acceptance run is a later ordinary one
+against committed, domain-reviewed files.
 
 ## Debug dispatch
 
 `workflow_dispatch` takes a `debug_gate` choice. `full` runs the ordinary
-manual matrix. Any other value names a single Phase 5f shard, runs only
-`Current-phase database smoke`, and suppresses `Contracts` and the regression
-matrix - without that suppression, asking for one shard would also launch a
-half-hour contract graph and six historical database-backed smokes.
+manual matrix. Any other value names a single task, runs only `Current-phase
+database smoke`, and suppresses `Contracts` and the regression matrix - without
+that suppression, asking for one task would also launch a half-hour contract
+graph and seven historical database-backed smokes. The allowlist currently
+holds `phase5g1aWriteOracleCapture`, the browser capture alone, so a selector
+failure can be reproduced without the surrounding restore and scoring lane.
 
 The input is a typed `choice` over a fixed allowlist rather than free text
 because `.github/actions/adempiere-build` expands its `task` and `args` inputs
