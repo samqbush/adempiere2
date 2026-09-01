@@ -139,9 +139,14 @@ class LegacyBusinessPartnerWriteOracleTest {
 			update(page);
 			flow.add(step(rendezvous, 3, "update"));
 
-			deactivate(page);
-			flow.add(step(rendezvous, 4, "deactivate"));
-
+			// Deactivation is deliberately LAST, after the concurrency step.
+			// Run 33475295851 established that ADempiere renders an inactive
+			// record read-only: the second editor loaded the deactivated row and
+			// found the entire form greyed out, Save included. Deactivating
+			// before the concurrency step therefore does not measure a conflict
+			// at all -- it measures the product refusing to edit a disabled
+			// record, which is a different fact and one this increment does not
+			// claim to capture.
 			// The concurrency step. The contract requires the LEGACY conflict
 			// answer to be captured here so that 5g-1b has something it did not
 			// invent to score the modern runtime against.
@@ -170,14 +175,14 @@ class LegacyBusinessPartnerWriteOracleTest {
 				// not concurrency effects, and folding them into the update step
 				// would freeze them as though they were. Giving them their own
 				// step boundary attributes them where they belong.
-				flow.add(step(rendezvous, 5, "concurrency-second-editor-authenticated"));
+				flow.add(step(rendezvous, 4, "concurrency-second-editor-authenticated"));
 
 				openWindow(second, recordValue);
 				focusRecord(second, recordValue);
 				fill(second, "Name", recordValue + " Partner By Second Editor");
 				save(second);
 				facts.put("concurrency-second-editor-saved", "true");
-				flow.add(step(rendezvous, 6, "concurrency-second-editor-update"));
+				flow.add(step(rendezvous, 5, "concurrency-second-editor-update"));
 
 				// The primary session still holds the record it loaded before the
 				// second editor wrote it. Its save is the conflict.
@@ -189,10 +194,19 @@ class LegacyBusinessPartnerWriteOracleTest {
 				// score whatever the driver was written to expect.
 				fill(page, "Name", recordValue + " Partner By First Editor");
 				facts.put("concurrency-conflicting-save-outcome", attemptSave(page));
-				flow.add(step(rendezvous, 7, "concurrency-conflicting-save"));
+				flow.add(step(rendezvous, 6, "concurrency-conflicting-save"));
 
 				LegacyBrowserFlow.logout(second);
 			}
+
+			// The primary session's state after the conflicting save is exactly
+			// what the conflict step exists to observe, and is therefore not a
+			// sound basis for measuring a further write. The record is reloaded
+			// from the database first, so the deactivate step measures
+			// deactivation and nothing else.
+			reloadRecord(page, recordValue);
+			deactivate(page);
+			flow.add(step(rendezvous, 7, "deactivate"));
 
 			LegacyBrowserFlow.logout(page);
 			facts.put("logout-reached", "true");
@@ -497,6 +511,14 @@ class LegacyBusinessPartnerWriteOracleTest {
 		if (value.equals(valueField.inputValue())) {
 			return;
 		}
+		reloadRecord(page, value);
+	}
+
+	/**
+	 * Re-reads the record from the database through the window's own lookup,
+	 * discarding whatever the session was holding.
+	 */
+	private void reloadRecord(Page page, String value) {
 		click(page, "Lookup Record");
 		Locator dialog = page.locator("div.z-window-modal").first();
 		dialog.waitFor();
