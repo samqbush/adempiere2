@@ -461,7 +461,14 @@ def diff(args) -> int:
                 )
     lines.append("")
     lines.append("[deleted]")
-    lines.extend(f"{t}\t{k}" for t, k in deleted)
+    # Symbolized on the same terms as [created] and [updated]. A row created
+    # earlier in the capture and deleted in this step is capture-created, so
+    # rendering its raw key here would reintroduce exactly the sequence-allocated
+    # integer the other sections stopped emitting.
+    lines.extend(
+        f"{t}\t{identities.symbol_for(f'{t}_id', primary_component(k)) or k}"
+        for t, k in deleted
+    )
     lines.append("")
 
     # A step that wrote nothing has to say so, in the compared payload.

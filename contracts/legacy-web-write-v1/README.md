@@ -170,7 +170,7 @@ background writer is indistinguishable from a route effect.
 | Date | 2026-09-01 |
 | Capturing CI run | https://github.com/samqbush/adempiere2/actions/runs/33491714444 |
 | Captured commit | `3a0f5fd911d85a545661bdee067be710f47d2fda` |
-| Evidence digest | `b6f4b105dfc596a56595a7a9ba9a3bb144cda20c20a76cf66d5c5eb5ede5d4b3` |
+| Evidence digest | `edd369f6f6f5636d7459c251608d0cb39abb4d931aa673acd69b576d1cf4df20` |
 | Disposition | **Approved as the expected answer for Phase 5g-1b.** |
 
 The digest is SHA-256 over the eight frozen fact files and every per-step effect
@@ -183,9 +183,13 @@ from them. A review-driven change to the derivation therefore changes the frozen
 bytes without changing the run they came from, and this digest moved once for
 exactly that reason: code review found that composite-keyed rows, and every row
 in a step after the one that created it, were freezing raw sequence-allocated
-integers into the comparison. The facts above were re-derived from the same
-run's snapshots, both captures still agree, and both still score against the
-contract.
+integers into the comparison, that a deleted capture-created row would still
+have done so, and that the edge scan skipped every composite key component --
+which is where the fan-out edges live, so `foreign-key-graph.tsv` recorded the
+three workflow edges and none of the four the create step actually wires. It now
+records all seven, including `ad_treenodebp node_id c_bpartner` and the three
+accounting rows. The facts above were re-derived from the same run's snapshots,
+both captures still agree, and both still score against the contract.
 
 What was reviewed, and what it says:
 
@@ -250,8 +254,7 @@ transition.
 
 ### A recorded limitation of the `[no-effect]` marker
 
-Four steps — role selection, both concurrency read steps, and the refused
-conflicting save — carry `[no-effect]` with the explicit value
+Five steps — `window-opened`, `concurrency-second-editor-authenticated`, `deactivate-editor-authenticated`, `concurrency-conflicting-save` and `logged-out` — carry `[no-effect]` with the explicit value
 `no-keyed-change-in-scope	no-row-count-delta-outside-ambient`.
 
 That value states precisely what was measured, and no more. The whole-database

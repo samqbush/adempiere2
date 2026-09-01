@@ -180,7 +180,12 @@ def foreign_key_graph(
     edges: set[str] = set()
     for entry in scope:
         table = entry["table"].lower()
-        key_column = entry["key_column"].lower()
+        # Only the table's OWN identity column is excluded from the edge scan.
+        # Excluding the whole declared key would be wrong for a composite one:
+        # C_BP_Customer_Acct is keyed on (C_BPartner_ID, C_AcctSchema_ID), so its
+        # reference to the business partner IS a key component, and skipping key
+        # components dropped exactly the fan-out edges this file exists to record.
+        self_column = f"{table}_id"
         for key, row in (document.get(table) or {}).items():
             child = identities.symbol_for(
                 f"{table}_id", primary_component(key))
@@ -188,11 +193,14 @@ def foreign_key_graph(
                 continue
             for column, value in row.items():
                 name = column.lower()
-                if name == key_column or value is None:
+                if name == self_column or value is None:
                     continue
-                if not (name.endswith("_id") or name == "record_id"):
+                if not (name.endswith("_id") or name in ("record_id", "node_id")):
                     continue
-                parent = identities.symbol_for(name, str(value), row)
+                # `container` is what lets a generic Node_ID resolve; without it
+                # the tree-node edge -- the reason the mechanism exists -- is
+                # silently unreachable here while business-values.tsv shows it.
+                parent = identities.symbol_for(name, str(value), row, table)
                 if parent is None or parent == child:
                     continue
                 target = identities.table_of(parent) or "?"

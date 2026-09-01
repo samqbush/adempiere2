@@ -209,7 +209,12 @@ MUTATIONS = [
 
 
 def effect_for(
-    before: Path, after_doc: dict, workdir: Path, tag: str, scope: Path
+    before: Path,
+    after_doc: dict,
+    workdir: Path,
+    tag: str,
+    scope: Path,
+    baseline: Path | None = None,
 ) -> str:
     after = workdir / f"{tag}-after.json"
     after.write_text(json.dumps(after_doc, indent=1, sort_keys=True), encoding="utf-8")
@@ -230,10 +235,13 @@ def effect_for(
             # exactly the classification the runtime capture is scored under.
             "--ambient",
             str(scope.parent / "ambient-tables.tsv"),
-            # The proof's "before" document IS the capture baseline: the fixture
-            # is a two-snapshot pair, so nothing pre-exists it.
+            # The proof's "before" document is normally ALSO the capture
+            # baseline: the fixture is a two-snapshot pair, so nothing pre-exists
+            # it. `assert_deleted_rows_are_symbolic` overrides it, because a
+            # deletion of a capture-created row can only be expressed when the
+            # baseline is earlier than the "before" snapshot.
             "--baseline",
-            str(before),
+            str(baseline or before),
             "--out", str(out),
         ],
         capture_output=True,
@@ -251,6 +259,66 @@ def effect_for(
         for line in out.read_text(encoding="utf-8").splitlines()
         if not line.startswith("#")
     )
+
+
+def assert_deleted_rows_are_symbolic(
+    before: Path, after_doc: dict, workdir: Path, scope: Path
+) -> None:
+    """A row created during the capture and deleted in this step stays symbolic.
+
+    The mutation table cannot reach this path. Its fixture passes `before` as the
+    baseline, so every `before` row is seeded and no deletion of a
+    capture-created row is expressible. That blind spot let `[deleted]` keep
+    rendering the raw sequence-allocated key long after `[created]` and
+    `[updated]` stopped -- a latent leak that would only have surfaced when an
+    increment whose flow deletes something was scored, which is the worst
+    possible time to discover it.
+    """
+    empty = workdir / "delete-baseline.json"
+    empty.write_text(
+        json.dumps({"scope": {}, "sentinel": {}}, indent=1, sort_keys=True),
+        encoding="utf-8",
+    )
+    # The fixture's "after" becomes this probe's "before": the business partner
+    # has to EXIST before the step in order to be deleted by it, and it has to be
+    # absent from the baseline in order to count as capture-created.
+    populated = workdir / "delete-before.json"
+    populated.write_text(
+        json.dumps(after_doc, indent=1, sort_keys=True), encoding="utf-8"
+    )
+    survivors = {
+        table: rows
+        for table, rows in after_doc["scope"].items()
+        if table != "c_bpartner"
+    }
+    effect = effect_for(
+        populated,
+        {**after_doc, "scope": survivors},
+        workdir,
+        "deleted-symbolic",
+        scope,
+        baseline=empty,
+    )
+    section = None
+    deleted: list[str] = []
+    for line in effect.splitlines():
+        if line.startswith("["):
+            section = line
+            continue
+        if section == "[deleted]" and line.startswith("c_bpartner\t"):
+            deleted.append(line)
+    if not deleted:
+        raise SystemExit(
+            "the deleted-row proof measured no deletion; its fixture no longer "
+            "removes a business partner the baseline never had"
+        )
+    unsymbolized = [line for line in deleted if "@" not in line]
+    if unsymbolized:
+        raise SystemExit(
+            "under-normalization: [deleted] rendered a raw generated key "
+            f"({unsymbolized[0]!r}). A deleted row that the capture created must "
+            "resolve to its symbol exactly as [created] and [updated] do."
+        )
 
 
 def main() -> int:
@@ -288,6 +356,8 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
+
+        assert_deleted_rows_are_symbolic(before, baseline_doc, workdir, scope)
 
         for name, direction, apply_mutation in MUTATIONS:
             mutated_doc = json.loads(after.read_text(encoding="utf-8"))

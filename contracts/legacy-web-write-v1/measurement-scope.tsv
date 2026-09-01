@@ -25,11 +25,17 @@
 # different reason: the undeclared-table backstop requires every non-ambient
 # changed table to be declared in the KEYED sections, and classifying real
 # business fan-out as ambient would be exactly the move that makes an unexpected
-# write acceptable. They contribute rows, not edges: each accounting table is
-# keyed on (C_BPartner_ID, C_AcctSchema_ID), so its primary key component IS the
-# parent reference, and since the identity map keys symbols by (column, value)
-# such a row resolves to its own parent's symbol and can never express an edge
-# distinct from itself.
+# write acceptable. Each accounting table is keyed on
+# (C_BPartner_ID, C_AcctSchema_ID). Its identity is declared and resolved under
+# its OWN table, so the row carries a symbol of its own and its C_BPartner_ID
+# renders as the parent's symbol -- a real edge, recorded in
+# foreign-key-graph.tsv alongside the AD_TreeNodeBP node and the workflow
+# fan-out. An earlier revision of this file claimed such a row could only ever
+# resolve to its parent and so could contribute rows but never an edge. That
+# described two defects rather than a property of the data -- a resolver that
+# lost composite-keyed identities, and an edge scan that skipped every key
+# component -- both found by code review, both now fixed, and the first covered
+# by the `generated-identities-moved` mutation.
 #
 # AD_WF_EventAudit stays ambient: it is an append-only audit of workflow
 # transitions, and it restates what the process and activity rows already carry.
