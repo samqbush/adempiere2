@@ -46,6 +46,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -216,10 +217,21 @@ def consistent_snapshot(db: Database, scope: list[dict]) -> dict:
     for entry in scope:
         table = entry["table"]
         predicate = entry.get("predicate") or "TRUE"
+        # PostgreSQL folds unquoted identifiers to lower case, so ADempiere's
+        # relations exist as `c_bpartner`, not `C_BPartner`. The scope contract
+        # spells them in the dictionary's CamelCase, so the identifier must be
+        # lowered BEFORE it is quoted -- quoting the contract spelling verbatim
+        # asked for a relation that does not exist. Quoting is retained rather
+        # than dropped so a table name can never be read as SQL syntax.
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", table):
+            raise SystemExit(
+                f"measurement-scope.tsv declares {table!r}, which is not a plain "
+                "SQL identifier. Refusing to interpolate it into a query."
+            )
         literal = table.lower().replace("'", "''")
         scope_pairs.append(
             f"'{literal}', (SELECT COALESCE(json_agg(x), '[]'::json) FROM"
-            f' (SELECT * FROM "{table}" WHERE {predicate}) x)'
+            f' (SELECT * FROM "{literal}" WHERE {predicate}) x)'
         )
     statement = (
         "SELECT json_build_object("

@@ -98,6 +98,19 @@ measure() {
   python3 "$scripts_dir/measure-write-effect.py" "$@"
 }
 
+# The lane leaves a Tomcat container running between phases by design, so an
+# abnormal exit must still take it down. Without this, a lane failure is
+# followed by cleanupPhase3Database failing too --
+# `database "adempiere_phase3_ci" is being accessed by other users` -- which
+# leaks a database and buries the real diagnosis under a second error.
+teardown() {
+  local status=$?
+  bash "$scripts_dir/stop-legacy-browser-lane.sh" \
+    "${PHASE5G_LANE_PORT:-8888}" >/dev/null 2>&1 || true
+  return "$status"
+}
+trap teardown EXIT
+
 # ---------------------------------------------------------------------------
 # Prepare: quiesce the installed database, prove it, and freeze it as the
 # archive every capture restores.
