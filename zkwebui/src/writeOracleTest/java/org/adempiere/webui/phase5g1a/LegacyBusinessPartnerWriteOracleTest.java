@@ -71,6 +71,8 @@ class LegacyBusinessPartnerWriteOracleTest {
 	private static final Duration RENDEZVOUS_TIMEOUT = Duration.ofMinutes(10);
 
 	private static final String WINDOW = "Business Partner";
+	/** {@code FindWindow.java:274} titles the dialog {@code Msg("Find") + ": " + window}. */
+	private static final String FIND_TITLE_PREFIX = "Lookup Record: ";
 
 	private final String baseUrl = SCRIPTS.property("baseUrl").replaceFirst("/+$", "");
 	private final String user = SCRIPTS.property("user");
@@ -168,7 +170,7 @@ class LegacyBusinessPartnerWriteOracleTest {
 				// step boundary attributes them where they belong.
 				flow.add(step(rendezvous, 5, "concurrency-second-editor-authenticated"));
 
-				openWindow(second);
+				openWindow(second, recordValue);
 				focusRecord(second, recordValue);
 				fill(second, "Name", recordValue + " Partner By Second Editor");
 				save(second);
@@ -261,30 +263,48 @@ class LegacyBusinessPartnerWriteOracleTest {
 			// A screenshot is a convenience; the textual dump below is the
 			// evidence that actually names a wrong selector.
 		}
+		// Each probe is evaluated and recorded INDEPENDENTLY. Run 33470049147
+		// wrote the screenshot and then lost the whole JSON dump to a single
+		// swallowed exception, so one malformed expression cost a full
+		// twelve-minute round trip and taught nothing. A probe that fails now
+		// records its own failure text next to the probes that succeeded.
+		Map<String, String> probes = new LinkedHashMap<>();
+		probes.put("url", "() => location.href");
+		probes.put("tabs", "() => Array.from(document.querySelectorAll("
+				+ "'span.z-tab-text')).map(e => e.textContent).join('|')");
+		probes.put("comboItems", "() => Array.from(document.querySelectorAll("
+				+ "'tr.z-combo-item')).map(e => e.getAttribute('z.label')"
+				+ " || e.textContent).join('|')");
+		probes.put("modals", "() => Array.from(document.querySelectorAll("
+				+ "'div.z-window-modal')).map(e => e.textContent.slice(0, 120)).join('|')");
+		probes.put("titles", "() => Array.from(document.querySelectorAll('[title]'))"
+				+ ".map(e => e.getAttribute('title')).join('|')");
+		probes.put("labels", "() => Array.from(document.querySelectorAll("
+				+ "'span.z-label, td.z-row-cell span')).slice(0, 200)"
+				+ ".map(e => e.textContent).join('|')");
+		List<String> lines = new ArrayList<>();
+		for (Map.Entry<String, String> probe : probes.entrySet()) {
+			String observed;
+			try {
+				observed = String.valueOf(page.evaluate(probe.getValue()));
+			} catch (RuntimeException probeFailure) {
+				observed = "<probe failed: " + probeFailure + ">";
+			}
+			lines.add(probe.getKey() + "\t" + observed.replace("\n", " "));
+		}
 		try {
-			Object dump = page.evaluate(
-					"() => JSON.stringify({"
-					+ " url: location.href,"
-					+ " tabs: Array.prototype.map.call("
-					+ "   document.querySelectorAll('span.z-tab-text'), e => e.textContent),"
-					+ " comboItems: Array.prototype.map.call("
-					+ "   document.querySelectorAll('tr.z-combo-item'),"
-					+ "   e => e.getAttribute('z.label') || e.textContent),"
-					+ " labels: Array.prototype.slice.call("
-					+ "   document.querySelectorAll('span.z-label, td.z-row-cell span'), 0, 200)"
-					+ "   .map(e => e.textContent),"
-					+ " toolbar: Array.prototype.map.call("
-					+ "   document.querySelectorAll('a.toolbar-button'),"
-					+ "   e => e.getAttribute('title') + '|' + e.className)"
-					+ "}, null, 1)");
-			Files.write(evidenceDir.resolve("failure-page.json"),
-					String.valueOf(dump).getBytes(StandardCharsets.UTF_8));
-		} catch (RuntimeException | IOException ignored) {
-			// Same rationale.
+			Files.write(evidenceDir.resolve("failure-page.tsv"), lines,
+					StandardCharsets.UTF_8);
+		} catch (IOException ignored) {
+			// Nothing further can be reported; the screenshot still stands.
 		}
 	}
 
 	private void openWindow(Page page) {
+		openWindow(page, null);
+	}
+
+	private void openWindow(Page page, String searchKey) {
 		Locator lookup = page.locator(
 				"xpath=//span[@title='Enter text to search for in tree']"
 						+ "/ancestor::div[1]/following-sibling::span"
@@ -308,8 +328,53 @@ class LegacyBusinessPartnerWriteOracleTest {
 						&& response.request().postData().contains("=onChange&")
 						&& response.request().postData().contains(encodedWindow),
 				() -> lookup.press("Enter"));
+		// ZK 3.6 does NOT render the window tab on selection. It opens the modal
+		// "Lookup Record" dialog first (FindWindow.java:274), and the tab only
+		// appears once that dialog is answered. Waiting for the tab straight
+		// after the menu selection therefore always timed out, thirty seconds
+		// behind a dialog that was sitting there waiting for input.
+		enterWindowThroughFindDialog(page, searchKey);
 		page.locator("span.z-tab-text:text-is('" + WINDOW + "')").first().waitFor();
 		tabPanel(page).waitFor();
+	}
+
+	/**
+	 * Answers the mandatory "Lookup Record" dialog that stands between the menu
+	 * selection and the rendered window.
+	 *
+	 * @param searchKey the record to load, or {@code null} to enter the window
+	 *                  with no record loaded -- which is what the create step
+	 *                  needs, and is reached by cancelling rather than by
+	 *                  running an empty query that would load every partner.
+	 */
+	private void enterWindowThroughFindDialog(Page page, String searchKey) {
+		Locator dialog = page.locator("div.z-window-modal").first();
+		dialog.waitFor();
+		// Assert WHICH dialog. A modal is not self-identifying, and answering
+		// an unexpected one would be an undiagnosable divergence later.
+		page.getByText(FIND_TITLE_PREFIX + WINDOW).first().waitFor();
+		// The dialog's controls are ConfirmPanel actions built by WAppsAction,
+		// which sets a tooltip and an image and clears the label
+		// (WAppsAction.java:96-106). They therefore carry a title attribute and
+		// NO text, so they are addressed the same way the proven role-panel
+		// confirmation addresses its own OK (LegacyBrowserFlow.confirmRole).
+		if (searchKey == null) {
+			page.waitForResponse(
+					response -> response.request().url().contains("/zkau"),
+					() -> dialog.locator("[title='Cancel']").first().click());
+		} else {
+			Locator search = dialog
+					.locator("xpath=.//td[normalize-space(text())='Search Key']"
+							+ "/following-sibling::td[1]//input")
+					.first();
+			search.waitFor();
+			search.fill(searchKey);
+			search.press("Tab");
+			page.waitForResponse(
+					response -> response.request().url().contains("/zkau"),
+					() -> dialog.locator("[title='OK']").first().click());
+		}
+		dialog.waitFor(new Locator.WaitForOptions().setState(WaitForSelectorState.DETACHED));
 	}
 
 	private void create(Page page) {
@@ -412,7 +477,7 @@ class LegacyBusinessPartnerWriteOracleTest {
 		search.press("Tab");
 		page.waitForResponse(
 				response -> response.request().url().contains("/zkau"),
-				() -> dialog.locator("button:text-is('OK')").first().click());
+				() -> dialog.locator("[title='OK']").first().click());
 		dialog.waitFor(new Locator.WaitForOptions().setState(WaitForSelectorState.DETACHED));
 		assertEquals(value, labelledInput(page, "Search Key").inputValue(),
 				"the window is not positioned on the captured record");
