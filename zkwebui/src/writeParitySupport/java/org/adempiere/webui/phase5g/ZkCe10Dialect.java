@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -660,7 +661,7 @@ public final class ZkCe10Dialect implements ZkDialect {
 			page.waitForResponse(
 					response -> response.request().url().contains("/zkau")
 							&& response.ok()
-							&& carries(response.request().postData(), value),
+							&& commitsValue(response.request().postData(), value),
 					new Page.WaitForResponseOptions().setTimeout(FIELD_SETTLE.toMillis()),
 					() -> {
 						search.press("Tab");
@@ -670,32 +671,71 @@ public final class ZkCe10Dialect implements ZkDialect {
 			if (!pressed[0]) {
 				throw timedOut;
 			}
-			throw new AssertionError("no accepted /zkau request carrying the Find"
+			throw new AssertionError("no accepted /zkau onChange carrying the Find"
 					+ " dialog's search key '" + value + "' was observed, so the"
-					+ " lookup would have queried unfiltered", timedOut);
+					+ " server never stored the criterion and the lookup would"
+					+ " have queried unfiltered", timedOut);
 		}
 	}
 
 	/**
-	 * Whether an AU request body carries {@code value}.
+	 * Whether an AU request body is an {@code onChange} that carries
+	 * {@code value}.
 	 *
-	 * <p>ZK encodes each AU datum with {@code encodeURIComponent} before placing
-	 * it in a form-urlencoded body, so a raw {@code contains} only matches when
-	 * every character of the value survives that encoding. The search key is an
-	 * operator-supplied property, so it may not; matching the decoded body as
-	 * well keeps the proof independent of the fixture's character class.
+	 * <p>Matching the body for the value alone is not the proof it looks like.
+	 * ZK CE 10 batches an AU request as {@code cmd_N} / {@code uuid_N} /
+	 * {@code data_N} triples ({@code zk.jar!/web/js/zk/au.ts:857-870}), and
+	 * several commands carry an input's text without applying it to the
+	 * component on the server -- {@code onChanging} exists precisely to report a
+	 * value that is not committed. A predicate satisfied by any of them would
+	 * certify a key the server never stored, which is the failure this guard was
+	 * added to make impossible.
+	 *
+	 * <p>So the command is paired with its own datum by index, and only
+	 * {@code onChange} counts. {@code updateChange_} is what emits it
+	 * ({@code zul.jar!/web/js/zul/inp/InputWidget.ts:1022-1062}) and it is the
+	 * event {@code FindWindow} registers on the Search Key editor, so this is
+	 * the exact transition the dialog's own query depends on.
+	 *
+	 * <p>Each datum is {@code encodeURIComponent}-encoded, so it is decoded
+	 * before matching. That keeps the proof independent of the fixture's
+	 * character class rather than of this particular search key.
 	 */
-	private boolean carries(String body, String value) {
+	private boolean commitsValue(String body, String value) {
 		if (body == null) {
 			return false;
 		}
-		if (body.contains(value)) {
-			return true;
+		Map<String, String> commands = new HashMap<>();
+		Map<String, String> data = new HashMap<>();
+		for (String field : body.split("&")) {
+			int split = field.indexOf('=');
+			if (split < 0) {
+				continue;
+			}
+			String name = field.substring(0, split);
+			String raw = field.substring(split + 1);
+			if (name.endsWith("cmd_" + suffix(name))) {
+				commands.put(suffix(name), decoded(raw));
+			} else if (name.endsWith("data_" + suffix(name))) {
+				data.put(suffix(name), decoded(raw));
+			}
 		}
+		return commands.entrySet().stream()
+				.anyMatch(entry -> "onChange".equals(entry.getValue())
+						&& data.getOrDefault(entry.getKey(), "").contains(value));
+	}
+
+	/** The batch index of an AU field name such as {@code cmd_3} or {@code data_3}. */
+	private String suffix(String name) {
+		int underscore = name.lastIndexOf('_');
+		return underscore < 0 ? "" : name.substring(underscore + 1);
+	}
+
+	private String decoded(String raw) {
 		try {
-			return URLDecoder.decode(body, StandardCharsets.UTF_8).contains(value);
+			return URLDecoder.decode(raw, StandardCharsets.UTF_8);
 		} catch (IllegalArgumentException malformed) {
-			return false;
+			return raw;
 		}
 	}
 
