@@ -1082,9 +1082,14 @@ The failure mode that shaped the design is that **a green can lie**. Every
 observation in a capture is runtime-blind - one public origin, normalized URLs,
 the product's own database effects - so a routed lane whose cohort decision,
 handoff or proxy failed **closed** would serve the legacy application, score a
-perfect green against the legacy oracle, and report modern parity. Both dialects
-therefore implement `identifyServingRuntime`, asserted per capture by the lane
-and again by the validator. Relatedly, `reset-cohort-config.sh verify` compares
+perfect green against the legacy oracle, and report modern parity.
+`ZkDialect.identifyServingRuntime` therefore identifies each dialect's runtime
+from markup only that runtime emits, and asserts it - for **every one of the
+four sessions**, because cohort routing decides per identity and the flow uses
+two. Run 33626582558 is what one sample costs: it recorded `served=modern`
+truthfully for the primary session while the legacy Tomcat's own log carried the
+second editor's and the duplicate submitter's lookups. The validator now
+requires a `served.<session>` row equal to `modern` for all four. Relatedly, `reset-cohort-config.sh verify` compares
 only the total `AD_SysConfig` row count and is recorded as a tamper check, not as
 proof of routing.
 
@@ -1094,7 +1099,7 @@ proof of routing.
 ./gradlew phase5g1bFinalVerification --dependency-verification=strict
 ```
 
-It proves the runtime evidence validator rejects all 27 declared defect classes -
+It proves the runtime evidence validator rejects all 29 declared defect classes -
 a fail-closed check that silently never fires is worse than no check, because it
 accepts what it should refuse, quietly, forever - and asserts the lane invariants
 that keep a parity increment from producing the answer it is scored against. It

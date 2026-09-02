@@ -120,7 +120,7 @@ public final class BusinessPartnerWriteFlow {
 			// product's own database effects -- so a routed lane that fell back
 			// to the legacy application would score a perfect green against the
 			// legacy oracle and report modern parity.
-			dialect.identifyServingRuntime(page, evidenceDir);
+			dialect.identifyServingRuntime(page, evidenceDir, "primary");
 
 			// Step 0 is the baseline: the orchestrator snapshots an authenticated
 			// session that has not yet written any business row. Without it, the
@@ -168,6 +168,7 @@ public final class BusinessPartnerWriteFlow {
 
 				dialect.signIn(second, baseUrl, config.secondUser(), config.secondPassword(),
 						config.client(), "second editor's");
+				dialect.identifyServingRuntime(second, evidenceDir, "second-editor");
 				facts.put("concurrency-second-editor-desktop-reached", "true");
 
 				// The second editor's FIRST login writes rows of its own --
@@ -232,6 +233,7 @@ public final class BusinessPartnerWriteFlow {
 					dialect.signIn(fourth, baseUrl, config.secondUser(),
 							config.secondPassword(), config.client(),
 							"duplicate-submitting session's");
+					dialect.identifyServingRuntime(fourth, evidenceDir, "duplicate-submitter");
 					flow.add(step(rendezvous, 7, "duplicate-submit-editor-authenticated"));
 
 					dialect.openWindow(fourth, recordValue);
@@ -269,6 +271,7 @@ public final class BusinessPartnerWriteFlow {
 				try {
 					dialect.signIn(third, baseUrl, config.user(), config.password(),
 							config.client(), "deactivating session's");
+					dialect.identifyServingRuntime(third, evidenceDir, "deactivating");
 					flow.add(step(rendezvous, 9, "deactivate-editor-authenticated"));
 
 					dialect.openWindow(third, recordValue);

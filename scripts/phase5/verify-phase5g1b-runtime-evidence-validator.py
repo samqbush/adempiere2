@@ -35,6 +35,16 @@ REPO_ROOT = HERE.parent.parent
 BASE_URL = "http://127.0.0.1:8888/webui"
 MODERN_PORT = "8443"
 
+# Mirrors the validator's own tuple. Deliberately restated rather than imported,
+# for the same reason every other constant here is: a verifier that imported the
+# thing it verifies would agree with a mistake.
+WRITE_FLOW_SESSIONS = (
+    "primary",
+    "second-editor",
+    "duplicate-submitter",
+    "deactivating",
+)
+
 H6_ROWS = (
     "h6-loopback-origin-unreached",
     "h6-cohort-decision-modern",
@@ -115,7 +125,9 @@ def build_evidence(root: Path, contract: Path, head: str, steps: list[str]) -> N
     for label in ("A", "B"):
         capture = root / label
         write(capture / "runtime-identification.tsv",
-              "expected\tmodern\nserved\tmodern\ndialect\tZkCe10Dialect\n")
+              "expected\tmodern\nserved\tmodern\ndialect\tZkCe10Dialect\n"
+              + "".join(f"served.{name}\tmodern\n"
+                        for name in WRITE_FLOW_SESSIONS))
         write(capture / "network-requests.tsv",
               f"GET\t{BASE_URL}/index.zul\n"
               f"POST\t{BASE_URL}/zkau\n")
@@ -223,7 +235,24 @@ def main() -> int:
         mutations: list[tuple[str, object]] = [
             ("a capture served by the LEGACY application",
              lambda root: write(root / "A" / "runtime-identification.tsv",
-                                "expected\tmodern\nserved\tlegacy\ndialect\tZk36Dialect\n")),
+                                "expected\tmodern\nserved\tlegacy\ndialect\tZk36Dialect\n"
+                                + "".join(f"served.{name}\tlegacy\n"
+                                          for name in WRITE_FLOW_SESSIONS))),
+            # The two classes below are the shape of run 33626582558, in which a
+            # capture reported served=modern truthfully and was still half
+            # legacy, because the row described one session out of four.
+            ("a capture that identified only its first session",
+             lambda root: write(root / "A" / "runtime-identification.tsv",
+                                "expected\tmodern\nserved\tmodern\n"
+                                "dialect\tZkCe10Dialect\nserved.primary\tmodern\n")),
+            ("a capture in which one session was served the LEGACY application",
+             lambda root: write(root / "A" / "runtime-identification.tsv",
+                                "expected\tmodern\nserved\tmodern\n"
+                                "dialect\tZkCe10Dialect\n"
+                                + "".join(
+                                    f"served.{name}\t"
+                                    + ("legacy" if name == "second-editor" else "modern")
+                                    + "\n" for name in WRITE_FLOW_SESSIONS))),
             ("a capture that reached the loopback modern origin directly",
              lambda root: write(root / "A" / "network-requests.tsv",
                                 f"GET\thttp://127.0.0.1:{MODERN_PORT}/webui-modern/index.zul\n")),

@@ -1,6 +1,13 @@
 package org.adempiere.webui.phase5g;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.UnaryOperator;
 
@@ -73,11 +80,21 @@ public interface ZkDialect {
 	void logout(Page page);
 
 	/**
-	 * Records WHICH application actually served this authenticated session.
+	 * The application this dialect exists to drive: {@code legacy} or
+	 * {@code modern}. It is the expected half of the comparison
+	 * {@link #identifyServingRuntime} makes.
+	 */
+	String expectedRuntime();
+
+	/**
+	 * Records and ASSERTS WHICH application actually served one authenticated
+	 * session.
 	 *
 	 * <p>Not a business fact, and deliberately not one of the compared fact
 	 * classes: it is written to its own {@code runtime-identification.tsv} and
-	 * is never scored against the frozen contract.
+	 * is never scored against the frozen contract. It is a lane precondition,
+	 * so asserting it cannot mask a product divergence -- it can only refuse a
+	 * capture that was never about the program it claims.
 	 *
 	 * <p>It exists because every other observation in this flow is
 	 * runtime-blind. The browser only ever sees the public origin, the recorded
@@ -88,13 +105,48 @@ public interface ZkDialect {
 	 * worst failure available to a parity increment, and nothing else in the
 	 * capture can see it.
 	 *
-	 * <p>Both dialects implement it, and each identifies its own runtime from
-	 * markup only that runtime emits. Two lines are written: {@code expected},
-	 * the runtime this dialect drives, and {@code served}, the runtime the page
-	 * says answered. The lane fails when they disagree, which is why the
-	 * comparison is not made here.
+	 * <p>The markers are the ones the Phase 5e routed matrix already uses to tell
+	 * the runtimes apart at the public origin
+	 * ({@code RoutedCohortMatrixTest.servedBy}): the modern slice links
+	 * {@code phase5d-modern.css}, and the legacy theme serves {@code .dsp}
+	 * resources. Matching BOTH or NEITHER is recorded as {@code indeterminate}
+	 * rather than resolved by preference; guessing here would defeat the only
+	 * check in the capture that can see a lane serving the wrong application.
+	 *
+	 * <p>It is called for EVERY session, and that is not defensive duplication.
+	 * The capture drives four sessions under two identities, and cohort routing
+	 * decides per identity. Identifying only the first session leaves the other
+	 * three unchecked, and run 33626582558 is what that costs: the legacy
+	 * Tomcat's own log carried the second editor's and the duplicate submitter's
+	 * lookups, inside a capture claiming modern parity, and the run's own
+	 * evidence said {@code served=modern} because it described one session out
+	 * of four.
+	 *
+	 * <p>The result is asserted as well as recorded. A capture served by the
+	 * wrong application is not a parity failure to be scored later; it is a lane
+	 * that never tested what it claims, and every fact it goes on to emit is
+	 * about the wrong program.
 	 */
-	void identifyServingRuntime(Page page, Path evidenceDir) throws java.io.IOException;
+	default void identifyServingRuntime(Page page, Path evidenceDir, String session)
+			throws IOException {
+		String content = page.content();
+		boolean modern = content.contains("phase5d-modern.css");
+		boolean legacy = content.contains(".dsp");
+		String served = modern == legacy ? "indeterminate" : (modern ? "modern" : "legacy");
+		Path file = evidenceDir.resolve("runtime-identification.tsv");
+		List<String> lines = new ArrayList<>();
+		if (!Files.exists(file)) {
+			lines.add("expected\t" + expectedRuntime());
+			lines.add("dialect\t" + id());
+			lines.add("served\t" + served);
+		}
+		lines.add("served." + session + "\t" + served);
+		Files.write(file, lines, StandardCharsets.UTF_8,
+				StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+		assertEquals(expectedRuntime(), served,
+				"the " + session + " session was served the " + served
+						+ " application, not the " + expectedRuntime() + " one");
+	}
 
 	/**
 	 * Opens the capture's window, optionally positioned on {@code searchKey}.

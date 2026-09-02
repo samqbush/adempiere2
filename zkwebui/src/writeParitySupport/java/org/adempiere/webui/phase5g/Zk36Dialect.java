@@ -114,28 +114,9 @@ public final class Zk36Dialect implements ZkDialect {
 		LegacyBrowserFlow.logout(page);
 	}
 
-	/**
-	 * Identifies the served application from markup only this runtime emits.
-	 *
-	 * <p>The two markers are the ones the Phase 5e routed matrix already uses to
-	 * tell the runtimes apart at the public origin ({@code RoutedCohortMatrixTest.servedBy}):
-	 * the modern slice links {@code phase5d-modern.css}, and the legacy theme
-	 * serves {@code .dsp} resources. Matching BOTH or NEITHER is recorded as
-	 * {@code indeterminate} rather than resolved by preference -- guessing here
-	 * would defeat the only check in the capture that can see a lane serving the
-	 * wrong application.
-	 */
 	@Override
-	public void identifyServingRuntime(Page page, Path evidenceDir) throws IOException {
-		String content = page.content();
-		boolean modern = content.contains("phase5d-modern.css");
-		boolean legacy = content.contains(".dsp");
-		String served = modern == legacy ? "indeterminate" : (modern ? "modern" : "legacy");
-		Files.write(evidenceDir.resolve("runtime-identification.tsv"),
-				List.of("expected\tlegacy",
-						"served\t" + served,
-						"dialect\t" + id()),
-				StandardCharsets.UTF_8);
+	public String expectedRuntime() {
+		return "legacy";
 	}
 
 	/**

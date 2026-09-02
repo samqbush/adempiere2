@@ -64,10 +64,18 @@ So a routed lane whose cohort decision, handoff or proxy failed **closed** would
 serve the *legacy* application, score a **perfect green** against the legacy
 oracle, and report modern parity. Nothing else in the capture could see it.
 
-`ZkDialect.identifyServingRuntime` closes that hole. Both dialects implement it,
-it is asserted per capture by the lane and again by the validator, and it is
-written to its own file rather than into `facts` so the frozen answer is
-unchanged and the legacy regression still scores clean.
+`ZkDialect.identifyServingRuntime` closes that hole. Each dialect declares its
+`expectedRuntime()`, the shared default method identifies the runtime that
+actually answered, and it asserts them equal. It is written to its own file
+rather than into `facts`, so the frozen answer is unchanged and the legacy
+regression still scores clean - and because it is a lane precondition rather
+than a product behaviour, asserting it cannot mask a divergence. It can only
+refuse a capture that was never about the program it claims.
+
+It runs for **every one of the four sessions**. That is not defensive
+duplication: cohort routing decides per *identity*, and the flow drives four
+sessions under two. Run 33626582558 is what one sample costs - see the narrative
+for that run below.
 
 The markers are the ones Phase 5e already proved: `phase5d-modern.css` for
 modern, `.dsp` for legacy.
@@ -198,9 +206,61 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33580195848](https://github.com/samqbush/adempiere2/actions/runs/33580195848) | 22m07s, failed in the **legacy** regression before the parity lane started | Latent oracle-lane flake: `PA_Goal` is a wall-clock-triggered lazy writer, so two captures that straddle an hour boundary diverge |
 | [33584462937](https://github.com/samqbush/adempiere2/actions/runs/33584462937) | 32m10s; legacy regression **green**, routed lane prepared, ambient census **passed**, modern capture A driving | Driver defect: `ZkCe10Dialect.signIn` navigated to the bare origin instead of `/webui/`, so the browser landed on ADempiere's `/admin/` page |
 | [33586831680](https://github.com/samqbush/adempiere2/actions/runs/33586831680) | 31m31s; modern login, role, menu and the Business Partner window all rendered, `served=modern`, steps 0-1 measured; failed clicking Save | **First modern runtime defect**: `NumberBox` attached its calculator handlers with ZK 3.6's `setAction`, which ZK 10 rejects at render time, and the resulting error overlay intercepted the click |
+| [33626582558](https://github.com/samqbush/adempiere2/actions/runs/33626582558) | 33m; legacy lane green end to end; modern capture A completed steps 0-9 for the fourth run running, and failed at the same step | **Lane defect, and the worst kind**: the two Tomcat logs showed the *legacy* application serving two of the four sessions of the "modern" capture. The `user-allowlisted` preset allowlists only `GardenAdmin`; the second acting identity `GardenUser` fell back to legacy. The capture reported `served=modern` truthfully, because it sampled one session out of four |
 | [33598342557](https://github.com/samqbush/adempiere2/actions/runs/33598342557) | 33m; legacy lane green end to end; modern capture A completed steps 0-9 for the third run running, and failed at the same step | The search key **was** committed - the new guard did not fire - so the wrong *field* was being filled: the dialog locator took `.first()` of a union that also matches the window behind it, and the Business Partner window has its own field captioned "Search Key" |
 | [33591572610](https://github.com/samqbush/adempiere2/actions/runs/33591572610) | 33m; legacy lane green end to end; modern capture A again completed steps 0-9 and again failed positioning the deactivating session | The awaited `/zkau` response did not identify the request being waited for, so ZK 10's own in-flight traffic could satisfy it; an uncommitted search key then failed **silently** as an unfiltered query |
 | [33589524866](https://github.com/samqbush/adempiere2/actions/runs/33589524866) | 33m; **the modern runtime completed steps 0-9**, including `create` (7 rows), `update`, the concurrency pair and `duplicate-submit`; failed positioning the deactivating session | Driver settlement: the Find dialog's Ok was clicked before the search key's own blur round trip had landed, so the query ran unfiltered |
+
+### Run 33626582558 - half the capture was the legacy application
+
+The fourth identical failure refuted its own repair. The new diagnostic reported
+`modal candidates=1, captioned=1, committed criterion='P5G1A-0001'`: one modal,
+correctly captioned, carrying the right key. The locator theory of run 33598342557
+was wrong, and so were the two before it.
+
+What found the answer was reading the run's **other** Tomcat log. The legacy
+Tomcat's `catalina.out` contained `FindWindow.getQuery` entries timestamped
+*inside the modern capture*, at 12:21:37 and 12:22:29. Two of the four browser
+sessions in the modern parity capture had been served by the legacy application.
+
+The cause is a lane defect. The write flow drives four sessions under **two**
+identities - `GardenAdmin` (`AD_User_ID` 101) for the primary and deactivating
+sessions, `GardenUser` (102) for the second editor and the duplicate submitter -
+and the lane applied the `user-allowlisted` cohort preset, which allowlists 101
+alone. Cohort routing decides per identity, so 102 fell back to legacy exactly as
+designed. Sessions 2 and 4 had been passing because they never touched ZK 10.
+
+The evidence was not lying. `identifyServingRuntime` was called once, for the
+primary session, and the validator checked that one row; the file said
+`served=modern` and the primary session genuinely was. The comment above the
+method called it "the only check in the capture that can see a lane serving the
+wrong application", and it covered a quarter of the capture. A single sample of a
+per-identity decision proves nothing about the other identities, and that is the
+durable lesson of this run - more durable than the preset fix.
+
+Three repairs follow. The lane applies a new `write-parity-users` preset
+allowlisting both identities; `user-allowlisted` is left alone because the H6
+matrix depends on it allowlisting exactly one. `identifyServingRuntime` becomes a
+shared default method that runs for every session, writes a `served.<session>`
+row, and now **asserts** the served runtime rather than only recording it. The
+evidence validator requires all four rows and requires each to read `modern`,
+with two new injected defect classes proving both halves of that check fire -
+one for a capture that identified only its first session, one for a capture in
+which a single session was served legacy.
+
+Three earlier theories are recorded here as refuted, so they are not retried: a
+settlement race on the blur round trip (refuted by two identical failures at the
+same step), an ambiguous `/zkau` wait predicate satisfied by ZK 10 polling
+(refuted when the hardened predicate passed), and a dialog locator resolving to
+the window behind the modal (refuted by this run's own `candidates=1`
+diagnostic).
+
+**What this run leaves open.** Session 3 - the genuinely modern one - exposed a
+real modern divergence that is still unfixed: the modern Tomcat logged
+`MQuery[C_BPartner,Restrictions=0]` for every lookup while legacy logged
+`UPPER(C_BPartner.Value) LIKE 'P5G1A-0001%'`. The next run should be read as
+diagnosis of that product defect, not as a pass: once sessions 2 and 4 are
+genuinely modern, they are expected to fail the same lookup.
 
 ### Run 33598342557 - the dialog was never the dialog
 
@@ -548,7 +608,7 @@ what it should refuse, quietly, forever. So
 tree the validator must accept, then mutates it once per defect class and
 requires a rejection each time.
 
-**27 injected defect classes, all rejected.**
+**29 injected defect classes, all rejected.**
 
 The proof was itself verified, not asserted. The increment's central governance
 guard - that a parity branch may not re-freeze the answer it is scored against -

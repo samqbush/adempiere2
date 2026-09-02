@@ -44,6 +44,16 @@ MIN_RESTORE_SECONDS = 60
 # whose own claim is to produce a new legacy answer.
 FROZEN_MANIFEST_SHA256 = "5fc4ee2960f94899656591e9e8f14e2d4f042e33c03e67ccd3df779dcb4c999a"
 
+# Every session the write flow drives. Cohort routing decides per IDENTITY, and
+# the flow uses two, so proving the primary session was served the modern
+# application proves nothing about the other three.
+WRITE_FLOW_SESSIONS = (
+    "primary",
+    "second-editor",
+    "duplicate-submitter",
+    "deactivating",
+)
+
 H6_ROWS = (
     "h6-loopback-origin-unreached",
     "h6-cohort-decision-modern",
@@ -168,11 +178,29 @@ def check_capture(root: Path, label: str, contract: Path,
     # is runtime-blind -- one public origin, normalized URLs, the product's own
     # database effects -- so a routed lane that failed closed to legacy would
     # score a PERFECT green against the legacy oracle and report modern parity.
+    #
+    # It is checked per SESSION, and that is the part that matters. The capture
+    # drives four sessions under two identities and cohort routing decides per
+    # identity, so a single `served` row describes one session out of four. Run
+    # 33626582558 passed this check while the legacy Tomcat's own log carried
+    # the second editor's and the duplicate submitter's lookups.
     if not missing("runtime-identification.tsv"):
         identity = keyed(capture / "runtime-identification.tsv")
-        if identity.get("expected") != "modern" or identity.get("served") != "modern":
+        if identity.get("expected") != "modern":
             problems.append(
-                f"capture {label} was not served by the modern runtime: {identity}")
+                f"capture {label} did not expect the modern runtime: {identity}")
+        served = {key: value for key, value in identity.items()
+                  if key.startswith("served.")}
+        absent = {f"served.{name}" for name in WRITE_FLOW_SESSIONS} - set(served)
+        if absent:
+            problems.append(
+                f"capture {label} identified no serving runtime for "
+                f"{sorted(absent)}, so those sessions are unproven")
+        for key in sorted(served):
+            if served[key] != "modern":
+                problems.append(
+                    f"capture {label} session {key[len('served.'):]} was served "
+                    f"the {served[key]} application, not the modern one")
 
     # The browser must never have reached the loopback modern origin directly.
     # Requests are recorded before routing, so an aborted request still appears

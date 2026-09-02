@@ -210,7 +210,7 @@ prepare() {
   reset restore "$seed_archive"
   quiesce quiesce
   quiesce verify
-  cohort apply user-allowlisted
+  cohort apply write-parity-users
   # A tamper record, NOT a proof of routing. `reset-cohort-config.sh verify`
   # compares the AD_SysConfig row count against the snapshot; since every
   # capture restores the archive this snapshot was taken from, a match is close

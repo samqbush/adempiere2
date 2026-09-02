@@ -15,7 +15,7 @@ set -euo pipefail
 if [[ $# -lt 6 ]]; then
   echo "Usage: ADEMPIERE_PHASE5E_DB_PASSWORD=... reset-cohort-config.sh <host> <port> <database> <user> <marker> <command> [args]" >&2
   echo "  commands: state | apply <preset> | clear | snapshot <file> | verify <file>" >&2
-  echo "  presets:  master-off user-allowlisted role-allowlisted role-unselected" >&2
+  echo "  presets:  master-off user-allowlisted write-parity-users role-allowlisted role-unselected" >&2
   echo "            not-allowlisted duplicate malformed client-scoped" >&2
   echo "            inactive-duplicate unreadable readable" >&2
   exit 64
@@ -48,6 +48,13 @@ shift 6
 # is what proves the decision reads the selected role rather than the user's
 # role list.
 COHORT_USER_A=101
+# GardenUser, the second acting identity. The write-parity capture drives FOUR
+# sessions and two of them log in as this user, so a preset that allowlists only
+# GardenAdmin routes half the capture to the LEGACY application. Run 33626582558
+# is what that looks like: the legacy Tomcat's own log carried the second
+# editor's and the duplicate submitter's lookups, inside a capture claiming
+# modern parity.
+COHORT_USER_B=102
 COHORT_ROLE_A=102
 COHORT_ROLE_UNSELECTED=103
 
@@ -176,6 +183,16 @@ case "$command" in
       user-allowlisted)
         insert_row MODERN_WEB_UI_ENABLED Y 0 0 Y
         insert_row MODERN_WEB_UI_USER_IDS "$COHORT_USER_A" 0 0 Y
+        insert_row MODERN_WEB_UI_ROLE_IDS "" 0 0 Y
+        ;;
+      write-parity-users)
+        # Every acting identity in the write-parity flow, and ONLY because every
+        # one of them must be served the modern application for the capture to
+        # mean what it claims. This is deliberately a separate preset rather than
+        # a widening of user-allowlisted, whose whole point in the H6 matrix is
+        # that exactly one identity is allowlisted.
+        insert_row MODERN_WEB_UI_ENABLED Y 0 0 Y
+        insert_row MODERN_WEB_UI_USER_IDS "$COHORT_USER_A,$COHORT_USER_B" 0 0 Y
         insert_row MODERN_WEB_UI_ROLE_IDS "" 0 0 Y
         ;;
       role-allowlisted)
