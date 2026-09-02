@@ -195,6 +195,88 @@ Each modern defect is fixed in its own commit citing the run it closes.
 |---|---|---|
 | [33570169991](https://github.com/samqbush/adempiere2/actions/runs/33570169991) | 25m24s, before any modern write | Lane defect: the parity lane seeded itself from the state the legacy regression left behind |
 | [33572353340](https://github.com/samqbush/adempiere2/actions/runs/33572353340) | 30m45s, capture A fixture applied, browser not yet driven | Script defect: `psql` does not interpolate `:'var'` inside a `--command` string, so session evidence failed with `syntax error at or near ":"` |
+| [33580195848](https://github.com/samqbush/adempiere2/actions/runs/33580195848) | 22m07s, failed in the **legacy** regression before the parity lane started | Latent oracle-lane flake: `PA_Goal` is a wall-clock-triggered lazy writer, so two captures that straddle an hour boundary diverge |
+
+### Run 33580195848 - the hour boundary
+
+This run failed in `phase5g1aLegacyWriteOracleSmoke` - the **legacy** freeze-off
+regression that the parity smoke depends on so the oracle is re-proven at PR
+HEAD. No modern code participates in that lane, and the same lane was green on
+this branch in run
+[33548556277](https://github.com/samqbush/adempiere2/actions/runs/33548556277),
+so the finding is a pre-existing latent defect in the oracle lane that a longer
+job merely made likely to be observed.
+
+> `FAIL: step duplicate-submit-editor-authenticated: the effect diverged between
+> captures A and B` - `observed: pa_goal +0 content`
+>
+> `FAIL: table pa_goal changed but is neither declared in the effect model nor
+> classified as reviewed ambient state.`
+
+`+0 content` is the R12 sentinel that increment 5g-1a-x added, working exactly
+as designed: the row count did not move, the row *content* did, and without the
+content component this would have been silently invisible.
+
+The mechanism is `MGoal`
+(`base/src/org/compiere/model/MGoal.java`). `getUserGoals` runs at login for the
+performance indicator panel and calls `updateGoal(false)` per goal, which
+recalculates and **saves** whenever
+
+    force || getDateLastRun() == null || !TimeUtil.isSameHour(getDateLastRun(), null)
+
+`PA_Goal` is therefore not a timer source - which is why
+`quiesce-phase5f-background-processors.sh`, whose scope is the eight sources
+`AdempiereServerMgr.startServers()` schedules, does not and should not cover it.
+It is a **lazy, wall-clock-triggered** writer whose firing depends on nothing
+but which clock hour a login happens in. Captures A and B of the *same* runtime
+diverge when the lane crosses an hour boundary, and the 5g-1a freeze run simply
+did not cross one, which is why the frozen models do not declare `pa_goal`.
+
+**The fix removes the nondeterminism rather than forgiving it.** Two forgiving
+repairs were available and both were rejected: widening `ambient-tables.tsv`
+would teach the frozen contract to accept a real write set it cannot otherwise
+explain, and `contracts/legacy-web-write-v1/` is read-only in 5g-1b in any case.
+Instead `scripts/phase5/quiesce-performance-goals.sh` deactivates `PA_Goal`
+during quiescence, so `getUserGoals`' own `WHERE IsActive='Y'` returns no rows
+and `updateGoal` is never reached, in any hour.
+
+This is lane infrastructure, not an oracle amendment:
+
+- `contracts/` is untouched; nothing is re-captured, re-frozen or reclassified.
+- Quiescence runs **before** the golden archive is captured, so every capture
+  restores an already-quiesced database and the deactivation is a uniform
+  baseline shift. `measure-write-effect.py` scores *diffs* between two snapshots
+  within a capture, so a uniform baseline shift cannot perturb a frozen model.
+- The same quiesce is applied identically to the legacy lane, the parity lane
+  and every H6 case's own seed restore, so the two runtimes are never compared
+  across different database states.
+- The frozen contract itself, however, **was** captured unquiesced, and the
+  deactivation is not invisible to the product: `WPAPanel.get()` returns `null`
+  when `getUserGoals` yields no rows, so `DefaultDesktop`'s
+  `if (!dashboardPanel.getChildren().isEmpty())` guard drops the Performance
+  Indicators panel from the post-login desktop. That difference is asserted to
+  be inert rather than assumed to be: the legacy freeze-off regression re-scores
+  every frozen fact class - semantic facts, business values, network classes and
+  concurrency facts - against the unquiesced-capture answer at PR HEAD, so if
+  the missing panel perturbed any frozen fact, that gate fails. No other
+  behaviour changes: all six `MMeasure.update*Goals()` variants resolve their
+  write set through `MGoal.getMeasureGoals`, which filters `IsActive='Y'` too,
+  and the dashboard's chart panels load goals by ID without calling
+  `updateGoal`.
+- `validate-phase5g1b-runtime-evidence.py` requires `goal-quiesce-state.tsv`, so
+  a lane that silently stopped quiescing goals fails closed. It also requires
+  `seed-goal-quiesce-state.tsv`, which the parity lane copies forward from the
+  legacy lane's evidence directory before restoring the seed. That second file
+  exists because the defect being repaired is in the *legacy* lane while the
+  only PR-blocking gate reads 5g-1b evidence: without it, a legacy lane that
+  stopped quiescing goals would leave every gate green - the parity lane
+  re-quiesces after restoring the seed, so it would self-heal - while the oracle
+  regressed to failing on an hour boundary. Removing either file is an injected
+  defect class the validator's own validator rejects.
+
+The acceptance test is the legacy freeze-off regression itself: it re-scores
+both captures against the answer 5g-1a froze, so a green run is direct evidence
+that the frozen answer still reproduces under the added quiescence.
 
 ### Run 33570169991 - the seed
 

@@ -122,6 +122,11 @@ quiesce() {
   bash "$scripts_dir/quiesce-phase5f-background-processors.sh" \
     "$db_host" "$db_port" "$db_name" "$db_user" "$marker" "$1" \
     "$evidence_root/quiesce-state.tsv"
+  # See quiesce-performance-goals.sh: PA_Goal is a wall-clock-triggered lazy
+  # writer, so each H6 case's own seed restore must carry it quiesced too.
+  bash "$scripts_dir/quiesce-performance-goals.sh" \
+    "$db_host" "$db_port" "$db_name" "$db_user" "$marker" "$1" \
+    "$evidence_root/goal-quiesce-state.tsv"
 }
 
 cohort() {

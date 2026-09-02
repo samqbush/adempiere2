@@ -325,6 +325,15 @@ def check_lane(root: Path) -> list[str]:
     for name, why in (
         ("quiesce-state.tsv",
          "nothing records that the configured background processors were quiesced"),
+        ("goal-quiesce-state.tsv",
+         "PA_Goal recalculates and saves on an hour boundary "
+         "(MGoal.updateGoal), so without this the capture is only "
+         "deterministic in the hour it happened to run in"),
+        ("seed-goal-quiesce-state.tsv",
+         "the seed this lane restores came from the legacy lane, whose own "
+         "quiescence no PR-blocking gate otherwise reads; without this a "
+         "legacy lane that stopped quiescing PA_Goal would leave every gate "
+         "green while the oracle went back to failing on an hour boundary"),
         ("cohort-config.tsv",
          "nothing records the cohort fixture the lane applied"),
         ("topology/topology.tsv",

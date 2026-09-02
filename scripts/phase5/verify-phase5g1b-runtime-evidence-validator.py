@@ -96,6 +96,8 @@ def build_evidence(root: Path, contract: Path, head: str, steps: list[str]) -> N
     }) + "\n")
     write(root / "score-summary.tsv", "mode\tscore\nself-diff\tpass\nproblems\t0\n")
     write(root / "quiesce-state.tsv", "verified\ttrue\n")
+    write(root / "goal-quiesce-state.tsv", "pa_goal\t100\tIsActive\tY\n")
+    write(root / "seed-goal-quiesce-state.tsv", "pa_goal\t100\tIsActive\tY\n")
     write(root / "cohort-config.tsv", "preset\tuser-allowlisted\n")
     write(root / "topology" / "topology.tsv",
           "public_listener\t127.0.0.1:8888\n"
@@ -264,6 +266,10 @@ def main() -> int:
              lambda root: write(root / "h6" / "h6-matrix.tsv", "".join(
                  f"{row}\t{'fail' if index == 0 else 'pass'}\tsynthetic\n"
                  for index, row in enumerate(H6_ROWS)))),
+            ("an unquiesced performance-goal recalculation",
+             lambda root: (root / "goal-quiesce-state.tsv").unlink()),
+            ("a seed captured from an unquiesced legacy lane",
+             lambda root: (root / "seed-goal-quiesce-state.tsv").unlink()),
             ("an unobserved session lifecycle",
              lambda root: (root / "session-evidence" / "session-lifecycle.tsv").unlink()),
             ("a second modern deployment",

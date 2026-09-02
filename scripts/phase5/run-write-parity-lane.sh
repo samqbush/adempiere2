@@ -101,6 +101,7 @@ golden_archive=$evidence_root/golden.dump
 # starting state the frozen answer itself was produced from. See prepare().
 seed_archive=${PHASE5G1B_SEED_ARCHIVE:-$repo_root/build/phase5g1a/runtime-evidence/golden.dump}
 quiesce_state=$evidence_root/quiesce-state.tsv
+goal_quiesce_state=$evidence_root/goal-quiesce-state.tsv
 mkdir -p "$evidence_root" "$evidence_root/session-evidence"
 
 reset() {
@@ -111,6 +112,13 @@ reset() {
 quiesce() {
   bash "$scripts_dir/quiesce-phase5f-background-processors.sh" \
     "$db_host" "$db_port" "$db_name" "$db_user" "$marker" "$1" "$quiesce_state"
+  # PA_Goal is a lazy, WALL-CLOCK-triggered writer rather than a timer source,
+  # so the Phase 5f processor quiesce does not cover it: MGoal.updateGoal saves
+  # whenever DateLastRun is not in the current hour, and getUserGoals calls it
+  # at every login. Two captures of the same runtime that straddle an hour
+  # boundary therefore diverge. See quiesce-performance-goals.sh.
+  bash "$scripts_dir/quiesce-performance-goals.sh" \
+    "$db_host" "$db_port" "$db_name" "$db_user" "$marker" "$1" "$goal_quiesce_state"
 }
 
 cohort() {
@@ -184,6 +192,21 @@ prepare() {
     echo "state the preceding lane happened to leave behind." >&2
     return 1
   fi
+  # The defect this closes lives in the LEGACY lane, but the only gate that
+  # blocks the PR reads 5g-1b evidence. So bind the seed lane's quiescence to
+  # this lane's evidence: if run-write-oracle-lane.sh ever stops quiescing
+  # PA_Goal, the parity lane's own `quiesce quiesce` below would silently
+  # self-heal and every gate would stay green while the legacy oracle went
+  # back to failing on an hour boundary. Carrying the seed's record forward
+  # makes that regression fail closed here.
+  seed_goal_quiesce=$(dirname "$seed_archive")/goal-quiesce-state.tsv
+  if [[ ! -s "$seed_goal_quiesce" ]]; then
+    echo "the legacy lane recorded no performance-goal quiescence at" >&2
+    echo "$seed_goal_quiesce, so the seed this lane restores is only" >&2
+    echo "deterministic in the clock hour it was captured in." >&2
+    return 1
+  fi
+  cp "$seed_goal_quiesce" "$evidence_root/seed-goal-quiesce-state.tsv"
   reset restore "$seed_archive"
   quiesce quiesce
   quiesce verify
