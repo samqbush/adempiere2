@@ -559,16 +559,114 @@ public final class ZkCe10Dialect implements ZkDialect {
 			}
 		};
 		page.onRequest(listener);
+		// Run 33664809767 settled the wire question: the deactivate save sent
+		// nothing (requestsNamingSaveControl=0 across 22 AU posts) while the
+		// primary's conflicting save sent its onClick bundled behind an onBlur.
+		// So the click is lost before ZK sends, on a control whose every
+		// probed property is healthy. This records, passively, whether a DOM
+		// click event reaches the anchor at all, and reads back ZK's own send
+		// state, which makes the reading three-valued: the click never landed,
+		// it landed and ZK declined to act, or it landed and ZK fired but
+		// zAu never put it on the wire.
+		//
+		// Deliberately a capture-phase, passive listener on the anchor plus a
+		// read of ambient state. It registers no ZK handler, wraps no product
+		// function and mutates nothing, so it cannot change what the click
+		// does -- which is the whole point: instrumenting zAu.send would answer
+		// the same question by altering the thing being measured.
 		try {
+			installClickWitness(page, saveComponentId);
 			click(page, "Save changes");
 			return pollSaveOutcome(page);
 		} finally {
+			String witness = readClickWitness(page);
 			// In the finally, so a click or poll that throws still reports what
 			// reached the wire rather than leaving the previous step's record.
 			saveRequestsByPage.put(page, saveComponentId + " auPostsFromThisPage=" + auPosts[0]
 					+ " requestsNamingSaveControl=" + seen.size()
-					+ (seen.isEmpty() ? "" : " || " + String.join(" || ", seen)));
+					+ (seen.isEmpty() ? "" : " || " + String.join(" || ", seen))
+					+ " || " + witness);
 			page.offRequest(listener);
+		}
+	}
+
+
+	/**
+	 * Installs a passive, capture-phase witness on the Save anchor.
+	 *
+	 * <p>Observation only: it adds one listener that appends to a private array
+	 * and returns. It does not stop propagation, does not prevent the default,
+	 * registers nothing with ZK and replaces no product function, so the click
+	 * it witnesses is the same click that would have happened without it.
+	 *
+	 * <p>The listener removes its predecessor before attaching. {@code save}
+	 * runs several times against the same page and the Save anchor survives
+	 * across them -- {@code Toolbarbutton.setDisabled} mutates the attribute
+	 * rather than rerendering -- so attaching a fresh closure each time would
+	 * have made one click report as three arrivals on the page that saves most
+	 * often, which is the control page.
+	 *
+	 * <p>The popup and mask counters are sampled <em>inside</em> the listener,
+	 * because they are only meaningful as click-time facts: read afterwards
+	 * they describe the state 30 seconds of polling later. {@code ev.eventPhase}
+	 * is recorded but {@code ev.defaultPrevented} deliberately is not: in a
+	 * capture-phase listener on the target it cannot yet reflect ZK's own
+	 * bubble-phase handling, so it would read {@code false} in healthy and
+	 * unhealthy cases alike.
+	 */
+	private void installClickWitness(Page page, String saveComponentId) {
+		if (saveComponentId == null) {
+			page.evaluate("() => { window.__p5gWitness = ['witness-not-installed-null-id']; }");
+			return;
+		}
+		page.evaluate("id => {"
+				+ "  window.__p5gWitness = [];"
+				+ "  const el = document.getElementById(id);"
+				+ "  if (!el) { window.__p5gWitness.push('anchor-absent-at-install'); return; }"
+				+ "  if (window.__p5gWitnessOn) { el.removeEventListener('click', window.__p5gWitnessOn, true); }"
+				+ "  const vis = sel => Array.from(document.querySelectorAll(sel))"
+				+ "    .filter(e => e.offsetParent !== null || e.getClientRects().length > 0).length;"
+				+ "  window.__p5gWitnessOn = ev => {"
+				+ "    const a = document.activeElement;"
+				+ "    window.__p5gWitness.push('domClick target=' + (ev.target && ev.target.id ? ev.target.id : "
+				+ "      (ev.target && ev.target.tagName ? ev.target.tagName : '?'))"
+				+ "      + ' phase=' + ev.eventPhase + ' trusted=' + ev.isTrusted"
+				+ "      + ' atClickOpenComboPopups=' + vis('.z-combobox-popup')"
+				+ "      + ' atClickMasks=' + vis('.z-modal-mask,.z-loading,.z-apply-mask')"
+				+ "      + ' atClickActiveElement=' + (a ? (a.id || a.tagName) : 'none'));"
+				+ "  };"
+				+ "  el.addEventListener('click', window.__p5gWitnessOn, true);"
+				+ "}", saveComponentId);
+	}
+
+	/**
+	 * Reads the click witness back, together with the ZK client-side send state.
+	 *
+	 * <p>The send state is what makes the reading three-valued rather than two.
+	 * A DOM click can arrive and {@code Toolbarbutton.doClick_} can fire
+	 * correctly and still nothing leaves the browser, because {@code zAu.sendNow}
+	 * returns early and silently when {@code zAu.disabledRequest} is set -- which
+	 * an obsolete desktop, an alert or a targetless redirect all set, and only
+	 * {@code beforeunload} clears -- or parks the event in the desktop's request
+	 * queue while another request is in flight. Neither writes to the console,
+	 * so without these four values a witnessed click would be misread as the
+	 * product declining to act.
+	 */
+	private String readClickWitness(Page page) {
+		try {
+			Object value = page.evaluate("() => {"
+					+ "  const w = window.__p5gWitness || ['witness-not-installed'];"
+					+ "  let q = 'n/a';"
+					+ "  try { q = String(zAu.getAuRequests(zk.Desktop._dt).length); } catch (e) { q = 'unreadable'; }"
+					+ "  return 'witness=' + (w.length ? w.join(' ; ') : 'no-dom-click')"
+					+ "    + ' disabledRequest=' + (typeof zAu === 'undefined' ? 'n/a' : !!zAu.disabledRequest)"
+					+ "    + ' queuedAuRequests=' + q"
+					+ "    + ' ajaxReq=' + (typeof zAu === 'undefined' ? 'n/a' : !!zAu.ajaxReq)"
+					+ "    + ' pendingReqInf=' + (typeof zAu === 'undefined' ? 'n/a' : !!zAu.pendingReqInf);"
+					+ "}");
+			return String.valueOf(value).replace("\n", " ");
+		} catch (RuntimeException e) {
+			return "witness-read-failed=" + e.getClass().getSimpleName();
 		}
 	}
 

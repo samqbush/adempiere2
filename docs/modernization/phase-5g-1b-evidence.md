@@ -208,6 +208,7 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33580195848](https://github.com/samqbush/adempiere2/actions/runs/33580195848) | 22m07s, failed in the **legacy** regression before the parity lane started | Latent oracle-lane flake: `PA_Goal` is a wall-clock-triggered lazy writer, so two captures that straddle an hour boundary diverge |
 | [33584462937](https://github.com/samqbush/adempiere2/actions/runs/33584462937) | 32m10s; legacy regression **green**, routed lane prepared, ambient census **passed**, modern capture A driving | Driver defect: `ZkCe10Dialect.signIn` navigated to the bare origin instead of `/webui/`, so the browser landed on ADempiere's `/admin/` page |
 | [33586831680](https://github.com/samqbush/adempiere2/actions/runs/33586831680) | 31m31s; modern login, role, menu and the Business Partner window all rendered, `served=modern`, steps 0-1 measured; failed clicking Save | **First modern runtime defect**: `NumberBox` attached its calculator handlers with ZK 3.6's `setAction`, which ZK 10 rejects at render time, and the resulting error overlay intercepted the click |
+| [33664809767](https://github.com/samqbush/adempiere2/actions/runs/33664809767) | 34m34s; same failure, same step; **the wire question is settled** | The `deactivate` save produced **no** AU request naming the Save control across 22 posts, while the primary's conflicting save produced one, bundled behind an `onBlur`. The click is therefore lost before ZK sends, and the server is exonerated. Every widget property remains healthy, so the search narrows to whether a DOM click reaches the anchor at all |
 | [33658582428](https://github.com/samqbush/adempiere2/actions/runs/33658582428) | 33m40s; same failure, same step, and **every client-side explanation refuted** | The Save control's widget is bound exactly to its own anchor, `class=zul.wgt.Toolbarbutton`, `disabled=false` on both the widget and the DOM, `desktop=yes`, `inServer=true`, `asapsClick=true` and listening for `onClick` in both `isListen` forms; `zk` and `zAu` are live with `processing=false`, `mounting=false`, no error boxes and **no console error**. The preserved console log carries only the six legacy-theme 404s |
 | [33653427475](https://github.com/samqbush/adempiere2/actions/runs/33653427475) | 32m49s; **the layout fix holds where it is measured** - the Active checkbox now has a real box, hit-tests to itself and clears; failed in the `deactivate` **save** | The click reached the server (`dataStatusChanged: *1/1`), and then the Save click produced **no `/zkau` request at all** - the modern access log shows nothing but empty 18-byte polls until Tomcat stopped, and `GridTable.dataSave` was never invoked. The old `saveButton` probe read `!!e.disabled` on an anchor, which is always `false`, so it had never actually reported the control state |
 | [33647155695](https://github.com/samqbush/adempiere2/actions/runs/33647155695) | 33m20s; **the event-thread fix worked** - the modern capture cleared the Find dialog, the second editor, the conflicting save and the duplicate submit, and failed at step 10 `deactivate` | The refusal is now observed on the modern runtime: the primary editor shows `*2/18` and *Current record was changed by another user, please ReQuery*. The new failure is layout, not logic - clicking the Active checkbox is intercepted by the border layout's own centre body and by the field grid, and the failure screenshot shows the field area painting blank although the DOM carries every editor |
@@ -218,6 +219,82 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33598342557](https://github.com/samqbush/adempiere2/actions/runs/33598342557) | 33m; legacy lane green end to end; modern capture A completed steps 0-9 for the third run running, and failed at the same step | The search key **was** committed - the new guard did not fire - so the wrong *field* was being filled: the dialog locator took `.first()` of a union that also matches the window behind it, and the Business Partner window has its own field captioned "Search Key" |
 | [33591572610](https://github.com/samqbush/adempiere2/actions/runs/33591572610) | 33m; legacy lane green end to end; modern capture A again completed steps 0-9 and again failed positioning the deactivating session | The awaited `/zkau` response did not identify the request being waited for, so ZK 10's own in-flight traffic could satisfy it; an uncommitted search key then failed **silently** as an unfiltered query |
 | [33589524866](https://github.com/samqbush/adempiere2/actions/runs/33589524866) | 33m; **the modern runtime completed steps 0-9**, including `create` (7 rows), `update`, the concurrency pair and `duplicate-submit`; failed positioning the deactivating session | Driver settlement: the Find dialog's Ok was clicked before the search key's own blur round trip had landed, so the query ran unfiltered |
+
+### Run 33664809767 - the click never reaches the wire
+
+The per-page record answered the question it was built for, and the two pages
+answered it differently:
+
+```
+saveRequests  zk_comp_3222 auPostsFromThisPage=22 requestsNamingSaveControl=1
+              || dtid=...&cmd_0=onBlur&uuid_0=Field_Name2_220_1_3359
+                 &cmd_1=onClick&uuid_1=zk_comp_3222&data_1={"pageX":568,...}
+saveRequests  zk_comp_3225 auPostsFromThisPage=22 requestsNamingSaveControl=0
+```
+
+The primary page's conflicting save **did** put its `onClick` on the wire,
+bundled behind the `onBlur` of the field the driver had just left - which is
+what a real ZK save submission looks like, and which independently confirms the
+resolution above that this save reached the product and was refused on its
+merits.
+
+The `deactivate` page sent **nothing**. Twenty-two AU posts left that page
+during the same window and not one carried the Save control's component id.
+What those twenty-two were is not recorded and cannot be recovered - the
+listener retains only bodies naming the Save control, and an 18-byte answer
+looks the same for a poll and for a command that changed no UI - so they are
+left unclassified. The claim that matters does not need them: no request named
+the Save control, so the click is lost *before* ZK sends. No ZK log level is
+needed, and the server is exonerated on this step - there was never a request
+for it to answer.
+
+That sits oddly beside the previous run's refutations, because every property
+*so far probed* is healthy on this exact control: bound to its own anchor,
+enabled on both widget and DOM, `desktop=yes`, `inServer=true`, ASAP-listening
+for `onClick`, `zk` and `zAu` live, no console error. But "so far probed" is the
+operative qualifier, and treating the search space as two-valued - click lost,
+or handler declined - would have been wrong. There is a third path, and it is
+silent by construction:
+
+`zAu.sendNow` returns immediately when `zAu.disabledRequest` is set, writing
+nothing anywhere. An obsolete desktop, an alert, or a redirect with no target
+all set that flag, and only `beforeunload` clears it, so once set every later
+request queues forever. Independently, `sendNow` parks the event and returns
+when `zAu.ajaxReq` or `zAu.pendingReqInf` is truthy, draining only when the
+in-flight request completes. In both cases the DOM click arrived, `doClick_`
+fired and `fireX` ran correctly - and nothing left the browser. The existing
+`zkClientState` probe could not see any of this: it reads `zk.processing`, which
+is not `zAu.processing()`, and never reads the queue at all.
+
+So the search space is three-valued: the click never landed, it landed and ZK's
+handler declined to act, or it landed and fired and `zAu` never put it on the
+wire.
+
+`awaitSaveOutcome` now witnesses all three. Before the click it attaches a
+capture-phase listener to the Save anchor recording whether a click event
+arrives, with its target, phase and `isTrusted`; and afterwards it reads
+`zAu.disabledRequest`, the desktop's queued AU request count, `zAu.ajaxReq` and
+`zAu.pendingReqInf`. A queued request is the direct signature of the third path,
+so one run now separates all three outcomes instead of two.
+
+`ev.defaultPrevented` is recorded nowhere, deliberately: in a capture-phase
+listener on the target it cannot yet reflect ZK's own bubble-phase handling, so
+it would read `false` whether or not anything was wrong.
+
+The popup and mask counters are sampled **inside** the listener rather than
+afterwards, because they are only meaningful as click-time facts - read at the
+end of a 30-second poll they describe a different moment. They are recorded as
+context, not as a hypothesis: the `z-combobox-popup` elements in this run's dump
+are equally present on the page whose click *did* reach the wire, and Playwright
+hit-tests before clicking, so an overlay covering the anchor would have thrown
+rather than silently swallowed. Anchor-level interception is already excluded.
+
+The witness is passive. It adds one listener that appends to an array, removing
+its predecessor first so that repeated saves against the same page cannot report
+one click as several; it does not stop propagation, prevent the default,
+register anything with ZK or replace any product function. Wrapping `zAu.send`
+would have answered the same question by altering the thing being measured,
+which in a parity lane is not a trade worth making.
 
 ### Run 33658582428 - every client-side explanation is refuted
 
