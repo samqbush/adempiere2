@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -26,6 +27,7 @@ import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Request;
 import com.microsoft.playwright.Response;
+import com.microsoft.playwright.TimeoutError;
 import com.microsoft.playwright.options.RequestOptions;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import com.microsoft.playwright.options.WaitUntilState;
@@ -581,7 +583,7 @@ public final class ZkCe10Dialect implements ZkDialect {
 	}
 
 	/**
-	 * Commits a Find-dialog search key and waits for the commit to land.
+	 * Commits a Find-dialog search key and proves the commit reached the server.
 	 *
 	 * <p>The dialect may express how a control is operated and AWAITED, and this
 	 * is that: {@code Tab} blurs the field, which fires the editor's
@@ -589,25 +591,84 @@ public final class ZkCe10Dialect implements ZkDialect {
 	 * value until that request is applied server-side.
 	 *
 	 * <p>The legacy dialect types the key and clicks Ok inside a single
-	 * {@code /zkau} wait. Under ZK 3.6 that is enough. Under ZK 10 it is a race
-	 * the caller can lose: the wait can be satisfied by the blur's own round
-	 * trip while the Ok click has already been dispatched against a dialog whose
-	 * query field is still empty, and the window then opens on the FIRST record
-	 * instead of the requested one. Run 33589524866 lost it on the third of
-	 * three uses -- `expected: <P5G1A-0001> but was: <Chemical Product, inc>` --
-	 * which is the signature of an unfiltered query, not of a missing record.
+	 * {@code /zkau} wait. Under ZK 3.6 that is enough. Under ZK 10 it is not,
+	 * for two reasons, and runs 33589524866 and 33591572610 both died on the
+	 * same symptom -- {@code expected: <P5G1A-0001> but was:
+	 * <Chemical Product, inc>}, with the diagnostic probe showing
+	 * {@code Data requeried 1/18}, which is an UNFILTERED query landing on the
+	 * first record rather than a missing one.
 	 *
-	 * <p>So await the blur explicitly, before the Ok click is dispatched. This
-	 * changes no step, no emitted fact and no outcome vocabulary; it only stops
-	 * the driver from reading the dialog before the product has finished
-	 * updating it.
+	 * <p>First, a bare {@code /zkau} predicate does not identify the request it
+	 * is waiting for. ZK 10 keeps its own {@code /zkau} traffic in flight --
+	 * polling, echoes, timers -- so the wait can be satisfied by a request that
+	 * carries nothing of ours while the Ok click has already been dispatched
+	 * against a dialog whose query field is still empty server-side.
+	 *
+	 * <p>Second, and worse, an uncommitted key fails SILENTLY: the query simply
+	 * runs unfiltered and the window opens on someone else's record, which is
+	 * only noticed later, somewhere else, as a wrong-record assertion.
+	 *
+	 * <p>So wait for a response whose REQUEST carried this value. That is direct
+	 * evidence the server received the key, it cannot be satisfied by unrelated
+	 * traffic, and when the key genuinely never leaves the browser it fails here
+	 * with that named cause instead of silently opening the wrong record.
+	 *
+	 * <p>This changes no step, no emitted fact and no outcome vocabulary. It
+	 * only stops the driver from reading the dialog before the product has
+	 * finished updating it, and stops a driver defect from being mistaken for a
+	 * product divergence.
 	 */
 	private void commitSearchKey(Page page, Locator search, String value) {
 		search.waitFor();
 		search.fill(value);
-		page.waitForResponse(
-				response -> response.request().url().contains("/zkau"),
-				() -> search.press("Tab"));
+		assertEquals(value, search.inputValue(),
+				"the Find dialog's search key did not accept the typed value");
+		// Whether the keystroke itself completed. A press that fails its own
+		// actionability checks -- a re-rendered dialog, an overlay -- raises the
+		// same TimeoutError as an unanswered wait, and reporting that as "the
+		// key was never sent" would assert a cause nobody observed.
+		boolean[] pressed = {false};
+		try {
+			page.waitForResponse(
+					response -> response.request().url().contains("/zkau")
+							&& response.ok()
+							&& carries(response.request().postData(), value),
+					new Page.WaitForResponseOptions().setTimeout(FIELD_SETTLE.toMillis()),
+					() -> {
+						search.press("Tab");
+						pressed[0] = true;
+					});
+		} catch (TimeoutError timedOut) {
+			if (!pressed[0]) {
+				throw timedOut;
+			}
+			throw new AssertionError("no accepted /zkau request carrying the Find"
+					+ " dialog's search key '" + value + "' was observed, so the"
+					+ " lookup would have queried unfiltered", timedOut);
+		}
+	}
+
+	/**
+	 * Whether an AU request body carries {@code value}.
+	 *
+	 * <p>ZK encodes each AU datum with {@code encodeURIComponent} before placing
+	 * it in a form-urlencoded body, so a raw {@code contains} only matches when
+	 * every character of the value survives that encoding. The search key is an
+	 * operator-supplied property, so it may not; matching the decoded body as
+	 * well keeps the proof independent of the fixture's character class.
+	 */
+	private boolean carries(String body, String value) {
+		if (body == null) {
+			return false;
+		}
+		if (body.contains(value)) {
+			return true;
+		}
+		try {
+			return URLDecoder.decode(body, StandardCharsets.UTF_8).contains(value);
+		} catch (IllegalArgumentException malformed) {
+			return false;
+		}
 	}
 
 	private void reloadRecord(Page page, String value) {

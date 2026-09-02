@@ -198,7 +198,45 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33580195848](https://github.com/samqbush/adempiere2/actions/runs/33580195848) | 22m07s, failed in the **legacy** regression before the parity lane started | Latent oracle-lane flake: `PA_Goal` is a wall-clock-triggered lazy writer, so two captures that straddle an hour boundary diverge |
 | [33584462937](https://github.com/samqbush/adempiere2/actions/runs/33584462937) | 32m10s; legacy regression **green**, routed lane prepared, ambient census **passed**, modern capture A driving | Driver defect: `ZkCe10Dialect.signIn` navigated to the bare origin instead of `/webui/`, so the browser landed on ADempiere's `/admin/` page |
 | [33586831680](https://github.com/samqbush/adempiere2/actions/runs/33586831680) | 31m31s; modern login, role, menu and the Business Partner window all rendered, `served=modern`, steps 0-1 measured; failed clicking Save | **First modern runtime defect**: `NumberBox` attached its calculator handlers with ZK 3.6's `setAction`, which ZK 10 rejects at render time, and the resulting error overlay intercepted the click |
+| [33591572610](https://github.com/samqbush/adempiere2/actions/runs/33591572610) | 33m; legacy lane green end to end; modern capture A again completed steps 0-9 and again failed positioning the deactivating session | The awaited `/zkau` response did not identify the request being waited for, so ZK 10's own in-flight traffic could satisfy it; an uncommitted search key then failed **silently** as an unfiltered query |
 | [33589524866](https://github.com/samqbush/adempiere2/actions/runs/33589524866) | 33m; **the modern runtime completed steps 0-9**, including `create` (7 rows), `update`, the concurrency pair and `duplicate-submit`; failed positioning the deactivating session | Driver settlement: the Find dialog's Ok was clicked before the search key's own blur round trip had landed, so the query ran unfiltered |
+
+### Run 33591572610 - a silent failure made loud
+
+The repair from run 33589524866 did not hold: the modern capture reached the
+same step and failed the same way, and the uploaded probe for the deactivating
+session showed the window reporting `Data requeried 1/18` on
+`Chemical Product, inc`. Eighteen is the whole GardenWorld business partner
+list, so the lookup ran with **no criteria at all**.
+
+That the same step failed twice ruled out the settlement race as the whole
+story. The remaining defect is in the predicate rather than in the number of
+waits: `url.contains("/zkau")` does not identify the request being waited for.
+ZK 10 keeps its own `/zkau` traffic in flight - polling, echoes, timers - so the
+wait can be satisfied by a request that carries nothing of ours.
+
+The deeper problem is that an uncommitted key fails **silently**. FindWindow
+simply queries unfiltered, the window opens on someone else's record, and the
+driver only notices later and somewhere else, as a wrong-record assertion that
+names neither the dialog nor the key. Two capture runs were spent on a symptom
+whose cause was never reported.
+
+So the wait now requires an **accepted** (`response.ok()`) `/zkau` response
+whose own request body carries the search key, matched against the body both raw
+and URL-decoded because ZK `encodeURIComponent`s each AU datum. That is direct
+evidence the server received the key; it cannot be satisfied by unrelated
+traffic; and when the key genuinely never leaves the browser, the driver now
+fails there, with that named cause, instead of opening the wrong record.
+
+A code review of the repair raised three defects, all fixed before commit: the
+raw-`contains` match was blind to ZK's percent-encoding and would have called a
+committed key uncommitted for any fixture value outside the unreserved character
+set; the predicate ignored `response.status()`, so a server-side **rejection** of
+the AU request would have been certified as a successful commit - the one way
+this change could have masked a genuine modern divergence; and the keystroke ran
+inside the guarded block, so a press that failed its own actionability checks
+would have been reported as a network commit failure. A `TimeoutError` raised
+before the press completes is now rethrown unchanged.
 
 ### Run 33589524866 - the first modern business write
 
