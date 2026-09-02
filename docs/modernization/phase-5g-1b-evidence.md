@@ -209,6 +209,7 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33584462937](https://github.com/samqbush/adempiere2/actions/runs/33584462937) | 32m10s; legacy regression **green**, routed lane prepared, ambient census **passed**, modern capture A driving | Driver defect: `ZkCe10Dialect.signIn` navigated to the bare origin instead of `/webui/`, so the browser landed on ADempiere's `/admin/` page |
 | [33586831680](https://github.com/samqbush/adempiere2/actions/runs/33586831680) | 31m31s; modern login, role, menu and the Business Partner window all rendered, `served=modern`, steps 0-1 measured; failed clicking Save | **First modern runtime defect**: `NumberBox` attached its calculator handlers with ZK 3.6's `setAction`, which ZK 10 rejects at render time, and the resulting error overlay intercepted the click |
 | [33683942292](https://github.com/samqbush/adempiere2/actions/runs/33683942292) | 37m33s; **the first modern business write in the programme, and the first scored comparison** | Both modern captures drove all twelve steps and scoring ran. `semantic-facts.tsv` and `concurrency-facts.tsv` match the frozen legacy answer **byte for byte**, including the headline refused conflicting save. Four failure classes remain: `C_BPartner.SalesRep_ID` null against the frozen `101`; `AD_WF_Process` and `AD_WF_Activity` carrying `AD_Client_ID=11` and `CreatedBy=101` against the frozen `0`; and two undeclared, A/B-nondeterministic browser errors |
+| [33691649424](https://github.com/samqbush/adempiere2/actions/runs/33691649424) | 34m24s; **the probe run: both remaining defect classes root-caused** | Three of the four classes still fail, down from four, and they reduce to two mechanisms: `c_bpartner.salesrep_id`, and the `ad_wf_process` and `ad_wf_activity` attribution rows, which share one cause. The undeclared browser errors did not recur - both captures emitted only the declared theme 404 - so that class was an intermittent race, not a constant. The context probe measured both runtimes at the points that decide the other two, and the answer is not the server-push guard: modern's `GridField.getDefault` holds a full session context, client 11 and user 101, that simply has no `#SalesRep_ID` in it, and modern's `MWorkflow.getDocValue` cache reload happens inside the user's session where legacy's happens on `main` at webapp startup with an empty context |
 | [33679068657](https://github.com/samqbush/adempiere2/actions/runs/33679068657) | 35m18s; **root cause located** | `atClickWidgetDisabled=true` on the failing page against `false` on the working one, with `postHandlerQueued` 1 against 2. ZK's `Toolbarbutton.doClick_` discards a click on a `_disabled` widget silently. The button reads enabled thirty seconds later, which is why every earlier probe found it healthy. Fixed by awaiting ZK's own enabled state before clicking |
 | [33673776776](https://github.com/samqbush/adempiere2/actions/runs/33673776776) | 38m22s; same failure, same step; **the click reaches ZK and ZK sends nothing** | `zk.dragging` was never set and the click propagated all the way to `document`, where ZK's single delegated click listener lives, with its `ignoreClick()` guard false - on both pages. Everything outside ZK is excluded. What remains unobserved is the inside of ZK's handler at click time: `Toolbarbutton.doClick_`'s silent `_disabled` return and `fireX`'s silent `evt.stop()` return, neither of which the 30-seconds-later dump can speak to |
 | [33669560347](https://github.com/samqbush/adempiere2/actions/runs/33669560347) | 30m27s; same failure, same step; **the witnessed axes are identical, the toolbars are not** | A trusted DOM click reached the Save anchor on both pages, with no popup, no mask, and `disabledRequest`, the AU queue, `ajaxReq` and `pendingReqInf` healthy on both - yet only the primary sent its `onClick`. The Save controls differ in `sclass`: three disable-enable cycles on the primary against one on the deactivate page. The stale-node reading was retracted - ZK delegates clicks from `document` - leaving `zk.dragging` and an in-flight `stopPropagation` |
@@ -223,6 +224,109 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33598342557](https://github.com/samqbush/adempiere2/actions/runs/33598342557) | 33m; legacy lane green end to end; modern capture A completed steps 0-9 for the third run running, and failed at the same step | The search key **was** committed - the new guard did not fire - so the wrong *field* was being filled: the dialog locator took `.first()` of a union that also matches the window behind it, and the Business Partner window has its own field captioned "Search Key" |
 | [33591572610](https://github.com/samqbush/adempiere2/actions/runs/33591572610) | 33m; legacy lane green end to end; modern capture A again completed steps 0-9 and again failed positioning the deactivating session | The awaited `/zkau` response did not identify the request being waited for, so ZK 10's own in-flight traffic could satisfy it; an uncommitted search key then failed **silently** as an unfiltered query |
 | [33589524866](https://github.com/samqbush/adempiere2/actions/runs/33589524866) | 33m; **the modern runtime completed steps 0-9**, including `create` (7 rows), `update`, the concurrency pair and `duplicate-submit`; failed positioning the deactivating session | Driver settlement: the Find dialog's Ok was clicked before the search key's own blur round trip had landed, so the query ran unfiltered |
+
+### Run 33691649424 - both remaining classes measured, and neither is the guard
+
+The context probe ran on both lanes. It refuted the leading hypothesis outright
+and replaced it with two measured mechanisms, which are different from each
+other and neither of which is the server-push guard.
+
+Three of the four scored classes still fail - `c_bpartner.salesrep_id`, and the
+`ad_wf_process` and `ad_wf_activity` attribution rows, which are two classes with
+one cause. The fourth stopped failing.
+
+**The undeclared browser errors did not recur.** Both captures emitted only the
+declared theme 404 - eight rows each, identical - so the class scored clean and
+the A/B self-diff passed. Run 33683942292's 503 and 403 were therefore an
+intermittent race, not a constant, and the forensics above stand as the account
+of what they were rather than of what always happens. That is a reliability
+finding, not a resolved one: an intermittent undeclared error is still a failure
+whenever it lands, and this increment does not claim otherwise. The new
+`browser-error-timeline.tsv` exists so that the next recurrence is attributable
+to a step and a session instead of being re-derived from Tomcat logs. Its six
+tab-separated columns are `instant`, `session`, `after_step_sequence`,
+`after_step_id`, `http_status`, `url`. The step columns name the last step the
+ledger **completed**, not the one in progress: every `step(...)` call in the flow
+runs after that step's browser actions have returned, so a row brackets its
+error between two rendezvous points rather than claiming a single one.
+
+**`SalesRep_ID`: the modern session context is authenticated and incomplete.**
+
+```
+legacy: where=GridField.getDefault ColumnName=SalesRep_ID ctxSize=313 client=11 user=101 hashSalesRep=101
+modern: where=GridField.getDefault ColumnName=SalesRep_ID ctxSize=317 client=11 user=101 hashSalesRep=null
+```
+
+Both threads hold a real session context of comparable size, with the same
+client and the same user. The modern one has no `#SalesRep_ID` in it at all, so
+step (e) of `GridField.getDefault` resolves nothing and an `_ID` column with no
+resolution returns null. The context is not empty and the guard is not
+implicated.
+
+The cause is in this increment's own lineage rather than in ZK. `Login` sets
+`#AD_User_Name`, `#AD_User_ID` and `#SalesRep_ID` together, in both of its role
+loops. `CohortHandoff.apply` - the Phase 5e handoff that rebuilds a modern
+session's identity from the ticket instead of from the role panel - mirrors that
+block and reproduced only the first two. It is a real modern defect, it is fixed
+in this branch by setting `#SalesRep_ID` from the ticket identity exactly as
+`Login` does, and the loop's one other write, `#SysAdmin`, is deliberately not
+mirrored: `APanel.java:466` is its only reader and it is Swing-only.
+
+**Workflow attribution: a JVM-wide cache poisoned at startup by a webapp the
+modern lane does not deploy.**
+
+```
+legacy: where=MWorkflow.getDocValue-reload AD_Client_ID=0  AD_Table_ID=54844 ctxSize=0   thread=main
+legacy: where=MWFProcess.new AD_Workflow_ID=131 ctx=id368603167 ctxSize=0 client=0 user=0 thread=Thread-6
+modern: where=MWorkflow.getDocValue-reload AD_Client_ID=11 AD_Table_ID=566   ctxSize=83  thread=Thread-3
+modern: where=MWFProcess.new AD_Workflow_ID=131 ctx=id257654665 ctxSize=83 client=11 user=101 thread=Thread-5
+```
+
+`MWFProcess`'s new-record constructor is `super(wf.getCtx(), 0, trxName)`, and
+`MWorkflow.getDocValue` caches its instances in the JVM-wide static
+`s_cacheDocValue`, each retaining the context of whichever caller happened to
+reload the cache. The two runtimes differ in who that caller was, and the whole
+divergence follows:
+
+- On legacy, the reload runs on `main` at `22:56:18.513`, inside webapp startup,
+  with an empty context. The trigger is verifiable in the same log burst:
+  `WebEnv.initWeb` - the `serverApps` webapp's initialisation, which Tomcat 9
+  hosts alongside `webui` - builds `Properties ctx = new Properties()` and
+  enqueues a server-started notification through `DefaultNotifier`. That save
+  reaches `DocWorkflowManager`, which calls `getDocValue` with the empty context
+  for its own table, 54844. The probe records exactly that: `AD_Client_ID=0`,
+  `AD_Table_ID=54844`, `ctxSize=0`. Every later save in every session then
+  reuses those instances, so `AD_Client_ID` and `CreatedBy` on `AD_WF_Process`
+  and `AD_WF_Activity` are 0 for the whole life of the JVM.
+- On modern, Tomcat 10 hosts `webui-modern` and `ADInterface` and **not**
+  `serverApps`. Its log contains no `WebEnv.initWeb` line at all. Nothing warms
+  the cache before the first user, so the reload happens inside the write
+  session, on `Thread-3`, holding client 11 and user 101 - and those are the
+  values the modern rows carry.
+
+**This is the class the increment cannot settle by itself.** The frozen `0/0/0`
+is not a property of the Business Partner write. It is a property of a static
+cache being poisoned by an unrelated webapp's startup notification, and the
+modern value is the one a reader would call correct. Three ways to close it
+exist and all three are oracle acts, which ADR decision 3 forbids inside a
+parity increment:
+
+1. fix the product so `MWFProcess` takes the saving context rather than the
+   cached workflow's - which moves the **legacy** answer too, and requires a
+   re-freeze;
+2. deploy `serverApps` on the modern lane so the modern JVM is poisoned
+   identically - which is reproducing an accident, and is Phase 5f/5h scope
+   besides;
+3. declare the attribution columns of these two tables a legacy startup artifact
+   rather than a business fact - which is precisely the after-the-fact
+   reclassification the design of this increment makes structurally impossible.
+
+The disposition is therefore the same one Phase 5g-1a-x established for exactly
+this shape of problem: a **separate legacy-only oracle increment**, named here
+and blocking, that decides the meaning of the workflow-attribution fact on
+legacy evidence and re-freezes if it changes it. `5g-1b` records the divergence,
+does not reclassify it, and does not claim parity on it.
+
 
 ### Run 33683942292 - the first scored modern write
 
@@ -256,6 +360,33 @@ The first three are deterministic on the modern runtime: capture A and capture B
 produced identical values, so they are a property of the runtime and not a
 flake. The fourth is not, and an A/B divergence is a self-diff failure in its own
 right regardless of what the frozen file says.
+
+**The fourth class is not a theme artifact, and the run's own logs say what it
+is.** Both undeclared rows were produced by the routed lane's own cohort
+machinery, not by ZK:
+
+- the 503 on `progress2.gif` is the router's `refuse` path. `CohortRoutingFilter`
+  answers `SC_SERVICE_UNAVAILABLE` for `redirect-in-progress` and
+  `handoff-in-progress`, which is what a static theme request racing the
+  legacy-to-modern transition receives.
+- the 403 on `/webui/zkau` is the modern application's `CohortHandoffFilter`
+  failing closed. The modern Tomcat log carries its `log.severe` verbatim twice -
+  `An unbootstrapped modern session made a request with no Phase 5e ticket` at
+  `21:50:03` and `21:52:05`. The first sits beside the ingress log's
+  `phase5e-route runtime=MODERN class=ZK_RESOURCE outcome=transition-to-context-root`
+  at `21:50:03.677`; the second sits six seconds after a modern
+  `sessionDestroyed`. Both are an ambient poll arriving at the modern origin
+  across a lifecycle boundary - the cohort transition, and logout - with a
+  session the modern container no longer knows and therefore no ticket.
+
+That is a real behavioural difference of the dual-runtime routed lane and it is
+**not** proposed for reclassification: `allowed-browser-errors.tsv` is
+`declared-subset`, these rows are undeclared, and the scorer is right to fail
+them. What is not yet established is which flow step each belongs to and whether
+either is browser-visible in a way a user would meet, because the scored file
+carries neither a step nor a session. The next run therefore also emits a
+diagnostic `browser-error-timeline.tsv`, written on both the success and the
+failure path and never scored.
 
 **Leading hypothesis for the first three, stated as a hypothesis.**
 `SessionContextListener` installs the ADempiere thread context only when the
@@ -302,7 +433,7 @@ hypothesis is actually about rather than only where it is convenient to observe:
 
 - `SessionContextListener`, per hook: the push implementation, whether it
   reported itself active, which branch the guard took, and the identity, size,
-  client, user and three `SalesRep_ID` candidates of the context the thread was
+  client, user and four `SalesRep_ID` candidates of the context the thread was
   holding - including all five dispose paths. Each teardown carries a `caller=` label and
   the same field set as an install, because the three unconditional teardowns -
   `ExecutionCleanup`, `EventThreadCleanup` and `DesktopCleanup` - are otherwise

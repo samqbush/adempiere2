@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -64,6 +65,23 @@ public final class BusinessPartnerWriteFlow {
 
 	private static final String WINDOW = "Business Partner";
 
+	/**
+	 * The last step the ledger COMPLETED, for the diagnostic error timeline only.
+	 *
+	 * <p>Not the step in progress. Every {@code step(...)} call in this flow runs
+	 * after that step's browser actions have returned, so the honest reading of a
+	 * timeline row is "after this step completed and before the next one did",
+	 * which brackets an error between two rendezvous points. Naming it for what
+	 * it is beats introducing a twelfth-hand begin marker at every call site.
+	 *
+	 * <p>Volatile because Playwright delivers response events on its own thread
+	 * while the driver thread advances the ledger.
+	 */
+	private volatile String lastCompletedStep = "-1\tbefore-login";
+
+	/** Diagnostic only; never scored. See {@link #recordErrorTimeline}. */
+	private final List<String> errorTimeline = new ArrayList<>();
+
 	private final ZkDialect dialect;
 	private final WriteCaptureConfig config;
 
@@ -96,6 +114,7 @@ public final class BusinessPartnerWriteFlow {
 				BrowserContext context = dialect.newContext(browser, baseUrl)) {
 			Page page = context.newPage();
 			dialect.recordTraffic(page, requests, errors, this::normalizedUrl);
+			recordErrorTimeline(page, "primary");
 
 			// Diagnostics are captured HERE, inside the resource scope, not in
 			// the outer handler. A try-with-resources closes its resources
@@ -159,6 +178,7 @@ public final class BusinessPartnerWriteFlow {
 			try (BrowserContext secondContext = dialect.newContext(browser, baseUrl)) {
 				Page second = secondContext.newPage();
 				dialect.recordTraffic(second, requests, errors, this::normalizedUrl);
+			recordErrorTimeline(second, "second");
 
 				// Inner guard for the same reason as the primary session's: a
 				// try-with-resources closes its context BEFORE any catch runs,
@@ -229,6 +249,7 @@ public final class BusinessPartnerWriteFlow {
 			try (BrowserContext duplicateContext = dialect.newContext(browser, baseUrl)) {
 				Page fourth = duplicateContext.newPage();
 				dialect.recordTraffic(fourth, requests, errors, this::normalizedUrl);
+			recordErrorTimeline(fourth, "fourth");
 				try {
 					dialect.signIn(fourth, baseUrl, config.secondUser(),
 							config.secondPassword(), config.client(),
@@ -268,6 +289,7 @@ public final class BusinessPartnerWriteFlow {
 			try (BrowserContext deactivateContext = dialect.newContext(browser, baseUrl)) {
 				Page third = deactivateContext.newPage();
 				dialect.recordTraffic(third, requests, errors, this::normalizedUrl);
+			recordErrorTimeline(third, "third");
 				try {
 					dialect.signIn(third, baseUrl, config.user(), config.password(),
 							config.client(), "deactivating session's");
@@ -304,6 +326,9 @@ public final class BusinessPartnerWriteFlow {
 			// diagnostic copies; the scored files are still written, from the
 			// same lists, on the success path below.
 			writeQuietly(evidenceDir.resolve("browser-errors-at-failure.tsv"), errors);
+			synchronized (errorTimeline) {
+				writeQuietly(evidenceDir.resolve("browser-error-timeline.tsv"), errorTimeline);
+			}
 			writeQuietly(evidenceDir.resolve("network-requests-at-failure.tsv"), requests);
 			// Publish before rethrowing. An orchestrator blocked on the next
 			// rendezvous has no other way to learn the browser has died, and a
@@ -328,6 +353,10 @@ public final class BusinessPartnerWriteFlow {
 				requests, StandardCharsets.UTF_8);
 		Files.write(evidenceDir.resolve("browser-errors.tsv"),
 				errors, StandardCharsets.UTF_8);
+		synchronized (errorTimeline) {
+			Files.write(evidenceDir.resolve("browser-error-timeline.tsv"),
+					errorTimeline, StandardCharsets.UTF_8);
+		}
 	}
 
 	/**
@@ -374,9 +403,40 @@ public final class BusinessPartnerWriteFlow {
 	 * Hands step {@code sequence} to the orchestrator and blocks until it has
 	 * snapshotted. Returns the flow ledger row for the step.
 	 */
+	/**
+	 * Records every browser-visible HTTP error against the step in progress and
+	 * the session that saw it.
+	 *
+	 * <p>Diagnostic only, and deliberately separate from the scored
+	 * {@code browser-errors.tsv}, whose format and comparison semantics are
+	 * frozen. Run 33683942292 produced two undeclared errors -- a 503 on a theme
+	 * image in capture A and a 403 on {@code /webui/zkau} in capture B -- and
+	 * the scored file, which carries neither a step nor a session, could not say
+	 * which part of the flow either belonged to. Correlating them with the
+	 * routed lane's own transition and teardown is the whole diagnosis, so the
+	 * timeline records the step, the session and a wall-clock instant that lines
+	 * up with both Tomcat logs.
+	 *
+	 * <p>Six tab-separated columns: {@code instant}, {@code session},
+	 * {@code after_step_sequence}, {@code after_step_id}, {@code http_status},
+	 * {@code url}.
+	 */
+	private void recordErrorTimeline(Page page, String sessionLabel) {
+		page.onResponse(response -> {
+			if (response.status() >= 400) {
+				synchronized (errorTimeline) {
+					errorTimeline.add(Instant.now() + "\t" + sessionLabel + "\t"
+							+ lastCompletedStep + "\t" + response.status() + "\t"
+							+ normalizedUrl(response.url()));
+				}
+			}
+		});
+	}
+
 	private String step(StepRendezvous rendezvous, int sequence, String stepId) {
 		rendezvous.request(sequence, stepId);
 		rendezvous.awaitAcknowledgement(sequence, stepId, RENDEZVOUS_TIMEOUT);
+		lastCompletedStep = sequence + "\t" + stepId;
 		return sequence + "\t" + stepId;
 	}
 
