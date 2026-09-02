@@ -326,8 +326,10 @@ runtime; a capture that did not record its restore; two captures sharing one
 restore; a missing or failing ambient census; a step ledger short of the frozen
 one; a scorer left in freeze mode; a frozen contract edited out from under the
 scorer; a re-frozen contract that agrees with its own regenerated manifest; a
-missing or failing H6 row; an unobserved session lifecycle; a second modern
-deployment; a JUnit report that is absent, empty, ran zero tests, or failed.
+missing or failing H6 row; an unobserved session lifecycle; an unquiesced
+performance-goal recalculation in this lane or in the legacy lane the seed came
+from; a second modern deployment; a JUnit report that is absent, empty, ran zero
+tests, or failed.
 
 A fail-closed check that silently never fires is worse than no check: it accepts
 what it should refuse, quietly, forever. So
@@ -335,7 +337,7 @@ what it should refuse, quietly, forever. So
 tree the validator must accept, then mutates it once per defect class and
 requires a rejection each time.
 
-**25 injected defect classes, all rejected.**
+**27 injected defect classes, all rejected.**
 
 The proof was itself verified, not asserted. The increment's central governance
 guard - that a parity branch may not re-freeze the answer it is scored against -

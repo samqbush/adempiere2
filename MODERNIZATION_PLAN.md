@@ -1094,7 +1094,7 @@ proof of routing.
 ./gradlew phase5g1bFinalVerification --dependency-verification=strict
 ```
 
-It proves the runtime evidence validator rejects all 17 declared defect classes -
+It proves the runtime evidence validator rejects all 27 declared defect classes -
 a fail-closed check that silently never fires is worse than no check, because it
 accepts what it should refuse, quietly, forever - and asserts the lane invariants
 that keep a parity increment from producing the answer it is scored against. It
