@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.UnaryOperator;
 
 import org.adempiere.webui.phase5d.BrowserSemanticContract;
@@ -657,11 +658,21 @@ public final class ZkCe10Dialect implements ZkDialect {
 		// same TimeoutError as an unanswered wait, and reporting that as "the
 		// key was never sent" would assert a cause nobody observed.
 		boolean[] pressed = {false};
+		String[] committed = {null};
 		try {
 			page.waitForResponse(
-					response -> response.request().url().contains("/zkau")
-							&& response.ok()
-							&& commitsValue(response.request().postData(), value),
+					response -> {
+						if (!response.request().url().contains("/zkau")
+								|| !response.ok()) {
+							return false;
+						}
+						String target = changedWidget(response.request().postData(), value);
+						if (target == null) {
+							return false;
+						}
+						committed[0] = target;
+						return true;
+					},
 					new Page.WaitForResponseOptions().setTimeout(FIELD_SETTLE.toMillis()),
 					() -> {
 						search.press("Tab");
@@ -676,11 +687,47 @@ public final class ZkCe10Dialect implements ZkDialect {
 					+ " server never stored the criterion and the lookup would"
 					+ " have queried unfiltered", timedOut);
 		}
+
+		// WHICH widget the server was told about. The command and the value are
+		// not enough on their own: an onChange carrying the right text, sent for
+		// the wrong component, is stored somewhere FindWindow never reads, and
+		// the lookup then queries unfiltered with every earlier check satisfied
+		// -- which is exactly the state run 33631958003 reached.
+		//
+		// The comparison is possible because a ZK widget's own node carries its
+		// uuid as the element id (zk.jar!/web/js/zk/widget.ts, domAttrs_) and a
+		// subordinate node carries uuid + "-" + subId. An input is whichever of
+		// the two the mold emits -- getInputNode() is $n('real') ?? $n()
+		// (zul.jar!/web/js/zul/inp/InputWidget.ts) -- and a uuid can never
+		// contain a hyphen, because ComponentsCtrl.checkUuid rejects one. So the
+		// prefix up to the first hyphen is the addressable widget either way,
+		// and a mismatch names a driver defect instead of leaving it
+		// indistinguishable from a product one.
+		String filled = search.getAttribute("id");
+		assertEquals(uuidOf(filled), committed[0],
+				"the Find dialog's search key was committed for a different"
+						+ " widget than the one the driver filled");
 	}
 
 	/**
-	 * Whether an AU request body is an {@code onChange} that carries
-	 * {@code value}.
+	 * The element id of a ZK input, reduced to its owning widget's uuid.
+	 *
+	 * <p>ZK suffixes the ids of a widget's subordinate DOM nodes with
+	 * {@code -<name>}; the uuid itself never contains one, so trimming at the
+	 * first hyphen after the uuid yields the addressable widget.
+	 */
+	private String uuidOf(String elementId) {
+		if (elementId == null) {
+			return null;
+		}
+		int suffix = elementId.indexOf('-');
+		return suffix < 0 ? elementId : elementId.substring(0, suffix);
+	}
+
+	/**
+	 * The uuid of the widget an AU request body reports an {@code onChange} for,
+	 * when that change carries {@code value}, or {@code null} when the body
+	 * contains no such change.
 	 *
 	 * <p>Matching the body for the value alone is not the proof it looks like.
 	 * ZK CE 10 batches an AU request as {@code cmd_N} / {@code uuid_N} /
@@ -693,20 +740,33 @@ public final class ZkCe10Dialect implements ZkDialect {
 	 *
 	 * <p>So the command is paired with its own datum by index, and only
 	 * {@code onChange} counts. {@code updateChange_} is what emits it
-	 * ({@code zul.jar!/web/js/zul/inp/InputWidget.ts:1022-1062}) and it is the
-	 * event {@code FindWindow} registers on the Search Key editor, so this is
-	 * the exact transition the dialog's own query depends on.
+	 * ({@code zul.jar!/web/js/zul/inp/InputWidget.ts}), and {@code onChange} is
+	 * what applies the typed text to the server-side input. That is the
+	 * transition the dialog's query depends on: {@code FindWindow} does not
+	 * listen for it -- its {@code hasValue} family sits inside a block comment
+	 * ({@code FindWindow.java:631-641}), so the visible Search Key is a
+	 * selection-column {@code WEditor} registering only {@code ON_OK} -- and
+	 * {@code cmd_ok_Simple} reads the criterion back at Ok time with
+	 * {@code wed.getValue()}. An uncommitted {@code onChange} therefore leaves
+	 * that read stale, and the query unfiltered, with nothing else to show for
+	 * it.
 	 *
 	 * <p>Each datum is {@code encodeURIComponent}-encoded, so it is decoded
 	 * before matching. That keeps the proof independent of the fixture's
 	 * character class rather than of this particular search key.
+	 *
+	 * <p>The uuid is returned rather than a boolean so the caller can check the
+	 * change was reported for the field it filled. A body that says only "some
+	 * widget committed this text" cannot distinguish a driver that typed into
+	 * the wrong editor from a product that ignored the right one.
 	 */
-	private boolean commitsValue(String body, String value) {
+	private String changedWidget(String body, String value) {
 		if (body == null) {
-			return false;
+			return null;
 		}
 		Map<String, String> commands = new HashMap<>();
 		Map<String, String> data = new HashMap<>();
+		Map<String, String> targets = new HashMap<>();
 		for (String field : body.split("&")) {
 			int split = field.indexOf('=');
 			if (split < 0) {
@@ -718,11 +778,19 @@ public final class ZkCe10Dialect implements ZkDialect {
 				commands.put(suffix(name), decoded(raw));
 			} else if (name.endsWith("data_" + suffix(name))) {
 				data.put(suffix(name), decoded(raw));
+			} else if (name.endsWith("uuid_" + suffix(name))) {
+				targets.put(suffix(name), decoded(raw));
 			}
 		}
 		return commands.entrySet().stream()
-				.anyMatch(entry -> "onChange".equals(entry.getValue())
-						&& data.getOrDefault(entry.getKey(), "").contains(value));
+				.filter(entry -> "onChange".equals(entry.getValue())
+						&& data.getOrDefault(entry.getKey(), "").contains(value))
+				.map(entry -> targets.get(entry.getKey()))
+				// Stream.findFirst() throws on a null element, and uuid_N is
+				// omitted for a desktop-targeted command (zk.jar!/web/js/zk/au.ts).
+				.filter(Objects::nonNull)
+				.findFirst()
+				.orElse(null);
 	}
 
 	/** The batch index of an AU field name such as {@code cmd_3} or {@code data_3}. */

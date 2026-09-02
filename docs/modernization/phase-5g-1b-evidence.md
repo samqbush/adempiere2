@@ -208,10 +208,52 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33580195848](https://github.com/samqbush/adempiere2/actions/runs/33580195848) | 22m07s, failed in the **legacy** regression before the parity lane started | Latent oracle-lane flake: `PA_Goal` is a wall-clock-triggered lazy writer, so two captures that straddle an hour boundary diverge |
 | [33584462937](https://github.com/samqbush/adempiere2/actions/runs/33584462937) | 32m10s; legacy regression **green**, routed lane prepared, ambient census **passed**, modern capture A driving | Driver defect: `ZkCe10Dialect.signIn` navigated to the bare origin instead of `/webui/`, so the browser landed on ADempiere's `/admin/` page |
 | [33586831680](https://github.com/samqbush/adempiere2/actions/runs/33586831680) | 31m31s; modern login, role, menu and the Business Partner window all rendered, `served=modern`, steps 0-1 measured; failed clicking Save | **First modern runtime defect**: `NumberBox` attached its calculator handlers with ZK 3.6's `setAction`, which ZK 10 rejects at render time, and the resulting error overlay intercepted the click |
+| [33631958003](https://github.com/samqbush/adempiere2/actions/runs/33631958003) | 31m50s; **the first structurally valid modern capture** - all sessions reaching the flow were served ZK 10, and the legacy Tomcat logged nothing during it; failed positioning the *second editor*, one session earlier than before | The `onChange` guard did **not** fire, so the server was told the key. Both Tomcat logs now read cleanly against each other: legacy logs `UPPER(C_BPartner.Value) LIKE 'P5G1A-0001%'`, modern logs `MQuery[C_BPartner,Restrictions=0]` for the same driver actions. A **real modern divergence**, isolated at last on a capture that was entirely modern |
 | [33626582558](https://github.com/samqbush/adempiere2/actions/runs/33626582558) | 33m; legacy lane green end to end; modern capture A completed steps 0-9 for the fourth run running, and failed at the same step | **Lane defect, and the worst kind**: the two Tomcat logs showed the *legacy* application serving two of the four sessions of the "modern" capture. The `user-allowlisted` preset allowlists only `GardenAdmin`; the second acting identity `GardenUser` fell back to legacy. The capture reported `served=modern` truthfully, because it sampled one session out of four |
 | [33598342557](https://github.com/samqbush/adempiere2/actions/runs/33598342557) | 33m; legacy lane green end to end; modern capture A completed steps 0-9 for the third run running, and failed at the same step | The search key **was** committed - the new guard did not fire - so the wrong *field* was being filled: the dialog locator took `.first()` of a union that also matches the window behind it, and the Business Partner window has its own field captioned "Search Key" |
 | [33591572610](https://github.com/samqbush/adempiere2/actions/runs/33591572610) | 33m; legacy lane green end to end; modern capture A again completed steps 0-9 and again failed positioning the deactivating session | The awaited `/zkau` response did not identify the request being waited for, so ZK 10's own in-flight traffic could satisfy it; an uncommitted search key then failed **silently** as an unfiltered query |
 | [33589524866](https://github.com/samqbush/adempiere2/actions/runs/33589524866) | 33m; **the modern runtime completed steps 0-9**, including `create` (7 rows), `update`, the concurrency pair and `duplicate-submit`; failed positioning the deactivating session | Driver settlement: the Find dialog's Ok was clicked before the search key's own blur round trip had landed, so the query ran unfiltered |
+
+### Run 33631958003 - the first valid modern capture, and a real divergence
+
+The cohort fix worked and is visible in the evidence rather than argued:
+`runtime-identification.tsv` records `served.second-editor modern`, the identity
+that had been silently falling back to legacy. The legacy Tomcat's own log ends
+at 13:11:20 - the legacy regression - and carries nothing during the modern
+capture at 13:20. This is the first capture in the increment whose observations
+are about the program it claims.
+
+The failure moved one session *earlier*, to the second editor, which is exactly
+what the diagnosis predicted: that session had been passing because it was
+running ZK 3.6.
+
+What it exposes is a genuine modern divergence, and the two logs now state it
+without inference. For the same driver actions on the same seeded database:
+
+| | Find dialog query |
+|---|---|
+| legacy ZK 3.6 | `(UPPER(C_BPartner.Value) LIKE 'P5G1A-0001%')` |
+| modern ZK CE 10 | `MQuery[C_BPartner,Restrictions=0]` |
+
+The unkeyed window open matches on both runtimes, so the divergence is specific
+to a criterion being applied, not to the dialog as such.
+
+The sharpened commit guard did not fire, so an accepted `/zkau` carried
+`cmd=onChange` with the key: the server was told. That matters because of how
+the dialog actually reads its criterion. `FindWindow` does not listen for the
+change - its `hasValue` family sits inside a block comment
+(`FindWindow.java:631-641`), so the visible Search Key is a selection-column
+`WEditor` registering only `ON_OK` - and `cmd_ok_Simple` reads the value back at
+Ok time with `wed.getValue()`. The `onChange` is what puts the text into the
+server-side input that read returns, so an uncommitted one leaves the query
+unfiltered and nothing else to show for it. One link is still unproven,
+and it is the link that decides whether this is a product defect or a driver
+one - **which widget** the change was reported for. The guard ignored `uuid_N`,
+and an `onChange` carrying the right text for the wrong component is stored
+somewhere `FindWindow` never reads, leaving the lookup unfiltered with every
+earlier check satisfied. The guard now returns that uuid and asserts it is the
+field the driver filled, so the next run names one cause or the other instead of
+leaving them indistinguishable.
 
 ### Run 33626582558 - half the capture was the legacy application
 
