@@ -208,6 +208,7 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33580195848](https://github.com/samqbush/adempiere2/actions/runs/33580195848) | 22m07s, failed in the **legacy** regression before the parity lane started | Latent oracle-lane flake: `PA_Goal` is a wall-clock-triggered lazy writer, so two captures that straddle an hour boundary diverge |
 | [33584462937](https://github.com/samqbush/adempiere2/actions/runs/33584462937) | 32m10s; legacy regression **green**, routed lane prepared, ambient census **passed**, modern capture A driving | Driver defect: `ZkCe10Dialect.signIn` navigated to the bare origin instead of `/webui/`, so the browser landed on ADempiere's `/admin/` page |
 | [33586831680](https://github.com/samqbush/adempiere2/actions/runs/33586831680) | 31m31s; modern login, role, menu and the Business Partner window all rendered, `served=modern`, steps 0-1 measured; failed clicking Save | **First modern runtime defect**: `NumberBox` attached its calculator handlers with ZK 3.6's `setAction`, which ZK 10 rejects at render time, and the resulting error overlay intercepted the click |
+| [33653427475](https://github.com/samqbush/adempiere2/actions/runs/33653427475) | 32m49s; **the layout fix holds where it is measured** - the Active checkbox now has a real box, hit-tests to itself and clears; failed in the `deactivate` **save** | The click reached the server (`dataStatusChanged: *1/1`), and then the Save click produced **no `/zkau` request at all** - the modern access log shows nothing but empty 18-byte polls until Tomcat stopped, and `GridTable.dataSave` was never invoked. The old `saveButton` probe read `!!e.disabled` on an anchor, which is always `false`, so it had never actually reported the control state |
 | [33647155695](https://github.com/samqbush/adempiere2/actions/runs/33647155695) | 33m20s; **the event-thread fix worked** - the modern capture cleared the Find dialog, the second editor, the conflicting save and the duplicate submit, and failed at step 10 `deactivate` | The refusal is now observed on the modern runtime: the primary editor shows `*2/18` and *Current record was changed by another user, please ReQuery*. The new failure is layout, not logic - clicking the Active checkbox is intercepted by the border layout's own centre body and by the field grid, and the failure screenshot shows the field area painting blank although the DOM carries every editor |
 | [33640642306](https://github.com/samqbush/adempiere2/actions/runs/33640642306) | 33m; same failure, same session | **Root cause.** The criterion diagnostic showed `wed.getValue()` returning `P5G1A-0001` correctly - and showed `getQuery` logging `Restrictions=0` *before* `cmd_ok_Simple` ran at all. ZK 3.6 enables the event processing thread by default and ZK 5 and later do not, so `Window.doModal()` no longer blocks - it branches on `isEventThreadEnabled()` and quietly degrades the window to a non-modal mode - and `AbstractADWindowPanel.initialQuery` read `FindWindow.getQuery()` from a dialog the operator had not yet touched |
 | [33636622993](https://github.com/samqbush/adempiere2/actions/runs/33636622993) | 32m; same failure, same session | **The driver is exonerated.** The uuid assertion passed: the `onChange` carrying the key was reported for exactly the widget the driver filled. Everything observable from the browser now agrees, so the divergence is server-side and the next observation has to come from there |
@@ -216,6 +217,113 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33598342557](https://github.com/samqbush/adempiere2/actions/runs/33598342557) | 33m; legacy lane green end to end; modern capture A completed steps 0-9 for the third run running, and failed at the same step | The search key **was** committed - the new guard did not fire - so the wrong *field* was being filled: the dialog locator took `.first()` of a union that also matches the window behind it, and the Business Partner window has its own field captioned "Search Key" |
 | [33591572610](https://github.com/samqbush/adempiere2/actions/runs/33591572610) | 33m; legacy lane green end to end; modern capture A again completed steps 0-9 and again failed positioning the deactivating session | The awaited `/zkau` response did not identify the request being waited for, so ZK 10's own in-flight traffic could satisfy it; an uncommitted search key then failed **silently** as an unfiltered query |
 | [33589524866](https://github.com/samqbush/adempiere2/actions/runs/33589524866) | 33m; **the modern runtime completed steps 0-9**, including `create` (7 rows), `update`, the concurrency pair and `duplicate-submit`; failed positioning the deactivating session | Driver settlement: the Find dialog's Ok was clicked before the search key's own blur round trip had landed, so the query ran unfiltered |
+
+### Run 33653427475 - the layout fix holds, and the save goes silent
+
+The geometry probes answered the previous run's open question for the control
+that mattered. The Active checkbox now has a real box, and
+`document.elementFromPoint` at its own centre returns the checkbox itself:
+
+```
+unqField_1_0_C_BPartner_IsActive3374-real[619,613,20x20]@629,623
+    ->unqField_1_0_C_BPartner_IsActive3374-real.
+unqField_1_0_C_BPartner_AD_Client_ID3313[611,249,230x34]@725,266
+    ->unqField_1_0_C_BPartner_AD_Client_ID3313-real.z-combobox-input
+```
+
+The click landed and the dump records the checkbox as `z-checkbox-off`, where
+the previous run could not reach it at all. That is what the dropped vflex is
+evidenced to have fixed, and the claim is deliberately no wider: the probe
+samples the first 40 matches of a tab reporting 169 editors, 22 of the 38
+sampled entries hit-test to `null` because they sit outside the viewport, and
+`IsEmployee3336` still reports a `0x0` box. Those are unresolved observations
+about editors this flow does not touch, not evidence that the tab is now
+uniformly well laid out.
+
+The capture then failed one action later, saving that deactivation:
+
+```
+the record was not saved: rejected-save-still-enabled
+```
+
+**What the runtime's own logs establish.** The deactivating session queried its
+record at 16:45:13.964, and at 16:45:14.464 the modern runtime logged
+`AbstractADWindowPanel.dataStatusChanged: *1/1`. The leading `*` is the dirty
+marker, so the checkbox change reached the server and the record was pending.
+After that the modern Tomcat logged **nothing** until it was stopped at
+16:45:49, and `GridTable.dataSave` - which the same log records four times for
+the earlier saves at 16:43:40, 16:43:47, 16:44:02 and 16:44:55 - was never
+invoked. The access log agrees: the last substantive `POST /webui/zkau` is the
+2237-byte checkbox response at 16:45:14, and every request after it is an empty
+18-byte poll.
+
+So Playwright delivered a click to a control it found actionable, and the ZK
+client sent no event-carrying request. It did keep polling: the empty 18-byte
+POSTs continue every second or two until shutdown, which is weak evidence
+against a wholly dead client - though the access log cannot attribute a poll to
+a particular desktop, and three browser contexts were open. Playwright throws on
+an intercepted click, so this is not the previous defect returning; the event
+was lost after the click, on the client.
+
+**What is *not* established, and why the run could not decide it.** The failure
+dump's `saveButton` probe reported `disabled=false`, and that reading was
+worthless: it evaluated `!!e.disabled` against an `<a>` element, where
+`disabled` is not a property and the expression is unconditionally `false`. The
+probe had never reported the control's state. (The scored path was never
+affected - `saveSettled` reads `hasAttribute('disabled')`, matching how ZK CE 10
+actually renders a disabled `Toolbarbutton`, which `Toolbarbutton.domAttrs_`
+and `setDisabled` both confirm.)
+
+Reading the ZK CE 10 client sources leaves at least these four mechanisms open.
+They are not claimed to be exhaustive:
+
+1. **The ZK client is dead.** A page whose JavaScript has failed still renders,
+   still hit-tests, and still reports controls as enabled, while silently
+   sending nothing.
+2. **No server-side `onClick` listener is bound.** `Toolbarbutton.doClick_`
+   calls `fireX(evt)`, and ZK transmits an event only when the server is
+   listening for it. A widget that lost its listener fires locally and sends
+   nothing.
+3. **The widget and the DOM disagree about `disabled`.** `doClick_` returns
+   early when `_disabled` is set, and `setDisabled` only touches the DOM
+   attribute when the value actually changes (or `force` is passed) *and*
+   `this.desktop` is truthy. A state change made while the widget is detached
+   therefore leaves `_disabled` set on a control the DOM still presents as
+   enabled - which is precisely the contradiction observed.
+4. **The widget is no longer `inServer`.** `fireX` sends only when
+   `toServer || (this.inServer && this.desktop)`, so a widget detached from the
+   server-side component tree is independently sufficient for total silence.
+
+All four produce the identical symptom, and no artifact from this run
+distinguishes them, so no fix is attempted here. Three changes make the next
+run decide between them instead:
+
+- `browser-errors.tsv` and `network-requests.tsv` were written **only on the
+  success path**, so the one run in which a page-level JavaScript error is a
+  leading hypothesis discarded the console log that would have proved or
+  refuted it. They are now also written as `*-at-failure.tsv` copies from the
+  same lists. The scored files are unchanged.
+- The `saveButton` probe now reports `hasAttribute('disabled')` and
+  `aria-disabled` instead of a property that cannot exist.
+- A `saveControl` probe records the control's markup and, if ZK is alive, its
+  bound widget's `uuid`, `className`, `_disabled`, `desktop`, `inServer`,
+  `_asaps['onClick']`, both forms of `isListen('onClick')` and `_autodisable`.
+  It looks the widget up with `{exact: true}`, because `zk.Widget.$` otherwise
+  walks up the DOM and would report an *ancestor* widget's state for a control
+  whose own widget is gone; `matchesId` records the check. A `zkClientState`
+  probe records `zk`, `zAu`, `zk.processing` and `zk.mounting`.
+
+  Both forms of `isListen` are recorded because neither alone decides
+  mechanism 2: with no options it also returns true for a purely client-side
+  listener, and false for a deferrable server listener that `fireX` still
+  sends. Mechanism 3 shows as `_disabled=true` against `attrDisabled=false`,
+  and mechanism 4 as `inServer=false`. Mechanism 1 is evidenced by the console
+  log and by a stuck `processing`/`mounting` flag - *not* by a missing `zk`,
+  which a client that died mid-session would still define.
+
+All of it is observation. The dialect gains no new way to operate a control,
+and `save` still hard-fails on any non-accepted outcome, so a lost click stays
+a red lane.
 
 ### Run 33647155695 - the fix lands, and the next defect is layout
 

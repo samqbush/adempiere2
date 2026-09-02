@@ -1000,7 +1000,58 @@ public final class ZkCe10Dialect implements ZkDialect {
 		probes.put("saveButton",
 				"() => Array.from(document.querySelectorAll(\"[title='Save changes']\"))"
 						+ ".map(e => e.tagName.toLowerCase() + '#' + (e.id || '?') + '['"
-						+ " + e.className + ']disabled=' + !!e.disabled).join('|')");
+						+ " + e.className + ']attrDisabled=' + e.hasAttribute('disabled')"
+						+ " + ' aria=' + e.getAttribute('aria-disabled')).join('|')");
+		// Run 33653427475 clicked an enabled Save control and the server logged
+		// no event-carrying /zkau request. That is only explicable client-side,
+		// so record what the control actually is: its markup, and whether ZK
+		// still has a live widget bound to it that would have sent the event.
+		//
+		// Read from the widget, not from a single predicate. isListen('onClick')
+		// alone cannot answer the question: with no options it also returns true
+		// for a purely client-side listener, and false for a server listener
+		// registered as deferrable -- which fireX still sends. _asaps['onClick'],
+		// the asapOnly form, and inServer are recorded alongside it because
+		// fireX gates on all of them.
+		probes.put("saveControl", "() => {"
+				+ " const e = document.querySelector(\"[title='Save changes']\");"
+				+ " if (!e) return 'no-save-control';"
+				+ " const html = (e.outerHTML || '').slice(0, 600);"
+				+ " let w = 'no-zk';"
+				+ " try {"
+				+ "  if (window.zk && zk.Widget && zk.Widget.$) {"
+				+ "   const g = zk.Widget.$(e, {exact: true});"
+				+ "   w = g ? ('uuid=' + g.uuid + ' matchesId=' + (g.uuid === e.id)"
+				+ "        + ' class=' + g.className"
+				+ "        + ' disabled=' + g._disabled + ' desktop=' + (g.desktop ? 'yes' : 'no')"
+				+ "        + ' inServer=' + g.inServer"
+				+ "        + ' asapsClick=' + (g._asaps ? g._asaps['onClick'] : 'no-asaps')"
+				+ "        + ' listensClickAsap=' + (g.isListen"
+				+ "           ? g.isListen('onClick', {asapOnly: true}) : '?')"
+				+ "        + ' listensClickAny=' + (g.isListen ? g.isListen('onClick') : '?')"
+				+ "        + ' autodisable=' + g._autodisable)"
+				+ "     : 'no-widget-bound';"
+				+ "  }"
+				+ " } catch (err) { w = 'widget-probe-threw:' + err; }"
+				+ " return w + ' || ' + html;"
+				+ "}");
+		// Whether the ZK client is still alive at all. Note what this cannot
+		// prove: a client that died mid-session still has zk and zAu defined,
+		// so their presence refutes nothing. The load-bearing readings are the
+		// processing/mounting flags and the console log now preserved on the
+		// failure path.
+		probes.put("zkClientState", "() => {"
+				+ " const bits = [];"
+				+ " bits.push('zk=' + (typeof window.zk));"
+				+ " bits.push('zAu=' + (typeof window.zAu));"
+				+ " try { bits.push('processing=' + (window.zk && zk.processing)); }"
+				+ "  catch (err) { bits.push('processing-threw'); }"
+				+ " try { bits.push('mounting=' + (window.zk && zk.mounting)); }"
+				+ "  catch (err) { bits.push('mounting-threw'); }"
+				+ " bits.push('errorBoxes=' + document.querySelectorAll("
+				+ "  '.z-error, .z-messagebox-window, .z-loading').length);"
+				+ " return bits.join(' ');"
+				+ "}");
 		probes.put("tabPanels", "() => Array.from(document.querySelectorAll("
 				+ "'div.desktop-tabpanel')).map(e => (e.id || '?') + '#'"
 				+ " + e.className + '#titled=' + e.querySelectorAll('[title]').length"

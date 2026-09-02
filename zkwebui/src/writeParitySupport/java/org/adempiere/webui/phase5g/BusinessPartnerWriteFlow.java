@@ -296,6 +296,15 @@ public final class BusinessPartnerWriteFlow {
 				throw failure;
 			}
 		} catch (Throwable failure) {
+			// Publish the traffic and console records BEFORE rethrowing.
+			// Run 33653427475 lost them: they were written only on the success
+			// path, so the one run where a click produced no /zkau request at
+			// all -- exactly the case a page-level JavaScript error explains --
+			// discarded the console log that would have said so. These are
+			// diagnostic copies; the scored files are still written, from the
+			// same lists, on the success path below.
+			writeQuietly(evidenceDir.resolve("browser-errors-at-failure.tsv"), errors);
+			writeQuietly(evidenceDir.resolve("network-requests-at-failure.tsv"), requests);
 			// Publish before rethrowing. An orchestrator blocked on the next
 			// rendezvous has no other way to learn the browser has died, and a
 			// lane that hangs until the CI job times out produces no diagnosis.
@@ -319,6 +328,21 @@ public final class BusinessPartnerWriteFlow {
 				requests, StandardCharsets.UTF_8);
 		Files.write(evidenceDir.resolve("browser-errors.tsv"),
 				errors, StandardCharsets.UTF_8);
+	}
+
+	/**
+	 * Writes a diagnostic file, swallowing any I/O failure.
+	 *
+	 * <p>Only ever used on the failure path, and only for files no gate scores.
+	 * A diagnostic that cannot be written must not replace the failure it was
+	 * added to explain.
+	 */
+	private static void writeQuietly(java.nio.file.Path target, List<String> lines) {
+		try {
+			Files.write(target, lines, StandardCharsets.UTF_8);
+		} catch (Exception ignored) {
+			// Deliberately ignored; see the javadoc.
+		}
 	}
 
 	/**
