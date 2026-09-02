@@ -87,6 +87,12 @@ api_port=$(awk -F= '$1 == "api.port" {sub(/^[^=]*=/, ""); print; exit}' \
 # Tomcat 10 tree is not resolved here either.
 public_log="$installed_home/tomcat/logs/catalina.out"
 
+# The number of sessions BusinessPartnerWriteFlow drives, each of which records
+# its own served-runtime row. Restated here rather than derived from the file
+# being checked: counting the rows the evidence happens to contain would let a
+# capture that identified fewer sessions satisfy its own check.
+write_flow_sessions=4
+
 # The reseed primitive's container lifecycle, as an adapter -- the same wiring
 # the parity lane hands it, because the destructive rows restore the golden
 # archive underneath the SAME two runtimes and must bring both down first.
@@ -199,7 +205,8 @@ row_loopback_origin_unreached() {
 #
 # The write session's cohort decision must be recorded as MODERN with the
 # expected reason USER_ALLOWLISTED -- the reason the golden archive's baked-in
-# `user-allowlisted` cohort fixture produces, asserted here rather than merely
+# `write-parity-users` cohort fixture produces, since it allowlists the write
+# flow's two acting identities by AD_User_ID, asserted here rather than merely
 # "some MODERN line exists". The authoritative record is the one line
 # CohortDecisionInterceptor.decide() writes once per session. That interceptor
 # is a ZK 3.6 listener registered from the derived WEB-INF/zk.xml in the webui
@@ -223,6 +230,11 @@ row_loopback_origin_unreached() {
 # decision-log reason -- it can only see MODERN, not USER_ALLOWLISTED -- and the
 # evidence string says so, so the two are never conflated. If neither the
 # decision line nor a served=modern observation is present, the row fails.
+#
+# The fallback demands EVERY session's observation, not the bare `served` row.
+# Cohort routing decides per identity and the write flow uses two, so a single
+# row describes one session out of four -- which is how run 33626582558 recorded
+# served=modern while the legacy application answered half the capture.
 # ---------------------------------------------------------------------------
 row_cohort_decision_modern() {
   local expected_reason=USER_ALLOWLISTED
@@ -233,20 +245,22 @@ row_cohort_decision_modern() {
     return
   fi
   # Fallback: the served-runtime observation the driver already recorded.
-  local label id served expected
+  local label id expected sessions modern_sessions
   for label in A B; do
     id=$evidence_root/$label/runtime-identification.tsv
     [[ -f "$id" ]] || continue
-    served=$(awk -F'\t' '$1 == "served" { print $2 }' "$id")
     expected=$(awk -F'\t' '$1 == "expected" { print $2 }' "$id")
-    if [[ "$served" == modern && "$expected" == modern ]]; then
+    sessions=$(awk -F'\t' '$1 ~ /^served\./ { print $1 }' "$id" | sort -u | wc -l | tr -d ' ')
+    modern_sessions=$(awk -F'\t' '$1 ~ /^served\./ && $2 == "modern" { print $1 }' "$id" | sort -u | wc -l | tr -d ' ')
+    if [[ "$expected" == modern && "$sessions" -eq "$write_flow_sessions" \
+          && "$modern_sessions" -eq "$write_flow_sessions" ]]; then
       record h6-cohort-decision-modern pass \
-        "no decision-log line found; SERVED-runtime observation (not a decision reason) shows capture $label expected=modern served=modern"
+        "no decision-log line found; SERVED-runtime observation (not a decision reason) shows capture $label expected=modern with all $write_flow_sessions sessions served modern"
       return
     fi
   done
   record h6-cohort-decision-modern fail \
-    "no '$wanted' decision line in the public log and no capture recorded served=modern"
+    "no '$wanted' decision line in the public log and no capture recorded all $write_flow_sessions sessions served modern"
 }
 
 # ---------------------------------------------------------------------------

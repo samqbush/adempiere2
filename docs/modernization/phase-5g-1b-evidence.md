@@ -191,8 +191,10 @@ line.
 The row therefore falls back to the driver's browser-observed served runtime,
 and says so in its evidence string. That fallback is a **served-runtime**
 observation, not a decision reason - a browser can see `MODERN`, never
-`USER_ALLOWLISTED` - and the two are never conflated in the record. A row with
-neither fails. The first CI run of the smoke will settle which branch fires;
+`USER_ALLOWLISTED` - and the two are never conflated in the record. It demands
+**all four** of the write flow's sessions, not the bare `served` row: cohort
+routing decides per identity and the flow uses two, so one row is a quarter of
+the answer. A row with neither record fails. The first CI run of the smoke will settle which branch fires;
 until then this is reported as a known limit of the row, not as coverage.
 
 ## Capture run log
