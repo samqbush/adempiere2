@@ -208,6 +208,7 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33580195848](https://github.com/samqbush/adempiere2/actions/runs/33580195848) | 22m07s, failed in the **legacy** regression before the parity lane started | Latent oracle-lane flake: `PA_Goal` is a wall-clock-triggered lazy writer, so two captures that straddle an hour boundary diverge |
 | [33584462937](https://github.com/samqbush/adempiere2/actions/runs/33584462937) | 32m10s; legacy regression **green**, routed lane prepared, ambient census **passed**, modern capture A driving | Driver defect: `ZkCe10Dialect.signIn` navigated to the bare origin instead of `/webui/`, so the browser landed on ADempiere's `/admin/` page |
 | [33586831680](https://github.com/samqbush/adempiere2/actions/runs/33586831680) | 31m31s; modern login, role, menu and the Business Partner window all rendered, `served=modern`, steps 0-1 measured; failed clicking Save | **First modern runtime defect**: `NumberBox` attached its calculator handlers with ZK 3.6's `setAction`, which ZK 10 rejects at render time, and the resulting error overlay intercepted the click |
+| [33669560347](https://github.com/samqbush/adempiere2/actions/runs/33669560347) | 30m27s; same failure, same step; **the witnessed axes are identical, the toolbars are not** | A trusted DOM click reached the Save anchor on both pages, with no popup, no mask, and `disabledRequest`, the AU queue, `ajaxReq` and `pendingReqInf` healthy on both - yet only the primary sent its `onClick`. The Save controls differ in `sclass`: three disable-enable cycles on the primary against one on the deactivate page. The stale-node reading was retracted - ZK delegates clicks from `document` - leaving `zk.dragging` and an in-flight `stopPropagation` |
 | [33664809767](https://github.com/samqbush/adempiere2/actions/runs/33664809767) | 34m34s; same failure, same step; **the wire question is settled** | The `deactivate` save produced **no** AU request naming the Save control across 22 posts, while the primary's conflicting save produced one, bundled behind an `onBlur`. The click is therefore lost before ZK sends, and the server is exonerated. Every widget property remains healthy, so the search narrows to whether a DOM click reaches the anchor at all |
 | [33658582428](https://github.com/samqbush/adempiere2/actions/runs/33658582428) | 33m40s; same failure, same step, and **every client-side explanation refuted** | The Save control's widget is bound exactly to its own anchor, `class=zul.wgt.Toolbarbutton`, `disabled=false` on both the widget and the DOM, `desktop=yes`, `inServer=true`, `asapsClick=true` and listening for `onClick` in both `isListen` forms; `zk` and `zAu` are live with `processing=false`, `mounting=false`, no error boxes and **no console error**. The preserved console log carries only the six legacy-theme 404s |
 | [33653427475](https://github.com/samqbush/adempiere2/actions/runs/33653427475) | 32m49s; **the layout fix holds where it is measured** - the Active checkbox now has a real box, hit-tests to itself and clears; failed in the `deactivate` **save** | The click reached the server (`dataStatusChanged: *1/1`), and then the Save click produced **no `/zkau` request at all** - the modern access log shows nothing but empty 18-byte polls until Tomcat stopped, and `GridTable.dataSave` was never invoked. The old `saveButton` probe read `!!e.disabled` on an anchor, which is always `false`, so it had never actually reported the control state |
@@ -219,6 +220,79 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33598342557](https://github.com/samqbush/adempiere2/actions/runs/33598342557) | 33m; legacy lane green end to end; modern capture A completed steps 0-9 for the third run running, and failed at the same step | The search key **was** committed - the new guard did not fire - so the wrong *field* was being filled: the dialog locator took `.first()` of a union that also matches the window behind it, and the Business Partner window has its own field captioned "Search Key" |
 | [33591572610](https://github.com/samqbush/adempiere2/actions/runs/33591572610) | 33m; legacy lane green end to end; modern capture A again completed steps 0-9 and again failed positioning the deactivating session | The awaited `/zkau` response did not identify the request being waited for, so ZK 10's own in-flight traffic could satisfy it; an uncommitted search key then failed **silently** as an unfiltered query |
 | [33589524866](https://github.com/samqbush/adempiere2/actions/runs/33589524866) | 33m; **the modern runtime completed steps 0-9**, including `create` (7 rows), `update`, the concurrency pair and `duplicate-submit`; failed positioning the deactivating session | Driver settlement: the Find dialog's Ok was clicked before the search key's own blur round trip had landed, so the query ran unfiltered |
+
+### Run 33669560347 - the click arrives, and a retraction
+
+The three-valued witness returned the one answer that was not on the list. Both
+pages, verbatim apart from their component ids:
+
+```
+witness=domClick target=IMG phase=1 trusted=true atClickOpenComboPopups=0
+        atClickMasks=0 atClickActiveElement=zk_comp_322X
+        disabledRequest=false queuedAuRequests=0 ajaxReq=false pendingReqInf=false
+```
+
+A real DOM click reached the Save anchor on **both** pages. `trusted=true` is
+what establishes that; `target=IMG phase=1` does not corroborate it, and is
+recorded only as context - the phase is a consequence of registering the witness
+capture-phase on the anchor while the click lands on the inner image, and a
+synthetic event would report the same. No popup was open, no mask was up, and
+focus was on the button itself. ZK's send state was healthy on both:
+`disabledRequest=false` is meaningful even read late, because that flag is
+cleared in exactly one place, the `beforeunload` path, so had it ever been set
+it would still have been set.
+
+The primary page then sent its `onClick`. The `deactivate` page, identical on
+every one of these axes, sent nothing.
+
+That refutes the third path. It does **not** mean the two pages are
+indistinguishable, and the same dump shows they are not. The Save control's
+rendered class differs beyond its id: `toolbar-button` followed by four spaces
+on the primary, two on the deactivate page. That is a state counter, not
+cosmetics. `ToolBarButton.setDisabled`
+(`zkwebui/WEB-INF/src/org/adempiere/webui/component/ToolBarButton.java:38-45`)
+appends `disableFilter` on disable and, on enable, removes the word while
+leaving its separator space behind, so each disable-enable cycle adds one space.
+The primary's Save button has been through three cycles, the deactivate page's
+through one. The two toolbars did not follow the same state sequence, and no run
+has probed the toolbar enable/disable path.
+
+**A retraction.** The first reading of this run was that ZK's DOM handler must
+not be attached to the node the click arrived on. That is a category error and
+is withdrawn. ZK CE 10 does not attach per-node click handlers: `bind_`
+registers drag, flex and touch molds only, and clicks are dispatched by
+delegation from a single `document` listener installed at `zk/mount.ts:842`.
+That listener is always attached, and its widget lookup walks up from
+`evt.target` and returns on the first `_binds` hit without comparing `$n()`, so
+even a widget caching a stale node would still receive the click. A
+`widgetNodeIsClicked` probe could not have separated the two pages, and was
+dropped before it ran rather than after.
+
+**What replaces it.** Two things can silently swallow a delegated click, and
+neither has been observed:
+
+The first is `zk.dragging`. The `document` click listener's first statement is
+`if (zk.Draggable.ignoreClick()) return;`, and `ignoreClick()` is `!!zk.dragging`.
+`zk.dragging` is set when a drag begins and cleared in exactly one place - a
+timeout inside `Draggable._endDrag`. A drag that starts and never completes
+therefore leaves it set permanently, and from that moment every click on that
+page is dropped with no console error, no AU request, and every widget and `zAu`
+property still reading healthy. That is precisely the shape of this defect:
+page-scoped, total, and invisible to every axis probed so far. It is also a
+plausible thing for the `deactivate` step to have caused, since it is the step
+that clicks a checkbox rather than typing into a field.
+
+The second is a `stopPropagation` between the anchor and `document`. The witness
+is capture-phase on the target; ZK's listener is bubble-phase on `document`; the
+whole span between them is unobserved, and a stop there would fit every reading
+taken so far just as well.
+
+So the read-back now reports `zk.dragging` both at click time and afterwards -
+late is meaningful for the same reason it is for `disabledRequest` - and a
+second passive listener on `document` records whether the click ever arrived
+there. If the document witness fires on the primary and not on the deactivate
+page, the click is being stopped in flight; if `dragging` is true, the click is
+being discarded on arrival.
 
 ### Run 33664809767 - the click never reaches the wire
 

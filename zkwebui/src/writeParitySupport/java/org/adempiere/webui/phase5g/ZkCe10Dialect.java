@@ -616,7 +616,8 @@ public final class ZkCe10Dialect implements ZkDialect {
 	 */
 	private void installClickWitness(Page page, String saveComponentId) {
 		if (saveComponentId == null) {
-			page.evaluate("() => { window.__p5gWitness = ['witness-not-installed-null-id']; }");
+			page.evaluate("() => { window.__p5gWitness = ['witness-not-installed-null-id'];"
+					+ " window.__p5gDocWitness = []; }");
 			return;
 		}
 		page.evaluate("id => {"
@@ -633,9 +634,18 @@ public final class ZkCe10Dialect implements ZkDialect {
 				+ "      + ' phase=' + ev.eventPhase + ' trusted=' + ev.isTrusted"
 				+ "      + ' atClickOpenComboPopups=' + vis('.z-combobox-popup')"
 				+ "      + ' atClickMasks=' + vis('.z-modal-mask,.z-loading,.z-apply-mask')"
-				+ "      + ' atClickActiveElement=' + (a ? (a.id || a.tagName) : 'none'));"
+				+ "      + ' atClickActiveElement=' + (a ? (a.id || a.tagName) : 'none')"
+				+ "      + ' atClickDragging=' + (typeof zk === 'undefined' ? 'n/a' : !!zk.dragging)"
+				+ "      + ' atClickIgnoreClick=' + (typeof zk === 'undefined' || !zk.Draggable ? 'n/a'"
+				+ "          : !!zk.Draggable.ignoreClick()));"
 				+ "  };"
 				+ "  el.addEventListener('click', window.__p5gWitnessOn, true);"
+				+ "  window.__p5gDocWitness = [];"
+				+ "  if (window.__p5gDocWitnessOn) { document.removeEventListener('click', window.__p5gDocWitnessOn, false); }"
+				+ "  window.__p5gDocWitnessOn = ev => {"
+				+ "    window.__p5gDocWitness.push('reachedDocument fromSave=' + (el.contains(ev.target)));"
+				+ "  };"
+				+ "  document.addEventListener('click', window.__p5gDocWitnessOn, false);"
 				+ "}", saveComponentId);
 	}
 
@@ -651,6 +661,25 @@ public final class ZkCe10Dialect implements ZkDialect {
 	 * queue while another request is in flight. Neither writes to the console,
 	 * so without these four values a witnessed click would be misread as the
 	 * product declining to act.
+	 *
+	 * <p>Run 33669560347 read all four as healthy and identical on the page that
+	 * sent and the page that did not, so it also reads {@code zk.dragging}.
+	 * ZK CE 10 dispatches clicks by delegation from one {@code document}
+	 * listener, and that listener's first statement is
+	 * {@code if (zk.Draggable.ignoreClick()) return;}, which is
+	 * {@code !!zk.dragging}. {@code zk.dragging} is cleared in exactly one
+	 * place, a timeout inside {@code Draggable._endDrag}, so a drag that starts
+	 * and never completes leaves it set and every later click on that page is
+	 * dropped in silence -- no console error, no AU request, and every widget
+	 * and {@code zAu} property still reading healthy. That is the shape this
+	 * defect has. Reading it late is meaningful for the same reason it is for
+	 * {@code disabledRequest}: if it were set, it would still be set.
+	 *
+	 * <p>The companion {@code docWitness} closes the only other gap. The anchor
+	 * listener is capture-phase on the target while ZK's is bubble-phase on
+	 * {@code document}, so everything between them is unobserved; a
+	 * {@code stopPropagation} in that span would also be silent and would fit
+	 * every reading so far.
 	 */
 	private String readClickWitness(Page page) {
 		try {
@@ -662,7 +691,9 @@ public final class ZkCe10Dialect implements ZkDialect {
 					+ "    + ' disabledRequest=' + (typeof zAu === 'undefined' ? 'n/a' : !!zAu.disabledRequest)"
 					+ "    + ' queuedAuRequests=' + q"
 					+ "    + ' ajaxReq=' + (typeof zAu === 'undefined' ? 'n/a' : !!zAu.ajaxReq)"
-					+ "    + ' pendingReqInf=' + (typeof zAu === 'undefined' ? 'n/a' : !!zAu.pendingReqInf);"
+					+ "    + ' pendingReqInf=' + (typeof zAu === 'undefined' ? 'n/a' : !!zAu.pendingReqInf)"
+					+ "    + ' draggingNow=' + (typeof zk === 'undefined' ? 'n/a' : !!zk.dragging)"
+					+ "    + ' docWitness=' + ((window.__p5gDocWitness || []).join(' ; ') || 'no-document-click');"
 					+ "}");
 			return String.valueOf(value).replace("\n", " ");
 		} catch (RuntimeException e) {
