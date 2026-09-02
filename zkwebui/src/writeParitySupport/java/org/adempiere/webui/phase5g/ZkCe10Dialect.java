@@ -575,7 +575,16 @@ public final class ZkCe10Dialect implements ZkDialect {
 		// does -- which is the whole point: instrumenting zAu.send would answer
 		// the same question by altering the thing being measured.
 		try {
+			// Installed BEFORE the enablement wait, so the early
+			// save-never-enabled return below cannot leave the previous save's
+			// witness in place to be reported as this attempt's evidence. The
+			// finally reads the witness unconditionally, so an uninstalled
+			// witness would be a stale one, and a stale witness is what sent
+			// the last nine diagnoses in the wrong direction.
 			installClickWitness(page, saveComponentId);
+			if (!awaitSaveEnabled(page, saveComponentId)) {
+				return "save-never-enabled";
+			}
 			click(page, "Save changes");
 			return pollSaveOutcome(page);
 		} finally {
@@ -590,6 +599,71 @@ public final class ZkCe10Dialect implements ZkDialect {
 		}
 	}
 
+
+
+	/**
+	 * Waits until ZK considers the Save control enabled, before clicking it.
+	 *
+	 * <p>This closes the defect run 33679068657 located. On the page whose save
+	 * was silently lost the witness read {@code atClickWidgetDisabled=true} at
+	 * the moment of the click, against {@code false} on the page that saved, and
+	 * {@code Toolbarbutton.doClick_} is wrapped in {@code if (!this._disabled)}
+	 * -- so ZK received the click, dropped it, and reported nothing. The failure
+	 * dump, sampling thirty seconds later once the toolbar had caught up, read
+	 * the control as enabled, which is why nine runs of widget, transport and
+	 * server probes all came back healthy.
+	 *
+	 * <p>Playwright's own actionability checks cannot cover this. ZK CE 10 does
+	 * render {@code disabled="disabled"} on the anchor
+	 * ({@code Toolbarbutton.domAttrs_}), and ADempiere additionally marks a
+	 * disabled toolbar button with a {@code disableFilter} style class, but
+	 * Playwright treats the {@code disabled} attribute as meaningful only on
+	 * BUTTON/INPUT/SELECT/TEXTAREA/OPTION/OPTGROUP -- not on an {@code <a>} --
+	 * and ZK sets no {@code aria-disabled}. So the control is visible, stable,
+	 * enabled to {@code isEnabled()} and passes hit-testing while being, to ZK,
+	 * inert. The widget's own {@code _disabled} is read here because it is the
+	 * state {@code doClick_} actually tests, and the source from which both the
+	 * attribute and the style class are derived.
+	 *
+	 * <p>Why the control was disabled at all is a driver artifact, not a modern
+	 * product defect: the deactivating desktop's server log shows
+	 * {@code AbstractADWindowPanel.dataStatusChanged: *1/1} -- the dirty marker
+	 * that enables Save -- 476ms before the click, so the server had already
+	 * decided correctly. What raced it is that {@link #clearActive} and
+	 * {@link #clickAwaitingServer} await any {@code /zkau} response rather than
+	 * their own, and ZK CE 10 polls roughly once per 1.5s, so an ambient poll
+	 * can satisfy that wait before the update that enables Save has been
+	 * applied. Waiting on the state actually needed, rather than on a transport
+	 * event that may belong to someone else, is what closes it.
+	 *
+	 * <p>This is settlement, which is the dialect's business: locate, operate,
+	 * await. It normalizes no behavioural difference. If the runtime never
+	 * enables Save, the wait expires and the caller reports
+	 * {@code save-never-enabled}, which is not in the scored outcome vocabulary
+	 * and so fails loudly as itself rather than being retried into silence or
+	 * replaced by a driver timeout.
+	 */
+	private boolean awaitSaveEnabled(Page page, String saveComponentId) {
+		if (saveComponentId == null) {
+			return true;
+		}
+		long deadline = System.nanoTime() + SAVE_SETTLE.toNanos();
+		while (System.nanoTime() < deadline) {
+			Object enabled = page.evaluate("id => {"
+					+ "  try {"
+					+ "    const el = document.getElementById(id);"
+					+ "    if (!el) { return false; }"
+					+ "    const wd = zk.Widget.$(el, {exact: true});"
+					+ "    return !!wd && !wd._disabled;"
+					+ "  } catch (e) { return false; }"
+					+ "}", saveComponentId);
+			if (Boolean.TRUE.equals(enabled)) {
+				return true;
+			}
+			page.waitForTimeout(250);
+		}
+		return false;
+	}
 
 	/**
 	 * Installs a passive, capture-phase witness on the Save anchor.
@@ -805,6 +879,15 @@ public final class ZkCe10Dialect implements ZkDialect {
 		assertNotNull(saveComponentId,
 				"the Save control carries no ZK component id, so the replayed request "
 						+ "could not be bound to the save command");
+
+		// Hoisted ABOVE waitForRequest: this wait issues no request, and
+		// waitForRequest runs on Playwright's own 30s default, so waiting
+		// inside its callback would spend the transport budget on toolbar
+		// settlement and could time out a slow-but-working save as if the
+		// request had never been sent.
+		assertTrue(awaitSaveEnabled(page, saveComponentId),
+				"the Save control never became enabled, so the duplicate-submit "
+						+ "step had no accepted save to replay");
 
 		Request saveRequest = page.waitForRequest(
 				request -> request.url().contains("/zkau")

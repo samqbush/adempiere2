@@ -208,6 +208,7 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33580195848](https://github.com/samqbush/adempiere2/actions/runs/33580195848) | 22m07s, failed in the **legacy** regression before the parity lane started | Latent oracle-lane flake: `PA_Goal` is a wall-clock-triggered lazy writer, so two captures that straddle an hour boundary diverge |
 | [33584462937](https://github.com/samqbush/adempiere2/actions/runs/33584462937) | 32m10s; legacy regression **green**, routed lane prepared, ambient census **passed**, modern capture A driving | Driver defect: `ZkCe10Dialect.signIn` navigated to the bare origin instead of `/webui/`, so the browser landed on ADempiere's `/admin/` page |
 | [33586831680](https://github.com/samqbush/adempiere2/actions/runs/33586831680) | 31m31s; modern login, role, menu and the Business Partner window all rendered, `served=modern`, steps 0-1 measured; failed clicking Save | **First modern runtime defect**: `NumberBox` attached its calculator handlers with ZK 3.6's `setAction`, which ZK 10 rejects at render time, and the resulting error overlay intercepted the click |
+| [33679068657](https://github.com/samqbush/adempiere2/actions/runs/33679068657) | 35m18s; **root cause located** | `atClickWidgetDisabled=true` on the failing page against `false` on the working one, with `postHandlerQueued` 1 against 2. ZK's `Toolbarbutton.doClick_` discards a click on a `_disabled` widget silently. The button reads enabled thirty seconds later, which is why every earlier probe found it healthy. Fixed by awaiting ZK's own enabled state before clicking |
 | [33673776776](https://github.com/samqbush/adempiere2/actions/runs/33673776776) | 38m22s; same failure, same step; **the click reaches ZK and ZK sends nothing** | `zk.dragging` was never set and the click propagated all the way to `document`, where ZK's single delegated click listener lives, with its `ignoreClick()` guard false - on both pages. Everything outside ZK is excluded. What remains unobserved is the inside of ZK's handler at click time: `Toolbarbutton.doClick_`'s silent `_disabled` return and `fireX`'s silent `evt.stop()` return, neither of which the 30-seconds-later dump can speak to |
 | [33669560347](https://github.com/samqbush/adempiere2/actions/runs/33669560347) | 30m27s; same failure, same step; **the witnessed axes are identical, the toolbars are not** | A trusted DOM click reached the Save anchor on both pages, with no popup, no mask, and `disabledRequest`, the AU queue, `ajaxReq` and `pendingReqInf` healthy on both - yet only the primary sent its `onClick`. The Save controls differ in `sclass`: three disable-enable cycles on the primary against one on the deactivate page. The stale-node reading was retracted - ZK delegates clicks from `document` - leaving `zk.dragging` and an in-flight `stopPropagation` |
 | [33664809767](https://github.com/samqbush/adempiere2/actions/runs/33664809767) | 34m34s; same failure, same step; **the wire question is settled** | The `deactivate` save produced **no** AU request naming the Save control across 22 posts, while the primary's conflicting save produced one, bundled behind an `onBlur`. The click is therefore lost before ZK sends, and the server is exonerated. Every widget property remains healthy, so the search narrows to whether a DOM click reaches the anchor at all |
@@ -221,6 +222,86 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33598342557](https://github.com/samqbush/adempiere2/actions/runs/33598342557) | 33m; legacy lane green end to end; modern capture A completed steps 0-9 for the third run running, and failed at the same step | The search key **was** committed - the new guard did not fire - so the wrong *field* was being filled: the dialog locator took `.first()` of a union that also matches the window behind it, and the Business Partner window has its own field captioned "Search Key" |
 | [33591572610](https://github.com/samqbush/adempiere2/actions/runs/33591572610) | 33m; legacy lane green end to end; modern capture A again completed steps 0-9 and again failed positioning the deactivating session | The awaited `/zkau` response did not identify the request being waited for, so ZK 10's own in-flight traffic could satisfy it; an uncommitted search key then failed **silently** as an unfiltered query |
 | [33589524866](https://github.com/samqbush/adempiere2/actions/runs/33589524866) | 33m; **the modern runtime completed steps 0-9**, including `create` (7 rows), `update`, the concurrency pair and `duplicate-submit`; failed positioning the deactivating session | Driver settlement: the Find dialog's Ok was clicked before the search key's own blur round trip had landed, so the query ran unfiltered |
+
+### Run 33679068657 - the Save control was disabled at the instant it was clicked
+
+The three click-time readings separated the two pages on the first attempt:
+
+| | primary (saved) | deactivate (silent) |
+|---|---|---|
+| `resolvesTo` / `isSaveWidget` | `zk_comp_3222` / `true` | `zk_comp_3225` / `true` |
+| `atClickWidgetDisabled` | **`false`** | **`true`** |
+| `atClickClickLsns` | `0` | `0` |
+| `postHandlerQueued` | **`2`** | **`1`** |
+
+`Toolbarbutton.doClick_` is wrapped in `if (!this._disabled)`. The Save control
+was disabled, to ZK, at the moment the click arrived, so ZK received the click
+and discarded it without a listener running, without an error and without an AU
+request. Widget resolution succeeded on both, and no client-side `onClick`
+listener was involved on either. `postHandlerQueued` is consistent with the
+reading - 2 on the page that saved against 1 on the page that did not - but it
+is an absolute queue depth read once, post-click, on two different desktops,
+with no pre-click baseline on either, so it is corroboration and not a measured
+delta. `atClickWidgetDisabled` carries the finding on its own.
+
+This is why nine runs of probes came back healthy. Every one of them sampled the
+control from the failure dump, roughly thirty seconds after the click and after
+the settle poll had expired - by which time the toolbar had caught up and the
+button read `disabled=false`. The defect only exists in the instant the earlier
+instrumentation could not see, and the `sclass` asymmetry noted in the previous
+run - three disable-enable cycles against one - was the first visible trace of
+it.
+
+**This is a driver race, not a modern product defect, and the distinction is
+evidenced rather than assumed.** The deactivating desktop's own server log ends
+with `AbstractADWindowPanel.dataStatusChanged: *1/1` at `20:58:54.004`, and
+nothing after it until the 20:59:28 shutdown. The `*` is
+`DataStatusEvent.getMessage`'s changed marker, so the server had recognised the
+record as dirty - the condition that enables Save - within half a second of the
+checkbox click, and it emitted that status. The product's state machine reached
+the correct state, and sent it; what did not happen in time was the client
+applying it. What raced it is on the driver's side: `clearActive` and
+`clickAwaitingServer` await *any* `/zkau` response rather than their own, and ZK
+CE 10 polls roughly once per 1.5s, so an ambient 18-byte poll can satisfy that
+wait before the checkbox's own response has been applied to the toolbar. That is
+the same shape of defect this document already records for run 33591572610, on a
+runtime whose ambient traffic is far heavier than ZK 3.6's - which is why the
+legacy lane, whose `clearActive` is byte-identical and whose `awaitSaveOutcome`
+has no enablement wait at all, simply wins the race and never observed it.
+
+**Why the driver could not have caught this with an actionability check.**
+Playwright's checks are thorough but they are checks on the DOM: visible,
+stable, receives events, enabled. ZK CE 10 does render `disabled="disabled"` on
+the anchor, and ADempiere additionally adds a `disableFilter` style class - but
+Playwright treats the `disabled` attribute as meaningful only on
+BUTTON/INPUT/SELECT/TEXTAREA/OPTION/OPTGROUP, not on an `<a>`, and ZK sets no
+`aria-disabled`. The control is therefore visible, stable, hit-testable and
+`isEnabled()`-true while being, to ZK, inert.
+
+So `awaitSaveOutcome` now waits for ZK's own view of the control before
+clicking: it polls `zk.Widget.$(el, {exact: true})._disabled` - the state
+`doClick_` actually tests, and the source the attribute and the style class are
+both derived from - until the widget is enabled, within the same settle budget.
+`replaySave` takes the same wait, hoisted above its `waitForRequest` so that
+toolbar settlement is not charged against the transport budget.
+
+This is settlement, and settlement is the dialect's business - locate, operate,
+await. Waiting on the state actually needed, rather than on a transport event
+that may belong to someone else, is strictly more correct than what it replaces.
+It normalizes no behavioural difference: if the runtime never enables Save, the
+wait expires and the step reports `save-never-enabled`, which is deliberately
+**not** in the scored outcome vocabulary, so it fails loudly as itself instead
+of being retried into silence or dressed up as a driver timeout.
+
+**It also removes a false-green exposure on the headline fact.** The frozen
+answer for the conflicting save is `rejected-save-still-enabled`, and that is
+also what `pollSaveOutcome` returns when it exhausts its budget having seen no
+settlement. A Save that was ZK-disabled at click time in `attemptSave` therefore
+produced the *expected* value for the single most important fact in the oracle,
+for the wrong reason. It now produces `save-never-enabled`, which is red. The
+plan anticipated exactly this class of problem - "settlement is the hardest
+driver problem", and "a wrong wait produces a flaky capture rather than a red
+one" - and this is the first confirmed instance.
 
 ### Run 33673776776 - ZK receives the click and still sends nothing
 
