@@ -76,6 +76,13 @@ gradlew=$repo_root/gradlew
 # requiring the caller to set two identical values keeps one source of truth.
 export ADEMPIERE_PHASE5F_DB_PASSWORD=$ADEMPIERE_PHASE5D_DB_PASSWORD
 
+# Phase 5g-1b diagnostic, logging only: the same SessionContextListener probe the
+# parity lane enables, so the legacy answer this lane re-proves comes with the
+# comparison the modern divergence needs. It emits log lines and changes no
+# behaviour, and this lane scoring green against the frozen contract is the
+# proof of that. See scripts/phase5/run-write-parity-lane.sh.
+export PHASE5G_CONTEXT_PROBE_OPT=${PHASE5G_CONTEXT_PROBE_OPT:--Dadempiere.phase5g.contextProbe=true}
+
 golden_archive=$evidence_root/golden.dump
 quiesce_state=$evidence_root/quiesce-state.tsv
 goal_quiesce_state=$evidence_root/goal-quiesce-state.tsv

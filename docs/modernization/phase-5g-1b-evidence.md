@@ -208,6 +208,7 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33580195848](https://github.com/samqbush/adempiere2/actions/runs/33580195848) | 22m07s, failed in the **legacy** regression before the parity lane started | Latent oracle-lane flake: `PA_Goal` is a wall-clock-triggered lazy writer, so two captures that straddle an hour boundary diverge |
 | [33584462937](https://github.com/samqbush/adempiere2/actions/runs/33584462937) | 32m10s; legacy regression **green**, routed lane prepared, ambient census **passed**, modern capture A driving | Driver defect: `ZkCe10Dialect.signIn` navigated to the bare origin instead of `/webui/`, so the browser landed on ADempiere's `/admin/` page |
 | [33586831680](https://github.com/samqbush/adempiere2/actions/runs/33586831680) | 31m31s; modern login, role, menu and the Business Partner window all rendered, `served=modern`, steps 0-1 measured; failed clicking Save | **First modern runtime defect**: `NumberBox` attached its calculator handlers with ZK 3.6's `setAction`, which ZK 10 rejects at render time, and the resulting error overlay intercepted the click |
+| [33683942292](https://github.com/samqbush/adempiere2/actions/runs/33683942292) | 37m33s; **the first modern business write in the programme, and the first scored comparison** | Both modern captures drove all twelve steps and scoring ran. `semantic-facts.tsv` and `concurrency-facts.tsv` match the frozen legacy answer **byte for byte**, including the headline refused conflicting save. Four failure classes remain: `C_BPartner.SalesRep_ID` null against the frozen `101`; `AD_WF_Process` and `AD_WF_Activity` carrying `AD_Client_ID=11` and `CreatedBy=101` against the frozen `0`; and two undeclared, A/B-nondeterministic browser errors |
 | [33679068657](https://github.com/samqbush/adempiere2/actions/runs/33679068657) | 35m18s; **root cause located** | `atClickWidgetDisabled=true` on the failing page against `false` on the working one, with `postHandlerQueued` 1 against 2. ZK's `Toolbarbutton.doClick_` discards a click on a `_disabled` widget silently. The button reads enabled thirty seconds later, which is why every earlier probe found it healthy. Fixed by awaiting ZK's own enabled state before clicking |
 | [33673776776](https://github.com/samqbush/adempiere2/actions/runs/33673776776) | 38m22s; same failure, same step; **the click reaches ZK and ZK sends nothing** | `zk.dragging` was never set and the click propagated all the way to `document`, where ZK's single delegated click listener lives, with its `ignoreClick()` guard false - on both pages. Everything outside ZK is excluded. What remains unobserved is the inside of ZK's handler at click time: `Toolbarbutton.doClick_`'s silent `_disabled` return and `fireX`'s silent `evt.stop()` return, neither of which the 30-seconds-later dump can speak to |
 | [33669560347](https://github.com/samqbush/adempiere2/actions/runs/33669560347) | 30m27s; same failure, same step; **the witnessed axes are identical, the toolbars are not** | A trusted DOM click reached the Save anchor on both pages, with no popup, no mask, and `disabledRequest`, the AU queue, `ajaxReq` and `pendingReqInf` healthy on both - yet only the primary sent its `onClick`. The Save controls differ in `sclass`: three disable-enable cycles on the primary against one on the deactivate page. The stale-node reading was retracted - ZK delegates clicks from `document` - leaving `zk.dragging` and an in-flight `stopPropagation` |
@@ -222,6 +223,133 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33598342557](https://github.com/samqbush/adempiere2/actions/runs/33598342557) | 33m; legacy lane green end to end; modern capture A completed steps 0-9 for the third run running, and failed at the same step | The search key **was** committed - the new guard did not fire - so the wrong *field* was being filled: the dialog locator took `.first()` of a union that also matches the window behind it, and the Business Partner window has its own field captioned "Search Key" |
 | [33591572610](https://github.com/samqbush/adempiere2/actions/runs/33591572610) | 33m; legacy lane green end to end; modern capture A again completed steps 0-9 and again failed positioning the deactivating session | The awaited `/zkau` response did not identify the request being waited for, so ZK 10's own in-flight traffic could satisfy it; an uncommitted search key then failed **silently** as an unfiltered query |
 | [33589524866](https://github.com/samqbush/adempiere2/actions/runs/33589524866) | 33m; **the modern runtime completed steps 0-9**, including `create` (7 rows), `update`, the concurrency pair and `duplicate-submit`; failed positioning the deactivating session | Driver settlement: the Find dialog's Ok was clicked before the search key's own blur round trip had landed, so the query ran unfiltered |
+
+### Run 33683942292 - the first scored modern write
+
+`awaitSaveEnabled` closed the silent save. Both modern captures ran every step,
+both wrote, and the scorer compared them against `contracts/legacy-web-write-v1/`
+for the first time.
+
+**What already matches.** `semantic-facts.tsv` and `concurrency-facts.tsv` are
+identical to the frozen legacy answer. That includes
+`concurrency-conflicting-save-outcome`, the fact this increment exists to test:
+the modern runtime refuses the stale-editor save exactly as legacy does. The
+foreign-key graph and the keyed effect identities agree, and ten of the eleven
+effect documents pass. The only failing document is `create`. Three others - the
+three `*-editor-authenticated` steps - differ from the frozen text by
+`ad_session +2 rows` against `+1`, which the scorer tolerates because
+`ad_session` is declared ambient in `ambient-tables.tsv`; it is recorded here
+because it is a real, if permitted, difference in the modern lane's session
+churn.
+
+**Four failure classes remain.** They are recorded here as observations. No
+value below is reclassified, and none is proposed for the contract.
+
+| Class | Frozen | Modern | A/B |
+|---|---|---|---|
+| `c_bpartner.salesrep_id` | `101` | `<null>` | same in A and B |
+| `ad_wf_process` `ad_client_id`, `createdby`, `updatedby` | `0`, `0`, `0` | `11`, `101`, `101` | same in A and B |
+| `ad_wf_activity` `ad_client_id`, `createdby`, `updatedby` | `0`, `0`, `0` | `11`, `101`, `101` | same in A and B |
+| `browser-errors.tsv` undeclared row | - | A: `http 503 /webui/theme/default/images/zk/progress2.gif`; B: `http 403 /webui/zkau` | **differs between A and B** |
+
+The first three are deterministic on the modern runtime: capture A and capture B
+produced identical values, so they are a property of the runtime and not a
+flake. The fourth is not, and an A/B divergence is a self-diff failure in its own
+right regardless of what the frozen file says.
+
+**Leading hypothesis for the first three, stated as a hypothesis.**
+`SessionContextListener` installs the ADempiere thread context only when the
+desktop's server push is **not** active - eight of its eleven ZK lifecycle hooks
+are wrapped in `if (serverPush == null || !serverPush.isActive())`, and three
+more dispose the context unconditionally, which is the other half of the
+mechanism. Legacy
+selects `org.zkoss.zkmax.ui.comet.CometServerPush`; the modern descriptor
+selects `org.zkoss.zk.ui.impl.PollingServerPush`, because zkmax is the
+commercial edition. The two do not report `isActive()` over the same windows, so
+the guard need not take the same branch on each runtime at the same point in a
+flow.
+
+Both observed signs follow from that one mechanism, in opposite directions
+because they are read at different moments:
+
+- `SalesRep_ID` resolves from context, not from the record. `GridField.getDefault`
+  reads `m_vo.ctx` - the context captured when the tab's field descriptors were
+  built, not the saving thread's. Step (c) is out: the seed carries no
+  `DefaultValue` for `AD_Column` 4431 or for any `AD_Field` on it, and (c) is
+  entered only for a non-empty one. That leaves (d), a `P|` or `P<window>|` user
+  preference, and (e), which reads `#SalesRep_ID` and then `$SalesRep_ID`.
+  `Login` sets `#SalesRep_ID` to the logged-in user unconditionally at role
+  selection, and the frozen `salesrep_id=101` equals the frozen `createdby=101`,
+  which points at (e) - but which key actually produced it has not been
+  measured, so the probe logs all four rather than assuming one. A field VO
+  whose ctx is not the
+  session's sees none of them, and an `_ID` column with no resolution returns
+  null.
+- `MWFProcess`'s new-record constructor is `super(wf.getCtx(), 0, trxName)` -
+  the context of the **cached** `MWorkflow`, retained from whichever thread
+  first loaded workflow 131. `AD_Client_ID=0` and `CreatedBy=0` are what an
+  empty context produces; `11` and `101` are what the session context produces.
+
+That is a coherent account, but it is an account, not a measurement, and this
+document has already retracted several of those. Run 33683942292 also settles
+one thing it might otherwise be blamed on: the workflow is **not** asynchronous
+on either runtime. `MWFActivity.performWork` logs the same `POSave_<uuid>`
+transaction on both, so both start the workflow inside the save.
+
+**What the next run adds.** A logging-only probe, enabled on **both** lanes
+behind `-Dadempiere.phase5g.contextProbe=true`, placed at the points the
+hypothesis is actually about rather than only where it is convenient to observe:
+
+- `SessionContextListener`, per hook: the push implementation, whether it
+  reported itself active, which branch the guard took, and the identity, size,
+  client, user and three `SalesRep_ID` candidates of the context the thread was
+  holding - including all five dispose paths. Each teardown carries a `caller=` label and
+  the same field set as an install, because the three unconditional teardowns -
+  `ExecutionCleanup`, `EventThreadCleanup` and `DesktopCleanup` - are otherwise
+  byte-identical, and the hypothesis is stated about which windows each runtime
+  holds the context over;
+- `MWorkflow.getDocValue` on a cache **reload**, which is the measurement that
+  settles the workflow-attribution class. Workflow 131 is `WorkflowType=V`, a
+  document-value workflow, so `PO.save` reaches it through
+  `DocWorkflowManager` and `getDocValue`, which builds its instances with
+  `new Query(ctx, ...)` and never calls `MWorkflow.get`. Probing `get` alone
+  would have produced no line at all for 131. `get` is probed too, for the
+  document-process workflows that do route through it;
+- the `MWFProcess(MWorkflow, ProcessInfo, String)` constructor, so a row's
+  attribution can be matched back to the thread that loaded the workflow;
+- `GridField.getDefault` for `SalesRep_ID`, so the null is attributed to a named
+  context object and a named resolution step.
+
+The listener probe reads through a new `ServerContext.getIfPresent()` rather
+than `getCurrentInstance()`. That distinction is load-bearing twice over. The
+old accessor installed an empty context on any thread that merely read it -
+through an `initialValue()` override on the thread local - which
+would have erased the difference between "no ADempiere identity" and "a system
+context" - both report client 0 and user 0, and 0 is exactly the frozen legacy
+value the hypothesis wants to attribute to an empty context. And because the
+thread local is inheritable, reading it would also have handed that thread's
+future children a context object to share that they would otherwise not have
+had. `getCurrentInstance` still installs, exactly as before, so no caller moves.
+Moving the installation out of `initialValue()` did need care in one place:
+`ThreadLocal.get()` cannot tell an absent entry from an entry whose value is
+null, and `setCurrentInstance(null)` - which `AdempiereWebUI` and
+`TimelineEventFeed` both reach, because `SessionManager.getSessionContext`
+returns null for a removed session - used to make `getCurrentInstance` return
+null rather than an empty context. That is preserved with an explicit marker, so
+the null return, and a child thread's inheritance of it, both behave as before.
+
+The legacy freeze-off regression scoring green in the same run is a detector for
+a behaviour change that reaches a scored effect. It is not a substitute for the
+probe being read-only, which is why the probe was made read-only. It comes out
+once the question is closed.
+
+**What the answer cannot be.** If the mechanism is confirmed, the fix is not to
+relax the scorer. Nor is it obviously to remove the guard: the frozen legacy
+`0`/`0` workflow attribution is itself a product of that guard, so removing it
+would move the legacy answer too, and the legacy regression would say so. The
+disposition of a divergence that the oracle itself encodes is a governance
+question for the increment, not a driver question, and it is recorded here
+unresolved rather than settled quietly.
 
 ### Run 33679068657 - the Save control was disabled at the instant it was clicked
 

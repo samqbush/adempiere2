@@ -81,6 +81,11 @@ public class MWorkflow extends X_AD_Workflow
 		if (retValue != null)
 			return retValue;
 		retValue = new MWorkflow (ctx, AD_Workflow_ID, null);
+		// Phase 5g-1b diagnostic: a cached instance keeps this ctx for the life
+		// of the process, and MWFProcess takes its AD_Client_ID and CreatedBy
+		// from it. See Phase5gContextProbe.
+		org.compiere.util.Phase5gContextProbe.capture("MWorkflow.get-miss",
+			"AD_Workflow_ID=" + AD_Workflow_ID, ctx);
 		if (retValue.get_ID() != 0)
 			s_cache.put(AD_Workflow_ID, retValue);
 		return retValue;
@@ -155,6 +160,15 @@ public class MWorkflow extends X_AD_Workflow
 				s_cacheDocValue.put (oldKey, wfs);
 			}
 			s_log.config("#" + s_cacheDocValue.size());
+			// Phase 5g-1b diagnostic: this is the capture point that matters
+			// for a document-value workflow. Every instance built here keeps
+			// this ctx for the life of the cache entry, and MWFProcess's
+			// new-record constructor is super(wf.getCtx(), ...), so this ctx --
+			// not the saving thread's -- decides AD_Client_ID and CreatedBy on
+			// AD_WF_Process and AD_WF_Activity. See Phase5gContextProbe.
+			org.compiere.util.Phase5gContextProbe.capture("MWorkflow.getDocValue-reload",
+				"workflows=" + workflows.size() + " AD_Client_ID=" + AD_Client_ID
+					+ " AD_Table_ID=" + AD_Table_ID, ctx);
 		}
 		//	Look for Entry
 		MWorkflow[] retValue = (MWorkflow[])s_cacheDocValue.get(key);
