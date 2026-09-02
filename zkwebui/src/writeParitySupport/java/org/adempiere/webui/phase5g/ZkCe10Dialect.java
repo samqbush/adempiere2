@@ -627,6 +627,22 @@ public final class ZkCe10Dialect implements ZkDialect {
 				+ "  if (window.__p5gWitnessOn) { el.removeEventListener('click', window.__p5gWitnessOn, true); }"
 				+ "  const vis = sel => Array.from(document.querySelectorAll(sel))"
 				+ "    .filter(e => e.offsetParent !== null || e.getClientRects().length > 0).length;"
+				+ "  const resolve = t => {"
+				+ "    try {"
+				+ "      const wd = zk.Widget.$(t, {child: true});"
+				+ "      if (!wd) { return 'resolvesTo=undefined'; }"
+				+ "      const n = wd.$n ? wd.$n() : null;"
+				+ "      return 'resolvesTo=' + wd.uuid + ' isSaveWidget=' + (wd.uuid === id)"
+				+ "        + ' resolvedClass=' + (wd.className || '?')"
+				+ "        + ' resolvedInServer=' + !!wd.inServer"
+				+ "        + ' resolvedHasDesktop=' + !!wd.desktop"
+				+ "        + ' resolvedAsapClick=' + !!(wd._asaps && wd._asaps['onClick'])"
+				+ "        + ' resolvedNodeLive=' + (n ? document.contains(n) : 'no-node')"
+				+ "        + ' atClickWidgetDisabled=' + !!wd._disabled"
+				+ "        + ' atClickClickLsns=' + ((wd._lsns && wd._lsns['onClick'])"
+				+ "            ? wd._lsns['onClick'].length : 0);"
+				+ "    } catch (e) { return 'resolve-failed=' + e.name; }"
+				+ "  };"
 				+ "  window.__p5gWitnessOn = ev => {"
 				+ "    const a = document.activeElement;"
 				+ "    window.__p5gWitness.push('domClick target=' + (ev.target && ev.target.id ? ev.target.id : "
@@ -637,13 +653,17 @@ public final class ZkCe10Dialect implements ZkDialect {
 				+ "      + ' atClickActiveElement=' + (a ? (a.id || a.tagName) : 'none')"
 				+ "      + ' atClickDragging=' + (typeof zk === 'undefined' ? 'n/a' : !!zk.dragging)"
 				+ "      + ' atClickIgnoreClick=' + (typeof zk === 'undefined' || !zk.Draggable ? 'n/a'"
-				+ "          : !!zk.Draggable.ignoreClick()));"
+				+ "          : !!zk.Draggable.ignoreClick())"
+				+ "      + ' ' + resolve(ev.target));"
 				+ "  };"
 				+ "  el.addEventListener('click', window.__p5gWitnessOn, true);"
 				+ "  window.__p5gDocWitness = [];"
 				+ "  if (window.__p5gDocWitnessOn) { document.removeEventListener('click', window.__p5gDocWitnessOn, false); }"
 				+ "  window.__p5gDocWitnessOn = ev => {"
-				+ "    window.__p5gDocWitness.push('reachedDocument fromSave=' + (el.contains(ev.target)));"
+				+ "    let q = 'n/a';"
+				+ "    try { q = String(zAu.getAuRequests(zk.Desktop._dt).length); } catch (e) { q = 'unreadable'; }"
+				+ "    window.__p5gDocWitness.push('reachedDocument fromSave=' + el.contains(ev.target)"
+				+ "      + ' postHandlerQueued=' + q);"
 				+ "  };"
 				+ "  document.addEventListener('click', window.__p5gDocWitnessOn, false);"
 				+ "}", saveComponentId);
@@ -675,7 +695,29 @@ public final class ZkCe10Dialect implements ZkDialect {
 	 * defect has. Reading it late is meaningful for the same reason it is for
 	 * {@code disabledRequest}: if it were set, it would still be set.
 	 *
-	 * <p>The companion {@code docWitness} closes the only other gap. The anchor
+	 * <p>Run 33673776776 refuted both of those too, and in doing so narrowed the
+	 * defect sharply: {@code docWitness} reported that the click <em>reaches</em>
+	 * ZK's own {@code document} listener on both pages, with
+	 * {@code ignoreClick()} false. So ZK receives the click and still sends
+	 * nothing, and everything outside ZK is excluded.
+	 *
+	 * <p>What remains unobserved is the inside of ZK's own handler, and two of
+	 * its early returns are silent and are read here <em>at click time</em>,
+	 * which is the point. The failure dump samples the widget roughly thirty
+	 * seconds later, after the settle poll, by which time the toolbar has had
+	 * every opportunity to change state -- and the Save controls are known to
+	 * differ in exactly that respect, three disable-enable cycles against one.
+	 * {@code Toolbarbutton.doClick_} returns without a trace when
+	 * {@code _disabled} is set, and {@code fireX} returns without a trace when a
+	 * client-side {@code onClick} listener calls {@code evt.stop()}. Both
+	 * produce precisely the observed signature.
+	 *
+	 * <p>{@code docWitness} closes the propagation gap and now also reads the
+	 * desktop's AU queue. Its listener is registered on {@code document}
+	 * non-capture and later than ZK's, so it runs <em>after</em> ZK's whole
+	 * handler for the same click: a queue depth read there separates "fireX
+	 * never sent" from "sent, and lost downstream of the queue", which nothing
+	 * so far can do. The anchor
 	 * listener is capture-phase on the target while ZK's is bubble-phase on
 	 * {@code document}, so everything between them is unobserved; a
 	 * {@code stopPropagation} in that span would also be silent and would fit

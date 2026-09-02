@@ -208,6 +208,7 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33580195848](https://github.com/samqbush/adempiere2/actions/runs/33580195848) | 22m07s, failed in the **legacy** regression before the parity lane started | Latent oracle-lane flake: `PA_Goal` is a wall-clock-triggered lazy writer, so two captures that straddle an hour boundary diverge |
 | [33584462937](https://github.com/samqbush/adempiere2/actions/runs/33584462937) | 32m10s; legacy regression **green**, routed lane prepared, ambient census **passed**, modern capture A driving | Driver defect: `ZkCe10Dialect.signIn` navigated to the bare origin instead of `/webui/`, so the browser landed on ADempiere's `/admin/` page |
 | [33586831680](https://github.com/samqbush/adempiere2/actions/runs/33586831680) | 31m31s; modern login, role, menu and the Business Partner window all rendered, `served=modern`, steps 0-1 measured; failed clicking Save | **First modern runtime defect**: `NumberBox` attached its calculator handlers with ZK 3.6's `setAction`, which ZK 10 rejects at render time, and the resulting error overlay intercepted the click |
+| [33673776776](https://github.com/samqbush/adempiere2/actions/runs/33673776776) | 38m22s; same failure, same step; **the click reaches ZK and ZK sends nothing** | `zk.dragging` was never set and the click propagated all the way to `document`, where ZK's single delegated click listener lives, with its `ignoreClick()` guard false - on both pages. Everything outside ZK is excluded. What remains unobserved is the inside of ZK's handler at click time: `Toolbarbutton.doClick_`'s silent `_disabled` return and `fireX`'s silent `evt.stop()` return, neither of which the 30-seconds-later dump can speak to |
 | [33669560347](https://github.com/samqbush/adempiere2/actions/runs/33669560347) | 30m27s; same failure, same step; **the witnessed axes are identical, the toolbars are not** | A trusted DOM click reached the Save anchor on both pages, with no popup, no mask, and `disabledRequest`, the AU queue, `ajaxReq` and `pendingReqInf` healthy on both - yet only the primary sent its `onClick`. The Save controls differ in `sclass`: three disable-enable cycles on the primary against one on the deactivate page. The stale-node reading was retracted - ZK delegates clicks from `document` - leaving `zk.dragging` and an in-flight `stopPropagation` |
 | [33664809767](https://github.com/samqbush/adempiere2/actions/runs/33664809767) | 34m34s; same failure, same step; **the wire question is settled** | The `deactivate` save produced **no** AU request naming the Save control across 22 posts, while the primary's conflicting save produced one, bundled behind an `onBlur`. The click is therefore lost before ZK sends, and the server is exonerated. Every widget property remains healthy, so the search narrows to whether a DOM click reaches the anchor at all |
 | [33658582428](https://github.com/samqbush/adempiere2/actions/runs/33658582428) | 33m40s; same failure, same step, and **every client-side explanation refuted** | The Save control's widget is bound exactly to its own anchor, `class=zul.wgt.Toolbarbutton`, `disabled=false` on both the widget and the DOM, `desktop=yes`, `inServer=true`, `asapsClick=true` and listening for `onClick` in both `isListen` forms; `zk` and `zAu` are live with `processing=false`, `mounting=false`, no error boxes and **no console error**. The preserved console log carries only the six legacy-theme 404s |
@@ -220,6 +221,77 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33598342557](https://github.com/samqbush/adempiere2/actions/runs/33598342557) | 33m; legacy lane green end to end; modern capture A completed steps 0-9 for the third run running, and failed at the same step | The search key **was** committed - the new guard did not fire - so the wrong *field* was being filled: the dialog locator took `.first()` of a union that also matches the window behind it, and the Business Partner window has its own field captioned "Search Key" |
 | [33591572610](https://github.com/samqbush/adempiere2/actions/runs/33591572610) | 33m; legacy lane green end to end; modern capture A again completed steps 0-9 and again failed positioning the deactivating session | The awaited `/zkau` response did not identify the request being waited for, so ZK 10's own in-flight traffic could satisfy it; an uncommitted search key then failed **silently** as an unfiltered query |
 | [33589524866](https://github.com/samqbush/adempiere2/actions/runs/33589524866) | 33m; **the modern runtime completed steps 0-9**, including `create` (7 rows), `update`, the concurrency pair and `duplicate-submit`; failed positioning the deactivating session | Driver settlement: the Find dialog's Ok was clicked before the search key's own blur round trip had landed, so the query ran unfiltered |
+
+### Run 33673776776 - ZK receives the click and still sends nothing
+
+Both hypotheses were refuted, and the refutation is the most useful result the
+lane has produced. Both pages, again identical apart from ids:
+
+```
+... atClickDragging=false atClickIgnoreClick=false
+    disabledRequest=false queuedAuRequests=0 ajaxReq=false pendingReqInf=false
+    draggingNow=false docWitness=reachedDocument fromSave=true
+```
+
+`zk.dragging` was never set, so no abandoned drag is discarding clicks. And
+`docWitness=reachedDocument fromSave=true` on the failing page is the decisive
+line: nothing stops the click in flight. It propagates from the Save anchor all
+the way to `document`, which is where ZK's one delegated click listener lives,
+and that listener's guard is false.
+
+So ZK **receives** the click on the failing page and sends nothing. Everything
+outside ZK is now excluded - the driver, the DOM, the transport, the request
+queue and the server all behave identically on the page that works and the page
+that does not.
+
+What that listener does next is resolve a widget from the event target and hand
+it to `_doEvt`:
+
+```js
+if (evt.which == 1)
+  _doEvt(new zk.Event(Widget.$(evt, {child: true}), 'onClick', ...));
+```
+
+and `_doEvt` begins `var wgt = wevt.target; if (wgt && !wgt.$weave) { ... }`. If
+that resolution yielded `undefined`, `_doEvt` would return having done nothing,
+with no console error and no AU request.
+
+**That reading was drafted and withdrawn before it ran.** It does not survive
+contact with `Widget.$`, and it contradicted the retraction recorded for the
+previous run, forty lines below, which had already given the reason: the lookup
+walks up from the event target and returns on the **first** `_binds` hit, with no
+node test. Walking from the `<img>`, the `-cnt` span's sub-id branch does apply
+an `$n()`/`isAncestor` test - but failing it does not end the walk, it falls
+through to the next ancestor, which is `<a id="zk_comp_3225">`, where
+`_binds[id]` hits and returns unconditionally. Resolution cannot fail for this
+control, and the same run's `saveControl` field proves `_binds` holds the entry.
+The resolution fields are still recorded, but as confirmation, not as the
+hypothesis.
+
+**What is genuinely unobserved is the inside of ZK's handler, at click time.**
+Two of its early returns are silent, and both fit the signature exactly:
+
+- `Toolbarbutton.doClick_` begins `if (!this._disabled)`. A disabled widget
+  swallows the click and returns.
+- `fireX` runs client-side `onClick` listeners first and returns if one calls
+  `evt.stop()`.
+
+Neither has been read *when it matters*. The failure dump samples the widget
+about thirty seconds after the click, once the settle poll has expired, and
+`disabled=false` at that moment says nothing about `_disabled` during dispatch.
+That gap is not hypothetical here: the two Save controls are already known to
+differ in precisely this respect, three disable-enable cycles on the primary
+against one on the deactivate page. A toolbar that was still disabled when the
+driver clicked, and re-enabled before the dump, would produce every reading
+observed so far.
+
+So the witness now reads `_disabled` and the client `onClick` listener count from
+the resolved widget at click time, and the `document` listener - which is
+registered non-capture and later than ZK's, so it runs after ZK's whole handler
+for the same click - additionally reports the desktop's AU queue depth. A
+non-zero depth there means `fireX` did send and the loss is downstream; zero
+means it never sent. Between them, the three readings cover every remaining link
+in the chain.
 
 ### Run 33669560347 - the click arrives, and a retraction
 
