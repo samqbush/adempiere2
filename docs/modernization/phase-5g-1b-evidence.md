@@ -197,6 +197,73 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33572353340](https://github.com/samqbush/adempiere2/actions/runs/33572353340) | 30m45s, capture A fixture applied, browser not yet driven | Script defect: `psql` does not interpolate `:'var'` inside a `--command` string, so session evidence failed with `syntax error at or near ":"` |
 | [33580195848](https://github.com/samqbush/adempiere2/actions/runs/33580195848) | 22m07s, failed in the **legacy** regression before the parity lane started | Latent oracle-lane flake: `PA_Goal` is a wall-clock-triggered lazy writer, so two captures that straddle an hour boundary diverge |
 | [33584462937](https://github.com/samqbush/adempiere2/actions/runs/33584462937) | 32m10s; legacy regression **green**, routed lane prepared, ambient census **passed**, modern capture A driving | Driver defect: `ZkCe10Dialect.signIn` navigated to the bare origin instead of `/webui/`, so the browser landed on ADempiere's `/admin/` page |
+| [33586831680](https://github.com/samqbush/adempiere2/actions/runs/33586831680) | 31m31s; modern login, role, menu and the Business Partner window all rendered, `served=modern`, steps 0-1 measured; failed clicking Save | **First modern runtime defect**: `NumberBox` attached its calculator handlers with ZK 3.6's `setAction`, which ZK 10 rejects at render time, and the resulting error overlay intercepted the click |
+
+### Run 33586831680 - the first modern runtime defect
+
+The first run to drive the modern runtime through a business flow. Modern login,
+role selection, the menu tree and the Business Partner window all rendered:
+`runtime-identification.tsv` recorded `expected=modern served=modern`, the window
+carried 169 editors, the organisation combobox held the expected `Fertilizer`,
+and steps 0 and 1 (`authenticated-baseline`, `window-opened`) were measured.
+
+Capture A then failed clicking the toolbar Save button. The button itself was
+fine - Playwright resolved it and reported it "visible, enabled and stable" -
+but something was on top of it:
+
+    <div class="messages">…</div> from <div id="zk_err" class="z-error">…</div>
+    subtree intercepts pointer events
+
+The lane's failure screenshot named the cause: a ZK client error box reading
+**147 Errors**, repeating `Illegal action: onKeyPress : return calc.validate(...)`
+and `Unknown action: calc.append` / `calc.clearAll` / `calc.evaluate` /
+`calc.percentage`.
+
+`NumberBox.getCalculatorPopup()` attached its calculator handlers with
+`HtmlBasedComponent.setAction("onClick : <javascript>")`. That was ZK 3.6's way
+to register an inline client-side event handler. In ZK 5 and later `setAction`
+means something else entirely - a client-side *effect* vocabulary - so ZK 10's
+widget parser splits the string on `;`, fails to find each verb in
+`zk.eff.Actions`, and calls `zk.error` for every one. `zk.error` is what renders
+`div#zk_err.z-error`. Every numeric field on the Business Partner window
+contributed, which is how a single API change produced 147 errors and an overlay
+across the whole desktop.
+
+The repair is the ZK 5+/10 API for the same intent, `setWidgetListener(event,
+script)`, applied to all 20 call sites. The script body is compiled by
+`new Function('var event=arguments[0];' + fn)`, so the one handler that takes
+`event` and uses a top-level `return` keeps working unchanged.
+
+This is a modern **runtime** defect, the first the increment has found, and it
+is fixed in `WEB-INF/src` rather than worked around in the driver. Dismissing the
+overlay in the dialect would have been a reclassification: the errors are real,
+they are emitted by the product, and they are exactly the kind of difference the
+increment exists to surface.
+
+The legacy oracle cannot be perturbed by it. `zkwebui/build.gradle` sets
+`sourceSets.main.java.srcDirs = []` and assigns `WEB-INF/src` exclusively to the
+`modernUi` source set; `zkwebui/build.xml`'s `war` target only copies
+`${phase5d.frozen.war}`, which `scripts/phase5/materialize-legacy-webui-war.sh`
+builds in an isolated `git worktree` at the 40-hex `source_commit` recorded in
+`contracts/legacy-web-v1/capture-environment.tsv`. A dirty working tree cannot
+reach it, and the legacy freeze-off regression re-proves the frozen answer at PR
+HEAD regardless.
+
+Two residual observations were made while fixing this, neither in the write path
+and neither introduced by the repair:
+
+- **The modern calculator is functionally dead, though now silent.** ZK 5 dropped
+  ZK 3.x auto-generated component ids, so `txtCalc.getId()` returns `""` before
+  any `setId` - visible in the screenshot itself as `calc.validate('','',...)`.
+  The popup now renders without errors, but its buttons resolve
+  `document.getElementById('')` to `null`. That is an event-time `TypeError` in
+  the console, not a render-time overlay, so it cannot affect a capture. It is
+  recorded rather than fixed because repairing it means reworking `calc.js` to
+  address components by uuid, which is not this increment's claim.
+- **`WAttachment.java:147` still emits the ZK 3.x `$e(...)` helper**, which ZK 10
+  replaced with `$eval`. It runs from a `setTimeout` inside an `AuScript`, so it
+  cannot raise the overlay, and the attachment dialog is outside the Business
+  Partner write flow.
 
 ### Run 33584462937 - the context path
 
