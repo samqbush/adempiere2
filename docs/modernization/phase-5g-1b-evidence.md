@@ -187,21 +187,28 @@ observation, not a decision reason - a browser can see `MODERN`, never
 neither fails. The first CI run of the smoke will settle which branch fires;
 until then this is reported as a known limit of the row, not as coverage.
 
-## What the first capture run found
+## Capture run log
 
-Run [33570169991](https://github.com/samqbush/adempiere2/actions/runs/33570169991)
-failed at 25m24s, before any modern write, with:
+Each modern defect is fixed in its own commit citing the run it closes.
+
+| Run | Reached | Finding |
+|---|---|---|
+| [33570169991](https://github.com/samqbush/adempiere2/actions/runs/33570169991) | 25m24s, before any modern write | Lane defect: the parity lane seeded itself from the state the legacy regression left behind |
+| [33572353340](https://github.com/samqbush/adempiere2/actions/runs/33572353340) | 30m45s, capture A fixture applied, browser not yet driven | Script defect: `psql` does not interpolate `:'var'` inside a `--command` string, so session evidence failed with `syntax error at or near ":"` |
+
+### Run 33570169991 - the seed
+
+The lane's own fixture guard caught a defect in the **lane**, not the modern
+runtime:
 
 > `Phase 5g-1a fixture precondition failed: 1 business partner row(s) with a
 > P5G1A- key survived the reseed. The database was not restored from the golden
 > archive.`
 
-The lane's own fixture guard caught a defect in the **lane**, not the modern
-runtime. `phase5g1bModernWriteParitySmoke` depends on the legacy freeze-off
-regression so the oracle is re-proven at PR HEAD, and that regression finishes
-with capture B's post-write state - `P5G1A-0001` included - still in the
-database. The parity lane then took its "golden" baseline from exactly that
-state.
+`phase5g1bModernWriteParitySmoke` depends on the legacy freeze-off regression so
+the oracle is re-proven at PR HEAD, and that regression finishes with capture
+B's post-write state - `P5G1A-0001` included - still in the database. The parity
+lane then took its "golden" baseline from exactly that state.
 
 The failure was the smaller half of the problem. A lane that seeded itself this
 way would have scored the modern runtime **from a starting state the legacy
@@ -210,6 +217,15 @@ a bit-identical seed. The lane now restores the archive the legacy lane captured
 from the quiesced installed product - the same verified state that produced the
 frozen answer - and takes its own golden archive from there, failing closed if
 that archive is absent rather than seeding itself from whatever ran before it.
+
+### Run 33572353340 - session evidence
+
+The seed fix held: `Phase 5g-1a fixture preconditions satisfied`, and the
+routed ambient census passed with a clean scope. The session-evidence capture
+then failed on `psql` variable interpolation, which does not happen inside a
+`--command` string. The label is now embedded by the shell as a SQL literal,
+after being constrained to `^[A-Za-z0-9_-]+$` so a value reaching a statement
+can never carry quoting with it.
 
 ## Gates
 

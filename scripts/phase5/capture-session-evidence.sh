@@ -35,6 +35,16 @@ db_name=$3
 db_user=$4
 database_marker=$5
 label=$6
+
+# psql does not interpolate :'var' inside a --command string, so the label is
+# embedded as a SQL literal by the shell instead. It is constrained to a
+# conservative character class first: the callers pass fixed lane phase names
+# ('pre-A', 'post-logout', ...), and refusing anything else keeps a value that
+# reaches a SQL statement from ever being able to carry quoting with it.
+if [[ ! $label =~ ^[A-Za-z0-9_-]+$ ]]; then
+  echo "session evidence label '$label' must match ^[A-Za-z0-9_-]+$" >&2
+  exit 64
+fi
 out_file=$7
 
 db_password=${ADEMPIERE_PHASE5D_DB_PASSWORD:?application database password environment variable is required}
@@ -114,10 +124,9 @@ printf '# label\trecord_type\tad_session_id\tad_client_id\tad_org_id\tcreated_by
 # runtime reason.
 run_psql \
   --field-separator=$'\t' \
-  --set=lbl="$label" \
   --command="
     SELECT
-      :'lbl',
+      '$label',
       'session',
       AD_Session_ID,
       AD_Client_ID,
@@ -143,9 +152,8 @@ run_psql \
 # never has to guess which a row is.
 run_psql \
   --field-separator=$'\t' \
-  --set=lbl="$label" \
   --command="
-    SELECT :'lbl', 'ad_changelog_count',
+    SELECT '$label', 'ad_changelog_count',
       '-', '-', '-', '-', '-', '-', '-', '-', '-', '-',
       (SELECT count(*) FROM AD_ChangeLog)" >>"$out_file"
 
