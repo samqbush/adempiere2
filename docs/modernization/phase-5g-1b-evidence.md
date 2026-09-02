@@ -208,11 +208,33 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33580195848](https://github.com/samqbush/adempiere2/actions/runs/33580195848) | 22m07s, failed in the **legacy** regression before the parity lane started | Latent oracle-lane flake: `PA_Goal` is a wall-clock-triggered lazy writer, so two captures that straddle an hour boundary diverge |
 | [33584462937](https://github.com/samqbush/adempiere2/actions/runs/33584462937) | 32m10s; legacy regression **green**, routed lane prepared, ambient census **passed**, modern capture A driving | Driver defect: `ZkCe10Dialect.signIn` navigated to the bare origin instead of `/webui/`, so the browser landed on ADempiere's `/admin/` page |
 | [33586831680](https://github.com/samqbush/adempiere2/actions/runs/33586831680) | 31m31s; modern login, role, menu and the Business Partner window all rendered, `served=modern`, steps 0-1 measured; failed clicking Save | **First modern runtime defect**: `NumberBox` attached its calculator handlers with ZK 3.6's `setAction`, which ZK 10 rejects at render time, and the resulting error overlay intercepted the click |
+| [33636622993](https://github.com/samqbush/adempiere2/actions/runs/33636622993) | 32m; same failure, same session | **The driver is exonerated.** The uuid assertion passed: the `onChange` carrying the key was reported for exactly the widget the driver filled. Everything observable from the browser now agrees, so the divergence is server-side and the next observation has to come from there |
 | [33631958003](https://github.com/samqbush/adempiere2/actions/runs/33631958003) | 31m50s; **the first structurally valid modern capture** - all sessions reaching the flow were served ZK 10, and the legacy Tomcat logged nothing during it; failed positioning the *second editor*, one session earlier than before | The `onChange` guard did **not** fire, so the server was told the key. Both Tomcat logs now read cleanly against each other: legacy logs `UPPER(C_BPartner.Value) LIKE 'P5G1A-0001%'`, modern logs `MQuery[C_BPartner,Restrictions=0]` for the same driver actions. A **real modern divergence**, isolated at last on a capture that was entirely modern |
 | [33626582558](https://github.com/samqbush/adempiere2/actions/runs/33626582558) | 33m; legacy lane green end to end; modern capture A completed steps 0-9 for the fourth run running, and failed at the same step | **Lane defect, and the worst kind**: the two Tomcat logs showed the *legacy* application serving two of the four sessions of the "modern" capture. The `user-allowlisted` preset allowlists only `GardenAdmin`; the second acting identity `GardenUser` fell back to legacy. The capture reported `served=modern` truthfully, because it sampled one session out of four |
 | [33598342557](https://github.com/samqbush/adempiere2/actions/runs/33598342557) | 33m; legacy lane green end to end; modern capture A completed steps 0-9 for the third run running, and failed at the same step | The search key **was** committed - the new guard did not fire - so the wrong *field* was being filled: the dialog locator took `.first()` of a union that also matches the window behind it, and the Business Partner window has its own field captioned "Search Key" |
 | [33591572610](https://github.com/samqbush/adempiere2/actions/runs/33591572610) | 33m; legacy lane green end to end; modern capture A again completed steps 0-9 and again failed positioning the deactivating session | The awaited `/zkau` response did not identify the request being waited for, so ZK 10's own in-flight traffic could satisfy it; an uncommitted search key then failed **silently** as an unfiltered query |
 | [33589524866](https://github.com/samqbush/adempiere2/actions/runs/33589524866) | 33m; **the modern runtime completed steps 0-9**, including `create` (7 rows), `update`, the concurrency pair and `duplicate-submit`; failed positioning the deactivating session | Driver settlement: the Find dialog's Ok was clicked before the search key's own blur round trip had landed, so the query ran unfiltered |
+
+### Run 33636622993 - the driver is exonerated
+
+The new assertion did not fire. The `onChange` carrying `P5G1A-0001` was
+reported for the same widget uuid as the input the driver filled, so the browser
+did everything correctly: it located the dialog's own Search Key criterion,
+typed the value, committed it, and the server accepted the commit for that
+widget.
+
+That closes the driver-defect branch. Four browser-side properties are now
+proven together - the right dialog, the right field, an `onChange` rather than
+any other command, and the right target - and the modern query is still
+unfiltered. Whatever discards the criterion is on the server, between ZK
+applying the value to the input and `cmd_ok_Simple` reading it back with
+`wed.getValue()`.
+
+Nothing further is observable from the browser, so the next run stops trying.
+`cmd_ok_Simple` now logs each selection editor by column, by the same widget
+uuid the browser addresses, and by value, immediately before it reads them.
+Both runtimes compile that source, so a single run produces the legacy and the
+modern answer side by side instead of two runs producing one each.
 
 ### Run 33631958003 - the first valid modern capture, and a real divergence
 
