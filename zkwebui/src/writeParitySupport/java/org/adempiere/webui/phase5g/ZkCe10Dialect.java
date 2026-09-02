@@ -13,10 +13,12 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 
 import org.adempiere.webui.phase5d.BrowserSemanticContract;
@@ -83,6 +85,29 @@ import com.microsoft.playwright.options.WaitUntilState;
  * actually rendered, since a round trip through this lane is not cheap.
  */
 public final class ZkCe10Dialect implements ZkDialect {
+
+	/**
+	 * What each page's most recent save click put on the wire, for the failure
+	 * dump.
+	 *
+	 * <p>Diagnostic only: never read by a scored assertion, and never used to
+	 * decide an outcome. Written by {@link #awaitSaveOutcome} and emitted by
+	 * {@link #captureDiagnostics}.
+	 *
+	 * <p>Keyed by page rather than held as a single value, because the failing
+	 * path dumps TWO pages: a deactivate failure captures the deactivating
+	 * session and then, after the rethrow, the primary one. A single field
+	 * would report the last save attempted anywhere against whichever page was
+	 * being dumped, so {@code failure-primary.tsv} would carry another
+	 * session's record. Keyed, the primary's row is its own last save -- which
+	 * is the conflicting save, the one fact this lane most needs to be honest
+	 * about.
+	 *
+	 * <p>A page with no entry reports {@code not-recorded-for-this-page} rather
+	 * than "no save attempted": {@code replaySave} clicks Save without going
+	 * through this method, so absence means uninstrumented, not inactive.
+	 */
+	private final Map<Page, String> saveRequestsByPage = new IdentityHashMap<>();
 
 	/** Identical budgets to the legacy dialect: these are hang backstops. */
 	private static final Duration SAVE_SETTLE = Duration.ofSeconds(30);
@@ -505,8 +530,46 @@ public final class ZkCe10Dialect implements ZkDialect {
 	}
 
 	private String awaitSaveOutcome(Page page) {
-		click(page, "Save changes");
-		return pollSaveOutcome(page);
+		// Observe, without altering, whether the click emits an AU request that
+		// names the Save control. Run 33658582428 refuted every client-side
+		// explanation for a silent save -- ZK alive, the widget bound exactly to
+		// this anchor, enabled, inServer, and listening ASAP for onClick, with
+		// no console error -- which leaves two possibilities that the access log
+		// cannot separate, because a command the server answers with no UI
+		// change returns the same 18 bytes as an idle poll: either the request
+		// was never sent, or it was sent and produced no save. A zero count
+		// settles the first. A non-zero count does NOT by itself convict the
+		// product, because RequestQueueImpl can discard an AU request before any
+		// ADempiere code runs -- and note that raising org.zkoss.zk.ui.impl to
+		// FINE would not show it, since isObsolete logs nothing at any level.
+		//
+		// A listener, deliberately not waitForRequest: a wait that expires
+		// throws TimeoutError and would replace the product's own outcome with
+		// a driver timeout. This records and never decides.
+		String saveComponentId = toolbarButton(page, "Save changes").getAttribute("id");
+		List<String> seen = new ArrayList<>();
+		int[] auPosts = {0};
+		Consumer<Request> listener = request -> {
+			if (request.url().contains("/zkau") && "POST".equals(request.method())) {
+				auPosts[0]++;
+				String body = request.postData();
+				if (body != null && saveComponentId != null && body.contains(saveComponentId)) {
+					seen.add(body.length() > 400 ? body.substring(0, 400) : body);
+				}
+			}
+		};
+		page.onRequest(listener);
+		try {
+			click(page, "Save changes");
+			return pollSaveOutcome(page);
+		} finally {
+			// In the finally, so a click or poll that throws still reports what
+			// reached the wire rather than leaving the previous step's record.
+			saveRequestsByPage.put(page, saveComponentId + " auPostsFromThisPage=" + auPosts[0]
+					+ " requestsNamingSaveControl=" + seen.size()
+					+ (seen.isEmpty() ? "" : " || " + String.join(" || ", seen)));
+			page.offRequest(listener);
+		}
 	}
 
 	/**
@@ -1110,6 +1173,10 @@ public final class ZkCe10Dialect implements ZkDialect {
 				+ "  + ' z=' + s.zIndex;"
 				+ "}).join('|')");
 		List<String> lines = new ArrayList<>();
+		// Recorded in Java rather than probed from the page: it is what the
+		// browser sent, which the DOM cannot show.
+		lines.add("saveRequests\t" + saveRequestsByPage
+				.getOrDefault(page, "not-recorded-for-this-page").replace("\n", " "));
 		for (Map.Entry<String, String> probe : probes.entrySet()) {
 			String observed;
 			try {

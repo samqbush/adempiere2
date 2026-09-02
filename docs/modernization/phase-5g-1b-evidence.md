@@ -208,6 +208,7 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33580195848](https://github.com/samqbush/adempiere2/actions/runs/33580195848) | 22m07s, failed in the **legacy** regression before the parity lane started | Latent oracle-lane flake: `PA_Goal` is a wall-clock-triggered lazy writer, so two captures that straddle an hour boundary diverge |
 | [33584462937](https://github.com/samqbush/adempiere2/actions/runs/33584462937) | 32m10s; legacy regression **green**, routed lane prepared, ambient census **passed**, modern capture A driving | Driver defect: `ZkCe10Dialect.signIn` navigated to the bare origin instead of `/webui/`, so the browser landed on ADempiere's `/admin/` page |
 | [33586831680](https://github.com/samqbush/adempiere2/actions/runs/33586831680) | 31m31s; modern login, role, menu and the Business Partner window all rendered, `served=modern`, steps 0-1 measured; failed clicking Save | **First modern runtime defect**: `NumberBox` attached its calculator handlers with ZK 3.6's `setAction`, which ZK 10 rejects at render time, and the resulting error overlay intercepted the click |
+| [33658582428](https://github.com/samqbush/adempiere2/actions/runs/33658582428) | 33m40s; same failure, same step, and **every client-side explanation refuted** | The Save control's widget is bound exactly to its own anchor, `class=zul.wgt.Toolbarbutton`, `disabled=false` on both the widget and the DOM, `desktop=yes`, `inServer=true`, `asapsClick=true` and listening for `onClick` in both `isListen` forms; `zk` and `zAu` are live with `processing=false`, `mounting=false`, no error boxes and **no console error**. The preserved console log carries only the six legacy-theme 404s |
 | [33653427475](https://github.com/samqbush/adempiere2/actions/runs/33653427475) | 32m49s; **the layout fix holds where it is measured** - the Active checkbox now has a real box, hit-tests to itself and clears; failed in the `deactivate` **save** | The click reached the server (`dataStatusChanged: *1/1`), and then the Save click produced **no `/zkau` request at all** - the modern access log shows nothing but empty 18-byte polls until Tomcat stopped, and `GridTable.dataSave` was never invoked. The old `saveButton` probe read `!!e.disabled` on an anchor, which is always `false`, so it had never actually reported the control state |
 | [33647155695](https://github.com/samqbush/adempiere2/actions/runs/33647155695) | 33m20s; **the event-thread fix worked** - the modern capture cleared the Find dialog, the second editor, the conflicting save and the duplicate submit, and failed at step 10 `deactivate` | The refusal is now observed on the modern runtime: the primary editor shows `*2/18` and *Current record was changed by another user, please ReQuery*. The new failure is layout, not logic - clicking the Active checkbox is intercepted by the border layout's own centre body and by the field grid, and the failure screenshot shows the field area painting blank although the DOM carries every editor |
 | [33640642306](https://github.com/samqbush/adempiere2/actions/runs/33640642306) | 33m; same failure, same session | **Root cause.** The criterion diagnostic showed `wed.getValue()` returning `P5G1A-0001` correctly - and showed `getQuery` logging `Restrictions=0` *before* `cmd_ok_Simple` ran at all. ZK 3.6 enables the event processing thread by default and ZK 5 and later do not, so `Window.doModal()` no longer blocks - it branches on `isEventThreadEnabled()` and quietly degrades the window to a non-modal mode - and `AbstractADWindowPanel.initialQuery` read `FindWindow.getQuery()` from a dialog the operator had not yet touched |
@@ -217,6 +218,113 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33598342557](https://github.com/samqbush/adempiere2/actions/runs/33598342557) | 33m; legacy lane green end to end; modern capture A completed steps 0-9 for the third run running, and failed at the same step | The search key **was** committed - the new guard did not fire - so the wrong *field* was being filled: the dialog locator took `.first()` of a union that also matches the window behind it, and the Business Partner window has its own field captioned "Search Key" |
 | [33591572610](https://github.com/samqbush/adempiere2/actions/runs/33591572610) | 33m; legacy lane green end to end; modern capture A again completed steps 0-9 and again failed positioning the deactivating session | The awaited `/zkau` response did not identify the request being waited for, so ZK 10's own in-flight traffic could satisfy it; an uncommitted search key then failed **silently** as an unfiltered query |
 | [33589524866](https://github.com/samqbush/adempiere2/actions/runs/33589524866) | 33m; **the modern runtime completed steps 0-9**, including `create` (7 rows), `update`, the concurrency pair and `duplicate-submit`; failed positioning the deactivating session | Driver settlement: the Find dialog's Ok was clicked before the search key's own blur round trip had landed, so the query ran unfiltered |
+
+### Run 33658582428 - every client-side explanation is refuted
+
+The four mechanisms the previous run left open were named precisely so that one
+run could close them. It closed all four, and none of them is the cause.
+
+```
+saveControl    uuid=zk_comp_3225 matchesId=true class=zul.wgt.Toolbarbutton
+               disabled=false desktop=yes inServer=true asapsClick=true
+               listensClickAsap=true listensClickAny=true autodisable=undefined
+saveButton     a#zk_comp_3225[toolbar-button  z-toolbarbutton]
+               attrDisabled=false aria=null
+zkClientState  zk=function zAu=object processing=false mounting=false
+               errorBoxes=0
+```
+
+Mechanism 1 is out: `zk` and `zAu` are live, neither flag is stuck, and
+`browser-errors-at-failure.tsv` - preserved for the first time by the previous
+commit, and the reason this is decidable at all - contains **no** JavaScript
+error. Its only six entries are the legacy-theme
+`/webui/theme/default/css/themesaf.css.dsp` 404s. Mechanism 2 is out:
+`asapsClick=true` and both `isListen` forms agree the server is listening for
+`onClick` as ASAP. Mechanism 3 is out: the widget and the DOM agree the control
+is enabled. Mechanism 4 is out: `inServer=true`.
+
+`matchesId=true` rules out the one way this reading could have been an artefact
+of the probe - the widget reported is the anchor's own, not an ancestor's.
+
+The failure is otherwise identical to the previous run: nine effect documents,
+ten rendezvous acknowledgements, and `GridTable.dataSave` logged for four saves
+and never for this one.
+
+**The conflicting save is a genuine product refusal, and its missing `dataSave`
+line is expected.** Four `dataSave` lines is fewer than the number of save
+submissions that precede `deactivate`, and the gap is worth pinning down
+precisely, because `rejected-save-still-enabled` is also the frozen legacy
+answer for the conflicting save - so a modern save that silently did nothing
+would score as parity on the headline concurrency fact for the wrong reason.
+
+It did not do nothing. The refusal is `CurrentRecordModified`
+(`AD_MESSAGE_ID=53059`, `db/ddlutils/data/AD_MESSAGE.xml:1347`), whose text is
+exactly the observed `Current record was changed by another user, please
+ReQuery`. It has one producer in the tree:
+`GridTab.hasChangedCurrentTabAndParents()` at
+`base/src/org/compiere/model/GridTab.java:1034-1035`. `GridTab.dataSave` calls
+it at line 992, **before** `m_mTable.dataSave` at line 999, and on a manual
+toolbar save returns `false` immediately (lines 995-996). `GridTable.dataSave`
+is therefore never entered, and `log.info("Row=")` at `GridTable.java:1468`
+never runs. The absence of a fifth line is the *signature* of this refusal, not
+an anomaly in it.
+
+The log line's odd shape corroborates the path rather than undermining it.
+`log.saveError("CurrentRecordModified", msg, false)` stores a `ValueNamePair`
+whose name is the already-resolved text (`CLogger.java:162`);
+`AbstractADWindowPanel.onSave` then reports it through
+`Msg.getMsg(ctx, CLogger.retrieveErrorString(null))`
+(`AbstractADWindowPanel.java:1702-1707`), feeding resolved text back in as if it
+were a key - which is why the log reads `Msg.getMsg: NOT found: Current record
+was changed by another user, please ReQuery`. Had the refusal come from
+`GridTable`'s `SaveErrorDataChanged` instead, the text would have been `Could
+not save changes - data was changed after query.` (`AD_MESSAGE.xml:723`), which
+appears nowhere in this run.
+
+So the modern runtime refuses the conflicting save for the correct reason, and
+`deactivate` remains the single open defect. Noted because the two are easy to
+conflate: `GridTab.dataSave` and `GridTable.dataSave` are different methods, and
+only the latter logs.
+
+**What the refutation actually leaves.** A live, enabled, bound, ASAP-listening
+Toolbarbutton that is clicked must put an `onClick` on the wire. Either it did
+not - and no property of the widget explains why - or it did, and the product
+answered by doing nothing. The access log cannot separate those, because ZK
+answers a command that changes no UI with the same 18 bytes as an idle poll,
+and response size is all the access log records.
+
+That is one observation away from being decided, and the observation is of the
+request rather than the page. `awaitSaveOutcome` now registers a request
+listener around the click and records, for the failure dump alone, how many
+`/zkau` POSTs this page sent and how many carried the Save control's own
+component id, with a bounded prefix of each such body. `requestsNamingSaveControl=0`
+means the click never reached the wire, which is decisive on its own. A
+non-zero count means it reached the server, but it does **not** by itself
+convict the product: `RequestQueueImpl` can discard an AU request before any
+ADempiere code runs. Note that raising `org.zkoss.zk.ui.impl` to `FINE` would
+**not** cover that branch. Its `"Ignore request: {}"` line sits in a
+`ComponentNotFoundException` handler; `isObsolete` - which drops a request whose
+component belongs to another desktop - contains no logging at any level, as its
+bytecode in `/tmp/zkall` shows. This run's `desktop=yes` already makes
+`isObsolete` implausible, so the non-zero branch would need a different
+observation to be designed rather than a log level to be raised.
+
+The record is keyed by `Page`, not held in a single field, because the failing
+path dumps two pages: the deactivating session first, then the primary one
+after the rethrow. A single field would have written the deactivate session's
+record into `failure-primary.tsv` - the two dumps have different Save
+components, `zk_comp_3225` and `zk_comp_3222` - and would have destroyed the
+one measurement that bears on the unreconciled observation above. Keyed, the
+primary reports its own last save, which is the conflicting save. A page that
+attempted no save reports `no-save-attempted-on-this-page` rather than
+borrowing another page's answer.
+
+It is a listener rather than a `waitForRequest` on purpose: a wait that expires
+throws a Playwright timeout and would replace the product's own outcome with a
+driver error, which is precisely the substitution this lane exists to prevent.
+The record is written in a `finally`, so a click or poll that throws still
+reports what reached the wire. Nothing here decides an outcome; `save` still
+hard-fails on any non-accepted result.
 
 ### Run 33653427475 - the layout fix holds, and the save goes silent
 
