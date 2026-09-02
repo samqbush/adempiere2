@@ -196,6 +196,40 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33570169991](https://github.com/samqbush/adempiere2/actions/runs/33570169991) | 25m24s, before any modern write | Lane defect: the parity lane seeded itself from the state the legacy regression left behind |
 | [33572353340](https://github.com/samqbush/adempiere2/actions/runs/33572353340) | 30m45s, capture A fixture applied, browser not yet driven | Script defect: `psql` does not interpolate `:'var'` inside a `--command` string, so session evidence failed with `syntax error at or near ":"` |
 | [33580195848](https://github.com/samqbush/adempiere2/actions/runs/33580195848) | 22m07s, failed in the **legacy** regression before the parity lane started | Latent oracle-lane flake: `PA_Goal` is a wall-clock-triggered lazy writer, so two captures that straddle an hour boundary diverge |
+| [33584462937](https://github.com/samqbush/adempiere2/actions/runs/33584462937) | 32m10s; legacy regression **green**, routed lane prepared, ambient census **passed**, modern capture A driving | Driver defect: `ZkCe10Dialect.signIn` navigated to the bare origin instead of `/webui/`, so the browser landed on ADempiere's `/admin/` page |
+
+### Run 33584462937 - the context path
+
+The first run to reach a modern browser. Three things were proven on the way:
+the PA_Goal quiescence closed the hour-boundary flake and the legacy freeze-off
+regression re-proved the frozen oracle at PR HEAD; the routed lane brought up
+both runtimes, recorded its topology and captured a golden archive from the
+verified quiesced, cohort-routed state; and the routed ambient census passed,
+which is the first evidence that the dual-runtime lane introduces no writer of
+its own.
+
+Capture A then failed after 30 seconds waiting for the login field. The lane's
+own failure record named the cause without any local reproduction:
+
+    url    http://127.0.0.1:8888/admin/
+    titles a[]=Download ADempiere Client
+
+`phase5g1a.browser.baseUrl` is the **origin** only, `http://127.0.0.1:8888`, and
+`LegacyBrowserFlow.login` appends the `/webui/` context path itself.
+`ZkCe10Dialect.signIn` navigated to `baseUrl + "/"`, which ADempiere redirects to
+`/admin/`, so the driver waited for a ZK login field on the client download page.
+
+This is a defect in the modern **driver**, not in the modern runtime: the
+`[id^='rowUser'] input` selector it was waiting for is the one Phase 5d and
+Phase 5e already drive successfully against ZK CE 10. Appending the context path
+in the dialect also makes it structurally impossible for the scored origin to
+drift onto the loopback `/webui-modern` context that ADR decision 6 forbids
+scoring on.
+
+The fix adds an explicit post-navigation assertion that the browser is still on
+the `/webui` origin. The 403 in the modern Tomcat's access log for `GET /webui/`
+is unrelated and correct - it is the loopback guard refusing a direct request
+that carries no handoff ticket.
 
 ### Run 33580195848 - the hour boundary
 

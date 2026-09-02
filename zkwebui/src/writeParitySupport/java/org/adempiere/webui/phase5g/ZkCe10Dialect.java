@@ -163,11 +163,27 @@ public final class ZkCe10Dialect implements ZkDialect {
 	@Override
 	public void signIn(Page page, String baseUrl, String user, String password, String client,
 			String sessionLabel) {
-		Response login = page.navigate(baseUrl + "/",
+		// The context path is part of the origin under test, not an optional
+		// suffix. `phase5g1a.browser.baseUrl` is the ORIGIN only
+		// (`http://127.0.0.1:8888`), exactly as the legacy flow receives it, and
+		// LegacyBrowserFlow.login appends `/webui/` itself. Run 33584462937
+		// navigated to the bare origin instead, which ADempiere redirects to
+		// `/admin/`; the capture then spent 30s waiting for a login field on the
+		// "Download ADempiere Client" page. Appending it here also means the
+		// scored origin cannot drift onto the loopback `/webui-modern` context
+		// that ADR decision 6 forbids scoring on.
+		Response login = page.navigate(baseUrl + "/webui/",
 				new Page.NavigateOptions().setWaitUntil(WaitUntilState.DOMCONTENTLOADED));
 		assertNotNull(login, "the " + sessionLabel + " login navigation returned no response");
 		assertEquals(200, login.status(),
 				"the " + sessionLabel + " login page did not respond 200");
+		// A redirect away from /webui is the failure above, and without this it
+		// surfaces 30 seconds later as an unexplained selector timeout. Each CI
+		// iteration of this lane costs half an hour, so the diagnosis belongs at
+		// the point of the defect.
+		assertTrue(page.url().contains("/webui"),
+				"the " + sessionLabel + " login navigation left the /webui origin and landed on "
+						+ page.url());
 
 		Locator userInput = page.locator("[id^='rowUser'] input").first();
 		userInput.waitFor();
