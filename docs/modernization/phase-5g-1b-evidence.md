@@ -208,6 +208,7 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33580195848](https://github.com/samqbush/adempiere2/actions/runs/33580195848) | 22m07s, failed in the **legacy** regression before the parity lane started | Latent oracle-lane flake: `PA_Goal` is a wall-clock-triggered lazy writer, so two captures that straddle an hour boundary diverge |
 | [33584462937](https://github.com/samqbush/adempiere2/actions/runs/33584462937) | 32m10s; legacy regression **green**, routed lane prepared, ambient census **passed**, modern capture A driving | Driver defect: `ZkCe10Dialect.signIn` navigated to the bare origin instead of `/webui/`, so the browser landed on ADempiere's `/admin/` page |
 | [33586831680](https://github.com/samqbush/adempiere2/actions/runs/33586831680) | 31m31s; modern login, role, menu and the Business Partner window all rendered, `served=modern`, steps 0-1 measured; failed clicking Save | **First modern runtime defect**: `NumberBox` attached its calculator handlers with ZK 3.6's `setAction`, which ZK 10 rejects at render time, and the resulting error overlay intercepted the click |
+| [33647155695](https://github.com/samqbush/adempiere2/actions/runs/33647155695) | 33m20s; **the event-thread fix worked** - the modern capture cleared the Find dialog, the second editor, the conflicting save and the duplicate submit, and failed at step 10 `deactivate` | The refusal is now observed on the modern runtime: the primary editor shows `*2/18` and *Current record was changed by another user, please ReQuery*. The new failure is layout, not logic - clicking the Active checkbox is intercepted by the border layout's own centre body and by the field grid, and the failure screenshot shows the field area painting blank although the DOM carries every editor |
 | [33640642306](https://github.com/samqbush/adempiere2/actions/runs/33640642306) | 33m; same failure, same session | **Root cause.** The criterion diagnostic showed `wed.getValue()` returning `P5G1A-0001` correctly - and showed `getQuery` logging `Restrictions=0` *before* `cmd_ok_Simple` ran at all. ZK 3.6 enables the event processing thread by default and ZK 5 and later do not, so `Window.doModal()` no longer blocks - it branches on `isEventThreadEnabled()` and quietly degrades the window to a non-modal mode - and `AbstractADWindowPanel.initialQuery` read `FindWindow.getQuery()` from a dialog the operator had not yet touched |
 | [33636622993](https://github.com/samqbush/adempiere2/actions/runs/33636622993) | 32m; same failure, same session | **The driver is exonerated.** The uuid assertion passed: the `onChange` carrying the key was reported for exactly the widget the driver filled. Everything observable from the browser now agrees, so the divergence is server-side and the next observation has to come from there |
 | [33631958003](https://github.com/samqbush/adempiere2/actions/runs/33631958003) | 31m50s; **the first structurally valid modern capture** - all sessions reaching the flow were served ZK 10, and the legacy Tomcat logged nothing during it; failed positioning the *second editor*, one session earlier than before | The `onChange` guard did **not** fire, so the server was told the key. Both Tomcat logs now read cleanly against each other: legacy logs `UPPER(C_BPartner.Value) LIKE 'P5G1A-0001%'`, modern logs `MQuery[C_BPartner,Restrictions=0]` for the same driver actions. A **real modern divergence**, isolated at last on a capture that was entirely modern |
@@ -215,6 +216,78 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33598342557](https://github.com/samqbush/adempiere2/actions/runs/33598342557) | 33m; legacy lane green end to end; modern capture A completed steps 0-9 for the third run running, and failed at the same step | The search key **was** committed - the new guard did not fire - so the wrong *field* was being filled: the dialog locator took `.first()` of a union that also matches the window behind it, and the Business Partner window has its own field captioned "Search Key" |
 | [33591572610](https://github.com/samqbush/adempiere2/actions/runs/33591572610) | 33m; legacy lane green end to end; modern capture A again completed steps 0-9 and again failed positioning the deactivating session | The awaited `/zkau` response did not identify the request being waited for, so ZK 10's own in-flight traffic could satisfy it; an uncommitted search key then failed **silently** as an unfiltered query |
 | [33589524866](https://github.com/samqbush/adempiere2/actions/runs/33589524866) | 33m; **the modern runtime completed steps 0-9**, including `create` (7 rows), `update`, the concurrency pair and `duplicate-submit`; failed positioning the deactivating session | Driver settlement: the Find dialog's Ok was clicked before the search key's own blur round trip had landed, so the query ran unfiltered |
+
+### Run 33647155695 - the fix lands, and the next defect is layout
+
+Restoring the event thread carried the capture four steps past every
+root-caused run before it - 33631958003, 33636622993 and 33640642306 all died
+positioning the second editor. It did **not** reach further than
+33589524866 or 33591572610, whose artifacts carry the same ten rendezvous
+acknowledgements and the same nine effect documents; those runs died of a
+driver settlement defect rather than a runtime one. What is new here is that
+the steps in between are now trustworthy: the modern runtime positions the
+second editor on the right record through a modal that actually blocked,
+performs the conflicting save, and **refuses it**. The primary editor's status
+bar reads `*2/18` with *Current record was changed by another user, please
+ReQuery*. That is the headline concurrency fact of the frozen oracle, observed
+on ZK CE 10 for the first time.
+
+The run then failed at step 10, `deactivate`, clicking the Active checkbox:
+
+```
+locator resolved to <input type="checkbox" checked="checked"
+    id="unqField_1_0_C_BPartner_IsActive3374-real"/>
+  <div role="none" class="z-center-body" id="zk_comp_3298-cave">…</div>
+    intercepts pointer events
+  <div role="grid" id="zk_comp_3301" class="z-grid z-flex-item"
+    data-adempiere-legacy-height="100%">…</div> intercepts pointer events
+```
+
+The element is present, checked, visible, enabled and stable, and the DOM dump
+carries every editor of the tab. But the failure screenshot shows the field area
+painting **blank**: scanning it across the field region, the only non-chrome
+pixels are a 3px blue left border about two pixels tall. That border is set
+nowhere but `ADTabPanel.activate(true)`, so the collapsed box is this tab's own
+field grid, and the vflex plainly did not size it.
+
+**What is established, and what is not.** `ADTabPanel.initComponents` built that
+grid with `setHeight("100%")` followed by `ZkCompat.setVflex(grid, true)`, which
+clears the height, because ZK CE 10 refuses the pair that ZK 3.6 accepted. The
+grid is therefore vflex-sized and two pixels tall - that much the artifact
+proves. The mechanism does **not** reduce to the `position: absolute` in the
+same method: `activate(true)` runs for tab 0 at window open and replaces the
+style wholesale, so that declaration never reaches the rendered element, and the
+rendered class list `z-grid z-flex-item` shows ZK CE 10 did process the box
+through its CSS-flex path rather than skipping it as positioned. An earlier
+draft of this note asserted the absolute-positioning mechanism; it is retracted.
+
+The change made in response is narrower than a root-cause fix and is warranted
+on its own terms. Keeping the vflex is not merely ineffective here, it is
+unreachable: `activate(false)` calls `setHeight("100%")` on this same grid on
+every tab switch, and ZK CE 10's `HtmlBasedComponent.setHeight` throws
+`UiException("Not allowed to set vflex and height at the same time except
+vflex=\"min\"")` whenever a vflex is set - verified in the 10.3.0.1-jakarta
+bytecode. So the vflex form aborts the event that switches away from a tab. The
+percentage height is what ZK CE 10 leaves available once the vflex is refused.
+Whether it is *sufficient* for this grid is an open question that the next run
+decides.
+
+The `data-adempiere-legacy-height="100%"` attribute in the interception message
+is the Phase 5d shim recording the height it removed.
+
+To make that next run decisive rather than another inference, the dialect gained
+geometry to its failure dump. Playwright reports only the class of whatever it
+hit, which names a container without saying whether the target was collapsed,
+positioned outside its scroll parent, or genuinely covered. The dump now records
+each editor's client rect and what `document.elementFromPoint` returns at that
+editor's own centre; the full ancestor chain from an editor to `<body>`,
+including the grid's internal mesh, with each box's computed position, display,
+height, flex-grow, flex-basis and overflow; and the same computed state for the
+candidate containers. The flex state is recorded because whether ZK CE 10
+treated a given box as a flex item is exactly what is in dispute. It is pure
+observation: the dialect gains no new way to *operate* a control, only to
+describe one, and every probe is individually guarded so it cannot mask the
+failure it is describing.
 
 ### Run 33640642306 - the modal that never blocked
 

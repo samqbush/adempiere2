@@ -1009,6 +1009,55 @@ public final class ZkCe10Dialect implements ZkDialect {
 		probes.put("fieldLabels", "() => Array.from(document.querySelectorAll("
 				+ "'[class*=\"field-label\"]')).slice(0, 200)"
 				+ ".map(e => e.className + ':' + e.textContent.trim()).join('|')");
+		// Geometry, so an intercepted click is diagnosable from this dump alone.
+		// Playwright reports only the class of whatever it hit; that names a
+		// container without saying whether the target was collapsed, positioned
+		// outside its scroll parent, or genuinely covered. Record each editor's
+		// own client rect and what the document returns at its centre point.
+		probes.put("editorGeometry", "() => Array.from(document.querySelectorAll("
+				+ "\"[id*='_C_BPartner_'][id$='-real'], [id*='_C_BPartner_']\"))"
+				+ ".filter(e => e.tagName === 'INPUT' || e.tagName === 'SPAN')"
+				+ ".slice(0, 40).map(e => {"
+				+ " const r = e.getBoundingClientRect();"
+				+ " const cx = r.left + r.width / 2, cy = r.top + r.height / 2;"
+				+ " const hit = document.elementFromPoint(cx, cy);"
+				+ " return (e.id || '?') + '[' + Math.round(r.left) + ',' + Math.round(r.top)"
+				+ "  + ',' + Math.round(r.width) + 'x' + Math.round(r.height) + ']'"
+				+ "  + '@' + Math.round(cx) + ',' + Math.round(cy)"
+				+ "  + '->' + (hit ? (hit.id || hit.tagName) + '.' + hit.className : 'null');"
+				+ "}).join('|')");
+		// Which box collapsed is the open question, so walk the whole ancestor
+		// chain from one editor to <body> rather than sampling a fixed list of
+		// container classes: the grid's internal mesh (z-grid-body, z-rows,
+		// z-row, z-cell) is on that chain and is not otherwise observed. The
+		// computed display/flex state is recorded because whether ZK CE 10
+		// treated a box as a CSS flex item is itself in dispute.
+		probes.put("editorAncestry", "() => {"
+				+ " const seed = document.querySelector(\"[id*='_C_BPartner_'][id$='-real']\")"
+				+ "  || document.querySelector(\"[id*='_C_BPartner_']\");"
+				+ " if (!seed) return 'no-editor';"
+				+ " const out = []; let e = seed;"
+				+ " while (e && e.nodeType === 1 && out.length < 40) {"
+				+ "  const r = e.getBoundingClientRect(); const s = getComputedStyle(e);"
+				+ "  out.push((e.id || e.tagName) + '#' + (e.className || '-')"
+				+ "   + '[' + Math.round(r.width) + 'x' + Math.round(r.height) + ']'"
+				+ "   + ' pos=' + s.position + ' disp=' + s.display + ' h=' + s.height"
+				+ "   + ' fg=' + s.flexGrow + ' fb=' + s.flexBasis + ' of=' + s.overflow);"
+				+ "  e = e.parentElement;"
+				+ " }"
+				+ " return out.join('|');"
+				+ "}");
+		probes.put("gridGeometry", "() => Array.from(document.querySelectorAll("
+				+ "'div.z-grid, div.adtab-content, div.z-center-body, div.desktop-tabpanel'))"
+				+ ".slice(0, 40).map(e => { const r = e.getBoundingClientRect();"
+				+ " const s = getComputedStyle(e);"
+				+ " return (e.id || '?') + '#' + e.className"
+				+ "  + '[' + Math.round(r.left) + ',' + Math.round(r.top)"
+				+ "  + ',' + Math.round(r.width) + 'x' + Math.round(r.height) + ']'"
+				+ "  + ' pos=' + s.position + ' disp=' + s.display + ' h=' + s.height"
+				+ "  + ' fg=' + s.flexGrow + ' of=' + s.overflow"
+				+ "  + ' z=' + s.zIndex;"
+				+ "}).join('|')");
 		List<String> lines = new ArrayList<>();
 		for (Map.Entry<String, String> probe : probes.entrySet()) {
 			String observed;
