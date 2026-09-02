@@ -208,12 +208,132 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33580195848](https://github.com/samqbush/adempiere2/actions/runs/33580195848) | 22m07s, failed in the **legacy** regression before the parity lane started | Latent oracle-lane flake: `PA_Goal` is a wall-clock-triggered lazy writer, so two captures that straddle an hour boundary diverge |
 | [33584462937](https://github.com/samqbush/adempiere2/actions/runs/33584462937) | 32m10s; legacy regression **green**, routed lane prepared, ambient census **passed**, modern capture A driving | Driver defect: `ZkCe10Dialect.signIn` navigated to the bare origin instead of `/webui/`, so the browser landed on ADempiere's `/admin/` page |
 | [33586831680](https://github.com/samqbush/adempiere2/actions/runs/33586831680) | 31m31s; modern login, role, menu and the Business Partner window all rendered, `served=modern`, steps 0-1 measured; failed clicking Save | **First modern runtime defect**: `NumberBox` attached its calculator handlers with ZK 3.6's `setAction`, which ZK 10 rejects at render time, and the resulting error overlay intercepted the click |
+| [33640642306](https://github.com/samqbush/adempiere2/actions/runs/33640642306) | 33m; same failure, same session | **Root cause.** The criterion diagnostic showed `wed.getValue()` returning `P5G1A-0001` correctly - and showed `getQuery` logging `Restrictions=0` *before* `cmd_ok_Simple` ran at all. ZK 3.6 enables the event processing thread by default and ZK 5 and later do not, so `Window.doModal()` no longer blocks - it branches on `isEventThreadEnabled()` and quietly degrades the window to a non-modal mode - and `AbstractADWindowPanel.initialQuery` read `FindWindow.getQuery()` from a dialog the operator had not yet touched |
 | [33636622993](https://github.com/samqbush/adempiere2/actions/runs/33636622993) | 32m; same failure, same session | **The driver is exonerated.** The uuid assertion passed: the `onChange` carrying the key was reported for exactly the widget the driver filled. Everything observable from the browser now agrees, so the divergence is server-side and the next observation has to come from there |
 | [33631958003](https://github.com/samqbush/adempiere2/actions/runs/33631958003) | 31m50s; **the first structurally valid modern capture** - all sessions reaching the flow were served ZK 10, and the legacy Tomcat logged nothing during it; failed positioning the *second editor*, one session earlier than before | The `onChange` guard did **not** fire, so the server was told the key. Both Tomcat logs now read cleanly against each other: legacy logs `UPPER(C_BPartner.Value) LIKE 'P5G1A-0001%'`, modern logs `MQuery[C_BPartner,Restrictions=0]` for the same driver actions. A **real modern divergence**, isolated at last on a capture that was entirely modern |
 | [33626582558](https://github.com/samqbush/adempiere2/actions/runs/33626582558) | 33m; legacy lane green end to end; modern capture A completed steps 0-9 for the fourth run running, and failed at the same step | **Lane defect, and the worst kind**: the two Tomcat logs showed the *legacy* application serving two of the four sessions of the "modern" capture. The `user-allowlisted` preset allowlists only `GardenAdmin`; the second acting identity `GardenUser` fell back to legacy. The capture reported `served=modern` truthfully, because it sampled one session out of four |
 | [33598342557](https://github.com/samqbush/adempiere2/actions/runs/33598342557) | 33m; legacy lane green end to end; modern capture A completed steps 0-9 for the third run running, and failed at the same step | The search key **was** committed - the new guard did not fire - so the wrong *field* was being filled: the dialog locator took `.first()` of a union that also matches the window behind it, and the Business Partner window has its own field captioned "Search Key" |
 | [33591572610](https://github.com/samqbush/adempiere2/actions/runs/33591572610) | 33m; legacy lane green end to end; modern capture A again completed steps 0-9 and again failed positioning the deactivating session | The awaited `/zkau` response did not identify the request being waited for, so ZK 10's own in-flight traffic could satisfy it; an uncommitted search key then failed **silently** as an unfiltered query |
 | [33589524866](https://github.com/samqbush/adempiere2/actions/runs/33589524866) | 33m; **the modern runtime completed steps 0-9**, including `create` (7 rows), `update`, the concurrency pair and `duplicate-submit`; failed positioning the deactivating session | Driver settlement: the Find dialog's Ok was clicked before the search key's own blur round trip had landed, so the query ran unfiltered |
+
+### Run 33640642306 - the modal that never blocked
+
+The diagnostic answered the question it was added to answer, and answered it in
+the operator's favour twice over. `cmd_ok_Simple` logged
+
+```
+14:46:13.852 cmd_ok_Simple: selection editor Value uuid=Field_Value_220_1_2323 value=P5G1A-0001
+```
+
+so the criterion reached the server, survived the round trip, was applied to the
+right widget, and was still readable at the moment the dialog builds its query.
+Nothing was lost.
+
+The finding is in the timestamps. The unfiltered query is logged **before** the
+criterion is read:
+
+```
+14:46:12.793 getQuery: Query=MQuery[C_BPartner,Restrictions=0]
+14:46:13.852 cmd_ok_Simple: selection editor Value ... value=P5G1A-0001
+```
+
+The window does not read a criterion that was discarded. It reads the query
+*before the operator has entered one*, and then never reads it again.
+
+`AbstractADWindowPanel.initialQuery` constructs the dialog and synchronously
+reads its answer:
+
+```java
+FindWindow find = new FindWindow(...);
+if (!find.isCancel())
+    query = find.getQuery();
+```
+
+That is only correct if the constructor blocks. It blocks because
+`AbstractDesktop.showModal` calls `Window.doModal()`, which blocks its caller
+**only** by suspending the ZK event processing thread until the dialog is
+disposed. ZK 3.6 enables that thread by default. ZK 5 and every later release,
+including CE 10, disable it by default.
+
+ZK 10 does not refuse the call. `Window.doModal()` opens by branching on
+`isEventThreadEnabled()`, and on the disabled branch it calls
+`setNonModalMode(MODAL_EVENT_THREAD_DISABLED)` and returns - no exception is
+constructed and none is thrown:
+
+```
+0: isEventThreadEnabled(true)
+5: ifne 21          // enabled -> the suspending path
+8: checkOverlappable(-100)
+14: setNonModalMode(-100)
+20: return
+```
+
+So the dialog degrades to non-modal in silence. Construction returned
+immediately, `initialQuery` read an untouched `FindWindow`, and the window
+queried the whole table. The operator's later Ok set `m_query` on a dialog no
+longer connected to anything.
+
+This mechanism is a correction. The first reading of this run attributed the
+failure to `showModal` swallowing a `SuspendNotAllowedException` into an empty
+`catch`. Disassembling `org.zkoss.zul.Window` refutes that: on the disabled
+branch nothing is thrown, so that `catch` was never entered and never hid
+anything. The symptom, the culprit and the fix are unchanged; only the
+explanation was wrong, and a wrong explanation would have justified a detector
+that could not fire.
+
+This is a configuration divergence that a file-by-file descriptor migration
+could not have caught, because the setting was never in the file: it was a ZK
+*default* that changed between 3.6 and 5.
+
+A second, narrower fact confirms the application was written for the event
+thread. `SessionContextListener` implements `EventThreadResume`, whose
+`beforeResume`/`afterResume`/`abortResume` hooks restore the ADempiere thread
+context across a suspend; only `EventProcessingThreadImpl` suspends and resumes,
+so under the ZK 10 default those three methods are dead code. Its
+`EventThreadInit` and `EventThreadCleanup` implementations are **not** evidence
+here: `UiEngineImpl.processEvent` invokes both on the servlet thread even when
+the event thread is disabled, so they were already live and the claim that all
+of these hooks were dead would have been false.
+
+Four changes close it:
+
+- `zkwebui/src/phase5d/webapp/WEB-INF/zk.xml` sets
+  `<disable-event-thread>false</disable-event-thread>`, restoring the ZK 3.6
+  default. ZK CE 10 still parses the element and still ships
+  `EventProcessingThreadImpl`, so this is supported configuration, not a
+  workaround. It is recorded as the fourth deliberate difference in that
+  descriptor's own header.
+- `AbstractDesktop.showModal` now checks `isEventThreadEnabled()` before calling
+  `doModal()` and warns when it is off, because the degradation is otherwise
+  silent and affects *every* caller that constructs a modal and reads its result
+  synchronously. The pre-existing empty `catch` also gained a log, but that is
+  housekeeping, not the detector: it covers only the paths that genuinely throw
+  - no desktop, or a modal that cannot be entered - on which ZK restores the
+  window's prior mode and visibility.
+- `zkwebui/build.gradle`'s `webui-modern.war` content assertions now require
+  `<disable-event-thread>false</disable-event-thread>` in the packaged
+  descriptor. A runtime warning cannot protect a setting whose loss is silent
+  and whose only symptom is a wrong answer, so the setting is asserted where it
+  is packaged, alongside the existing polling-server-push and no-commercial-ZK
+  assertions.
+- The `cmd_ok_Simple` criterion diagnostic drops to `FINE`. `getQuery` already
+  logs the resulting query at `INFO`, so the default level still distinguishes
+  `Restrictions=0` from `Restrictions=1` without writing operators' search terms
+  to `catalina.out`.
+
+The fix is deliberately **not** in the dialect. A dialect may locate, operate
+and await; it may not compensate for a runtime behaviour the application
+depends on. Nor is it a change to the frozen legacy artifact. The legacy lane
+*does* compile `zkwebui/WEB-INF/src` - but from the Phase 5b commit in an
+isolated detached worktree, not from the working tree - which is why the
+diagnostic produced no legacy lines and why no product-source change in this
+increment can move the oracle.
+
+**Residual risk.** ZK discourages event threads on scalability grounds and has
+deprecated them. Restoring the default is the correct move for a parity
+increment - it makes the modern runtime behave as the frozen answer expects -
+but converting ADempiere's synchronous modals to an event-driven form remains
+open for a later phase, and is recorded as such rather than presented as done.
 
 ### Run 33636622993 - the driver is exonerated
 
@@ -233,8 +353,13 @@ applying the value to the input and `cmd_ok_Simple` reading it back with
 Nothing further is observable from the browser, so the next run stops trying.
 `cmd_ok_Simple` now logs each selection editor by column, by the same widget
 uuid the browser addresses, and by value, immediately before it reads them.
-Both runtimes compile that source, so a single run produces the legacy and the
-modern answer side by side instead of two runs producing one each.
+**That expectation was wrong, and run 33640642306 disproved it**: the legacy war
+is built from the Phase 5b source commit in an isolated worktree
+(`gradle/phase5/legacy-web-artifact.gradle`), so a working-tree edit to
+`zkwebui/WEB-INF/src` never reaches it and the diagnostic produced modern lines
+only. That the legacy oracle cannot be moved by a product-source edit is the
+governance property working as intended; it is recorded here because the
+expectation, not the property, is what this run corrected.
 
 ### Run 33631958003 - the first valid modern capture, and a real divergence
 

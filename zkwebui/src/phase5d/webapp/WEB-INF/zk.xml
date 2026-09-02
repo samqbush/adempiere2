@@ -17,6 +17,11 @@
      not ship.
   3. <log><log-base/></log> is dropped: it configured ZK 3.6's i3-log.conf
      monitor, which ZK CE 10 no longer has.
+  4. <disable-event-thread>false</disable-event-thread> is added. This is not a
+     new setting but a restored default: ZK 3.6 ran event threads by default and
+     ZK 5 and later do not, so preserving the descriptor element by element
+     silently dropped behaviour ADempiere depends on. See the comment on the
+     element itself.
 
   Everything else is preserved verbatim, including the ADempiere thread-context
   listener, the automatic session timeout and its timeout URI, and the ADempiere
@@ -42,6 +47,36 @@
 
 	<system-config>
 		<id-generator-class>org.adempiere.webui.AdempiereIdGenerator</id-generator-class>
+		<!--
+			ZK 3.6 enabled the event processing thread by default; ZK 5 and
+			later default it off, so preserving zk.xml element by element did
+			not preserve this behaviour.
+
+			AbstractDesktop.showModal calls Window.doModal(), which blocks the
+			caller only by suspending the event thread. Without that thread ZK
+			10 does not refuse the call: doModal() branches on
+			isEventThreadEnabled() and quietly degrades the window to a
+			non-modal mode, returning immediately. Every caller that constructs
+			a modal and then synchronously reads its result therefore reads an
+			untouched dialog. AbstractADWindowPanel.initialQuery does exactly
+			that with FindWindow.getQuery(), which is why the modern runtime
+			issued MQuery[C_BPartner,Restrictions=0] before the operator had
+			entered any criterion (run 33640642306).
+
+			The application also implements ZK's event-thread callbacks:
+			org.adempiere.webui.session.SessionContextListener implements
+			EventThreadResume, whose beforeResume/afterResume/abortResume hooks
+			restore the ADempiere thread context across a suspend and can only
+			ever run on an event thread. With the ZK 10 default they are dead
+			code.
+
+			Restoring the ZK 3.6 default is configuration parity, not a
+			behavioural workaround. ZK discourages event threads on scalability
+			grounds and logs a deprecation warning when they are enabled, so
+			converting ADempiere's synchronous modals to an event-driven form
+			remains open as a later-phase residual risk.
+		-->
+		<disable-event-thread>false</disable-event-thread>
 	</system-config>
 
 	<!--

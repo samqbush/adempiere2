@@ -798,6 +798,19 @@ tasks.register('verifyPhase5dModernWebWar') {
 		if (zkConfig.contains('zkmax') || zkConfig.contains('zkex')) {
 			problems << 'WEB-INF/zk.xml still selects a commercial ZK implementation'
 		}
+		// ZK 3.6 ran the event processing thread by default and ZK 5 and later
+		// do not, so this setting can be lost by migrating a descriptor rather
+		// than by editing one -- and losing it is silent at runtime, because
+		// Window.doModal() then degrades to a non-modal mode instead of
+		// failing. Every ADempiere caller that constructs a modal and reads its
+		// result synchronously, such as AbstractADWindowPanel.initialQuery
+		// reading FindWindow.getQuery(), would return a wrong answer with no
+		// error. Assert the setting here so its loss fails the build.
+		if (!(zkConfig =~ /(?s)<disable-event-thread>\s*false\s*<\/disable-event-thread>/)) {
+			problems << 'WEB-INF/zk.xml does not enable the ZK event processing ' +
+				'thread, so Window.doModal() will not block and every modal read ' +
+				'synchronously by its caller returns an untouched dialog'
+		}
 
 		// 3. Forbidden content.
 		def forbidden = [

@@ -1783,22 +1783,21 @@ public class FindWindow extends Window implements EventListener,ValueChangeListe
         //  onChange for. Legacy ZK 3.6 and modern ZK CE 10 build different
         //  queries from identical driver actions, and this is the only place
         //  the two can be compared on the criterion itself rather than on its
-        //  effect.
-        if (log.isLoggable(Level.INFO))
+        //  effect. Kept at FINE: getQuery() already logs the resulting query at
+        //  INFO, so the default level still shows whether a criterion was
+        //  applied, without writing every operator's search terms to the log.
+        if (log.isLoggable(Level.FINE))
         {
             for (int i = 0; i < m_sEditors.size(); i++)
             {
                 WEditor probe = (WEditor)m_sEditors.get(i);
                 GridField probed = getTargetMField(probe.getColumnName());
                 Object shown = probe.getValue();
-                //  The criterion is what the comparison needs, but this level is
-                //  on by default and an encrypted or password selection column
-                //  would be written to catalina.out in the clear. The loop below
-                //  encrypts such a value before it reaches SQL; the diagnostic
-                //  must not print what that protects.
+                //  The loop below encrypts an encrypted column's value before it
+                //  reaches SQL; the diagnostic must not print what that protects.
                 if (probed == null || probed.isEncryptedField() || probed.isEncryptedColumn())
                     shown = shown == null ? null : "[redacted]";
-                log.info("selection editor " + probe.getColumnName()
+                log.fine("selection editor " + probe.getColumnName()
                         + " uuid=" + probe.getComponent().getUuid()
                         + " value=" + shown);
             }

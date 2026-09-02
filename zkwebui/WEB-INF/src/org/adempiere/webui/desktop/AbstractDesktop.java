@@ -15,6 +15,7 @@ package org.adempiere.webui.desktop;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
 
 import org.adempiere.webui.ClientInfo;
 import org.adempiere.webui.component.Window;
@@ -197,13 +198,40 @@ public abstract class AbstractDesktop extends AbstractUIPart implements IDesktop
    		//fall back to highlighted if can't execute doModal
    		if (Events.inEventListener())
    		{
+			// Window.doModal() only blocks when ZK's event processing thread is
+			// enabled. When it is disabled, ZK 10 does not refuse the call: it
+			// branches on isEventThreadEnabled() and quietly degrades the
+			// window to a non-modal mode, returning immediately. Every caller
+			// that constructs a modal and then synchronously reads its result
+			// -- AbstractADWindowPanel.initialQuery reading
+			// FindWindow.getQuery() is one -- then reads an untouched dialog
+			// and produces a silently wrong answer. ZK 3.6 enabled the event
+			// thread by default and later releases do not, so the setting can
+			// be lost by migrating a descriptor rather than by editing one.
+			// Say so rather than degrade in silence.
+			if (!isEventThreadEnabled(win))
+			{
+				logger.warning("Modal requested for " + win.getClass().getName()
+					+ " while the ZK event thread is disabled, so doModal()"
+					+ " will not block. Any caller that reads this window's"
+					+ " result synchronously will observe an untouched dialog."
+					+ " Set <disable-event-thread>false</disable-event-thread>"
+					+ " in zk.xml.");
+			}
 			try
 			{
 				win.doModal();
 			}
 			catch(org.zkoss.zk.ui.SuspendNotAllowedException e)
 			{
-				
+				// Reachable when the window has no desktop, and when the modal
+				// cannot be entered -- for example with max-suspended-threads
+				// exhausted. Only the second case reaches ZK's
+				// handleFailedModal, which restores the window's previous mode
+				// and visibility, so the window may not be displayed at all.
+				logger.log(Level.WARNING, "Modal refused for "
+					+ win.getClass().getName()
+					+ "; it may not be displayed.", e);
 			}
    		}
    		else
@@ -212,6 +240,30 @@ public abstract class AbstractDesktop extends AbstractUIPart implements IDesktop
    		}
 			
 	}
+
+   	/**
+   	 * Whether ZK's event processing thread is enabled for the window's
+   	 * application, and so whether {@link Window#doModal()} will block. The
+   	 * desktop is resolved the way ZK resolves it, falling back to the current
+   	 * execution when the window has no page of its own. Unknown configuration
+   	 * is reported as enabled, so an inability to read the setting never
+   	 * produces a misleading warning.
+   	 */
+   	private boolean isEventThreadEnabled(Window win)
+   	{
+   		org.zkoss.zk.ui.Desktop desktop = win.getDesktop();
+   		if (desktop == null)
+   		{
+   			org.zkoss.zk.ui.Execution execution =
+   				org.zkoss.zk.ui.Executions.getCurrent();
+   			if (execution != null)
+   				desktop = execution.getDesktop();
+   		}
+   		if (desktop == null || desktop.getWebApp() == null
+   			|| desktop.getWebApp().getConfiguration() == null)
+   			return true;
+   		return desktop.getWebApp().getConfiguration().isEventThreadEnabled();
+   	}
    	
    	/**
    	 * 
