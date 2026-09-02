@@ -198,6 +198,41 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33580195848](https://github.com/samqbush/adempiere2/actions/runs/33580195848) | 22m07s, failed in the **legacy** regression before the parity lane started | Latent oracle-lane flake: `PA_Goal` is a wall-clock-triggered lazy writer, so two captures that straddle an hour boundary diverge |
 | [33584462937](https://github.com/samqbush/adempiere2/actions/runs/33584462937) | 32m10s; legacy regression **green**, routed lane prepared, ambient census **passed**, modern capture A driving | Driver defect: `ZkCe10Dialect.signIn` navigated to the bare origin instead of `/webui/`, so the browser landed on ADempiere's `/admin/` page |
 | [33586831680](https://github.com/samqbush/adempiere2/actions/runs/33586831680) | 31m31s; modern login, role, menu and the Business Partner window all rendered, `served=modern`, steps 0-1 measured; failed clicking Save | **First modern runtime defect**: `NumberBox` attached its calculator handlers with ZK 3.6's `setAction`, which ZK 10 rejects at render time, and the resulting error overlay intercepted the click |
+| [33589524866](https://github.com/samqbush/adempiere2/actions/runs/33589524866) | 33m; **the modern runtime completed steps 0-9**, including `create` (7 rows), `update`, the concurrency pair and `duplicate-submit`; failed positioning the deactivating session | Driver settlement: the Find dialog's Ok was clicked before the search key's own blur round trip had landed, so the query ran unfiltered |
+
+### Run 33589524866 - the first modern business write
+
+**The modern runtime wrote to the database for the first time in the programme.**
+Capture A measured steps 0 through 9 - `authenticated-baseline`,
+`window-opened`, `create` (7 rows created across 11 changed tables), `update`,
+`concurrency-second-editor-authenticated`, `concurrency-second-editor-update`,
+`concurrency-conflicting-save`, `duplicate-submit-editor-authenticated`,
+`duplicate-submit` and `deactivate-editor-authenticated` - through the public
+routed origin, with the routed ambient census clean on both quiet intervals.
+
+It then failed opening the window for the deactivating session:
+
+    the window is not positioned on the captured record
+    ==> expected: <P5G1A-0001> but was: <Chemical Product, inc>
+
+`Chemical Product, inc` is a stock GardenWorld business partner, and landing on
+it is the signature of an **unfiltered** query rather than of a missing record.
+
+Both dialects fill the Find dialog's Search Key, press `Tab`, and then click Ok
+inside a single `/zkau` wait. `Tab` blurs the field, which fires the editor's
+`onChange` as its own AU request, and FindWindow does not hold the value until
+that request is applied server-side. Under ZK 3.6 the single wait is enough.
+Under ZK 10 it is a race the caller can lose: the wait is satisfied by the
+blur's own round trip while the Ok click has already been dispatched against a
+dialog whose query field is still empty. The same code path had been used
+successfully twice earlier in the same capture, by the second editor and the
+duplicate-submit session, which is what a race looks like.
+
+The repair awaits the blur explicitly before dispatching the Ok click. It is a
+dialect change, and a legitimate one: a dialect may express how a control is
+located, operated and **awaited**, and this changes no step, no emitted fact and
+no outcome vocabulary. It only stops the driver from reading the dialog before
+the product has finished updating it.
 
 ### Run 33586831680 - the first modern runtime defect
 

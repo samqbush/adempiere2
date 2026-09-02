@@ -323,13 +323,10 @@ public final class ZkCe10Dialect implements ZkDialect {
 		// unexpected one would be an undiagnosable divergence later.
 		page.getByText(FIND_TITLE_PREFIX + WINDOW).first().waitFor();
 		if (searchKey != null) {
-			Locator search = dialog
+			commitSearchKey(page, dialog
 					.locator("xpath=.//td[normalize-space(.)='Search Key']"
 							+ "/following-sibling::td[1]//input")
-					.first();
-			search.waitFor();
-			search.fill(searchKey);
-			search.press("Tab");
+					.first(), searchKey);
 		}
 		page.waitForResponse(
 				response -> response.request().url().contains("/zkau"),
@@ -583,17 +580,44 @@ public final class ZkCe10Dialect implements ZkDialect {
 		reloadRecord(page, value);
 	}
 
+	/**
+	 * Commits a Find-dialog search key and waits for the commit to land.
+	 *
+	 * <p>The dialect may express how a control is operated and AWAITED, and this
+	 * is that: {@code Tab} blurs the field, which fires the editor's
+	 * {@code onChange} as its own AU request, and FindWindow does not hold the
+	 * value until that request is applied server-side.
+	 *
+	 * <p>The legacy dialect types the key and clicks Ok inside a single
+	 * {@code /zkau} wait. Under ZK 3.6 that is enough. Under ZK 10 it is a race
+	 * the caller can lose: the wait can be satisfied by the blur's own round
+	 * trip while the Ok click has already been dispatched against a dialog whose
+	 * query field is still empty, and the window then opens on the FIRST record
+	 * instead of the requested one. Run 33589524866 lost it on the third of
+	 * three uses -- `expected: <P5G1A-0001> but was: <Chemical Product, inc>` --
+	 * which is the signature of an unfiltered query, not of a missing record.
+	 *
+	 * <p>So await the blur explicitly, before the Ok click is dispatched. This
+	 * changes no step, no emitted fact and no outcome vocabulary; it only stops
+	 * the driver from reading the dialog before the product has finished
+	 * updating it.
+	 */
+	private void commitSearchKey(Page page, Locator search, String value) {
+		search.waitFor();
+		search.fill(value);
+		page.waitForResponse(
+				response -> response.request().url().contains("/zkau"),
+				() -> search.press("Tab"));
+	}
+
 	private void reloadRecord(Page page, String value) {
 		click(page, "Lookup Record");
 		Locator dialog = modalDialog(page).first();
 		dialog.waitFor();
-		Locator search = dialog
+		commitSearchKey(page, dialog
 				.locator("xpath=.//td[normalize-space(.)='Search Key']"
 						+ "/following-sibling::td[1]//input")
-				.first();
-		search.waitFor();
-		search.fill(value);
-		search.press("Tab");
+				.first(), value);
 		page.waitForResponse(
 				response -> response.request().url().contains("/zkau"),
 				() -> dialog.locator(OK_BUTTON).first().click());
