@@ -198,8 +198,45 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33580195848](https://github.com/samqbush/adempiere2/actions/runs/33580195848) | 22m07s, failed in the **legacy** regression before the parity lane started | Latent oracle-lane flake: `PA_Goal` is a wall-clock-triggered lazy writer, so two captures that straddle an hour boundary diverge |
 | [33584462937](https://github.com/samqbush/adempiere2/actions/runs/33584462937) | 32m10s; legacy regression **green**, routed lane prepared, ambient census **passed**, modern capture A driving | Driver defect: `ZkCe10Dialect.signIn` navigated to the bare origin instead of `/webui/`, so the browser landed on ADempiere's `/admin/` page |
 | [33586831680](https://github.com/samqbush/adempiere2/actions/runs/33586831680) | 31m31s; modern login, role, menu and the Business Partner window all rendered, `served=modern`, steps 0-1 measured; failed clicking Save | **First modern runtime defect**: `NumberBox` attached its calculator handlers with ZK 3.6's `setAction`, which ZK 10 rejects at render time, and the resulting error overlay intercepted the click |
+| [33598342557](https://github.com/samqbush/adempiere2/actions/runs/33598342557) | 33m; legacy lane green end to end; modern capture A completed steps 0-9 for the third run running, and failed at the same step | The search key **was** committed - the new guard did not fire - so the wrong *field* was being filled: the dialog locator took `.first()` of a union that also matches the window behind it, and the Business Partner window has its own field captioned "Search Key" |
 | [33591572610](https://github.com/samqbush/adempiere2/actions/runs/33591572610) | 33m; legacy lane green end to end; modern capture A again completed steps 0-9 and again failed positioning the deactivating session | The awaited `/zkau` response did not identify the request being waited for, so ZK 10's own in-flight traffic could satisfy it; an uncommitted search key then failed **silently** as an unfiltered query |
 | [33589524866](https://github.com/samqbush/adempiere2/actions/runs/33589524866) | 33m; **the modern runtime completed steps 0-9**, including `create` (7 rows), `update`, the concurrency pair and `duplicate-submit`; failed positioning the deactivating session | Driver settlement: the Find dialog's Ok was clicked before the search key's own blur round trip had landed, so the query ran unfiltered |
+
+### Run 33598342557 - the dialog was never the dialog
+
+The third identical failure was the informative one, because of what did *not*
+happen: the commit guard added for run 33591572610 stayed silent. An accepted
+`/zkau` request had carried `P5G1A-0001`. The key was typed, sent and applied -
+and the lookup still queried unfiltered.
+
+If the key is committed and the query is unfiltered, the key was committed to
+the wrong place. It was: `modalDialog(page)` is a union locator, callers took
+`.first()` of it, and the Business Partner window has its own field captioned
+**"Search Key"** - that is the caption of `C_BPartner.Value`. A dialog locator
+that resolves to the window instead of to the modal finds a "Search Key" input,
+fills it, and blurs it with a perfectly real AU request, while the dialog's own
+criterion stays empty.
+
+That also explains the shape of the failure, which no earlier theory did. It was
+never intermittent and never a race: it failed on exactly one of the three keyed
+window opens, always the same one. `enterWindowThroughFindDialog` answers
+ADempiere's mandatory lookup dialog *before* any window has rendered behind it,
+so its union has one member and it is always right. `reloadRecord` opens the
+same dialog *over* a rendered window, so its union has two - and the deactivating
+session is the only session that reaches `reloadRecord` at all.
+
+The repair identifies the dialog by its own caption and takes the last match,
+because Playwright resolves in document order and an ancestor that contains the
+caption text always precedes the dialog that owns it. The Search Key criterion is
+then resolved **strictly**: exactly one input, or the driver fails naming the
+ambiguity. Filling the wrong "Search Key" is silent, and silence is what cost
+three capture runs.
+
+Because the dialog is destroyed before the wrong-record assertion runs, that
+assertion now carries the dialog's own state - candidate counts and the committed
+criterion, read while the dialog still existed - so a fourth recurrence would
+report whether the criterion was ever there rather than only where the window
+ended up.
 
 ### Run 33591572610 - a silent failure made loud
 

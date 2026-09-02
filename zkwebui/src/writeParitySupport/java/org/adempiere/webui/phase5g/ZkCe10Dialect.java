@@ -319,21 +319,68 @@ public final class ZkCe10Dialect implements ZkDialect {
 	 * both runtimes compile.
 	 */
 	private void enterWindowThroughFindDialog(Page page, String searchKey) {
-		Locator dialog = modalDialog(page).first();
-		dialog.waitFor();
 		// Assert WHICH dialog. A modal is not self-identifying, and answering an
 		// unexpected one would be an undiagnosable divergence later.
 		page.getByText(FIND_TITLE_PREFIX + WINDOW).first().waitFor();
+		Locator dialog = findDialog(page);
 		if (searchKey != null) {
-			commitSearchKey(page, dialog
-					.locator("xpath=.//td[normalize-space(.)='Search Key']"
-							+ "/following-sibling::td[1]//input")
-					.first(), searchKey);
+			commitSearchKey(page, searchKeyField(dialog), searchKey);
 		}
 		page.waitForResponse(
 				response -> response.request().url().contains("/zkau"),
 				() -> dialog.locator(OK_BUTTON).first().click());
 		dialog.waitFor(new Locator.WaitForOptions().setState(WaitForSelectorState.DETACHED));
+	}
+
+	/**
+	 * The Find dialog itself, identified by its own caption.
+	 *
+	 * <p>Taking {@code .first()} of the modal-class union is not safe once the
+	 * ADWindow behind the dialog has rendered, and that is what runs 33589524866,
+	 * 33591572610 and 33598342557 all died on. The Business Partner window
+	 * carries its OWN field captioned "Search Key" -- it is the caption of
+	 * {@code C_BPartner.Value} -- so a dialog locator that resolves to the window
+	 * instead of to the modal finds a "Search Key" input, fills it, and commits
+	 * it with a perfectly real AU request. Nothing looks wrong until the lookup
+	 * runs unfiltered and the window opens on the first of eighteen records.
+	 *
+	 * <p>That is why the failure only ever appeared in {@link #reloadRecord}:
+	 * {@link #enterWindowThroughFindDialog} answers the mandatory dialog before
+	 * any window exists behind it, so its union has exactly one match, while
+	 * reloadRecord opens the dialog over a rendered window and has two.
+	 *
+	 * <p>So filter the union to the modal that carries the dialog's own caption,
+	 * and take the LAST match: Playwright resolves in document order, so when
+	 * the dialog is nested inside the window the innermost element is last, and
+	 * when it is a sibling the later one is still the dialog.
+	 */
+	private Locator findDialog(Page page) {
+		Locator captioned = captionedDialogs(page);
+		captioned.last().waitFor();
+		return captioned.last();
+	}
+
+	private Locator captionedDialogs(Page page) {
+		return modalDialog(page).filter(
+				new Locator.FilterOptions().setHasText(FIND_TITLE_PREFIX + WINDOW));
+	}
+
+	/**
+	 * The Find dialog's Search Key criterion.
+	 *
+	 * <p>Resolved strictly: filling the wrong "Search Key" input is silent, and
+	 * silence is what cost three capture runs.
+	 */
+	private Locator searchKeyField(Locator dialog) {
+		Locator field = dialog.locator(
+				"xpath=.//td[normalize-space(.)='Search Key']"
+						+ "/following-sibling::td[1]//input[not(@type='hidden')]");
+		field.first().waitFor();
+		int resolved = field.count();
+		assertEquals(1, resolved,
+				"the Find dialog's Search Key criterion resolved to "
+						+ resolved + " inputs");
+		return field.first();
 	}
 
 	/**
@@ -673,18 +720,27 @@ public final class ZkCe10Dialect implements ZkDialect {
 
 	private void reloadRecord(Page page, String value) {
 		click(page, "Lookup Record");
-		Locator dialog = modalDialog(page).first();
-		dialog.waitFor();
-		commitSearchKey(page, dialog
-				.locator("xpath=.//td[normalize-space(.)='Search Key']"
-						+ "/following-sibling::td[1]//input")
-				.first(), value);
+		page.getByText(FIND_TITLE_PREFIX + WINDOW).first().waitFor();
+		Locator dialog = findDialog(page);
+		Locator search = searchKeyField(dialog);
+		commitSearchKey(page, search, value);
+		// Read the dialog's own state while it still exists. If the lookup comes
+		// back on the wrong record the dialog is already gone, and without this
+		// the failure cannot say whether the criterion was ever there.
+		String dialogState = "modal candidates=" + modalDialog(page).count()
+				+ ", captioned=" + captionedDialogs(page).count()
+				+ ", committed criterion=" + quoted(search.inputValue());
 		page.waitForResponse(
 				response -> response.request().url().contains("/zkau"),
 				() -> dialog.locator(OK_BUTTON).first().click());
 		dialog.waitFor(new Locator.WaitForOptions().setState(WaitForSelectorState.DETACHED));
 		assertEquals(value, columnInput(page, "Value").inputValue(),
-				"the window is not positioned on the captured record");
+				"the window is not positioned on the captured record ("
+						+ dialogState + ")");
+	}
+
+	private String quoted(String value) {
+		return value == null ? "null" : "'" + value + "'";
 	}
 
 	/**
