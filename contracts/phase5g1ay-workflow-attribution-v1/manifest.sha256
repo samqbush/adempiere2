@@ -1,7 +1,7 @@
 # Phase 5g-1a-y corrected-legacy workflow-attribution contract manifest
 # SHA-256 over every file in this directory except this file.
 # sha256	path
-65cd1b21bf12e626436ef2c72e7917c3828bdf0e0fa7d059807d909effa14de8	README.md
+f1991e3f70fb6ffc7f3ab80aefb48c3300e7e808faef22a9e41e8647a7f5c4e8	README.md
 a2738372f9b0f89e9187ce7af3f2927c7e94ab17eacdbae61cacc16a67c88608	allowed-patched-paths.txt
 1be5f07d3df00aa16e1a864d1c9cd814a2bea8fc054b4cea1ef2d0fb09beacd2	capture-contract.tsv
 80c95bb044e23bdd36788582892e309eb4a519e0f2c9bb7124c66bb4e1aacca2	corrected-legacy-workflow-attribution.patch

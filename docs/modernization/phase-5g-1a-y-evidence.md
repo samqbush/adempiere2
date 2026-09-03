@@ -1,6 +1,6 @@
 # Phase 5g-1a-y workflow-attribution oracle amendment evidence
 
-**Status: candidate frozen and domain-reviewed; acceptance pending.** Candidate run
+**Status: corrected legacy oracle accepted; merge pending.** Candidate run
 https://github.com/samqbush/adempiere2/actions/runs/33779282955 completed two
 self-consistent captures but was rejected: the corrected jar retained stale
 code-signature entries, Java refused the replaced workflow classes with a
@@ -8,7 +8,8 @@ code-signature entries, Java refused the replaced workflow classes with a
 No candidate facts from that run were accepted. Corrected candidate run
 https://github.com/samqbush/adempiere2/actions/runs/33785079015 then completed
 two self-consistent captures with no digest error. Its exact generated facts
-are committed for a separate freeze-off acceptance run.
+were committed and accepted by separate freeze-off run
+https://github.com/samqbush/adempiere2/actions/runs/33788686426.
 
 ## Claim
 
@@ -20,7 +21,8 @@ context.
 The committed candidate now records `AD_Client_ID=11` and `CreatedBy` /
 `UpdatedBy=101` for the workflow process and activity, plus one keyed event
 audit row with the same saving-context attribution and symbolic process/record
-edges. These bytes are not accepted until the separate freeze-off run passes.
+edges. The acceptance run re-captured A and B from fresh restores, reported
+self-diff `pass`, and scored zero problems against these committed bytes.
 
 ## Oracle-only implementation
 
@@ -75,10 +77,13 @@ This gate makes no runtime claim. It cannot prove the corrected legacy runtime
 booted or that the database rows carry the decided attribution.
 
 The workflow's current-phase smoke selects corrected mode unconditionally for
-this increment. Until the isolated candidate-capture run is reviewed and its
-candidate facts are committed, the ordinary freeze-off job is expected to fail
-against the old frozen zeros. That is the intended fail-closed state; selecting
-legacy mode would make the prerequisite falsely green.
+this increment. Run 33788686426 executed that ordinary freeze-off path at PR
+head `cebd25609c8d3c30b34972599af95cd0caac778a`; its runner checkout was the
+corresponding synthetic merge commit
+`a4469808f6656d09aca402939864be49e854483f`. The uploaded provenance records
+`oracle_operation=acceptance`, the exact pinned patch, removed signatures, and
+four-artifact inventory, while `score-summary.tsv` records self-diff `pass` and
+zero problems.
 
 ## Required CI evidence
 
@@ -86,11 +91,11 @@ legacy mode would make the prerequisite falsely green.
 |---|---|
 | Corrected-legacy freeze run triggered by the prerequisite branch push | **Run 33785079015 green; A/B self-diff passed** |
 | Domain review of the candidate attribution and new fact digest | **Recorded by @samqbush: only process/activity `0/0` → `11/101`, keyed event audit, and their derived identities/edges changed; reviewed evidence digest `a0fc668b69b19ce61901c9a27185aa935c74db33458652080b2abf977fbd2112`** |
-| Committed frozen fact update | **Present in this candidate-fact commit** |
-| Separate corrected-legacy freeze-off acceptance run | **Not run** |
+| Committed frozen fact update | **Commit `cebd25609c8d3c30b34972599af95cd0caac778a`** |
+| Separate corrected-legacy freeze-off acceptance run | **Run 33788686426 green at candidate commit `cebd25609`; A/B self-diff passed and scoring reported zero problems** |
 | Merge to `develop` | **Not complete** |
 
-PR 18 remains blocked until every row above is complete.
+PR 18 remains blocked until this amendment merges.
 
 ## Hazard review
 

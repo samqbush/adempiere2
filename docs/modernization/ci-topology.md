@@ -241,21 +241,22 @@ the Phase 5e test's own wait configuration.
 longer blocks a pull request, but it still gates the post-merge lane and is
 still worth fixing.
 
-## The current-phase smoke awaits freeze-off acceptance
+## The current-phase smoke accepted the corrected oracle
 
 `Current-phase database smoke` still runs
 `phase5g1aLegacyWriteOracleSmoke`, but now passes
 `-Pphase5g1ayMode=corrected-legacy-workflow-attribution`. Candidate run
 33785079015 executed that corrected mode with freezing enabled and produced the
-domain-reviewed committed facts. It is not acceptance evidence. The
-current-phase job must now score those committed bytes with freezing off before
-R14 can close.
+domain-reviewed committed facts. It is not acceptance evidence. Required
+current-phase run 33788686426 then executed the same mode with freezing off at
+candidate commit `cebd25609`, re-captured A and B from fresh restores, and
+reported self-diff `pass` with zero scoring problems.
 
 The corrected mode is unconditional in the current-phase slot deliberately.
 Before the reviewed candidate facts were committed, an ordinary PR run was
 expected to fail when it scored the corrected attribution against the old
-frozen zeros. With the candidate now committed, the same ordinary freeze-off
-job is the required separate acceptance run.
+frozen zeros. After the candidate was committed, the same ordinary freeze-off
+job became and passed the required separate acceptance run.
 
 Before that task starts, Gradle snapshots both ordinary installed
 `Adempiere.jar` copies. The smoke uses an external guard for activation and

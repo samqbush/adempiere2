@@ -52,9 +52,10 @@ Corrected-legacy candidate run
 https://github.com/samqbush/adempiere2/actions/runs/33785079015 produced two
 self-consistent captures. The exact generated facts are committed: process and
 activity client/audit attribution is `11/101`, and one keyed event-audit row
-carries the same saving-context attribution. The candidate is domain-reviewed
-but is not accepted until a separate freeze-off acceptance run scores fresh
-captures against the committed bytes.
+carries the same saving-context attribution. Separate freeze-off acceptance run
+https://github.com/samqbush/adempiere2/actions/runs/33788686426 scored fresh
+captures against the committed bytes with A/B self-diff `pass` and zero
+problems. The corrected legacy answer is accepted.
 
 ## Governance
 
@@ -107,6 +108,6 @@ alternative is not to bless the cached-context result; the increment remains
 blocked until another independently reviewed legacy oracle mechanism exists.
 
 PR 18, https://github.com/samqbush/adempiere2/pull/18, is the later production
-consumer. It remains blocked until the corrected legacy answer is captured,
-domain-reviewed, accepted in a separate freeze-off run, and this oracle
+consumer. The corrected legacy answer is captured, domain-reviewed, and
+accepted in a separate freeze-off run; PR 18 remains blocked until this oracle
 amendment is merged to `develop`.

@@ -260,14 +260,14 @@ their closing gate by the frozen Phase 5f contract - is defined there as the
 disposition with its evidence, and Phase 5h is blocked behind it.
 
 `5g-1a` and `5g-1a-x` froze and accepted the legacy Business Partner write
-oracle. `5g-1a-y` is the in-progress R14 oracle-only prerequisite: the current
-frozen workflow process/activity client and audit attribution of `0` is a
-candidate to be replaced by the saving/invocation client and user, but no
-corrected freeze or acceptance run exists yet and the frozen facts remain
-unchanged. The amendment now also moves `AD_WF_EventAudit` out of ambient state
-and into the keyed workflow scope, with an exact process/activity predicate,
-required attribution columns, and a symbolic process edge; the keyed audit fact
-itself is still absent until CI capture.
+oracle. `5g-1a-y` is the accepted R14 oracle-only prerequisite: candidate run
+33785079015 replaced cached-startup workflow process/activity attribution with
+the saving client/user `11/101` and added the keyed `AD_WF_EventAudit` fact,
+while separate freeze-off run 33788686426 accepted the committed answer with
+A/B self-diff `pass` and zero scoring problems. The amendment moves event audit
+out of ambient state and into the keyed workflow scope, with an exact
+process/activity predicate, required attribution columns, and symbolic process
+and record edges.
 
 The amendment stores the future three-file production correction only as a
 SHA-256-pinned patch under
@@ -299,9 +299,8 @@ covers those controls. The current database-neutral chain head is:
 The corrected database-backed capture is selected explicitly with
 `-Pphase5g1ayMode=corrected-legacy-workflow-attribution`; omitting it preserves
 the existing legacy write-oracle behavior. PR 18,
-https://github.com/samqbush/adempiere2/pull/18, remains blocked until the
-corrected answer is captured, domain-reviewed, accepted in a separate
-freeze-off run, and merged.
+https://github.com/samqbush/adempiere2/pull/18, remains blocked until this
+accepted oracle amendment merges.
 
 The Tomcat smoke requires HTTP 2xx/3xx from each deployed context except
 `ADInterface`, whose unrouted base path is explicitly expected to return 404;

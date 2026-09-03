@@ -357,12 +357,14 @@ def validate_event_audit_contract_texts(
         EVENT_AUDIT_POLICY_FILE,
         "corrected-legacy candidate run",
         "exact generated facts are committed",
-        "not accepted until",
         "separate freeze-off acceptance run",
+        "33788686426",
+        "zero problems",
+        "corrected legacy answer is accepted",
     ):
         if token not in readme_lower:
             raise ValidationError(
-                f"the amendment README weakens pending-acceptance status: {token}"
+                f"the amendment README weakens accepted-oracle status: {token}"
             )
 
     business_rows = parse_rendered_rows(business_values_text, "business-values.tsv")
