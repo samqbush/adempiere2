@@ -205,7 +205,8 @@ first.
 
 | Run | Reached | Finding |
 |---|---|---|
-| [33700802266](https://github.com/samqbush/adempiere2/actions/runs/33700802266) | The first `full` dispatch on this branch: the regression matrix and `Contracts` both ran for the first time | The regression matrix is **green** on `phase3InstalledProduct`, `phase4InstalledApi`, `phase5bLegacyWebOracleSmoke`, `phase5cRollbackRehearsal`, `phase5dModernWebSmoke`, `phase5eCohortRoutingSmoke` and `phase5g1aLegacyWriteOracleSmoke`, which closes the open assumption that the event-thread descriptor change might regress the earlier modern and routed lanes. `Contracts` **failed** on `verifyPhase5Inventories`: `zk-sources.tsv` had drifted and nobody had seen it, because all 24 previous runs on this branch used a non-`full` `debug_gate`, whose `if:` suppresses that job. The current-phase smoke failed on `business-values.tsv` in both captures and on **nothing else** - the 503 did not recur - so R14 is now the single remaining class |
+| [33704883870](https://github.com/samqbush/adempiere2/actions/runs/33704883870) | PR #18's checks: `Contracts` **green**, current-phase smoke failed differently | `phase5g1bFinalVerification` passed in CI for the first time, with the whole chain behind it and the no-tracked-file-mutation postcondition. The smoke failed **before** scoring this time: capture B drove steps 1-10, then timed out after 30s waiting for `[id^='rowUser'] input` on `/webui/index.zul`. The ingress log shows `endRoutedSession` at `02:22:10.715` and `02:22:11.019` and then **no routing decision at all** for the navigation that followed. Recorded against R15; the mechanism is not yet measured |
+| [33700802266](https://github.com/samqbush/adempiere2/actions/runs/33700802266) | The first `full` dispatch on this branch: the regression matrix and `Contracts` both ran for the first time | The regression matrix is **green on all eight gates** - `phase3InstalledProduct`, `phase4InstalledApi`, `phase5bLegacyWebOracleSmoke`, `phase5cRollbackRehearsal`, `phase5dModernWebSmoke`, `phase5eCohortRoutingSmoke`, `phase5fJakartaWebRoutesSmoke` and `phase5g1aLegacyWriteOracleSmoke` - which closes the open assumption that the event-thread descriptor change might regress the earlier modern and routed lanes. `Contracts` **failed** on `verifyPhase5Inventories`: `zk-sources.tsv` had drifted and nobody had seen it, because all 24 previous runs on this branch used a non-`full` `debug_gate`, whose `if:` suppresses that job. The current-phase smoke failed on `business-values.tsv` in both captures and on **nothing else** - the 503 did not recur - so R14 is now the single remaining class |
 | [33696036502](https://github.com/samqbush/adempiere2/actions/runs/33696036502) | 36m; **`c_bpartner` matches the frozen answer exactly** | The `#SalesRep_ID` handoff fix landed: `business-values.tsv` no longer differs on `c_bpartner` at all, and the only remaining rows in that diff are the `ad_wf_process` and `ad_wf_activity` attribution columns, which is R14. The intermittent 503 recurred in capture A only, and the new timeline attributed it for the first time: the **second** editor's session, 0.7s into its sign-in, `class=STATIC_ASSET outcome=redirect-in-progress` in the ingress log - the cohort transition's own redirect barrier, not ZK |
 | [33691649424](https://github.com/samqbush/adempiere2/actions/runs/33691649424) | 34m24s; **the probe run: both remaining defect classes root-caused** | Three of the four classes still fail, down from four, and they reduce to two mechanisms: `c_bpartner.salesrep_id`, and the `ad_wf_process` and `ad_wf_activity` attribution rows, which share one cause. The undeclared browser errors did not recur - both captures emitted only the declared theme 404 - so that class was an intermittent race, not a constant. The context probe measured both runtimes at the points that decide the other two, and the answer is not the server-push guard: modern's `GridField.getDefault` holds a full session context, client 11 and user 101, that simply has no `#SalesRep_ID` in it, and modern's `MWorkflow.getDocValue` cache reload happens inside the user's session where legacy's happens on `main` at webapp startup with an empty context |
 | [33683942292](https://github.com/samqbush/adempiere2/actions/runs/33683942292) | 37m33s; **the first modern business write in the programme, and the first scored comparison** | Both modern captures drove all twelve steps and scoring ran. `semantic-facts.tsv` and `concurrency-facts.tsv` match the frozen legacy answer **byte for byte**, including the headline refused conflicting save. Four failure classes remain: `C_BPartner.SalesRep_ID` null against the frozen `101`; `AD_WF_Process` and `AD_WF_Activity` carrying `AD_Client_ID=11` and `CreatedBy=101` against the frozen `0`; and two undeclared, A/B-nondeterministic browser errors |
@@ -229,10 +230,65 @@ first.
 | [33572353340](https://github.com/samqbush/adempiere2/actions/runs/33572353340) | 30m45s, capture A fixture applied, browser not yet driven | Script defect: `psql` does not interpolate `:'var'` inside a `--command` string, so session evidence failed with `syntax error at or near ":"` |
 | [33570169991](https://github.com/samqbush/adempiere2/actions/runs/33570169991) | 25m24s, before any modern write | Lane defect: the parity lane seeded itself from the state the legacy regression left behind |
 
+### Run 33704883870 - capture B aborts after `endRoutedSession`, mechanism unmeasured
+
+This run's smoke did not reach scoring. Capture B completed steps 1 through 10,
+including the conflicting save and the duplicate submit, and then the driver
+timed out after 30 seconds waiting for the login field
+(`[id^='rowUser'] input`) on `/webui/index.zul`.
+
+The ingress log narrows where it happened without settling why:
+
+```
+02:22:10.715  CohortRoutingFilter.endRoutedSession: runtime=MODERN class=ZK_AU  outcome=routed-session-ended
+02:22:10.715  CohortRoutingFilter.endRoutedSession: runtime=MODERN class=ZK_PAGE outcome=routed-session-ended
+02:22:11.019  CohortRoutingFilter.endRoutedSession: runtime=MODERN class=ZK_AU  outcome=routed-session-ended
+                                          (nothing further)
+```
+
+The routed session ended, and the navigation that followed drew **no** routing
+decision and **no** transition script - not a refusal, not a route, nothing -
+and the page never rendered a login form.
+
+**What this is recorded as, and what it is not.** It shares an area with R15's
+503 - the cohort transition around session start and end - and R15 is broadened
+to carry it, because it is the same code owning both. It is **not** claimed to
+have the same cause: the 503 was measured to be the `REDIRECT_PENDING` barrier
+refusing a `STATIC_ASSET`, and nothing here has been measured to that standard.
+Asserting a shared mechanism from a shared neighbourhood is the kind of
+inference this increment has already had to retract once, so it is left as an
+observation with its evidence attached.
+
+It does change R15's severity. The 503 added an undeclared browser error to an
+otherwise complete capture; this aborted a capture after step 10 of 12. A gate
+that fails two different ways in the same area is not merely blocked by R14.
+
+### PR #18 - `Contracts` green at PR HEAD
+
+Opening https://github.com/samqbush/adempiere2/pull/18 produced the first
+`pull_request` event on this branch, and so the first run of `Contracts` that
+was not either suppressed or failing. It passed in 32m at `15ec25d13`
+([33704883870](https://github.com/samqbush/adempiere2/actions/runs/33704883870)),
+which is the first time `phase5g1bFinalVerification` - the new chain head this
+increment introduces - has been proven in CI, together with the whole
+transitive chain behind it and the post-Gradle "verification did not mutate
+tracked files" postcondition. `Core and module gate`, `Publication contract`
+and `JDK 21 disposable runtime smoke` are green on the same commit.
+
+`Current-phase database smoke` remains the one failing required check - on this
+run for an R15 reason rather than R14, since it never reached scoring.
+
 ### Run 33700802266 - the required check had never run
 
 This was the first `full` dispatch on the branch, and it exposed a gap in how
 the branch had been driven rather than a defect in what it built.
+
+The regression matrix passed on all eight gates, which is the first evidence
+that this branch does not regress any earlier phase. That mattered because the
+branch changes the ZK descriptor every `webui-modern.war` shares, and the
+question of whether re-enabling the event thread breaks the Phase 5d, 5e and 5f
+lanes had been an open assumption with no measurement behind it. It is now
+measured and negative.
 
 **`Contracts` had been skipped 24 times out of 24.** Every previous run was a
 `workflow_dispatch` carrying a `debug_gate` other than `full`, and the job's
@@ -1751,8 +1807,8 @@ can never carry quoting with it.
 
 | Gate | Kind | Status |
 |---|---|---|
-| `phase5g1bFinalVerification` | database-neutral, new `Contracts` chain head | Executed in CI for the first time in [33700802266](https://github.com/samqbush/adempiere2/actions/runs/33700802266), which **failed** on `verifyPhase5Inventories`; the drift is fixed and the gate is green locally, but the rest of the chain past that task has still never executed on this branch |
-| `phase5g1bModernWriteParitySmoke` | database-backed, new current-phase smoke | Executed repeatedly; **failing**, latest [33696036502](https://github.com/samqbush/adempiere2/actions/runs/33696036502). Never green on this branch |
+| `phase5g1bFinalVerification` | database-neutral, new `Contracts` chain head | **Green in CI** at PR HEAD `15ec25d13`, run [33704883870](https://github.com/samqbush/adempiere2/actions/runs/33704883870), 32m. Its first CI execution, [33700802266](https://github.com/samqbush/adempiere2/actions/runs/33700802266), failed on `verifyPhase5Inventories`; the inventory rule was fixed and the whole chain then passed |
+| `phase5g1bModernWriteParitySmoke` | database-backed, new current-phase smoke | Executed repeatedly; **failing** and never green. Latest is [33704883870](https://github.com/samqbush/adempiere2/actions/runs/33704883870) at PR HEAD, which failed **before reaching scoring** (R15); the last run that got as far as scoring, [33700802266](https://github.com/samqbush/adempiere2/actions/runs/33700802266), failed on `business-values.tsv` alone (R14) |
 
 ### The evidence validator, and its own validator
 
