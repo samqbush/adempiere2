@@ -280,9 +280,18 @@ tasks.register('verifyPhase5dCurrentZkInventory') {
 			'org.spin.loan_management/src/main/java/ui/zk',
 		].collect { rootProject.file(it) }.findAll { it.directory }
 		def uninventoried = []
+		// The ledger is generated from comment-stripped text - a source that
+		// names org.zkoss only in a comment is documenting the migration, not
+		// using the API - so this check has to strip too. A raw contains() here
+		// would demand a row the generator declines to emit, which is not a
+		// drift anyone can fix. Same expression as zk-compile-closure.gradle's
+		// phase5dStripComments, which is script-local to that file.
+		def stripComments = { String text ->
+			text.replaceAll('(?s)/\\*.*?\\*/', ' ').replaceAll('(?m)//.*$', ' ')
+		}
 		roots.each { root ->
 			rootProject.fileTree(root) { include '**/*.java' }.each { source ->
-				if (source.getText('UTF-8').contains('org.zkoss') &&
+				if (stripComments(source.getText('UTF-8')).contains('org.zkoss') &&
 						!inventoried.contains(source.canonicalPath)) {
 					uninventoried << rootProject.relativePath(source)
 				}

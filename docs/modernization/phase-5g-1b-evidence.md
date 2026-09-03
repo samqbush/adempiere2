@@ -205,6 +205,7 @@ first.
 
 | Run | Reached | Finding |
 |---|---|---|
+| [33700802266](https://github.com/samqbush/adempiere2/actions/runs/33700802266) | The first `full` dispatch on this branch: the regression matrix and `Contracts` both ran for the first time | The regression matrix is **green** on `phase3InstalledProduct`, `phase4InstalledApi`, `phase5bLegacyWebOracleSmoke`, `phase5cRollbackRehearsal`, `phase5dModernWebSmoke`, `phase5eCohortRoutingSmoke` and `phase5g1aLegacyWriteOracleSmoke`, which closes the open assumption that the event-thread descriptor change might regress the earlier modern and routed lanes. `Contracts` **failed** on `verifyPhase5Inventories`: `zk-sources.tsv` had drifted and nobody had seen it, because all 24 previous runs on this branch used a non-`full` `debug_gate`, whose `if:` suppresses that job. The current-phase smoke failed on `business-values.tsv` in both captures and on **nothing else** - the 503 did not recur - so R14 is now the single remaining class |
 | [33696036502](https://github.com/samqbush/adempiere2/actions/runs/33696036502) | 36m; **`c_bpartner` matches the frozen answer exactly** | The `#SalesRep_ID` handoff fix landed: `business-values.tsv` no longer differs on `c_bpartner` at all, and the only remaining rows in that diff are the `ad_wf_process` and `ad_wf_activity` attribution columns, which is R14. The intermittent 503 recurred in capture A only, and the new timeline attributed it for the first time: the **second** editor's session, 0.7s into its sign-in, `class=STATIC_ASSET outcome=redirect-in-progress` in the ingress log - the cohort transition's own redirect barrier, not ZK |
 | [33691649424](https://github.com/samqbush/adempiere2/actions/runs/33691649424) | 34m24s; **the probe run: both remaining defect classes root-caused** | Three of the four classes still fail, down from four, and they reduce to two mechanisms: `c_bpartner.salesrep_id`, and the `ad_wf_process` and `ad_wf_activity` attribution rows, which share one cause. The undeclared browser errors did not recur - both captures emitted only the declared theme 404 - so that class was an intermittent race, not a constant. The context probe measured both runtimes at the points that decide the other two, and the answer is not the server-push guard: modern's `GridField.getDefault` holds a full session context, client 11 and user 101, that simply has no `#SalesRep_ID` in it, and modern's `MWorkflow.getDocValue` cache reload happens inside the user's session where legacy's happens on `main` at webapp startup with an empty context |
 | [33683942292](https://github.com/samqbush/adempiere2/actions/runs/33683942292) | 37m33s; **the first modern business write in the programme, and the first scored comparison** | Both modern captures drove all twelve steps and scoring ran. `semantic-facts.tsv` and `concurrency-facts.tsv` match the frozen legacy answer **byte for byte**, including the headline refused conflicting save. Four failure classes remain: `C_BPartner.SalesRep_ID` null against the frozen `101`; `AD_WF_Process` and `AD_WF_Activity` carrying `AD_Client_ID=11` and `CreatedBy=101` against the frozen `0`; and two undeclared, A/B-nondeterministic browser errors |
@@ -228,6 +229,69 @@ first.
 | [33572353340](https://github.com/samqbush/adempiere2/actions/runs/33572353340) | 30m45s, capture A fixture applied, browser not yet driven | Script defect: `psql` does not interpolate `:'var'` inside a `--command` string, so session evidence failed with `syntax error at or near ":"` |
 | [33570169991](https://github.com/samqbush/adempiere2/actions/runs/33570169991) | 25m24s, before any modern write | Lane defect: the parity lane seeded itself from the state the legacy regression left behind |
 
+### Run 33700802266 - the required check had never run
+
+This was the first `full` dispatch on the branch, and it exposed a gap in how
+the branch had been driven rather than a defect in what it built.
+
+**`Contracts` had been skipped 24 times out of 24.** Every previous run was a
+`workflow_dispatch` carrying a `debug_gate` other than `full`, and the job's
+own condition - `github.event_name != 'workflow_dispatch' || inputs.debug_gate
+== 'full'` - suppresses it for exactly that case. That suppression is correct
+and deliberate: a single-shard debug dispatch buys one runtime data point and
+`Contracts` has no bearing on it. But the consequence is that
+`phase5g1bFinalVerification`, the new `Contracts` chain head this increment
+introduces, had **never once executed in CI on the branch that introduces it**,
+and the evidence table's "Verified locally; CI run to be recorded" was carrying
+more weight than it could bear. A required check is not verified by being
+declared.
+
+It failed on `verifyPhase5Inventories`: `gradle/phase5/zk-sources.tsv` had
+drifted. Three rows moved, and only one of the three was the new file:
+
+- `ZkCe10Dialect.java` appeared as a new ZK source;
+- `AbstractDesktop.java`'s reference count rose from 2 to 5;
+- `SessionContextListener.java` was reclassified from `ce-core` to
+  **`zkmax,ce-core`** - that is, as depending on ZK's *commercial* packages.
+
+The `AbstractDesktop` movement is real and belongs in the ledger: this branch's
+event-thread guard names three more ZK types. The other two were artifacts of
+how the ledger is computed. `SessionContextListener` acquired `zkmax` because a
+javadoc comment names `org.zkoss.zkmax.ui.comet.CometServerPush` while
+explaining which server push each runtime selects; it has no such import and no
+such dependency. `ZkCe10Dialect` was admitted on the same basis - it is a
+Playwright driver that reaches ZK only through the browser, its compile
+classpath contains no ZK at all, and both of its `org.zkoss` occurrences are in
+comments. Its symmetric sibling `Zk36Dialect`, doing the same job for the legacy
+runtime, has none and so got no row: the ledger was recording one half of a
+matched pair according to which author happened to type a fully-qualified name
+into a comment.
+
+**The fix is the rule the generator already applies elsewhere, not a reworded
+comment.** `generate-inventories.sh` strips Java comments before deciding
+namespace ownership, on the stated grounds that "a Java source that names the
+namespace only inside a comment is documenting the migration, not using the
+API". The `zk-sources.tsv` block did a raw `grep` instead. It now uses the same
+comment-stripped text for membership, for the reference count and for the API
+family columns.
+
+The blast radius was measured before adopting it: of 312 candidate files exactly
+one leaves the ledger (`ZkCe10Dialect`, returning the pinned count to its
+existing **311** so no pin had to be raised) and 16 reference counts fall - 15
+of which show as reductions against the committed ledger, the sixteenth being
+`SessionContextListener` itself, whose committed row was already stale.
+Every remaining `zkmax` classification disappears repo-wide, including
+`Combobox2Default.java` - which is an ADempiere-owned CE *replacement* for a
+commercial component, and whose only `zkmax` mention was the comment saying so.
+Recording those files as commercially dependent was the inaccurate state; the
+runtime's real commercial dependency is still recorded where it belongs, in
+`namespace-ownership.tsv`, against the two `zk.xml` descriptors.
+
+The first correction attempted here was to reword the offending comment. That
+was rejected on review: it would have left the next author free to reintroduce
+the drift by typing a fully-qualified name into javadoc, and it would have
+suppressed a signal rather than fixing the rule that produced it.
+
 ### Run 33696036502 - the handoff fix holds, and the 503 gets a name
 
 `business-values.tsv` for both captures now differs from the frozen answer in
@@ -245,8 +309,8 @@ outright. What remains is R14 alone, in the two tables that share its single
 cause, and this increment does not claim parity on it.
 
 **The 503 recurred, and the timeline earned its place.** It landed in capture A
-and not in capture B, confirming again that it is a race rather than a constant: 2 of the 6 captures
-scored so far, with run 33691649424 clean in both.
+and not in capture B, confirming again that it is a race rather than a constant: 2 of the 8 captures
+scored so far, with runs 33691649424 and 33700802266 clean in both.
 The timeline row is unambiguous:
 
 ```
@@ -1687,7 +1751,7 @@ can never carry quoting with it.
 
 | Gate | Kind | Status |
 |---|---|---|
-| `phase5g1bFinalVerification` | database-neutral, new `Contracts` chain head | Verified locally; CI run to be recorded |
+| `phase5g1bFinalVerification` | database-neutral, new `Contracts` chain head | Executed in CI for the first time in [33700802266](https://github.com/samqbush/adempiere2/actions/runs/33700802266), which **failed** on `verifyPhase5Inventories`; the drift is fixed and the gate is green locally, but the rest of the chain past that task has still never executed on this branch |
 | `phase5g1bModernWriteParitySmoke` | database-backed, new current-phase smoke | Executed repeatedly; **failing**, latest [33696036502](https://github.com/samqbush/adempiere2/actions/runs/33696036502). Never green on this branch |
 
 ### The evidence validator, and its own validator
