@@ -10,6 +10,14 @@ on:
       - phase-5g-1a-y-workflow-attribution-oracle
     paths:
       - .github/workflows/phase5g1ay-oracle-candidate.yml
+      - contracts/phase5g1ay-workflow-attribution-v1/**
+      - gradle/phase5/write-oracle.gradle
+      - scripts/phase5/guard-phase5g1ay-ordinary-runtime.sh
+      - scripts/phase5/materialize-phase5g1ay-corrected-runtime.sh
+      - scripts/phase5/run-write-oracle-smoke.sh
+      - scripts/phase5/validate-phase5g1ay-oracle.py
+      - scripts/phase5/validate-phase5g1ay-provenance.py
+      - scripts/phase5/verify-phase5g1ay-mutation-proof.py
 
 permissions:
   contents: read

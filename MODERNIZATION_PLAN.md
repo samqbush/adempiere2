@@ -1087,9 +1087,12 @@ pinned source commit, patch application and intended invocation-context flow,
 exact reviewed hunk/executable changed-line semantics, bounded capture-only
 materialization, independent failure restoration, exact current-HEAD/four-file
 provenance, separate fail-closed committed and working-tree scope checks,
-exact owned-worktree cleanup, a functional synthetic proof that the existing
+exact owned-worktree cleanup, contract-pinned removal of the baseline jar's
+stale signature entries, pre-score proof that both captures contain process,
+activity, and event-audit rows with saving-context attribution, a functional
+synthetic proof that the existing
 generic fact generator retains event-audit attribution and process/activity
-relationships, and 44 mutation cases. It proves no runtime attribution and no
+relationships, and 56 mutation cases. It proves no runtime attribution and no
 modern parity. The database-backed
 `phase5g1aLegacyWriteOracleSmoke` uses the corrected runtime only when
 `-Pphase5g1ayMode=corrected-legacy-workflow-attribution` (or the matching

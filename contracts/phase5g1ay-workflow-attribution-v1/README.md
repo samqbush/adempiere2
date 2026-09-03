@@ -76,7 +76,11 @@ The procedure is approved only when all of these controls remain true:
   invocation context through the reviewed overload chain without adding side
   effects or changing the compatibility overloads;
 - the corrected runtime is built from that disposable patched worktree and is
-  not packaged into ordinary installed or release outputs;
+  not packaged into ordinary installed or release outputs; because the
+  baseline jar is code-signed, the materializer requires the exact two
+  signature entries in `removed-signature-entries.txt`, removes them before
+  replacing classes, verifies that no signature entry remains, and records the
+  removal in provenance;
 - `AD_WF_EventAudit` remains absent from `ambient-tables.tsv`, carries the exact
   keyed predicate in `measurement-scope.tsv`, and the generator proves it can
   retain every required attribution column, symbolize the direct process edge,
@@ -92,6 +96,9 @@ The procedure is approved only when all of these controls remain true:
   `DocWorkflowManager`, `MWorkflow`, and `MWFProcess` class outputs;
 - restoration is required before scoring, and the independent Gradle finalizer
   restores and digest-verifies both ordinary jars even when the smoke fails;
+- both captures must contain exactly one keyed workflow process, activity, and
+  event-audit row carrying client 11 and saving user 101 attribution before
+  freeze or acceptance scoring can succeed;
 - freeze and acceptance remain separate CI runs.
 
 If this corrected-legacy procedure is not approved, capture cannot proceed. The

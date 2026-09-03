@@ -12,6 +12,10 @@ import shutil
 import tempfile
 
 
+class MutationConstructionError(RuntimeError):
+    pass
+
+
 def load_module(name: str, path: pathlib.Path):
     spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
@@ -86,6 +90,8 @@ def main() -> int:
     def must_fail(name: str, action) -> None:
         try:
             action()
+        except MutationConstructionError:
+            raise
         except Exception:
             rows.append((name, "detected"))
             return
@@ -93,7 +99,7 @@ def main() -> int:
 
     def replace_once(text: str, old: str, new: str) -> str:
         if text.count(old) != 1:
-            raise RuntimeError(
+            raise MutationConstructionError(
                 f"mutation source must occur exactly once: {old!r}, "
                 f"found {text.count(old)}"
             )
@@ -285,6 +291,48 @@ git -C "$repo_root" worktree add --detach --force "$worktree_root" "$source_comm
             )
         ),
     )
+    must_fail(
+        "materializer-leaves-stale-jar-signatures",
+        lambda: oracle.validate_materializer_semantics(
+            replace_once(
+                materializer_text,
+                'zip -q -d "$corrected_jar" "${expected_signatures[@]}"',
+                ': "signature removal bypassed"',
+            )
+        ),
+    )
+    must_fail(
+        "materializer-bypasses-signature-inventory-comparison",
+        lambda: oracle.validate_materializer_semantics(
+            replace_once(
+                materializer_text,
+                'if [[ "${actual_signatures[*]}" != "${expected_signatures[*]}" ]]; then',
+                "if false; then",
+            )
+        ),
+    )
+    must_fail(
+        "materializer-skips-signature-removal-verification",
+        lambda: oracle.validate_materializer_semantics(
+            replace_once(
+                materializer_text,
+                "FAIL: stale signature entries remain in corrected Adempiere.jar",
+                "stale signatures ignored",
+            )
+        ),
+    )
+    must_fail(
+        "materializer-bypasses-signature-postcheck-predicate",
+        lambda: oracle.validate_materializer_semantics(
+            replace_once(
+                materializer_text,
+                '''if "$java_home/bin/jar" --list --file "$corrected_jar" \\
+  | grep -Eq '^META-INF/[^/]+\\.(SF|RSA|DSA|EC)$'
+then''',
+                "if false; then",
+            )
+        ),
+    )
 
     visible, excluded = oracle.validate_repository_scope(
         set(),
@@ -346,10 +394,14 @@ git -C "$repo_root" worktree add --detach --force "$worktree_root" "$source_comm
             replace_once(
                 smoke_text,
                 """if [[ "$runtime_mode" == corrected-legacy-workflow-attribution ]]; then
+  validate_corrected_workflow_capture "$evidence_root/A/business-values.tsv"
+  validate_corrected_workflow_capture "$evidence_root/B/business-values.tsv"
   bash "$runtime_guard_script" restore \\
     "$repo_root" "$installed_home" "$runtime_guard_dir"
   trap - EXIT""",
                 """if [[ "$runtime_mode" == corrected-legacy-workflow-attribution ]]; then
+  validate_corrected_workflow_capture "$evidence_root/A/business-values.tsv"
+  validate_corrected_workflow_capture "$evidence_root/B/business-values.tsv"
   : "pre-score restoration bypassed"
   trap - EXIT""",
             ),
@@ -378,6 +430,94 @@ git -C "$repo_root" worktree add --detach --force "$worktree_root" "$source_comm
                 'if [[ ! -f "$expected" || "$(sha256_of "$target")" != "$(cat "$expected")" ]]; then',
                 'if [[ "$target" == "$target" ]]; then',
             ),
+            gradle_text,
+        ),
+    )
+    must_fail(
+        "corrected-capture-workflow-row-guard-bypassed",
+        lambda: oracle.validate_runtime_guard_semantics(
+            replace_once(
+                smoke_text,
+                'validate_corrected_workflow_capture "$evidence_root/A/business-values.tsv"',
+                ': "corrected workflow capture guard bypassed"',
+            ),
+            guard_text,
+            gradle_text,
+        ),
+    )
+    must_fail(
+        "corrected-capture-row-count-check-bypassed",
+        lambda: oracle.validate_runtime_guard_semantics(
+            replace_once(
+                smoke_text,
+                'if [[ "$rows" -ne 1 ]]; then',
+                "if false; then",
+            ),
+            guard_text,
+            gradle_text,
+        ),
+    )
+    must_fail(
+        "corrected-capture-identity-check-bypassed",
+        lambda: oracle.validate_runtime_guard_semantics(
+            replace_once(
+                smoke_text,
+                'if [[ "$identity" != "$expected_identity" ]]; then',
+                "if false; then",
+            ),
+            guard_text,
+            gradle_text,
+        ),
+    )
+    must_fail(
+        "corrected-capture-field-check-bypassed",
+        lambda: oracle.validate_runtime_guard_semantics(
+            replace_once(
+                smoke_text,
+                'if [[ ",$row," != *",$field,"* ]]; then',
+                "if false; then",
+            ),
+            guard_text,
+            gradle_text,
+        ),
+    )
+    must_fail(
+        "corrected-process-attribution-check-weakened",
+        lambda: oracle.validate_runtime_guard_semantics(
+            replace_once(
+                smoke_text,
+                "ad_client_id=11 createdby=101 updatedby=101 ad_user_id=101",
+                "ad_client_id=0 createdby=0 updatedby=0 ad_user_id=101",
+            ),
+            guard_text,
+            gradle_text,
+        ),
+    )
+    must_fail(
+        "corrected-activity-attribution-check-weakened",
+        lambda: oracle.validate_runtime_guard_semantics(
+            replace_once(
+                smoke_text,
+                """require_fact_fields "$facts" ad_wf_activity @ad_wf_activity#1 \\
+    ad_client_id=11 createdby=101 updatedby=101 \\""",
+                """require_fact_fields "$facts" ad_wf_activity @ad_wf_activity#1 \\
+    ad_client_id=0 createdby=0 updatedby=0 \\""",
+            ),
+            guard_text,
+            gradle_text,
+        ),
+    )
+    must_fail(
+        "corrected-event-audit-attribution-check-weakened",
+        lambda: oracle.validate_runtime_guard_semantics(
+            replace_once(
+                smoke_text,
+                """require_fact_fields "$facts" ad_wf_eventaudit @ad_wf_eventaudit#1 \\
+    ad_client_id=11 createdby=101 updatedby=101 \\""",
+                """require_fact_fields "$facts" ad_wf_eventaudit @ad_wf_eventaudit#1 \\
+    ad_client_id=0 createdby=0 updatedby=0 \\""",
+            ),
+            guard_text,
             gradle_text,
         ),
     )
@@ -530,6 +670,10 @@ git -C "$repo_root" worktree add --detach --force "$worktree_root" "$source_comm
     mutate_provenance(
         "provenance-missing-runtime-artifacts",
         lambda data: data.__setitem__("runtime_artifacts", []),
+    )
+    mutate_provenance(
+        "provenance-omits-removed-jar-signature",
+        lambda data: data["removed_jar_signatures"].pop(),
     )
     mutate_provenance(
         "provenance-omits-required-runtime-artifact",

@@ -35,6 +35,44 @@ installed_home=$repo_root/build/phase3/runtime/Adempiere
 runtime_guard_dir=$repo_root/build/phase5g1ay/ordinary-runtime-guard
 runtime_guard_script=$scripts_dir/guard-phase5g1ay-ordinary-runtime.sh
 
+require_fact_fields() {
+  local facts=$1 table=$2 expected_identity=$3
+  shift 3
+  local rows identity row field
+  rows=$(awk -F'\t' -v table="$table" '$1 == table { count++ } END { print count + 0 }' "$facts")
+  if [[ "$rows" -ne 1 ]]; then
+    echo "FAIL: corrected capture requires exactly one $table row in $facts, found $rows" >&2
+    return 1
+  fi
+  identity=$(awk -F'\t' -v table="$table" '$1 == table { print $2 }' "$facts")
+  if [[ "$identity" != "$expected_identity" ]]; then
+    echo "FAIL: corrected capture $table identity is $identity, expected $expected_identity" >&2
+    return 1
+  fi
+  row=$(awk -F'\t' -v table="$table" '$1 == table { print $3 }' "$facts")
+  for field in "$@"; do
+    if [[ ",$row," != *",$field,"* ]]; then
+      echo "FAIL: corrected capture $table row is missing $field in $facts" >&2
+      return 1
+    fi
+  done
+}
+
+validate_corrected_workflow_capture() {
+  local facts=$1
+  require_fact_fields "$facts" ad_wf_process @ad_wf_process#1 \
+    ad_client_id=11 createdby=101 updatedby=101 ad_user_id=101 \
+    ad_wf_process_id=@ad_wf_process#1 record_id=@c_bpartner#1
+  require_fact_fields "$facts" ad_wf_activity @ad_wf_activity#1 \
+    ad_client_id=11 createdby=101 updatedby=101 \
+    ad_wf_activity_id=@ad_wf_activity#1 \
+    ad_wf_process_id=@ad_wf_process#1 record_id=@c_bpartner#1
+  require_fact_fields "$facts" ad_wf_eventaudit @ad_wf_eventaudit#1 \
+    ad_client_id=11 createdby=101 updatedby=101 \
+    ad_wf_eventaudit_id=@ad_wf_eventaudit#1 \
+    ad_wf_process_id=@ad_wf_process#1 record_id=@c_bpartner#1
+}
+
 case "$runtime_mode" in
   legacy|corrected-legacy-workflow-attribution) ;;
   *)
@@ -80,6 +118,8 @@ bash "$scripts_dir/run-write-oracle-lane.sh" \
   "$db_host" "$db_port" "$db_name" "$db_user" "$system_user" "$marker" "$evidence_root"
 
 if [[ "$runtime_mode" == corrected-legacy-workflow-attribution ]]; then
+  validate_corrected_workflow_capture "$evidence_root/A/business-values.tsv"
+  validate_corrected_workflow_capture "$evidence_root/B/business-values.tsv"
   bash "$runtime_guard_script" restore \
     "$repo_root" "$installed_home" "$runtime_guard_dir"
   trap - EXIT

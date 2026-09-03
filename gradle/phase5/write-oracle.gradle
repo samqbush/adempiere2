@@ -593,6 +593,10 @@ tasks.register('verifyPhase5g1ayMutationProof', Exec) {
 		phase5g1aScript('validate-phase5g1ay-oracle.py'),
 		phase5g1aScript('validate-phase5g1ay-provenance.py'),
 		phase5g1aScript('verify-phase5g1ay-mutation-proof.py'),
+		phase5g1aScript('materialize-phase5g1ay-corrected-runtime.sh'),
+		phase5g1aScript('run-write-oracle-smoke.sh'),
+		phase5g1aScript('guard-phase5g1ay-ordinary-runtime.sh'),
+		rootProject.file('gradle/phase5/write-oracle.gradle'),
 		phase5g1aContractDir.file('measurement-scope.tsv'),
 		phase5g1aContractDir.file('ambient-tables.tsv'),
 		phase5g1aContractDir.file('normalization-policy.md'),
@@ -610,10 +614,10 @@ tasks.register('verifyPhase5g1ayMutationProof', Exec) {
 		def report = phase5g1ayBuildRoot.get().file('mutation-proof.tsv').asFile
 		def rows = report.readLines()
 			.findAll { it && !it.startsWith('mutation\t') }
-		if (rows.size() < 44 || rows.any { !it.endsWith('\tdetected') }) {
+		if (rows.size() != 56 || rows.any { !it.endsWith('\tdetected') }) {
 			throw new GradleException(
 				"The Phase 5g-1a-y mutation proof recorded ${rows.size()} case(s); " +
-					'the reviewed set is at least 44 detected mutations.')
+					'the reviewed set is exactly 56 detected mutations.')
 		}
 		logger.lifecycle(
 			"Phase 5g-1a-y mutation proof detected ${rows.size()} weakening(s)")

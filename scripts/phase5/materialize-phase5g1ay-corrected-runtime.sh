@@ -49,6 +49,10 @@ if [[ -z "$java_home" || ! -x "$java_home/bin/javac" || ! -x "$java_home/bin/jar
   echo "FAIL: a JDK with javac and jar is required" >&2
   exit 66
 fi
+if ! command -v zip >/dev/null 2>&1; then
+  echo "FAIL: zip is required to remove stale signatures from the corrected jar" >&2
+  exit 66
+fi
 
 if ! git -C "$repo_root" cat-file -e "${source_commit}^{commit}" 2>/dev/null; then
   git -C "$repo_root" fetch --no-tags --depth=1 origin "$source_commit"
@@ -231,6 +235,34 @@ corrected_jar="$output_dir/Adempiere.jar"
 cp "$baseline_jar" "$corrected_jar.tmp"
 mv "$corrected_jar.tmp" "$corrected_jar"
 
+expected_signatures=()
+while IFS= read -r signature; do
+  [[ -n "$signature" && "$signature" != \#* ]] || continue
+  expected_signatures+=("$signature")
+done <"$contract_dir/removed-signature-entries.txt"
+
+actual_signatures=()
+while IFS= read -r signature; do
+  [[ -n "$signature" ]] && actual_signatures+=("$signature")
+done < <(
+  "$java_home/bin/jar" --list --file "$corrected_jar" \
+    | LC_ALL=C grep -E '^META-INF/[^/]+\.(SF|RSA|DSA|EC)$' \
+    | LC_ALL=C sort
+)
+if [[ "${actual_signatures[*]}" != "${expected_signatures[*]}" ]]; then
+  echo "FAIL: baseline Adempiere.jar signature entries differ from the capture contract" >&2
+  printf 'expected: %s\nactual:   %s\n' \
+    "${expected_signatures[*]}" "${actual_signatures[*]}" >&2
+  exit 1
+fi
+zip -q -d "$corrected_jar" "${expected_signatures[@]}"
+if "$java_home/bin/jar" --list --file "$corrected_jar" \
+  | grep -Eq '^META-INF/[^/]+\.(SF|RSA|DSA|EC)$'
+then
+  echo "FAIL: stale signature entries remain in corrected Adempiere.jar" >&2
+  exit 1
+fi
+
 class_list="$output_dir/runtime-classes.txt"
 : >"$class_list"
 for class_name in DocWorkflowManager MWorkflow MWFProcess; do
@@ -269,7 +301,8 @@ fi
 
 repository_head=$(git -C "$repo_root" rev-parse HEAD)
 python3 - "$repo_root" "$output_dir" "$source_commit" "$mode" \
-  "$repository_head" "$oracle_operation" "$contract_dir" <<'PY'
+  "$repository_head" "$oracle_operation" "$contract_dir" \
+  "${expected_signatures[*]}" <<'PY'
 import hashlib
 import json
 import pathlib
@@ -279,6 +312,7 @@ repo_root = pathlib.Path(sys.argv[1]).resolve()
 output_dir = pathlib.Path(sys.argv[2]).resolve()
 source_commit, mode, repository_head, oracle_operation = sys.argv[3:7]
 contract_dir = pathlib.Path(sys.argv[7])
+removed_jar_signatures = sys.argv[8].split()
 
 contract = {}
 for line in (contract_dir / "capture-contract.tsv").read_text(encoding="utf-8").splitlines():
@@ -319,6 +353,7 @@ data = {
         }
         for path in artifact_paths
     ],
+    "removed_jar_signatures": removed_jar_signatures,
     "repository_head": repository_head,
     "oracle_operation": oracle_operation,
     "isolated_source_worktree": True,

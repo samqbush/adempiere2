@@ -57,6 +57,16 @@ def allowed_paths(contract_dir: pathlib.Path) -> list[str]:
     ]
 
 
+def removed_jar_signatures(contract_dir: pathlib.Path) -> list[str]:
+    return [
+        line
+        for line in (contract_dir / "removed-signature-entries.txt")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line and not line.startswith("#")
+    ]
+
+
 def repository_head(repo_root: pathlib.Path) -> str:
     completed = subprocess.run(
         ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
@@ -91,6 +101,7 @@ def validate_provenance(
         "patch_sha256",
         "patched_paths",
         "runtime_artifacts",
+        "removed_jar_signatures",
         "repository_head",
         "oracle_operation",
         "isolated_source_worktree",
@@ -109,6 +120,7 @@ def validate_provenance(
         "source_commit": contract["source_commit"],
         "patch_sha256": contract["patch_sha256"],
         "patched_paths": expected_paths,
+        "removed_jar_signatures": removed_jar_signatures(contract_dir),
         "isolated_source_worktree": True,
         "ordinary_repository_unchanged": True,
     }

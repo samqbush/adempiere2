@@ -704,11 +704,28 @@ def validate_materializer_semantics(materializer_text: str) -> None:
         "build/phase5g1ay/corrected-source",
         "build/phase5g1ay/corrected-runtime",
         "git apply --ignore-whitespace",
+        "removed-signature-entries.txt",
+        'zip -q -d "$corrected_jar" "${expected_signatures[@]}"',
+        "stale signature entries remain in corrected Adempiere.jar",
         "ordinary_repository_unchanged",
     ]
     absent = [token for token in required if token not in materializer_text]
     if absent:
         raise ValidationError(f"corrected runtime materializer is incomplete: {absent}")
+    require_ordered_tokens(
+        "corrected runtime signature removal",
+        materializer_text,
+        [
+            'done <"$contract_dir/removed-signature-entries.txt"',
+            'actual_signatures+=("$signature")',
+            'if [[ "${actual_signatures[*]}" != "${expected_signatures[*]}" ]]; then',
+            'zip -q -d "$corrected_jar" "${expected_signatures[@]}"',
+            '''if "$java_home/bin/jar" --list --file "$corrected_jar" \\
+  | grep -Eq '^META-INF/[^/]+\\.(SF|RSA|DSA|EC)$'
+then''',
+            "stale signature entries remain in corrected Adempiere.jar",
+        ],
+    )
     require_ordered_tokens(
         "corrected runtime materializer",
         materializer_text,
@@ -786,11 +803,46 @@ def validate_runtime_guard_semantics(
             "trap restore_corrected_runtime EXIT",
             'bash "$runtime_guard_script" activate',
             'bash "$scripts_dir/run-write-oracle-lane.sh"',
+            'validate_corrected_workflow_capture "$evidence_root/A/business-values.tsv"',
+            'validate_corrected_workflow_capture "$evidence_root/B/business-values.tsv"',
             'bash "$runtime_guard_script" restore',
             "trap - EXIT",
             'python3 "$scripts_dir/score-write-oracle-capture.py"',
         ],
     )
+    required_helper_tokens = [
+        """rows=$(awk -F'\\t' -v table="$table" '$1 == table { count++ } END { print count + 0 }' "$facts")""",
+        'if [[ "$rows" -ne 1 ]]; then',
+        """identity=$(awk -F'\\t' -v table="$table" '$1 == table { print $2 }' "$facts")""",
+        'if [[ "$identity" != "$expected_identity" ]]; then',
+        """if [[ ",$row," != *",$field,"* ]]; then""",
+    ]
+    require_ordered_tokens(
+        "corrected workflow capture helper",
+        smoke_text,
+        required_helper_tokens,
+    )
+    required_capture_blocks = [
+        """require_fact_fields "$facts" ad_wf_process @ad_wf_process#1 \\
+    ad_client_id=11 createdby=101 updatedby=101 ad_user_id=101 \\
+    ad_wf_process_id=@ad_wf_process#1 record_id=@c_bpartner#1""",
+        """require_fact_fields "$facts" ad_wf_activity @ad_wf_activity#1 \\
+    ad_client_id=11 createdby=101 updatedby=101 \\
+    ad_wf_activity_id=@ad_wf_activity#1 \\
+    ad_wf_process_id=@ad_wf_process#1 record_id=@c_bpartner#1""",
+        """require_fact_fields "$facts" ad_wf_eventaudit @ad_wf_eventaudit#1 \\
+    ad_client_id=11 createdby=101 updatedby=101 \\
+    ad_wf_eventaudit_id=@ad_wf_eventaudit#1 \\
+    ad_wf_process_id=@ad_wf_process#1 record_id=@c_bpartner#1""",
+    ]
+    absent_capture_blocks = [
+        block for block in required_capture_blocks if block not in smoke_text
+    ]
+    if absent_capture_blocks:
+        raise ValidationError(
+            "corrected workflow capture guard is incomplete: "
+            f"{absent_capture_blocks}"
+        )
     if 'cp "$corrected_jar" "$target.tmp"' in smoke_text:
         raise ValidationError("write-oracle smoke bypasses the independent runtime guard")
 

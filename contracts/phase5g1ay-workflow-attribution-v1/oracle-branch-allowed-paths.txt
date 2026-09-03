@@ -18,6 +18,7 @@ contracts/phase5g1ay-workflow-attribution-v1/manifest.sha256
 contracts/phase5g1ay-workflow-attribution-v1/oracle-branch-allowed-paths.txt
 contracts/phase5g1ay-workflow-attribution-v1/protected-repository-paths.txt
 contracts/phase5g1ay-workflow-attribution-v1/provenance-schema-fixture.json
+contracts/phase5g1ay-workflow-attribution-v1/removed-signature-entries.txt
 contracts/phase5g1ay-workflow-attribution-v1/workflow-attribution-policy.tsv
 docs/modernization/ci-topology.md
 docs/modernization/phase-5g-1a-y-evidence.md

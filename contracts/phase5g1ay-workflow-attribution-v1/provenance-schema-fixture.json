@@ -27,6 +27,10 @@
       "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
     }
   ],
+  "removed_jar_signatures": [
+    "META-INF/ADEMPIER.RSA",
+    "META-INF/ADEMPIER.SF"
+  ],
   "repository_head": "$GIT_HEAD",
   "oracle_operation": "acceptance",
   "isolated_source_worktree": true,

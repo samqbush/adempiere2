@@ -287,9 +287,10 @@ The separate `.github/workflows/phase5g1ay-oracle-candidate.yml` workflow runs
 the uniquely named `Oracle candidate capture (non-acceptance)` job when that
 file is pushed on the exact
 `phase-5g-1a-y-workflow-attribution-oracle` branch. Scoping the push trigger to
-the workflow file makes the initial prerequisite push the candidate request
-without running the expensive lane on later frozen-fact or documentation
-commits. The job passes
+the workflow, corrected-runtime materializer/guard/validators, Gradle wiring,
+and dedicated 5g-1a-y contract makes the initial prerequisite push and any
+capture-mechanism correction request a candidate run without running the
+expensive lane on later frozen-fact or documentation commits. The job passes
 `-Pphase5g1aFreeze=true` in addition to the mandatory
 `-Pphase5g1ayMode=corrected-legacy-workflow-attribution`. That run emits
 candidate contract files instead of scoring against them, and it is **not an

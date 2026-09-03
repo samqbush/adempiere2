@@ -279,14 +279,18 @@ source object. Validation separates committed pinned-source-to-`HEAD` changes
 from working-tree mutations, excluding only the two documented Ant-regenerated
 tracked outputs from the latter while protecting their committed versions.
 The corrected-source worktree is removed only through exact owned Git cleanup
-that fails closed on unregister errors. Provenance requires the current
-repository `HEAD` and the exact corrected jar/three-class inventory, and an
-independent Gradle finalizer restores both ordinary installed jars even when
-the smoke fails. The neutral validator also functionally exercises the existing
+that fails closed on unregister errors. The corrected jar removes exactly the
+two contract-pinned stale code-signature entries before replacing classes.
+Provenance requires the current repository `HEAD`, that removal list, and the
+exact corrected jar/three-class inventory. Both captures must contain the keyed
+workflow process, activity, and event-audit rows with saving-context
+attribution before scoring, and an independent Gradle finalizer restores both
+ordinary installed jars even when the smoke fails. The neutral validator also
+functionally exercises the existing
 generic fact generator against a synthetic event-audit row and fails if the
 table is dropped, reclassified ambient, loses a required attribution column, or
-cannot resolve its process/activity relationships. The current database-neutral
-chain head is:
+cannot resolve its process/activity relationships. The 56-case mutation proof
+covers those controls. The current database-neutral chain head is:
 
 ```bash
 ./gradlew phase5g1ayFinalVerification --dependency-verification=strict
