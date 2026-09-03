@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -32,6 +33,7 @@ import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.Response;
+import com.microsoft.playwright.TimeoutError;
 import com.microsoft.playwright.options.Cookie;
 import com.microsoft.playwright.options.WaitUntilState;
 
@@ -180,6 +182,11 @@ class RoutedCohortMatrixTest {
 			// presenting duplicates as runtime proof.
 			record("bootstrap-single-use", bootstrapIsSingleUse(),
 					"a second navigation re-bootstrapped the modern session");
+			runFixture("reset", oracleFixture);
+
+			record("transition-safe-asset-race", transitionSafeAssetRace(),
+					"a legacy theme image racing the cohort transition was "
+							+ "refused or did not overlap the redirect barrier");
 			runFixture("reset", oracleFixture);
 
 			// --- the cohort decision must not outlive its session ----------
@@ -458,6 +465,21 @@ class RoutedCohortMatrixTest {
 		}
 	}
 
+	private boolean logoutAndObserveFreshLogin(Page page) {
+		Locator logout = logoutControl(page);
+		if (logout.count() == 0) {
+			return false;
+		}
+		logout.first().click();
+		try {
+			page.locator("[id^='rowUser'] input").first().waitFor(
+					new Locator.WaitForOptions().setTimeout(30_000));
+			return true;
+		} catch (TimeoutError noFreshLogin) {
+			return false;
+		}
+	}
+
 	/** A browser that forges an internal header must be refused, not stripped. */
 	private boolean forgedInternalHeaderIsRejected() {
 		try (Playwright playwright = Playwright.create();
@@ -580,7 +602,16 @@ class RoutedCohortMatrixTest {
 				return false;
 			}
 			String modernCookie = sessionCookieValue(context);
-			logout(page);
+			boolean freshLoginRendered = logoutAndObserveFreshLogin(page);
+			boolean publicContextRoot =
+					(baseUrl + contextPath + "/").equals(page.url());
+			String freshCookie = sessionCookieValue(context);
+			long freshCookies = context.cookies().stream()
+					.filter(cookie -> "JSESSIONID".equals(cookie.name))
+					.count();
+			boolean sessionReplaced = modernCookie != null
+					&& freshCookie != null
+					&& !modernCookie.equals(freshCookie);
 
 			// Same browser, same cookie jar, a configuration that no longer
 			// selects this user.
@@ -597,17 +628,87 @@ class RoutedCohortMatrixTest {
 			Files.write(evidenceDir.resolve("cohort-reentry.tsv"),
 					List.of("first-cohort\tMODERN",
 							"reentry-cohort\t" + (legacy ? "LEGACY" : "MODERN"),
-							"session-replaced\t"
-									+ (modernCookie != null
-											&& !modernCookie.equals(reentryCookie)),
+							"session-replaced\t" + sessionReplaced,
+							"fresh-login-rendered\t" + freshLoginRendered,
+							"post-logout-context-root\t" + publicContextRoot,
+							"post-logout-public-cookies\t" + freshCookies,
 							"public-cookies\t" + cookies),
 					StandardCharsets.UTF_8);
 			logout(page);
 			// A new container session is the observable form of "the affinity and
 			// the decision were both destroyed": the router invalidates the
 			// Tomcat 9 session when the modern runtime reports the end.
-			return legacy && cookies == 1 && modernCookie != null
+			return freshLoginRendered && publicContextRoot
+					&& sessionReplaced && freshCookies == 1
+					&& legacy && cookies == 1 && modernCookie != null
 					&& !modernCookie.equals(reentryCookie);
+		}
+	}
+
+	/**
+	 * Forces immutable legacy theme images to overlap the role-selection AU
+	 * response that installs the modern affinity and owns the redirect barrier.
+	 */
+	private boolean transitionSafeAssetRace() throws IOException {
+		runCohort("apply", "user-allowlisted");
+		run("Routing mark", List.of(
+				laneScript, "routing", "mark",
+				evidenceDir.toString(), "transition-safe-asset"));
+		List<Integer> statuses = new CopyOnWriteArrayList<>();
+		try (Playwright playwright = Playwright.create();
+				Browser browser = playwright.chromium()
+						.launch(new BrowserType.LaunchOptions().setHeadless(true));
+				BrowserContext context = newContext(browser, primary)) {
+			Page page = context.newPage();
+			String assetPath = contextPath
+					+ "/theme/default/images/zk/progress2.gif";
+			page.onResponse(response -> {
+				if (response.url().contains(assetPath + "?r15=")) {
+					statuses.add(response.status());
+				}
+			});
+			page.navigate(baseUrl + contextPath + "/",
+					new Page.NavigateOptions()
+							.setWaitUntil(WaitUntilState.DOMCONTENTLOADED));
+			page.locator("[id^='rowUser'] input").first().waitFor();
+			page.locator("[id^='rowUser'] input").first().fill(primary.user());
+			page.locator("[id^='rowUser'] input").first().press("Tab");
+			page.locator("[id^='rowPassword'] input").first()
+					.fill(primary.password());
+			selectLanguage(page, primary);
+			okButton(page).click();
+			page.locator("[id^='grdChooseRole']").first().waitFor();
+			String selectedRole = selectedRole(page);
+
+			String burst = "() => {"
+					+ "let remaining=200;"
+					+ "const timer=setInterval(() => {"
+					+ "fetch('" + assetPath + "?r15=' + remaining,"
+					+ "{cache:'no-store'}).catch(() => {});"
+					+ "if (--remaining <= 0) clearInterval(timer);"
+					+ "}, 5);"
+					+ "}";
+			page.evaluate(burst);
+			okButton(page).click();
+			page.getByText(primary.user() + "@GardenWorld",
+					new Page.GetByTextOptions().setExact(false))
+					.first().waitFor();
+			page.waitForTimeout(250);
+
+			boolean modern = servedBy(page) == Served.MODERN;
+			boolean roleMatches = primary.role().equals(selectedRole);
+			boolean hasSuccess = statuses.stream().anyMatch(status -> status == 200);
+			Files.write(evidenceDir.resolve("transition-safe-asset-browser.tsv"),
+					List.of("requests\t" + statuses.size(),
+							"statuses\t" + statuses,
+							"modern-desktop\t" + modern,
+							"selected-role\t" + selectedRole),
+					StandardCharsets.UTF_8);
+			logout(page);
+			run("Routing observation", List.of(
+					laneScript, "routing", "observe",
+					evidenceDir.toString(), "transition-safe-asset"));
+			return modern && roleMatches && hasSuccess;
 		}
 	}
 

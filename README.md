@@ -183,6 +183,17 @@ all 23 public-origin cohort, isolation, lifecycle, SOAP-coexistence, and
 secret-hygiene rows as passing; see
 `docs/modernization/phase-5e-evidence.md`.
 
+The dedicated R15 hardening increment addresses two transition defects measured
+while validating https://github.com/samqbush/adempiere2/pull/18. Immutable
+legacy theme images now have a separate, closed `GET`/`HEAD` pass-through policy
+while the redirect barrier is set; general `STATIC_ASSET` routes such as
+`/zkau/view/` remain refused. Routed-session END now assigns one cleanup owner
+and one route-aware navigation owner: AU/XHR receives the ZK redirect command,
+top-level pages receive HTTP redirect, duplicates cannot redirect again, and a
+fresh request is undecided. The neutral and bridge regressions and the 24th
+runtime matrix row are implemented; full Phase 5e/5f and regression-matrix
+execution remains a GitHub Actions requirement before this increment merges.
+
 Phase 5f merged to `develop` as PR #11 at `83aeb8536`; both of its gates are
 executed and green:
 
@@ -260,7 +271,8 @@ their closing gate by the frozen Phase 5f contract - is defined there as the
 disposition with its evidence, and Phase 5h is blocked behind it.
 
 `5g-1a` and `5g-1a-x` froze and accepted the legacy Business Partner write
-oracle. `5g-1a-y` is the accepted R14 oracle-only prerequisite: candidate run
+oracle. `5g-1a-y` is the merged R14 oracle-only prerequisite from
+https://github.com/samqbush/adempiere2/pull/19: candidate run
 33785079015 replaced cached-startup workflow process/activity attribution with
 the saving client/user `11/101` and added the keyed `AD_WF_EventAudit` fact,
 while separate freeze-off run 33788686426 accepted the committed answer with

@@ -9,6 +9,7 @@ replace a baseline with a moving target.
 |---|---|
 | `derived-artifact-diff.tsv` | The complete set of entries in which the routed `webui.war` may differ from the frozen one, and how each may differ. |
 | `public-route-classes.tsv` | The closed public affinity unit: every method and path the router may proxy, and the refused rows that make it closed. |
+| `transition-safe-assets.tsv` | The narrower method/path allowlist that may pass through the legacy chain while a deciding response still owns the redirect barrier. |
 | `proxy-header-policy.tsv` | The request and response header allowlists, in both directions. |
 | `cohort-configuration.tsv` | The configuration grammar, precedence, decision lifetime, ticket parameters, key rules and cookie policy. |
 | `manifest.sha256` | The digests of the files above. |
@@ -18,6 +19,13 @@ Every row is asserted against the implementation by
 trusted by `verifyPhase5eDerivedLegacyWar`. A change to any of these files
 without a matching change to the code, or the reverse, fails the
 database-neutral gate.
+
+`STATIC_ASSET` does not imply transition safety. In particular,
+`/zkau/view/` is generated, session-bearing content and remains refused while
+the redirect barrier is set. Only `GET` and `HEAD` requests for `.gif` and
+`.png` files under `/theme/default/images/` are transition-safe; serving one
+does not release the barrier, rotate or bootstrap a session, consume a ticket,
+or alter cohort affinity.
 
 ## What this contract deliberately does not pin
 

@@ -13,6 +13,7 @@ public final class RoutingCore {
 		LEGACY,
 		ROUTE,
 		TRANSITION,
+		PASS_THROUGH,
 		REFUSE,
 		NOT_FOUND,
 		FAIL
@@ -35,6 +36,28 @@ public final class RoutingCore {
 				? plan(Action.FAIL, PublicRouteClass.UNKNOWN, null,
 						"decided-modern-without-affinity", 503)
 				: plan(Action.LEGACY, PublicRouteClass.UNKNOWN, null, null, 0);
+	}
+
+	/**
+	 * Closed policy for a request that arrives before the deciding legacy
+	 * response has released its redirect barrier.
+	 */
+	public static Plan redirectPending(String method, String rawPath) {
+		boolean rewritten =
+				SessionPathParameters.carriesSessionParameter(rawPath);
+		String pathInside = SessionPathParameters.strip(rawPath);
+		PublicRouteClass routeClass =
+				PublicRouteClassifier.classify(method, pathInside);
+		if (rewritten) {
+			return plan(Action.REFUSE, routeClass, pathInside,
+					"url-rewritten-session", 400);
+		}
+		if (PublicRouteClassifier.transitionSafeAsset(method, pathInside)) {
+			return plan(Action.PASS_THROUGH, routeClass, pathInside,
+					"transition-safe-asset", 0);
+		}
+		return plan(Action.REFUSE, routeClass, pathInside,
+				"redirect-in-progress", 503);
 	}
 
 	/**

@@ -433,11 +433,13 @@ tasks.register('verifyPhase5eDerivedDeterminism') {
 
 tasks.register('verifyPhase5eCohortContracts') {
 	group = 'verification'
-	description = 'Proves the reviewed Phase 5e route, header, cookie and audit contracts match the code'
+	description = 'Proves the reviewed Phase 5e route, transition, header, cookie and audit contracts match the code'
 	dependsOn ':org.adempiere.cohort:jar'
 	inputs.dir phase5eContractDir
 	outputs.file rootProject.layout.buildDirectory
 		.file('phase5/evidence/phase5e-public-routes.tsv')
+	outputs.file rootProject.layout.buildDirectory
+		.file('phase5/evidence/phase5e-transition-safe-assets.tsv')
 	doLast {
 		def classpath = project(':org.adempiere.cohort').sourceSets.main
 			.runtimeClasspath.files.collect { it.toURI().toURL() } as URL[]
@@ -478,7 +480,30 @@ tasks.register('verifyPhase5eCohortContracts') {
 					'so "the affinity unit is closed" would be vacuously true'
 			}
 
-			// 2. The header allowlists.
+			// 2. Transition safety is a separate, narrower method/path policy.
+			def transitionAssets = phase5eReadRows(
+				new File(phase5eContractDir, 'transition-safe-assets.tsv'))
+			transitionAssets.each { row ->
+				def safe = classifier.getMethod(
+					'transitionSafeAsset', String, String)
+					.invoke(null, row[0], row[1])
+				if (safe.toString() != row[2]) {
+					problems << "${row[0]} ${row[1]} transition-safe=${safe}, " +
+						"the contract says ${row[2]}"
+				}
+			}
+			if (!transitionAssets.any { it[2] == 'true' }
+					|| !transitionAssets.any {
+						it[1].startsWith('/zkau/view/') && it[2] == 'false'
+					}
+					|| !transitionAssets.any {
+						it[0] == 'POST' && it[2] == 'false'
+					}) {
+				problems << 'the transition-safe asset contract must record an ' +
+					'allowed image, a refused /zkau/view route, and a refused write'
+			}
+
+			// 3. The header allowlists.
 			def headers = phase5eReadRows(
 				new File(phase5eContractDir, 'proxy-header-policy.tsv'))
 			headers.each { row ->
@@ -499,7 +524,7 @@ tasks.register('verifyPhase5eCohortContracts') {
 				}
 			}
 
-			// 3. The audit policy must refuse to write anything it forbids.
+			// 4. The audit policy must refuse to write anything it forbids.
 			def forbidden = audit.getMethod('forbidden').invoke(null)
 			forbidden.each { needle ->
 				try {
@@ -513,7 +538,7 @@ tasks.register('verifyPhase5eCohortContracts') {
 				}
 			}
 
-			// 4. The documented grammar and the implemented grammar are one
+			// 5. The documented grammar and the implemented grammar are one
 			//    string, not two.
 			def grammar = parser.getMethod('identifierGrammar').invoke(null)
 			def documented = phase5eReadRows(
@@ -525,7 +550,7 @@ tasks.register('verifyPhase5eCohortContracts') {
 					"implemented one ${grammar}"
 			}
 
-			// 5. The ticket TTL, the reserved namespace and the replay capacity
+			// 6. The ticket TTL, the reserved namespace and the replay capacity
 			//    are the values the ADR justifies.
 			def ttl = protocol.getField('TTL_MILLIS').getLong(null)
 			def skew = protocol.getField('CLOCK_SKEW_MILLIS').getLong(null)
@@ -551,7 +576,7 @@ tasks.register('verifyPhase5eCohortContracts') {
 				problems << "the reserved internal namespace is ${reserved}"
 			}
 
-			// 6. The documented byte caps are the enforced byte caps, and the
+			// 7. The documented byte caps are the enforced byte caps, and the
 			//    enforcement is exercised rather than read off a constant.
 			def limits = loader.loadClass('org.adempiere.web.route.ProxyLimits')
 			def transfer = loader.loadClass(
@@ -605,8 +630,13 @@ tasks.register('verifyPhase5eCohortContracts') {
 		evidence.parentFile.mkdirs()
 		evidence.text = new File(
 			phase5eContractDir, 'public-route-classes.tsv').text
-		logger.lifecycle('Phase 5e route, header, audit, cohort and ticket ' +
-			'contracts match the implementation')
+		def transitionEvidence = rootProject.layout.buildDirectory
+			.file('phase5/evidence/phase5e-transition-safe-assets.tsv')
+			.get().asFile
+		transitionEvidence.text = new File(
+			phase5eContractDir, 'transition-safe-assets.tsv').text
+		logger.lifecycle('Phase 5e route, transition, header, audit, cohort ' +
+			'and ticket contracts match the implementation')
 	}
 }
 
@@ -614,7 +644,7 @@ tasks.register('verifyPhase5eCohortContracts') {
  * Mutation proof.
  *
  * A contract that no mutation can break is a description, not a gate. This
- * applies five reviewed mutations to the built classes and requires that a
+ * applies reviewed mutations to the built classes and requires that a
  * named assertion fails for each. It runs the mutations against copies; the
  * checked-out sources are never modified.
  */
@@ -925,7 +955,7 @@ tasks.register('verifyPhase5eRoutedEvidence') {
 			'master-off', 'user-allowlisted', 'role-allowlisted', 'not-allowlisted',
 			'config-duplicate', 'config-malformed', 'config-unreadable',
 			'config-client-scoped', 'bootstrap-single-use', 'role-unselected',
-			'cohort-reentry-after-logout',
+			'transition-safe-asset-race', 'cohort-reentry-after-logout',
 			'client-supplied-internal-header', 'missing-affinity',
 			'backend-unavailable', 'interceptor-mutation',
 			'concurrent-identity-isolation', 'logout-baseline', 'timeout-baseline',

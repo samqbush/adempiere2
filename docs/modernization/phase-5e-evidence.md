@@ -23,6 +23,7 @@ retires **nothing**.
 |---|---|
 | `phase5eFinalVerification` (database-neutral) | **Executed and green.** |
 | `phase5eCohortRoutingSmoke` (database-backed) | **Executed and green.** The marker-owned disposable PostgreSQL run recorded all 23 public-origin matrix rows as passing. |
+| R15 routing-hardening re-verification | **Pending in GitHub Actions.** The branch adds deterministic neutral and bridge coverage plus a 24th runtime matrix row; no canonical full or database-backed gate is claimed green before its PR-head runs complete. |
 
 The database-backed table below is recorded evidence from the canonical smoke.
 Its generated row-level results are in
@@ -49,7 +50,8 @@ handoff filter, cookie-only tracking and protocol jar all have to leave it green
 | Exactly one concurrent request may rotate a session, and exactly one may hold its ticket; the losers are refused explicitly and do not fail the session the winner is establishing | `PublicRouteClassifierTest`, `CohortRoutingFilterTest`, `RoutedWebContractTest` |
 | A persisted affinity is either restored intact or restored as `FAILED`/`affinity-not-restorable`; the bearer ticket is never written to the persisted session; a restored affinity that cannot resume is still modern | `PublicRouteClassifierTest`, `RoutedWebContractTest` |
 | A session whose recorded decision is `MODERN` but whose affinity is absent is refused with 503 and never handed to the legacy application; a `LEGACY` one is served normally | `CohortRoutingFilterTest` |
-| A routed session end invalidates the Tomcat 9 session — destroying the affinity **and** the sticky decision — and redirects to the public context root | `CohortRoutingFilterTest` |
+| While `REDIRECT_PENDING` is set, only `GET`/`HEAD` `.gif`/`.png` files under `/theme/default/images/` may pass through the legacy chain; the barrier and affinity stay unchanged, and `/zkau/view/`, ZK resources, pages, AU requests, unknown routes, path parameters, and write methods remain refused | `PublicRouteClassifierTest`, `RoutingCoreTest`, `CohortRoutingFilterTest`, `verifyPhase5eCohortContracts` |
+| A routed session end has exactly one cleanup owner and one route-aware navigation owner. Page END uses an HTTP redirect, AU END uses the ZK `redirect` response, duplicates cannot issue conflicting navigation, committed responses do not consume ownership, and the next request is undecided | `RoutingCoreTest`, `CohortRoutingFilterTest` |
 | The 8 MiB request and 64 MiB response caps are **enforced**, one byte on either side of the limit, nothing past the limit is written, and an oversized declared `Content-Length` is refused before the body is opened | `BoundedTransferTest`, `RoutedWebContractTest`, `verifyPhase5eCohortContracts` |
 | An established modern session never returns to the legacy runtime | `CohortRoutingFilterTest`, `PublicRouteClassifierTest` |
 | A deployment missing the router or the interceptor fails loudly | `CohortRoutingFilterTest` |
@@ -57,7 +59,7 @@ handoff filter, cookie-only tracking and protocol jar all have to leave it green
 | The derivation is byte-deterministic | `verifyPhase5eDerivedDeterminism` |
 | The ZK 3.6 bridge and the Jakarta modern WAR share only the neutral protocol | `verifyPhase5eBridgeIsolation` |
 | The reviewed contract files match the implementation | `verifyPhase5eCohortContracts`, `:zkwebui:routedContractTest` |
-| Sixteen reviewed mutations each **compile**, run their named test, and are detected by a failure in that test's own JUnit report | `verifyPhase5eMutationProof` |
+| Twenty-four reviewed mutations each **compile**, run their named test, and are detected by a failure in that test's own JUnit report | `verifyPhase5eMutationProof` |
 | The installed product and both 394LTS archives carry the routed artifact, the pristine rollback material, the Context descriptor, and the modern archive its `docBase` **resolves to**; the superseded auto-deployed `tomcat10-api/webapps/webui-modern.war` and its manifest are gone; the deployed Tomcat 9 `webapps/webui.war` agrees with `lib/webui.war` and no stale exploded context survives; no key material anywhere | `verifyPhase5eRoutedOverlay` |
 | Rollback restores the pristine logical digest, restores the Phase 5c/5d modern location and the deployed Tomcat 9 archive, removes the exploded context, **and survives the real Ant `setupWLib`** run with real merge inputs whose markers must appear in the rebuilt archive | `verifyPhase5eRollback` |
 | Phase 4 SOAP contracts, route classification and XFire absence still hold | `phase4FinalVerification` (via `phase5dFinalVerification`) |
@@ -97,6 +99,7 @@ Two things this matrix deliberately does not claim:
 | Client/org-only config row | Ignored; legacy |
 | Client-supplied internal header | Refused with 400 |
 | Bootstrapped session navigated again | Reused, not re-bootstrapped: same cookie value, one cookie, still modern |
+| Theme image overlaps the role-selection redirect barrier | At least one cache-bypassed `GET /theme/default/images/zk/progress2.gif?r15=...` is recorded with `transition-safe-asset` while the marked barrier is live, at least one burst response is 200, the barrier remains owned by the deciding response, and the session reaches the modern desktop. Post-barrier requests may correctly receive the existing fail-closed `awaiting-context-root` response and are recorded rather than misclassified as barrier failures |
 | Log out, then log in again in the same browser after the configuration stops selecting the user | Legacy, on a **new** container session. The decision is sticky per session and must not outlive it |
 | Missing or inconsistent affinity | Explicit failure; never a runtime switch |
 | Tomcat 10 outage during a modern session | Explicit failure and cleanup; never a legacy fallback |
@@ -242,6 +245,8 @@ copies unchanged, so the legacy cohort stays comparable with the Phase 5b oracle
 | The `role-allowlisted` fixture allowlisted a role the acting login never selects | `reset-cohort-config.sh`, `RoutedCohortMatrixTest` | `GardenAdmin` holds `AD_Role_ID` 102 and 103 in the seed and logs in as 102, but the fixture allowlisted 103, so the row could only have passed by accident. The fixture now allowlists 102, the browser reads back and asserts the role the session actually runs as, and a new `role-unselected` row proves a held-but-unselected role does **not** select the modern cohort. |
 | The concurrency row read `document.documentElement.lang` and never selected a language | `RoutedCohortMatrixTest` | Neither ZK version renders that attribute and `LoginPanel` listens only for `onSelect`, so the row compared two empty strings from two `en_US` sessions and could never have failed. Each identity is now driven to an explicit language through the combobox ADempiere populates, and the compared fact is the `AD_Message` `Logout` label ADempiere renders in the session's own language, calibrated against a solo capture of the same identity rather than a hard-coded translation. |
 | `discardLegacySessionState` called context-dependent `SessionManager` cleanup from a request thread with no `ServerContext` | `CohortRoutingFilter` | `getApplication()` resolved nothing, so `clearSession` and `cleanSessionBackground` silently did none of their work: the abandoned `AD_Session` row stayed open and the ZK background thread kept running. The abandoned session's context is now installed for the cleanup and restored in a `finally`, and the `AD_Session` row is closed from that context directly rather than through a weak reference that may already have been collected. |
+| `REDIRECT_PENDING` refused every request class, including immutable theme images | `PublicRouteClassifier`, `RoutingCore`, `CohortRoutingFilter` | PR 18 run 33696036502 measured a 503 for `/theme/default/images/zk/progress2.gif` while a sibling transition resource moved the browser to the context root. Transition safety is now a separate closed predicate, not an alias for `STATIC_ASSET`: only `GET`/`HEAD` `.gif`/`.png` files under `/theme/default/images/` pass through, without releasing the barrier or touching affinity, cookies, rotation, bootstrap, or tickets. |
+| Every END response received an ordinary HTTP redirect and every concurrent request repeated cleanup/navigation | `ModernSessionAffinity`, `RoutingLifecycle`, `CohortRoutingFilter` | PR 18 run 33704883870 measured concurrent AU/page END responses followed by no rendered login form. A 302 returned to ZK AU/XHR does not own top-level navigation. Cleanup and navigation now have separate atomic owners; AU uses the ZK redirect command, page requests use HTTP redirect, duplicates return 204, committed responses leave navigation available, and a fresh `/webui/` request is undecided. |
 
 ## H1–H8 red-team outcomes
 
@@ -260,6 +265,10 @@ copies unchanged, so the legacy cohort stays comparable with the Phase 5b oracle
 
 - The compatibility layer, the router and the handoff remain transitional until
   Phase 5h.
+- R15's deterministic code and browser evidence are implemented, but its
+  canonical `phase5eFinalVerification`, `phase5eCohortRoutingSmoke`, Phase 5f
+  smoke, and complete regression-matrix executions remain pending until the
+  dedicated routing-hardening PR runs in GitHub Actions.
 - A production customisation can still replace an installed descriptor. Phase 5e
   makes that a **startup failure** and an operator-visible constraint, but it
   cannot prove the content of an unknown customer overlay.

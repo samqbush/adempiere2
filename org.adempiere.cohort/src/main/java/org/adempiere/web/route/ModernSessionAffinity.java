@@ -109,6 +109,14 @@ public final class ModernSessionAffinity implements Serializable {
 	public record Admission(Step step, String ticket) {
 	}
 
+	/**
+	 * Atomic ownership of the two terminal side effects. Cleanup and browser
+	 * navigation are separate because an asset response may observe END first,
+	 * while a later page or AU response is the first one able to navigate.
+	 */
+	public record EndClaim(boolean cleanupOwner, boolean navigationOwner) {
+	}
+
 	private final CohortDecision decision;
 	private final CohortIdentity identity;
 	private Phase phase = Phase.PENDING_ROTATION;
@@ -116,6 +124,8 @@ public final class ModernSessionAffinity implements Serializable {
 	private transient String ticket;
 	private String modernSessionId;
 	private String failureReason;
+	private transient boolean endCleanupClaimed;
+	private transient boolean endNavigationClaimed;
 
 	public ModernSessionAffinity(CohortDecision decision, CohortIdentity identity) {
 		if (decision == null || !decision.modern()) {
@@ -249,6 +259,24 @@ public final class ModernSessionAffinity implements Serializable {
 	/** Whether this session may still be proxied. */
 	public synchronized boolean usable() {
 		return phase != Phase.FAILED;
+	}
+
+	/**
+	 * Claims routed-session cleanup and, when eligible, the one browser
+	 * navigation. The flags are transient so a container restart before actual
+	 * invalidation can safely retry both effects.
+	 */
+	public synchronized EndClaim claimEnd(boolean navigationEligible) {
+		boolean cleanupOwner = !endCleanupClaimed;
+		if (cleanupOwner) {
+			endCleanupClaimed = true;
+		}
+		boolean navigationOwner =
+				navigationEligible && !endNavigationClaimed;
+		if (navigationOwner) {
+			endNavigationClaimed = true;
+		}
+		return new EndClaim(cleanupOwner, navigationOwner);
 	}
 
 	@Override
