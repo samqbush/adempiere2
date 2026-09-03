@@ -1,0 +1,4 @@
+# Exact production source paths the corrected-legacy capture patch may touch.
+base/src/org/compiere/wf/DocWorkflowManager.java
+base/src/org/compiere/wf/MWorkflow.java
+base/src/org/compiere/wf/MWFProcess.java

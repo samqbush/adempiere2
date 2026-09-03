@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "phase": "5g-1a-y",
+  "mode": "corrected-legacy-workflow-attribution",
+  "source_commit": "60af453aab0e6537a6189241366c857c239c959f",
+  "patch_sha256": "80c95bb044e23bdd36788582892e309eb4a519e0f2c9bb7124c66bb4e1aacca2",
+  "patched_paths": [
+    "base/src/org/compiere/wf/DocWorkflowManager.java",
+    "base/src/org/compiere/wf/MWorkflow.java",
+    "base/src/org/compiere/wf/MWFProcess.java"
+  ],
+  "runtime_artifacts": [
+    {
+      "path": "build/phase5g1ay/corrected-runtime/Adempiere.jar",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "path": "build/phase5g1ay/corrected-runtime/classes/org/compiere/wf/DocWorkflowManager.class",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "path": "build/phase5g1ay/corrected-runtime/classes/org/compiere/wf/MWorkflow.class",
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    {
+      "path": "build/phase5g1ay/corrected-runtime/classes/org/compiere/wf/MWFProcess.class",
+      "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    }
+  ],
+  "repository_head": "$GIT_HEAD",
+  "oracle_operation": "acceptance",
+  "isolated_source_worktree": true,
+  "ordinary_repository_unchanged": true
+}

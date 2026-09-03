@@ -70,6 +70,7 @@ baseline is seeded and never receives a capture-local symbol.
 | Class | Why |
 |---|---|
 | `CreatedBy`, `UpdatedBy` | The acting user. This is the whole point of the concurrency capture: without `UpdatedBy` the oracle cannot say which of two editors won. Scored as `updatedby-changed`. |
+| `AD_WF_EventAudit` attribution: `AD_Client_ID`, `AD_Org_ID`, `CreatedBy`, `UpdatedBy`, `AD_User_ID`, `AD_WF_Responsible_ID`, `AD_WF_Process_ID`, `AD_WF_Node_ID`, `AD_Table_ID`, `Record_ID`, `EventType`, `WFState` | The saving/invocation client, organization, user, process and process/node activity are business facts. Residual R14 forbids normalizing the current cached-context zeros away or treating the audit row as ambient; `5g-1a-y` must capture and compare the complete normalized row through the separately reviewed corrected-legacy mechanism. |
 | `NULL` versus `''` | Different facts. Collapsing them would hide a column that stopped being populated. Scored as `null-became-empty`. |
 | `IsActive` | The deactivate step's entire observable effect. Scored as `isactive-flipped`. |
 | Unlisted timestamp columns | Truncating every timestamp that is not explicitly classified would be over-normalization by default. |

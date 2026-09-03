@@ -247,10 +247,9 @@ dictionary processes, 174 callout columns and 197 extension surfaces - under
 ./gradlew phase5g0FinalVerification --dependency-verification=strict
 ```
 
-That gate is now the head of the phase-gate chain and the `Contracts` job runs
-it. It regenerates the inventories from the seed dictionary and the reactor
-sources and requires an exact match, so a new extension callout, model validator
-or changed process class fails the build rather than silently widening a later
+It regenerates the inventories from the seed dictionary and the reactor sources
+and requires an exact match, so a new extension callout, model validator or
+changed process class fails the build rather than silently widening a later
 fixture's blast radius.
 
 `5g-0` also **opens** a named disposition for `/mobile`, `/adempiere` and
@@ -259,6 +258,46 @@ fixture's blast radius.
 their closing gate by the frozen Phase 5f contract - is defined there as the
 `5g-7` gate that requires a recorded `migrate`, `retire` or `narrow-5h-scope`
 disposition with its evidence, and Phase 5h is blocked behind it.
+
+`5g-1a` and `5g-1a-x` froze and accepted the legacy Business Partner write
+oracle. `5g-1a-y` is the in-progress R14 oracle-only prerequisite: the current
+frozen workflow process/activity client and audit attribution of `0` is a
+candidate to be replaced by the saving/invocation client and user, but no
+corrected freeze or acceptance run exists yet and the frozen facts remain
+unchanged. The amendment now also moves `AD_WF_EventAudit` out of ambient state
+and into the keyed workflow scope, with an exact process/activity predicate,
+required attribution columns, and a symbolic process edge; the keyed audit fact
+itself is still absent until CI capture.
+
+The amendment stores the future three-file production correction only as a
+SHA-256-pinned patch under
+`contracts/phase5g1ay-workflow-attribution-v1/`. The patch is applied only in a
+disposable detached worktree to build a capture-only runtime under
+`build/phase5g1ay/`; no `base/src` change or ordinary installed/release artifact
+ships from the oracle branch. The depth-one CI jobs narrowly fetch the pinned
+source object. Validation separates committed pinned-source-to-`HEAD` changes
+from working-tree mutations, excluding only the two documented Ant-regenerated
+tracked outputs from the latter while protecting their committed versions.
+The corrected-source worktree is removed only through exact owned Git cleanup
+that fails closed on unregister errors. Provenance requires the current
+repository `HEAD` and the exact corrected jar/three-class inventory, and an
+independent Gradle finalizer restores both ordinary installed jars even when
+the smoke fails. The neutral validator also functionally exercises the existing
+generic fact generator against a synthetic event-audit row and fails if the
+table is dropped, reclassified ambient, loses a required attribution column, or
+cannot resolve its process/activity relationships. The current database-neutral
+chain head is:
+
+```bash
+./gradlew phase5g1ayFinalVerification --dependency-verification=strict
+```
+
+The corrected database-backed capture is selected explicitly with
+`-Pphase5g1ayMode=corrected-legacy-workflow-attribution`; omitting it preserves
+the existing legacy write-oracle behavior. PR 18,
+https://github.com/samqbush/adempiere2/pull/18, remains blocked until the
+corrected answer is captured, domain-reviewed, accepted in a separate
+freeze-off run, and merged.
 
 The Tomcat smoke requires HTTP 2xx/3xx from each deployed context except
 `ADInterface`, whose unrouted base path is explicitly expected to return 404;

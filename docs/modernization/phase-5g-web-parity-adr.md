@@ -2,7 +2,8 @@
 
 Status: accepted; `5g-0` merged to `develop` as PR #13 at `91c4c2029`;
 `5g-1a` merged as PR #16 at `1a761b55b`; amended by decision 15, added by
-increment `5g-1a-x`
+increment `5g-1a-x`; amended by decision 16, added by in-progress increment
+`5g-1a-y`
 
 Extends:
 
@@ -333,6 +334,66 @@ Two corollaries, because an amendment is a weakening opportunity:
   itself is a different property from parity between two runtimes, so every
   fact class stays exact there regardless of policy.
 
+### Decision 16: a corrected legacy runtime may be used only as pinned capture input
+
+Added by increment `5g-1a-y`, after planning PR 18 exposed residual R14.
+
+The `5g-1a-x` oracle records `AD_WF_Process.AD_Client_ID=0`,
+`AD_WF_Activity.AD_Client_ID=0`, and `CreatedBy` / `UpdatedBy=0` for both rows.
+It also treats `AD_WF_EventAudit`, which `MWFActivity` creates, as ambient and
+therefore does not key or compare its attribution. Those values come from
+`MWorkflow`'s cached startup context, not from the document-saving invocation.
+The accepted domain decision is that a document-triggered workflow and its
+audit row are attributed to the saving/invocation client and user.
+
+The legacy write oracle therefore needs one narrow corrected-legacy capture
+procedure:
+
+1. the exact source commit is pinned in
+   `contracts/phase5g1ay-workflow-attribution-v1/capture-contract.tsv`, fetched
+   narrowly by each depth-one Lane 1 checkout and independently ensured by the
+   materializer before validation;
+2. one reviewed patch, with an exact SHA-256, hunk-header sequence, executable
+   added/removed line sequence, and exact three-path allowlist, is applied only
+   in a disposable detached worktree;
+3. the patched source builds a capture-only runtime under
+   `build/phase5g1ay/`;
+4. that runtime is activated only when
+   `corrected-legacy-workflow-attribution` is explicitly selected for the
+   existing write-oracle lane;
+5. the ordinary installed runtime is restored byte-for-byte before scoring,
+   while an independent digest-backed Gradle finalizer repeats restoration even
+   when the smoke fails; no patched source, installer, release archive, or
+   shared production runtime artifact merges in the oracle amendment;
+6. provenance requires `repository_head` to equal `git rev-parse HEAD` and an
+   exact artifact inventory of corrected `Adempiere.jar` plus the top-level
+   `DocWorkflowManager`, `MWorkflow`, and `MWFProcess` class outputs;
+7. `AD_WF_EventAudit` is removed from ambient classification, keyed by its own
+   generated identity through an exact fixture process/activity predicate, and
+   compared with its client/org/created/updated user, workflow
+   user/responsible, process, node, table/record, event type, and workflow state
+   intact. Its direct process edge is symbolized; its activity relationship is
+   the exact process/node join because the table has no `AD_WF_Activity_ID`.
+
+The future production shape is represented as data by the patch: backward-
+compatible overloads carry an explicit invocation `Properties` from
+`DocWorkflowManager` to `MWorkflow.start` and then to the `MWFProcess` PO
+superclass. Existing callers continue through the old overloads, and named
+transaction/savepoint/commit/rollback propagation is untouched.
+
+This is still oracle-before-modern. PR 18,
+https://github.com/samqbush/adempiere2/pull/18, later implements the shared
+production correction against the accepted answer. It remains blocked until
+`5g-1a-y` is captured, domain-reviewed, accepted in a separate freeze-off run,
+and merged. The scope/policy change is not a frozen fact update: until that
+capture, the accepted business-values and foreign-key files remain unchanged
+and carry no keyed event-audit row.
+
+If this corrected-legacy procedure is not approved, capture cannot proceed.
+The cached-context result is not silently retained or normalized away; the
+increment remains blocked until another independently reviewed legacy oracle
+mechanism is approved.
+
 ## Consequences
 
 - Phase 5g takes more branches than any prior phase. That is the cost of not
@@ -340,6 +401,10 @@ Two corollaries, because an amendment is a weakening opportunity:
 - The legacy Tomcat 9 / ZK 3.6 runtime must stay bootable and capturable for the
   whole of Phase 5g. It cannot be retired before `5g-7`, which reinforces the
   existing Phase 5h ordering.
+- A corrected-legacy capture runtime is not an ordinary product artifact. Its
+  source, patch, materialized classes, activation, restoration, and provenance
+  are separately guarded, and the database-neutral gate makes no claim that a
+  capture has run.
 - Full seed restore per capture makes the database-backed gates slower than the
   Phase 5f shards. Sharding by tier is expected, following the Phase 5f pattern
   of recording vector failures rather than aborting and driving the job with
@@ -364,6 +429,8 @@ Two corollaries, because an amendment is a weakening opportunity:
 |---|---|
 | One Phase 5g branch | Bundles a new capture harness, a new contract language, destructive fixture isolation, master-data CRUD, document transitions, accounting, process execution, modern defect fixes, routed security verification and CI topology movement into one review. Not reviewable, and not bisectable. |
 | Score the modern runtime first and bless the result | A self-frozen master proves later refactors, not first-run correctness. `MODERNIZATION_PLAN.md` §3.6 requires the legacy comparison when a legacy runtime is available, and it is. |
+| Capture the cached-context attribution and normalize the zeros away | The client and acting user are business attribution, not volatility. Removing them would make both the incorrect legacy result and any incorrect modern result look equal. |
+| Merge the three-file workflow correction in the oracle amendment | Violates the rule that an oracle PR ships no shared production runtime code and would let one branch invent the expected answer while implementing the behavior PR 18 is meant to score. |
 | Extend `contracts/legacy-web-browser-v1/` additively | `gradle/phase5/browser-contract.gradle:25-49` regenerates `manifest.sha256` over every file in the tree and `:81-84` hard-fails on any unmanifested file, so adding a file necessarily rewrites a frozen one. `modern-comparable-facts.tsv:1-10` is also specifically the Phase 5d read-only comparison policy, not an extensible write registry. A new `contracts/legacy-web-write-v1/` tree references the login contract without mutating it. |
 | Reuse `reset-oracle-fixture.sh` between write captures | It resets login and recent-item state for one hard-coded user and nothing else. Reusing it would let one capture's business rows leak into the next, producing a nondeterministic or falsely green oracle. |
 | Assert `Fact_Acct` rows as an effect of Sales Order completion | Factually wrong. Completion does not post, and the quiescence step disables the processor that otherwise would, so the assertion could only ever fail or be satisfied by accident. |
