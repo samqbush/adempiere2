@@ -194,22 +194,20 @@ observation, not a decision reason - a browser can see `MODERN`, never
 `USER_ALLOWLISTED` - and the two are never conflated in the record. It demands
 **all four** of the write flow's sessions, not the bare `served` row: cohort
 routing decides per identity and the flow uses two, so one row is a quarter of
-the answer. A row with neither record fails. The first CI run of the smoke will settle which branch fires;
-until then this is reported as a known limit of the row, not as coverage.
+the answer. A row with neither record fails. Every scored run so far fired the `served` branch - the routed captures
+reach the modern origin - so the `refused` branch remains unexercised and is
+reported as a known limit of the row, not as coverage.
 
 ## Capture run log
 
-Each modern defect is fixed in its own commit citing the run it closes.
+Each modern defect is fixed in its own commit citing the run it closes. Newest
+first.
 
 | Run | Reached | Finding |
 |---|---|---|
-| [33570169991](https://github.com/samqbush/adempiere2/actions/runs/33570169991) | 25m24s, before any modern write | Lane defect: the parity lane seeded itself from the state the legacy regression left behind |
-| [33572353340](https://github.com/samqbush/adempiere2/actions/runs/33572353340) | 30m45s, capture A fixture applied, browser not yet driven | Script defect: `psql` does not interpolate `:'var'` inside a `--command` string, so session evidence failed with `syntax error at or near ":"` |
-| [33580195848](https://github.com/samqbush/adempiere2/actions/runs/33580195848) | 22m07s, failed in the **legacy** regression before the parity lane started | Latent oracle-lane flake: `PA_Goal` is a wall-clock-triggered lazy writer, so two captures that straddle an hour boundary diverge |
-| [33584462937](https://github.com/samqbush/adempiere2/actions/runs/33584462937) | 32m10s; legacy regression **green**, routed lane prepared, ambient census **passed**, modern capture A driving | Driver defect: `ZkCe10Dialect.signIn` navigated to the bare origin instead of `/webui/`, so the browser landed on ADempiere's `/admin/` page |
-| [33586831680](https://github.com/samqbush/adempiere2/actions/runs/33586831680) | 31m31s; modern login, role, menu and the Business Partner window all rendered, `served=modern`, steps 0-1 measured; failed clicking Save | **First modern runtime defect**: `NumberBox` attached its calculator handlers with ZK 3.6's `setAction`, which ZK 10 rejects at render time, and the resulting error overlay intercepted the click |
-| [33683942292](https://github.com/samqbush/adempiere2/actions/runs/33683942292) | 37m33s; **the first modern business write in the programme, and the first scored comparison** | Both modern captures drove all twelve steps and scoring ran. `semantic-facts.tsv` and `concurrency-facts.tsv` match the frozen legacy answer **byte for byte**, including the headline refused conflicting save. Four failure classes remain: `C_BPartner.SalesRep_ID` null against the frozen `101`; `AD_WF_Process` and `AD_WF_Activity` carrying `AD_Client_ID=11` and `CreatedBy=101` against the frozen `0`; and two undeclared, A/B-nondeterministic browser errors |
+| [33696036502](https://github.com/samqbush/adempiere2/actions/runs/33696036502) | 36m; **`c_bpartner` matches the frozen answer exactly** | The `#SalesRep_ID` handoff fix landed: `business-values.tsv` no longer differs on `c_bpartner` at all, and the only remaining rows in that diff are the `ad_wf_process` and `ad_wf_activity` attribution columns, which is R14. The intermittent 503 recurred in capture A only, and the new timeline attributed it for the first time: the **second** editor's session, 0.7s into its sign-in, `class=STATIC_ASSET outcome=redirect-in-progress` in the ingress log - the cohort transition's own redirect barrier, not ZK |
 | [33691649424](https://github.com/samqbush/adempiere2/actions/runs/33691649424) | 34m24s; **the probe run: both remaining defect classes root-caused** | Three of the four classes still fail, down from four, and they reduce to two mechanisms: `c_bpartner.salesrep_id`, and the `ad_wf_process` and `ad_wf_activity` attribution rows, which share one cause. The undeclared browser errors did not recur - both captures emitted only the declared theme 404 - so that class was an intermittent race, not a constant. The context probe measured both runtimes at the points that decide the other two, and the answer is not the server-push guard: modern's `GridField.getDefault` holds a full session context, client 11 and user 101, that simply has no `#SalesRep_ID` in it, and modern's `MWorkflow.getDocValue` cache reload happens inside the user's session where legacy's happens on `main` at webapp startup with an empty context |
+| [33683942292](https://github.com/samqbush/adempiere2/actions/runs/33683942292) | 37m33s; **the first modern business write in the programme, and the first scored comparison** | Both modern captures drove all twelve steps and scoring ran. `semantic-facts.tsv` and `concurrency-facts.tsv` match the frozen legacy answer **byte for byte**, including the headline refused conflicting save. Four failure classes remain: `C_BPartner.SalesRep_ID` null against the frozen `101`; `AD_WF_Process` and `AD_WF_Activity` carrying `AD_Client_ID=11` and `CreatedBy=101` against the frozen `0`; and two undeclared, A/B-nondeterministic browser errors |
 | [33679068657](https://github.com/samqbush/adempiere2/actions/runs/33679068657) | 35m18s; **root cause located** | `atClickWidgetDisabled=true` on the failing page against `false` on the working one, with `postHandlerQueued` 1 against 2. ZK's `Toolbarbutton.doClick_` discards a click on a `_disabled` widget silently. The button reads enabled thirty seconds later, which is why every earlier probe found it healthy. Fixed by awaiting ZK's own enabled state before clicking |
 | [33673776776](https://github.com/samqbush/adempiere2/actions/runs/33673776776) | 38m22s; same failure, same step; **the click reaches ZK and ZK sends nothing** | `zk.dragging` was never set and the click propagated all the way to `document`, where ZK's single delegated click listener lives, with its `ignoreClick()` guard false - on both pages. Everything outside ZK is excluded. What remains unobserved is the inside of ZK's handler at click time: `Toolbarbutton.doClick_`'s silent `_disabled` return and `fireX`'s silent `evt.stop()` return, neither of which the 30-seconds-later dump can speak to |
 | [33669560347](https://github.com/samqbush/adempiere2/actions/runs/33669560347) | 30m27s; same failure, same step; **the witnessed axes are identical, the toolbars are not** | A trusted DOM click reached the Save anchor on both pages, with no popup, no mask, and `disabledRequest`, the AU queue, `ajaxReq` and `pendingReqInf` healthy on both - yet only the primary sent its `onClick`. The Save controls differ in `sclass`: three disable-enable cycles on the primary against one on the deactivate page. The stale-node reading was retracted - ZK delegates clicks from `document` - leaving `zk.dragging` and an in-flight `stopPropagation` |
@@ -224,6 +222,58 @@ Each modern defect is fixed in its own commit citing the run it closes.
 | [33598342557](https://github.com/samqbush/adempiere2/actions/runs/33598342557) | 33m; legacy lane green end to end; modern capture A completed steps 0-9 for the third run running, and failed at the same step | The search key **was** committed - the new guard did not fire - so the wrong *field* was being filled: the dialog locator took `.first()` of a union that also matches the window behind it, and the Business Partner window has its own field captioned "Search Key" |
 | [33591572610](https://github.com/samqbush/adempiere2/actions/runs/33591572610) | 33m; legacy lane green end to end; modern capture A again completed steps 0-9 and again failed positioning the deactivating session | The awaited `/zkau` response did not identify the request being waited for, so ZK 10's own in-flight traffic could satisfy it; an uncommitted search key then failed **silently** as an unfiltered query |
 | [33589524866](https://github.com/samqbush/adempiere2/actions/runs/33589524866) | 33m; **the modern runtime completed steps 0-9**, including `create` (7 rows), `update`, the concurrency pair and `duplicate-submit`; failed positioning the deactivating session | Driver settlement: the Find dialog's Ok was clicked before the search key's own blur round trip had landed, so the query ran unfiltered |
+| [33586831680](https://github.com/samqbush/adempiere2/actions/runs/33586831680) | 31m31s; modern login, role, menu and the Business Partner window all rendered, `served=modern`, steps 0-1 measured; failed clicking Save | **First modern runtime defect**: `NumberBox` attached its calculator handlers with ZK 3.6's `setAction`, which ZK 10 rejects at render time, and the resulting error overlay intercepted the click |
+| [33584462937](https://github.com/samqbush/adempiere2/actions/runs/33584462937) | 32m10s; legacy regression **green**, routed lane prepared, ambient census **passed**, modern capture A driving | Driver defect: `ZkCe10Dialect.signIn` navigated to the bare origin instead of `/webui/`, so the browser landed on ADempiere's `/admin/` page |
+| [33580195848](https://github.com/samqbush/adempiere2/actions/runs/33580195848) | 22m07s, failed in the **legacy** regression before the parity lane started | Latent oracle-lane flake: `PA_Goal` is a wall-clock-triggered lazy writer, so two captures that straddle an hour boundary diverge |
+| [33572353340](https://github.com/samqbush/adempiere2/actions/runs/33572353340) | 30m45s, capture A fixture applied, browser not yet driven | Script defect: `psql` does not interpolate `:'var'` inside a `--command` string, so session evidence failed with `syntax error at or near ":"` |
+| [33570169991](https://github.com/samqbush/adempiere2/actions/runs/33570169991) | 25m24s, before any modern write | Lane defect: the parity lane seeded itself from the state the legacy regression left behind |
+
+### Run 33696036502 - the handoff fix holds, and the 503 gets a name
+
+`business-values.tsv` for both captures now differs from the frozen answer in
+exactly two rows, and `c_bpartner` is not one of them:
+
+```
+observed  ad_wf_process  ... ad_client_id=11 ... createdby=101 ... updatedby=101
+frozen    ad_wf_process  ... ad_client_id=0  ... createdby=0   ... updatedby=0
+observed  ad_wf_activity ... ad_client_id=11 ... createdby=101 ... updatedby=101
+frozen    ad_wf_activity ... ad_client_id=0  ... createdby=0   ... updatedby=0
+```
+
+Setting `#SalesRep_ID` in `CohortHandoff.apply` closed the `SalesRep_ID` class
+outright. What remains is R14 alone, in the two tables that share its single
+cause, and this increment does not claim parity on it.
+
+**The 503 recurred, and the timeline earned its place.** It landed in capture A
+and not in capture B, confirming again that it is a race rather than a constant: 2 of the 6 captures
+scored so far, with run 33691649424 clean in both.
+The timeline row is unambiguous:
+
+```
+2026-09-03T00:10:42.024Z  second  3  update  503  /webui/theme/default/images/zk/progress2.gif
+```
+
+- it belongs to the **second** editor's session, not the primary one;
+- it arrived 0.72s after that session's own first page load, during its sign-in,
+  which is where the router performs the cohort transition;
+- and the ingress log names the decision at the same instant:
+  `CohortRoutingFilter.refuse: phase5e-route runtime=MODERN class=STATIC_ASSET
+  outcome=redirect-in-progress` at `00:10:42.019`, one millisecond before a
+  sibling `ZK_RESOURCE` received `transition-to-context-root`.
+
+So the 503 is `CohortRoutingFilter`'s redirect barrier, which refuses **every**
+class while `REDIRECT_PENDING` is set, including a static theme image with no
+session semantics. The browser had several resource requests in flight when the
+cohort decision flipped that session to MODERN; one of them lost the race.
+
+This is a real modern-lane defect and it is recorded, not reclassified. It is
+deliberately **not** fixed in this run's commit: narrowing the redirect barrier
+by route class is a change to Phase 5e's fail-closed routing, whose whole point
+is that it refuses rather than guesses, and it would need its own reasoning and
+its own H6 row rather than being folded into a parity fix as a convenience.
+Since R14 already prevents this gate from going green on this branch, fixing the
+flake here would buy no green and would spend a security-relevant change on a
+run that still fails. It is carried as this increment's own open item.
 
 ### Run 33691649424 - both remaining classes measured, and neither is the guard
 
@@ -299,24 +349,34 @@ divergence follows:
   reuses those instances, so `AD_Client_ID` and `CreatedBy` on `AD_WF_Process`
   and `AD_WF_Activity` are 0 for the whole life of the JVM.
 - On modern, Tomcat 10 hosts `webui-modern` and `ADInterface` and **not**
-  `serverApps`. Its log contains no `WebEnv.initWeb` line at all. Nothing warms
-  the cache before the first user, so the reload happens inside the write
-  session, on `Thread-3`, holding client 11 and user 101 - and those are the
-  values the modern rows carry.
+  `serverApps`, and its log contains no `WebEnv.initWeb` line at all. That is
+  not a property of Tomcat 10; it is two verifiable properties of this
+  composition. The capture lane exports
+  `ADEMPIERE_ROUTED_LANE_PHASE=phase5e` (`write-parity-container-adapter.sh:40`)
+  and `start-routed-lane.sh:154` stages the Phase 5f `*-modern.war` set only
+  when the lane phase is `phase5f`, so no `serverApps`-derived context is
+  deployed at all; and the Phase 5f `adempiere-modern.war` descriptor declares
+  no `load-on-startup` element, against three in the legacy
+  `adempiereApps.war`, so even the 5f composition would not warm the cache on
+  `main`. Nothing warms it before the first user, so the reload happens inside
+  the write session, on `Thread-3`, holding client 11 and user 101 - and those
+  are the values the modern rows carry.
 
 **This is the class the increment cannot settle by itself.** The frozen `0/0/0`
 is not a property of the Business Partner write. It is a property of a static
 cache being poisoned by an unrelated webapp's startup notification, and the
 modern value is the one a reader would call correct. Three ways to close it
-exist and all three are oracle acts, which ADR decision 3 forbids inside a
-parity increment:
+exist. Two are oracle acts, which ADR decision 3 forbids inside a parity
+increment; the third is permitted by the ADR and excluded on scope:
 
 1. fix the product so `MWFProcess` takes the saving context rather than the
    cached workflow's - which moves the **legacy** answer too, and requires a
    re-freeze;
 2. deploy `serverApps` on the modern lane so the modern JVM is poisoned
-   identically - which is reproducing an accident, and is Phase 5f/5h scope
-   besides;
+   identically - a modern-side change a parity increment *is* permitted to
+   make, and so **not** ADR-forbidden, but excluded on scope: it would
+   deliberately reproduce an accident, and modern startup composition is
+   Phase 5f/5h's to decide;
 3. declare the attribution columns of these two tables a legacy startup artifact
    rather than a business fact - which is precisely the after-the-fact
    reclassification the design of this increment makes structurally impossible.
@@ -1628,7 +1688,7 @@ can never carry quoting with it.
 | Gate | Kind | Status |
 |---|---|---|
 | `phase5g1bFinalVerification` | database-neutral, new `Contracts` chain head | Verified locally; CI run to be recorded |
-| `phase5g1bModernWriteParitySmoke` | database-backed, new current-phase smoke | **Not yet executed** |
+| `phase5g1bModernWriteParitySmoke` | database-backed, new current-phase smoke | Executed repeatedly; **failing**, latest [33696036502](https://github.com/samqbush/adempiere2/actions/runs/33696036502). Never green on this branch |
 
 ### The evidence validator, and its own validator
 

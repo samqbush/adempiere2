@@ -229,10 +229,13 @@ the Phase 5e test's own wait configuration.
 longer blocks a pull request, but it still gates the post-merge lane and is
 still worth fixing.
 
-## The current-phase smoke has not yet run
+## The current-phase smoke has run, and is not green
 
 `Current-phase database smoke` now runs `phase5g1bModernWriteParitySmoke`. It
-**has not been executed**, and must not be reported as green until it has. It
+**has been executed repeatedly and has never been green** - its latest run is
+[33696036502](https://github.com/samqbush/adempiere2/actions/runs/33696036502),
+which still fails on residual risk R14 - and must not be reported as green
+until it is. It
 replaces `phase5g1aLegacyWriteOracleSmoke`, which is green - the legacy oracle
 was accepted in run 33528308317, and the dialect extraction was re-proven
 against it in run 33548556277 - and which has been retired into the regression

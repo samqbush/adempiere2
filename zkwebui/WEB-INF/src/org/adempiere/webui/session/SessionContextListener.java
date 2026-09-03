@@ -330,7 +330,9 @@ public class SessionContextListener implements ExecutionInit,
      * {@code getCurrentInstance()}: the latter installs an empty context on a
      * thread that had none, which would both erase the distinction this probe
      * exists to draw and hand that thread's future children a shared context.
-     * It is removed once the question is closed.
+     * It is retained, not removed, now that the question is half-closed:
+     * residual risk R14's oracle increment {@code 5g-1a-y} has to re-take the
+     * modern-side measurement this probe produces. Remove it when R14 closes.
      */
     static boolean probeEnabled() {
         return "true".equals(System.getProperty("adempiere.phase5g.contextProbe"));

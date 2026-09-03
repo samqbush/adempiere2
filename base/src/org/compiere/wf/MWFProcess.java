@@ -109,8 +109,9 @@ public class MWFProcess extends X_AD_WF_Process
 		// Phase 5g-1b diagnostic: super(wf.getCtx(), ...) above already fixed
 		// this record's AD_Client_ID and CreatedBy from the cached workflow's
 		// retained context. See Phase5gContextProbe.
-		org.compiere.util.Phase5gContextProbe.capture("MWFProcess.new",
-			"AD_Workflow_ID=" + wf.getAD_Workflow_ID(), wf.getCtx());
+		if (org.compiere.util.Phase5gContextProbe.isEnabled())
+			org.compiere.util.Phase5gContextProbe.capture("MWFProcess.new",
+				"AD_Workflow_ID=" + wf.getAD_Workflow_ID(), wf.getCtx());
 		processInfo = pi;
 		setAD_Workflow_ID (wf.getAD_Workflow_ID());
 		setPriority(wf.getPriority());

@@ -84,8 +84,9 @@ public class MWorkflow extends X_AD_Workflow
 		// Phase 5g-1b diagnostic: a cached instance keeps this ctx for the life
 		// of the process, and MWFProcess takes its AD_Client_ID and CreatedBy
 		// from it. See Phase5gContextProbe.
-		org.compiere.util.Phase5gContextProbe.capture("MWorkflow.get-miss",
-			"AD_Workflow_ID=" + AD_Workflow_ID, ctx);
+		if (org.compiere.util.Phase5gContextProbe.isEnabled())
+			org.compiere.util.Phase5gContextProbe.capture("MWorkflow.get-miss",
+				"AD_Workflow_ID=" + AD_Workflow_ID, ctx);
 		if (retValue.get_ID() != 0)
 			s_cache.put(AD_Workflow_ID, retValue);
 		return retValue;
@@ -166,9 +167,10 @@ public class MWorkflow extends X_AD_Workflow
 			// new-record constructor is super(wf.getCtx(), ...), so this ctx --
 			// not the saving thread's -- decides AD_Client_ID and CreatedBy on
 			// AD_WF_Process and AD_WF_Activity. See Phase5gContextProbe.
-			org.compiere.util.Phase5gContextProbe.capture("MWorkflow.getDocValue-reload",
-				"workflows=" + workflows.size() + " AD_Client_ID=" + AD_Client_ID
-					+ " AD_Table_ID=" + AD_Table_ID, ctx);
+			if (org.compiere.util.Phase5gContextProbe.isEnabled())
+				org.compiere.util.Phase5gContextProbe.capture("MWorkflow.getDocValue-reload",
+					"workflows=" + workflows.size() + " AD_Client_ID=" + AD_Client_ID
+						+ " AD_Table_ID=" + AD_Table_ID, ctx);
 		}
 		//	Look for Entry
 		MWorkflow[] retValue = (MWorkflow[])s_cacheDocValue.get(key);

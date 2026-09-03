@@ -44,7 +44,14 @@ import java.util.logging.Level;
  * <p>So this probe is called at those capture points. It installs nothing,
  * takes the context as a parameter, and is off unless
  * {@code -Dadempiere.phase5g.contextProbe=true} is set, which only the Phase
- * 5g-1b lanes do. It is removed once the question is closed.
+ * 5g-1b lanes do.
+ *
+ * <p>It answered both questions in CI run 33691649424 and is deliberately
+ * <em>retained</em> rather than removed: the {@code SalesRep_ID} half is fixed,
+ * but the workflow-attribution half is residual risk R14, whose oracle
+ * increment {@code 5g-1a-y} has to re-take exactly this measurement on both
+ * runtimes to decide what the frozen answer should say. Remove it when R14
+ * closes.
  *
  * @author Phase 5g-1b
  */
