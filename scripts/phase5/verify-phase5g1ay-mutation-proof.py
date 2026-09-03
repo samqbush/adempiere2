@@ -131,32 +131,12 @@ def main() -> int:
         "AD_WF_EventAudit\t"
         f"{oracle.EVENT_AUDIT_KEY_COLUMN}\t{oracle.EVENT_AUDIT_PREDICATE}"
     )
-    future_event_line = (
-        "ad_wf_eventaudit\t@ad_wf_eventaudit#1\t"
-        "ad_client_id=11,ad_org_id=50001,ad_table_id=291,ad_user_id=101,"
-        "ad_wf_eventaudit_id=@ad_wf_eventaudit#1,ad_wf_node_id=244,"
-        "ad_wf_process_id=@ad_wf_process#1,ad_wf_responsible_id=100,"
-        "created=<volatile>,createdby=101,eventtype=PC,isactive=Y,"
-        "record_id=@c_bpartner#1,updated=<volatile>,updatedby=101,"
-        "uuid=<volatile>,wfstate=OS"
+    event_line = next(
+        line
+        for line in business_values_text.splitlines()
+        if line.startswith("ad_wf_eventaudit\t@ad_wf_eventaudit#1\t")
     )
-    future_business_values = business_values_text + future_event_line + "\n"
-    future_foreign_key_graph = (
-        foreign_key_graph_text.rstrip()
-        + "\n"
-        + oracle.EVENT_AUDIT_REQUIRED_EDGE
-        + "\n"
-    )
-    future_create_effect = replace_once(
-        create_effect_text,
-        "\n[updated]\n",
-        f"\n{future_event_line}\n\n[updated]\n",
-    )
-    validate_event_audit(
-        business_values=future_business_values,
-        foreign_key_graph=future_foreign_key_graph,
-        create_effect=future_create_effect,
-    )
+    validate_event_audit()
 
     must_fail(
         "document-manager-uses-cached-workflow-context",
@@ -580,12 +560,12 @@ then''',
         ),
     )
     must_fail(
-        "corrected-workflow-facts-omit-event-audit",
+        "frozen-workflow-facts-omit-event-audit",
         lambda: validate_event_audit(
             business_values=replace_once(
                 business_values_text,
-                "ad_wf_process\t@ad_wf_process#1\tad_client_id=0",
-                "ad_wf_process\t@ad_wf_process#1\tad_client_id=11",
+                event_line + "\n",
+                "",
             )
         ),
     )
@@ -593,38 +573,40 @@ then''',
         "frozen-event-audit-omits-createdby",
         lambda: validate_event_audit(
             business_values=replace_once(
-                future_business_values,
-                future_event_line,
-                future_event_line.replace("createdby=101,", ""),
+                business_values_text,
+                event_line,
+                event_line.replace("createdby=101,", ""),
             ),
-            foreign_key_graph=future_foreign_key_graph,
-            create_effect=future_create_effect,
         ),
     )
     must_fail(
         "frozen-event-audit-process-edge-omitted",
         lambda: validate_event_audit(
-            business_values=future_business_values,
-            create_effect=future_create_effect,
+            foreign_key_graph=replace_once(
+                foreign_key_graph_text,
+                oracle.EVENT_AUDIT_REQUIRED_EDGE + "\n",
+                "",
+            ),
         ),
     )
     must_fail(
         "frozen-event-audit-activity-join-broken",
         lambda: validate_event_audit(
             business_values=replace_once(
-                future_business_values,
-                future_event_line,
-                future_event_line.replace("ad_wf_node_id=244", "ad_wf_node_id=245"),
+                business_values_text,
+                event_line,
+                event_line.replace("ad_wf_node_id=244", "ad_wf_node_id=245"),
             ),
-            foreign_key_graph=future_foreign_key_graph,
-            create_effect=future_create_effect,
         ),
     )
     must_fail(
         "frozen-create-effect-omits-event-audit",
         lambda: validate_event_audit(
-            business_values=future_business_values,
-            foreign_key_graph=future_foreign_key_graph,
+            create_effect=replace_once(
+                create_effect_text,
+                event_line + "\n",
+                "",
+            ),
         ),
     )
 

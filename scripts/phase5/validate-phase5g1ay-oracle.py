@@ -355,13 +355,14 @@ def validate_event_audit_contract_texts(
     readme_lower = " ".join(amendment_readme_text.lower().split())
     for token in (
         EVENT_AUDIT_POLICY_FILE,
-        "contains no keyed event-audit row",
-        "remain untouched until",
-        "separate freeze-off run",
+        "corrected-legacy candidate run",
+        "exact generated facts are committed",
+        "not accepted until",
+        "separate freeze-off acceptance run",
     ):
         if token not in readme_lower:
             raise ValidationError(
-                f"the amendment README weakens pending-freeze status: {token}"
+                f"the amendment README weakens pending-acceptance status: {token}"
             )
 
     business_rows = parse_rendered_rows(business_values_text, "business-values.tsv")

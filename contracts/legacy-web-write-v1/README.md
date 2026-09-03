@@ -81,14 +81,16 @@ subscriptions.
 | `allowed-browser-errors.tsv` | present | The browser errors the legacy runtime is permitted to produce |
 | `transport-class-policy.tsv` | present | The reviewed comparison semantics for each fact class, decided on legacy evidence before any modern capture existed |
 
-### Pending workflow-attribution amendment (`5g-1a-y`)
+### Workflow-attribution amendment (`5g-1a-y`)
 
-The current frozen answer records `AD_WF_Process` and `AD_WF_Activity` with
-`AD_Client_ID=0` and `CreatedBy` / `UpdatedBy=0`, and records
-`AD_WF_EventAudit` only in the whole-database changed-table sentinel. Those
-bytes remain the accepted `5g-1a-x` answer until another two-run capture is
-accepted; no frozen effect, business-value, or foreign-key fact is edited on
-this branch.
+Corrected-legacy candidate run
+https://github.com/samqbush/adempiere2/actions/runs/33785079015 replaced the
+cached-startup attribution in `AD_WF_Process` and `AD_WF_Activity` with
+`AD_Client_ID=11` and `CreatedBy` / `UpdatedBy=101`, and added the keyed
+`AD_WF_EventAudit` row with the same saving-context attribution. The exact
+CI-generated business values, create effect, propagated identity comments, and
+foreign-key edges are committed here pending the required separate freeze-off
+acceptance run.
 
 Residual R14 records the domain decision that a document-triggered workflow must
 use the saving/invocation client and user rather than `MWorkflow`'s cached
@@ -107,10 +109,11 @@ and responsible, process, node, table/record, event type, and workflow state all
 retained for comparison. The exact machine-readable requirement is
 `contracts/phase5g1ay-workflow-attribution-v1/workflow-attribution-policy.tsv`.
 
-After a corrected-legacy freeze run exists, the candidate `0` attribution is
-reviewed together with the newly keyed event-audit row. Only then may this
-tree's frozen facts and domain-review digest move. A separate freeze-off run
-must accept those committed bytes before `5g-1a-y` merges. PR 18,
+The candidate was reviewed as one domain change: workflow process/activity
+attribution moves from startup `0/0` to saving client/user `11/101`, and event
+audit becomes a keyed consequence of that same workflow. No unrelated business
+value, semantic fact, concurrency result, or transport fact changed. A separate
+freeze-off run must accept these committed bytes before `5g-1a-y` merges. PR 18,
 https://github.com/samqbush/adempiere2/pull/18, remains blocked until that
 sequence completes.
 
@@ -207,6 +210,18 @@ background writer is indistinguishable from a route effect.
 | Effect documents | Re-derived locally from that run's snapshots — see "How these bytes were produced" below |
 | Evidence digest | `c3ffc902ccca93e149e6984e95240ec0bfc3c7b409cb3cc5ad323ce673ce0ce3` |
 | Disposition | **Approved as the expected answer for Phase 5g-1b.** |
+
+### Workflow-attribution amendment review
+
+| Field | Value |
+|---|---|
+| Reviewer | @samqbush |
+| Date | 2026-09-03 |
+| Corrected-legacy candidate run | https://github.com/samqbush/adempiere2/actions/runs/33785079015 |
+| Captured commit | `b9bab1e44722237b021cee31d7b03badd54f3ecb` |
+| Evidence digest | `a0fc668b69b19ce61901c9a27185aa935c74db33458652080b2abf977fbd2112` |
+| Reviewed change | Process/activity client and audit attribution `0/0` → saving context `11/101`; one keyed event-audit row and its process/record edges added; unrelated facts unchanged |
+| Disposition | **Approved as the candidate expected answer; separate freeze-off acceptance is required before merge.** |
 
 ### How these bytes were produced
 

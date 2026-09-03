@@ -1,12 +1,14 @@
 # Phase 5g-1a-y workflow-attribution oracle amendment evidence
 
-**Status: in progress and unverified.** Candidate run
+**Status: candidate frozen and domain-reviewed; acceptance pending.** Candidate run
 https://github.com/samqbush/adempiere2/actions/runs/33779282955 completed two
 self-consistent captures but was rejected: the corrected jar retained stale
 code-signature entries, Java refused the replaced workflow classes with a
 `SHA-384 digest error`, and the generated candidate dropped all workflow rows.
-No candidate facts from that run are accepted or committed, and no separate
-freeze-off acceptance run exists.
+No candidate facts from that run were accepted. Corrected candidate run
+https://github.com/samqbush/adempiere2/actions/runs/33785079015 then completed
+two self-consistent captures with no digest error. Its exact generated facts
+are committed for a separate freeze-off acceptance run.
 
 ## Claim
 
@@ -15,11 +17,10 @@ For a document-triggered workflow, `AD_WF_Process`, `AD_WF_Activity`, and the
 saving/invocation client and user rather than the cached `MWorkflow` startup
 context.
 
-The currently frozen `contracts/legacy-web-write-v1/business-values.tsv` rows
-still carry `AD_Client_ID=0` and `CreatedBy` / `UpdatedBy=0`. They are the
-candidate to be replaced after capture and review, not a corrected fact already
-accepted by this branch. The frozen file still has no keyed event-audit row or
-event-audit process edge.
+The committed candidate now records `AD_Client_ID=11` and `CreatedBy` /
+`UpdatedBy=101` for the workflow process and activity, plus one keyed event
+audit row with the same saving-context attribution and symbolic process/record
+edges. These bytes are not accepted until the separate freeze-off run passes.
 
 ## Oracle-only implementation
 
@@ -83,9 +84,9 @@ legacy mode would make the prerequisite falsely green.
 
 | Evidence | Status |
 |---|---|
-| Corrected-legacy freeze run triggered by the prerequisite branch push | **Run 33779282955 rejected; rerun required after stale-signature fix** |
-| Domain review of the candidate attribution and new fact digest | **Not recorded** |
-| Committed frozen fact update | **Not present** |
+| Corrected-legacy freeze run triggered by the prerequisite branch push | **Run 33785079015 green; A/B self-diff passed** |
+| Domain review of the candidate attribution and new fact digest | **Recorded by @samqbush: only process/activity `0/0` → `11/101`, keyed event audit, and their derived identities/edges changed; reviewed evidence digest `a0fc668b69b19ce61901c9a27185aa935c74db33458652080b2abf977fbd2112`** |
+| Committed frozen fact update | **Present in this candidate-fact commit** |
 | Separate corrected-legacy freeze-off acceptance run | **Not run** |
 | Merge to `develop` | **Not complete** |
 

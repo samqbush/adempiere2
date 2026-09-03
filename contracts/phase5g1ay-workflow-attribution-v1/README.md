@@ -48,12 +48,13 @@ complete normalized audit row is compared, including at least client/org,
 created/updated users, workflow user/responsible, process, node, table/record,
 event type, and workflow state.
 
-The currently frozen `business-values.tsv` answer still records client and
-audit attribution as `0` for the workflow process and activity, and contains no
-keyed event-audit row. Those rows are the **candidate to be replaced**, not a
-fact this branch has already changed. They remain untouched until a
-corrected-legacy freeze run is captured, reviewed, committed, and accepted by a
-separate freeze-off run.
+Corrected-legacy candidate run
+https://github.com/samqbush/adempiere2/actions/runs/33785079015 produced two
+self-consistent captures. The exact generated facts are committed: process and
+activity client/audit attribution is `11/101`, and one keyed event-audit row
+carries the same saving-context attribution. The candidate is domain-reviewed
+but is not accepted until a separate freeze-off acceptance run scores fresh
+captures against the committed bytes.
 
 ## Governance
 
