@@ -49,21 +49,6 @@ on:
           # `full` would also launch the contract graph and seven historical
           # database-backed smokes, none of which the oracle capture needs.
           - phase5g1aLegacyWriteOracleSmoke
-          # The browser capture alone, so a selector failure can be reproduced
-          # without the surrounding restore and scoring lane.
-          - phase5g1aWriteOracleCapture
-      # The Phase 5g-1a oracle has to come from somewhere, and a run that
-      # invents the expected answer must not also be the run that verifies it.
-      # Freeze mode is therefore MANUAL ONLY: no pull request, push or nightly
-      # run can reach it, and the acceptance run is a later, ordinary one
-      # against the committed and domain-reviewed files.
-      freeze_write_oracle:
-        description: >-
-          Capture the Phase 5g-1a write oracle and emit candidate contract
-          files instead of scoring against them. NOT an acceptance run.
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -104,14 +89,26 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+      - name: Fetch the contract-pinned Phase 5g-1a-y source commit
+        run: |
+          set -euo pipefail
+          source_commit=$(
+            awk -F'\t' '$1 == "source_commit" { print $2 }' \
+              contracts/phase5g1ay-workflow-attribution-v1/capture-contract.tsv
+          )
+          if ! git cat-file -e "${source_commit}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$source_commit"
+          fi
+          git cat-file -e "${source_commit}^{commit}"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
           cache: gradle
 
-      # One invocation, one task graph. phase5g1aFinalVerification chains
-      # phase5g0FinalVerification, which chains
+      # One invocation, one task graph. phase5g1ayFinalVerification chains
+      # phase5g1aFinalVerification, which chains phase5g0FinalVerification,
+      # which chains
       # phase5fFinalVerification, which transitively covers
       # phase3NoDatabaseDistribution, phase4FinalVerification and the Phase
       # 5a/5b/5c/5d/5e gates; phase5cFinalVerification contributes only
@@ -119,7 +116,7 @@ jobs:
       - name: Verify every database-neutral phase gate
         uses: ./.github/actions/adempiere-build
         with:
-          task: phase5g1aFinalVerification phase5cFinalVerification
+          task: phase5g1ayFinalVerification phase5cFinalVerification
 
       # if-no-files-found: error is satisfied by any one matching path, so an
       # upload block that also matches an evidence directory cannot detect a
@@ -189,6 +186,7 @@ jobs:
             build/phase5e/rollback/rollback-evidence.txt
             build/phase5e/rollback/setupwlib-ant.log
             build/phase5f/
+            build/phase5g1ay/
             build/phase3/release/Adempiere_394LTS.zip
             build/phase3/release/Adempiere_394LTS.tar.gz
             serverRoot/build/phase5f-wars/
@@ -206,9 +204,9 @@ jobs:
   # retired into the regression matrix below.
   #
   # The gate captures the legacy Business Partner write flow twice, from an
-  # independently restored database each time, and scores both against the
-  # frozen oracle. It observes the LEGACY runtime only: no modern business
-  # write is executed or claimed here.
+  # independently restored database each time, using the contract-pinned
+  # corrected-legacy workflow-attribution runtime. It scores both against the
+  # frozen oracle. No modern business write is executed or claimed here.
   # See docs/modernization/phase-5f-evidence.md for the outgoing gate.
   current-phase-smoke:
     name: Current-phase database smoke
@@ -243,6 +241,17 @@ jobs:
       ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD: postgres
     steps:
       - uses: actions/checkout@v4
+      - name: Fetch the contract-pinned Phase 5g-1a-y source commit
+        run: |
+          set -euo pipefail
+          source_commit=$(
+            awk -F'\t' '$1 == "source_commit" { print $2 }' \
+              contracts/phase5g1ay-workflow-attribution-v1/capture-contract.tsv
+          )
+          if ! git cat-file -e "${source_commit}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$source_commit"
+          fi
+          git cat-file -e "${source_commit}^{commit}"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -269,11 +278,15 @@ jobs:
           # are meaningless once an earlier one fails: continuing past a failed
           # capture would score a half-driven flow against the frozen oracle
           # and report a second, derived failure that explains nothing.
+          #
+          # Corrected mode is unconditional for this current-phase slot on
+          # purpose. Before the separate freeze run's reviewed candidate facts
+          # are committed, the ordinary acceptance job must fail against the old
+          # frozen zeros. Falling back to legacy mode would make the PR green
+          # without accepting R14. After those facts land, this same freeze-off
+          # path is the acceptance run.
           args: >-
-            ${{ (github.event_name == 'workflow_dispatch'
-                 && inputs.freeze_write_oracle)
-                && '-Pphase5g1aFreeze=true'
-                || '' }}
+            -Pphase5g1ayMode=corrected-legacy-workflow-attribution
       # build/phase5e/keys holds the generated handoff secret and is excluded
       # from every path below. A CI artifact is a published archive.
       - name: Upload current-phase runtime evidence
@@ -287,6 +300,8 @@ jobs:
             build/phase5g1a/normalizer-mutations.tsv
             build/phase5g1a/ambient-mutations.tsv
             build/phase5g1a/transport-class-policy-proof.tsv
+            build/phase5g1ay/
+            !build/phase5g1ay/ordinary-runtime-guard/
             build/phase3/runtime/Adempiere/tomcat/logs/
             zkwebui/build/test-results/writeOracleTest/
             zkwebui/build/reports/tests/writeOracleTest/

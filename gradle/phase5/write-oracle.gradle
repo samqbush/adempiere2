@@ -523,6 +523,119 @@ tasks.register('phase5g1aFinalVerification') {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 5g-1a-y: corrected-legacy workflow-attribution oracle amendment.
+// ---------------------------------------------------------------------------
+//
+// The patch is contract data, not production source. These tasks prove the
+// branch remains oracle-only and that the capture-only materializer is bounded
+// before CI is allowed to run the corrected legacy runtime.
+
+def phase5g1ayContractDir =
+	rootProject.layout.projectDirectory.dir('contracts/phase5g1ay-workflow-attribution-v1')
+def phase5g1ayBuildRoot = rootProject.layout.buildDirectory.dir('phase5g1ay')
+
+tasks.register('verifyPhase5g1ayOracleContract', Exec) {
+	group = 'verification'
+	description =
+		'Verifies the corrected-legacy patch, source/artifact immutability, bounded materializer, and contract manifest'
+	inputs.dir phase5g1ayContractDir
+	inputs.files(
+		phase5g1aScript('validate-phase5g1ay-oracle.py'),
+		phase5g1aScript('derive-write-oracle-facts.py'),
+		phase5g1aScript('normalize_write_capture.py'),
+		phase5g1aScript('materialize-phase5g1ay-corrected-runtime.sh'),
+		phase5g1aScript('guard-phase5g1ay-ordinary-runtime.sh'),
+		phase5g1aScript('run-write-oracle-smoke.sh'),
+		phase5g1aContractDir.file('measurement-scope.tsv'),
+		phase5g1aContractDir.file('ambient-tables.tsv'),
+		phase5g1aContractDir.file('normalization-policy.md'),
+		phase5g1aContractDir.file('business-values.tsv'),
+		phase5g1aContractDir.file('foreign-key-graph.tsv'),
+		phase5g1aContractDir.file('effect-model/create.txt'),
+		rootProject.file('gradle/phase5/write-oracle.gradle'),
+		rootProject.file('scripts/phase3/run-isolated-ant-build.sh'),
+		rootProject.file('install/build.xml'),
+		rootProject.file('install/Adempiere/build.xml'))
+	outputs.file phase5g1ayBuildRoot.map { it.file('oracle-contract-summary.tsv') }
+	outputs.upToDateWhen { false }
+	commandLine(
+		'python3',
+		phase5g1aScript('validate-phase5g1ay-oracle.py').absolutePath,
+		'--repo-root', rootProject.projectDir,
+		'--contract-dir', phase5g1ayContractDir.asFile,
+		'--summary',
+		phase5g1ayBuildRoot.get().file('oracle-contract-summary.tsv').asFile)
+}
+
+tasks.register('verifyPhase5g1ayProvenanceSchema', Exec) {
+	group = 'verification'
+	description =
+		'Proves the corrected-legacy capture provenance fixture carries every required field'
+	inputs.files(
+		phase5g1aScript('validate-phase5g1ay-provenance.py'),
+		phase5g1ayContractDir.file('capture-contract.tsv'),
+		phase5g1ayContractDir.file('allowed-patched-paths.txt'),
+		phase5g1ayContractDir.file('provenance-schema-fixture.json'))
+	commandLine(
+		'python3',
+		phase5g1aScript('validate-phase5g1ay-provenance.py').absolutePath,
+		'--provenance', phase5g1ayContractDir.file('provenance-schema-fixture.json').asFile,
+		'--contract-dir', phase5g1ayContractDir.asFile,
+		'--repo-root', rootProject.projectDir,
+		'--schema-fixture')
+}
+
+tasks.register('verifyPhase5g1ayMutationProof', Exec) {
+	group = 'verification'
+	description =
+		'Proves the corrected-legacy patch, manifest, path, and provenance validators fail closed'
+	inputs.files(
+		phase5g1aScript('validate-phase5g1ay-oracle.py'),
+		phase5g1aScript('validate-phase5g1ay-provenance.py'),
+		phase5g1aScript('verify-phase5g1ay-mutation-proof.py'),
+		phase5g1aScript('materialize-phase5g1ay-corrected-runtime.sh'),
+		phase5g1aScript('run-write-oracle-smoke.sh'),
+		phase5g1aScript('guard-phase5g1ay-ordinary-runtime.sh'),
+		rootProject.file('gradle/phase5/write-oracle.gradle'),
+		phase5g1aContractDir.file('measurement-scope.tsv'),
+		phase5g1aContractDir.file('ambient-tables.tsv'),
+		phase5g1aContractDir.file('normalization-policy.md'),
+		phase5g1aContractDir.file('business-values.tsv'),
+		phase5g1aContractDir.file('foreign-key-graph.tsv'),
+		phase5g1aContractDir.file('effect-model/create.txt'))
+	inputs.dir phase5g1ayContractDir
+	outputs.file phase5g1ayBuildRoot.map { it.file('mutation-proof.tsv') }
+	commandLine(
+		'python3',
+		phase5g1aScript('verify-phase5g1ay-mutation-proof.py').absolutePath,
+		'--repo-root', rootProject.projectDir,
+		'--report', phase5g1ayBuildRoot.get().file('mutation-proof.tsv').asFile)
+	doLast {
+		def report = phase5g1ayBuildRoot.get().file('mutation-proof.tsv').asFile
+		def rows = report.readLines()
+			.findAll { it && !it.startsWith('mutation\t') }
+		if (rows.size() != 56 || rows.any { !it.endsWith('\tdetected') }) {
+			throw new GradleException(
+				"The Phase 5g-1a-y mutation proof recorded ${rows.size()} case(s); " +
+					'the reviewed set is exactly 56 detected mutations.')
+		}
+		logger.lifecycle(
+			"Phase 5g-1a-y mutation proof detected ${rows.size()} weakening(s)")
+	}
+}
+
+tasks.register('phase5g1ayFinalVerification') {
+	group = 'verification'
+	description =
+		'Runs the database-neutral corrected-legacy oracle-amendment validators and every earlier phase gate'
+	dependsOn(
+		tasks.named('phase5g1aFinalVerification'),
+		tasks.named('verifyPhase5g1ayOracleContract'),
+		tasks.named('verifyPhase5g1ayProvenanceSchema'),
+		tasks.named('verifyPhase5g1ayMutationProof'))
+}
+
+// ---------------------------------------------------------------------------
 // The database-backed capture lane.
 // ---------------------------------------------------------------------------
 //
@@ -532,6 +645,10 @@ tasks.register('phase5g1aFinalVerification') {
 def phase5g1aProperty = { String name, Object fallback ->
 	rootProject.providers.gradleProperty(name).getOrElse(fallback.toString())
 }
+def phase5g1ayMode = rootProject.providers
+	.gradleProperty('phase5g1ayMode')
+	.orElse(rootProject.providers.environmentVariable('ADEMPIERE_PHASE5G1AY_MODE'))
+	.getOrElse('legacy')
 
 // CI supplies the system password as an environment variable, not as a Gradle
 // property, exactly as every other database-backed gate accepts it. Reading
@@ -542,14 +659,57 @@ def phase5g1aSystemPassword = rootProject.providers
 		'ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD'))
 	.getOrElse('')
 
+def phase5g1ayInstalledHome =
+	rootProject.layout.buildDirectory.dir('phase3/runtime/Adempiere')
+def phase5g1ayRuntimeGuardDir =
+	phase5g1ayBuildRoot.map { it.dir('ordinary-runtime-guard') }
+def phase5g1ayRuntimeGuardScript =
+	phase5g1aScript('guard-phase5g1ay-ordinary-runtime.sh')
+
+def snapshotPhase5g1ayOrdinaryRuntime =
+	tasks.register('snapshotPhase5g1ayOrdinaryRuntime', Exec) {
+		group = 'verification'
+		description =
+			'Snapshots the ordinary installed Adempiere.jar copies before corrected-runtime activation'
+		dependsOn tasks.named('phase3AntDatabaseBuild')
+		onlyIf { phase5g1ayMode == 'corrected-legacy-workflow-attribution' }
+		outputs.upToDateWhen { false }
+		commandLine(
+			'bash',
+			phase5g1ayRuntimeGuardScript.absolutePath,
+			'snapshot',
+			rootProject.projectDir,
+			phase5g1ayInstalledHome.get().asFile,
+			phase5g1ayRuntimeGuardDir.get().asFile)
+	}
+
+def restorePhase5g1ayOrdinaryRuntime =
+	tasks.register('restorePhase5g1ayOrdinaryRuntime', Exec) {
+		group = 'verification'
+		description =
+			'Restores and verifies the ordinary installed Adempiere.jar copies after the corrected lane'
+		onlyIf { phase5g1ayMode == 'corrected-legacy-workflow-attribution' }
+		outputs.upToDateWhen { false }
+		commandLine(
+			'bash',
+			phase5g1ayRuntimeGuardScript.absolutePath,
+			'restore',
+			rootProject.projectDir,
+			phase5g1ayInstalledHome.get().asFile,
+			phase5g1ayRuntimeGuardDir.get().asFile,
+			'--cleanup')
+	}
+
 tasks.register('phase5g1aLegacyWriteOracleSmoke', Exec) {
 	group = 'verification'
 	description =
 		'Captures the legacy Business Partner write flow twice through the public /webui origin and scores both against the frozen oracle'
 	dependsOn tasks.named('phase3AntDatabaseBuild')
+	dependsOn snapshotPhase5g1ayOrdinaryRuntime
 	// The write driver runs in the checksum-verified Phase 5c browser
 	// installation. This increment adds no browser artifact.
 	dependsOn tasks.named('installPhase5cBrowser')
+	finalizedBy restorePhase5g1ayOrdinaryRuntime
 	commandLine 'bash', phase5g1aScript('run-write-oracle-smoke.sh').absolutePath,
 		phase5g1aProperty('phase3DbHost', '127.0.0.1'),
 		phase5g1aProperty('phase3DbPort', '5432'),
@@ -561,11 +721,20 @@ tasks.register('phase5g1aLegacyWriteOracleSmoke', Exec) {
 		// Freeze mode is how the oracle is first produced. It is NOT an
 		// acceptance run and the gate never uses it: a run that invents the
 		// expected answer cannot also be the run that verifies it.
-		phase5g1aProperty('phase5g1aFreeze', 'false')
+		phase5g1aProperty('phase5g1aFreeze', 'false'),
+		phase5g1ayMode
 	environment 'ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD', phase5g1aSystemPassword
 	environment 'ADEMPIERE_PHASE5D_DB_PASSWORD',
 		phase5g1aProperty('phase3DbPassword', 'adempiere_phase3_ci')
 	doFirst {
+		if (!(phase5g1ayMode in [
+			'legacy',
+			'corrected-legacy-workflow-attribution'
+		])) {
+			throw new GradleException(
+				"Unsupported -Pphase5g1ayMode=${phase5g1ayMode}. The only corrected " +
+					'legacy mode is corrected-legacy-workflow-attribution.')
+		}
 		if (!phase5g1aSystemPassword) {
 			throw new GradleException(
 				'-Pphase3DbSystemPassword or ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD is ' +

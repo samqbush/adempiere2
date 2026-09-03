@@ -1,0 +1,65 @@
+diff --git a/base/src/org/compiere/wf/DocWorkflowManager.java b/base/src/org/compiere/wf/DocWorkflowManager.java
+--- a/base/src/org/compiere/wf/DocWorkflowManager.java
++++ b/base/src/org/compiere/wf/DocWorkflowManager.java
+@@ -110,7 +110,7 @@ public class DocWorkflowManager implements DocWorkflowMgr
+ 			pi.setAD_Client_ID(document.getAD_Client_ID());
+ 			pi.setTransactionName(document.get_TrxName());
+ 			//
+-			if (wf.start(pi) != null)
++			if (wf.start(document.getCtx(), pi) != null)
+ 			{
+ 				log.config(wf.getName());
+ 				m_noStarted++;
+diff --git a/base/src/org/compiere/wf/MWorkflow.java b/base/src/org/compiere/wf/MWorkflow.java
+--- a/base/src/org/compiere/wf/MWorkflow.java
++++ b/base/src/org/compiere/wf/MWorkflow.java
+@@ -706,12 +706,23 @@ public class MWorkflow extends X_AD_Workflow
+ 	 */
+ 	public MWFProcess start (ProcessInfo processInfo)
+ 	{
++		return start(getCtx(), processInfo);
++	}
++
++	/**
++	 * 	Start Workflow with the invocation context.
++	 *	@param invocationCtx context of the caller starting the workflow
++	 * 	@param processInfo Process Info (Record_ID)
++	 *	@return process
++	 */
++	public MWFProcess start (Properties invocationCtx, ProcessInfo processInfo)
++	{
+ 		MWFProcess workflowProcess = null;
+ 		Trx workflowProcessTransaction = null;
+ 		Savepoint savepoint = null;
+ 		Function<ProcessInfo,Boolean> isWorkflowEngineTransaction = pi -> pi.getTransactionName() == null;
+ 		try {
+-			workflowProcess = new MWFProcess (this, processInfo, null);
++			workflowProcess = new MWFProcess (this, invocationCtx, processInfo, null);
+ 			// Check if exits activities actives if this way then Other Process Active
+ 			boolean isOtherProcessActive = workflowProcess.getActivities(true, true).length > 0;
+ 			if (MWorkflow.WORKFLOWTYPE_DocumentProcess.equals(getWorkflowType())
+diff --git a/base/src/org/compiere/wf/MWFProcess.java b/base/src/org/compiere/wf/MWFProcess.java
+--- a/base/src/org/compiere/wf/MWFProcess.java
++++ b/base/src/org/compiere/wf/MWFProcess.java
+@@ -93,7 +93,20 @@ public class MWFProcess extends X_AD_WF_Process
+ 	 */
+ 	public MWFProcess (MWorkflow wf, ProcessInfo pi, String trxName) throws Exception
+ 	{
+-		super (wf.getCtx(), 0, trxName);
++		this(wf, wf.getCtx(), pi, trxName);
++	}
++
++	/**
++	 * 	New Constructor with the invocation context
++	 *	@param wf workflow
++	 *	@param invocationCtx context of the caller starting the workflow
++	 *	@param pi Process Info (Record_ID)
++	 *  @param trxName
++	 *	@throws Exception
++	 */
++	public MWFProcess (MWorkflow wf, Properties invocationCtx, ProcessInfo pi, String trxName) throws Exception
++	{
++		super (invocationCtx, 0, trxName);
+ 		if (!TimeUtil.isValid(wf.getValidFrom(), wf.getValidTo()))
+ 			throw new IllegalStateException("Workflow not valid");
+ 		m_wf = wf;

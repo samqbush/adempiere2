@@ -198,6 +198,7 @@ necessarily block merges.
 | R10 | CI coverage | Six database-backed smokes (`phase3InstalledProduct`, `phase4InstalledApi`, `phase5bLegacyWebOracleSmoke`, `phase5cRollbackRehearsal`, `phase5dModernWebSmoke`, `phase5eCohortRoutingSmoke`) moved off the pull-request gate to the post-merge regression matrix, so a PR can regress the installed product, installed SOAP, the frozen legacy oracle, the 5c browser/rollback lane, the 5d modern slice, or 5e `/webui` cohort routing, isolation and session lifecycle while Lane 1 stays green. `phase5eCohortRoutingSmoke` joined the matrix when the current-phase slot advanced to Phase 5f, and it carries a recorded Playwright flake, so its post-merge signal is the only remaining check on cohort routing | Ongoing, under the containment rule | A red `Regression matrix` is a stop-the-line event: no further phase work merges until it is green or the failure is triaged and recorded. Owner @samqbush. If the matrix has not run green within a week, treat the affected phases as unverified rather than lit. See `docs/modernization/ci-topology.md`. |
 | R11 | Phase 5g governance | The Phase 5g decomposition names exactly one oracle increment (`5g-1a`). ADR decisions 2 and 3 require every new behaviour class to be captured from the legacy runtime and forbid a parity increment from adding oracle facts, so `5g-1c`, `5g-1d`, `5g-1e`, `5g-1f`, `5g-2`, `5g-3`, `5g-4`, `5g-5`, `5g-6` and `5g-7` each currently have **no** increment that captures the answer they would be scored against | Before each affected increment begins | The increment immediately preceding an `unassigned` row names and merges its oracle increment - frozen and domain-reviewed - before that row starts. An increment marked `unassigned - blocking` in the Phase 5g decomposition table may not begin. Owner @samqbush. |
 | R12 | Write-effect sentinel blind spot | The Phase 5g-1a whole-database sentinel (`measure-write-effect.py`) is a row **count** per table, so it cannot see an `UPDATE` to a table outside the nine-table keyed measurement scope, nor an insert paired with a delete that nets to zero within one step. Five frozen steps - `window-opened`, `concurrency-second-editor-authenticated`, `deactivate-editor-authenticated`, `concurrency-conflicting-save` and `logged-out` - assert `[no-effect]`, and the refused conflicting save is the increment's headline concurrency fact, so the blind spot sits underneath a compared positive assertion | `5g-1a-x` (reassigned from `5g-1b`) | Closed in `5g-1a-x`. **Reassigned away from `5g-1b`**: adding a content component changes the emitted effect-document format, so every frozen `effect-model/*.txt` has to be re-captured with `--freeze`, and that is an oracle act. ADR decision 3 forbids one branch both inventing the expected answer and implementing the thing being scored, so a parity increment could not have repaired this. The sentinel now emits `count:s1:s2` per table, where the sums are taken over halves of `md5(row::text)` in the same consistent snapshot as the counts - `sum` rather than `bit_xor`, because XOR cancels a duplicated identical row pair back to zero and would reintroduce a blind spot while appearing to close one. The marker now reads `no-keyed-change-in-scope\tno-content-change-outside-ambient`, the neutral gate rejects any document still in the pre-R12 shape, and three mutation cases cover an out-of-scope `UPDATE`, a net-zero insert/delete churn, and a hidden write underneath a `[no-effect]` step. The repair immediately produced signal that had been invisible - `ad_recentitem`, `ad_session`, `c_bpartner` and `ad_sequence` all show `+0 content` rows on steps where no row count moved - and required classifying `AD_Sequence` ambient, since `MSequence.getNextID` issues `UPDATE AD_Sequence SET CurrentNext = ...` (`base/src/org/compiere/model/MSequence.java:205`), so it was always written and only became visible once content was measured. That classification is bounded: `AD_Sequence` is not one of the nine measurement-scope tables, so ambient status affects only the undeclared-table backstop and the `[no-effect]` marker and cannot hide a keyed effect. Owner @samqbush. |
+| R14 | Workflow attribution oracle | The frozen `5g-1a-x` answer records `AD_WF_Process` and `AD_WF_Activity` with `AD_Client_ID=0` and `CreatedBy` / `UpdatedBy=0`, because `MWorkflow.start` constructs `MWFProcess` from the cached workflow context. `AD_WF_EventAudit`, created from `MWFActivity`, was ambient and therefore outside keyed attribution comparison. The accepted domain decision is that a document-triggered workflow and its audit row use the saving/invocation client and user. Normalizing these values away or leaving the audit ambient would erase business attribution, while merging the correction in an oracle PR would violate oracle-before-modern | `5g-1a-y`; PR 18 remains blocked | Capture through the contract-pinned corrected-legacy procedure only: apply the exact reviewed three-file patch in a disposable detached worktree at the pinned source commit, materialize a capture-only runtime, key `AD_WF_EventAudit` through the fixture process/activity predicate, retain its client/org/user/process/node attribution and symbolic process edge, record source/patch/path/artifact provenance, freeze and domain-review the candidate answer, then accept it in a separate freeze-off run and merge the oracle amendment. No patched production source or ordinary installed/release artifact merges here, and no event-audit frozen fact is claimed before that capture. PR 18, https://github.com/samqbush/adempiere2/pull/18, later implements the shared production correction against the accepted oracle. Owner @samqbush. |
 
 ### 3.6 Oracle decision
 
@@ -1040,6 +1041,29 @@ No keyed effect changed in the re-freeze: every `[created]`, `[updated]` and
 `[deleted]` section is identical to the answer `5g-1a` froze. The amendment is a
 strict strengthening of the measurement around those unchanged facts.
 
+`5g-1a-y`, the R14 workflow-attribution oracle amendment, is **accepted; merge
+pending**. It adds no production runtime code.
+Corrected-legacy run 33785079015 self-diffed two captures and produced the
+committed candidate: `AD_WF_Process` and `AD_WF_Activity` move from cached
+startup client/audit `0/0` to saving client/user `11/101`, and
+`AD_WF_EventAudit` becomes a keyed non-ambient row with the same attribution,
+symbolic process/record edges, and process/node activity relationship. No
+unrelated business value, semantic fact, concurrency result, or transport fact
+changed. Separate freeze-off run 33788686426 re-captured both lanes at candidate
+commit `cebd25609`, passed A/B self-diff, and scored zero problems.
+
+The amendment pins source commit `60af453aab0e6537a6189241366c857c239c959f`,
+the exact three-file capture patch and its SHA-256, applies it only in a
+disposable detached worktree, materializes the corrected runtime only under
+`build/phase5g1ay/`, restores the ordinary installed runtime byte-for-byte
+before scoring, and attaches an independent digest-backed Gradle restoration
+finalizer for failures. Both depth-one Lane 1 checkouts narrowly fetch the exact
+pinned source object, and the materializer repeats that assurance before
+validation. `phase5g1ayFinalVerification` is database-neutral and makes no
+claim that this runtime has booted or that the attribution has been captured.
+PR 18, https://github.com/samqbush/adempiere2/pull/18, remains blocked until the
+capture, review, acceptance, and merge are complete.
+
 `5g-1a` produced the programme's first observed business writes through a
 running ADempiere web UI. Creating a business partner writes `C_BPartner`,
 starts a document workflow (`AD_WF_Process`, `AD_WF_Activity`,
@@ -1052,20 +1076,30 @@ frozen fact classes, nine per-step effect documents, two fixture-isolated
 captures that agree, and a recorded domain review. **No modern business write
 has still ever been observed.**
 
-`phase5g1aFinalVerification` is the head of the phase-gate chain:
+`phase5g1ayFinalVerification` is the head of the phase-gate chain:
 
 ```bash
-./gradlew phase5g1aFinalVerification --dependency-verification=strict
+./gradlew phase5g1ayFinalVerification --dependency-verification=strict
 ```
 
-It verifies the `contracts/legacy-web-write-v1/` manifest and its required-file
-floor, re-derives the table-scoped callout and registered-validator attribution
-to prove `C_BPartner` carries neither, and scores the write-capture normalizer in
-**both** directions - ten defect classes must be detected and four volatility
-classes must be normalized away - against a committed raw fixture. The captured
-legacy write facts and the recorded domain review are **not yet frozen**;
-`contracts/legacy-web-write-v1/README.md` names each absent file rather than
-omitting it silently.
+It chains the complete `phase5g1aFinalVerification` oracle contract and adds
+fail-closed validation of the R14 contract manifest, exact patch digest and
+allowed paths, production-source and ordinary-artifact immutability against the
+pinned source commit, patch application and intended invocation-context flow,
+exact reviewed hunk/executable changed-line semantics, bounded capture-only
+materialization, independent failure restoration, exact current-HEAD/four-file
+provenance, separate fail-closed committed and working-tree scope checks,
+exact owned-worktree cleanup, contract-pinned removal of the baseline jar's
+stale signature entries, pre-score proof that both captures contain process,
+activity, and event-audit rows with saving-context attribution, a functional
+synthetic proof that the existing
+generic fact generator retains event-audit attribution and process/activity
+relationships, and 56 mutation cases. It proves no runtime attribution and no
+modern parity. The database-backed
+`phase5g1aLegacyWriteOracleSmoke` uses the corrected runtime only when
+`-Pphase5g1ayMode=corrected-legacy-workflow-attribution` (or the matching
+environment variable) is explicitly selected; the default remains the existing
+legacy mode.
 
 **Regime:** Legacy ZK/Tomcat 9 remains lit; the modern ZK/Tomcat 10.1 slice
 crossed from dark to lit at Phase 5d and now expands.
@@ -1086,7 +1120,7 @@ crossed from dark to lit at Phase 5d and now expands.
 | 5d | Migrate the complete ZK compile closure and cross the Testability Milestone at login -> role -> menu -> read-only window | Web UI | 5c |
 | 5e | Prove concurrent client/org/role/user/language/session cleanup and add fail-closed cohort routing | Security/session | 5d (**merged and verified** at `6eda2bc8`; see "Phase 5e decisions and findings") |
 | 5f | Migrate all 82 deployed non-SOAP mappings by independently reversible context; disposition all 30 non-deployed mappings; build isolated generated Jakarta trees and five modern context WARs; preserve `/webui` while adding source-native `/timeline` and the exact static DSP compatibility resource | Web routes | 5e (**merged and verified** at `83aeb8536`; database-neutral gate green twice, six-shard database smoke green in run 33379849664) |
-| 5g | Complete read/write UI, process, report, upload/download, POS, dashboard, server-push, and extension parity. Delivered through sub-increments `5g-0` and `5g-1a` .. `5g-7`; see "Phase 5g decomposition" | Web UI/extensions | 5f (**active**; `5g-0` and `5g-1a` merged, `5g-1b` next) |
+| 5g | Complete read/write UI, process, report, upload/download, POS, dashboard, server-push, and extension parity. Delivered through sub-increments `5g-0` and `5g-1a` .. `5g-7`; see "Phase 5g decomposition" | Web UI/extensions | 5f (**active**; `5g-0`, `5g-1a`, and `5g-1a-x` merged; `5g-1a-y` has accepted R14 oracle evidence and awaits merge before PR 18 / `5g-1b`) |
 | 5h | Finish source-native Jakarta, preserve both historical SOAP paths on final ingress, then remove the router, Tomcat 9, transformer, and ZK 3.6 | Runtime/source | 5g |
 
 #### Risks & mitigations
@@ -1655,7 +1689,8 @@ Two ordering rules bind every Phase 5g increment:
 | 5g-0 | Phase 5f reconciliation; the Phase 5g ADR; ZK-facing extension/callout/validator discovery; the dictionary-process classification and named 5g-1e fixture; the disabled-context governance amendment | No | n/a - ships no runtime code |
 | 5g-1a (**complete**, PR #16 at `1a761b55b`) | The legacy Business Partner CRUD write oracle: a reusable legacy write capture harness, `contracts/legacy-web-write-v1/`, the keyed relational effect model, seed-restore isolation, normalizer and ambient-classification mutation proofs, the legacy two-user concurrency answer, and the recorded domain review. Captured in run 33491714444 and accepted in run 33497129519; frozen, self-diffed and scored | **No** | n/a - it *is* the oracle |
 | 5g-1a-x (**complete**, accepted in run 33528308317) | The legacy write oracle **amendment**, cut after 5g-1a merged and before 5g-1b begins: the R12 sentinel content component and its re-freeze; the legacy duplicate-submit / repeated non-idempotent AU save answer that 5g-1b's write-traffic security matrix needs and may not invent; and the reviewed `transport-class-policy.tsv` deciding, on legacy evidence alone, which fact classes are product facts and which are ZK 3.6 theme artifacts | **No** | n/a - it *is* the oracle |
-| 5g-1b | Modern Business Partner CRUD parity, scored **only** through the public routed `/webui` origin, including the legacy two-user concurrency answer 5g-1a froze and the duplicate-submit answer 5g-1a-x froze | Yes | **5g-1a**, as amended by **5g-1a-x** |
+| 5g-1a-y (**candidate frozen in run 33785079015 and accepted by separate freeze-off run 33788686426; merge pending**) | R14 workflow-attribution oracle amendment: capture the decided saving/invocation client and user for `AD_WF_Process`, `AD_WF_Activity`, and the `AD_WF_EventAudit` rows created from the activity through a source-commit- and patch-pinned corrected legacy runtime built only in a disposable worktree. Event audit is keyed and non-ambient with required client/org/user/process/node attribution. The exact CI candidate is committed and accepted; no checked-out production source, shared runtime code, or ordinary installed/release artifact changes | **No** | n/a - it *is* the oracle amendment |
+| 5g-1b / PR 18 | Modern Business Partner CRUD parity, scored **only** through the public routed `/webui` origin, including the legacy two-user concurrency answer 5g-1a froze, the duplicate-submit answer 5g-1a-x froze, and the accepted workflow-attribution answer from 5g-1a-y | Yes | **5g-1a**, as amended by **5g-1a-x** and **5g-1a-y**; **blocked until accepted 5g-1a-y merges** |
 | 5g-1c | Sales Order draft -> Complete: document status, document number, reservations and tax. **No accounting** | Yes | **unassigned - blocking** |
 | 5g-1d | The explicit "Post Immediate" action: `Posted='Y'` and balanced `Fact_Acct` | Yes | **unassigned - blocking** |
 | 5g-1e | One named non-report dictionary process: `AD_PInstance`, parameters, log rows, and an observable completion signal | Yes | **unassigned - blocking** |

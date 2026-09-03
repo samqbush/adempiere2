@@ -1,0 +1,10 @@
+# Production source roots and ordinary shipped-artifact roots that must remain
+# byte-identical to source_commit in the oracle amendment worktree.
+base/src
+zkwebui/WEB-INF/src
+org.adempiere.cohort/src/main
+lib
+packages
+zkpackages
+data/seed
+install/Adempiere

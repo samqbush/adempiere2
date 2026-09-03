@@ -9,7 +9,8 @@ what that grouping deliberately gives up. This implements
 | Lane | Trigger | Blocking | Jobs |
 |---|---|---|---|
 | 1 | `pull_request` → `develop`/`master` | Yes | `Contracts`, `Current-phase database smoke` |
-| 2 | `push` → `develop`/`master`, nightly `schedule`, `workflow_dispatch` | No | `Regression matrix` (6 database-backed gates) |
+| 2 | `push` → `develop`/`master`, nightly `schedule`, `workflow_dispatch` | No | `Regression matrix` (7 database-backed gates) |
+| Candidate capture | Push adding/changing `phase5g1ay-oracle-candidate.yml` on `phase-5g-1a-y-workflow-attribution-oracle` | No; creates no required-check names | `Oracle candidate capture (non-acceptance)` |
 
 Lane 1 is what a pull request must pass. Lane 2 records that the phases already
 merged still hold.
@@ -29,6 +30,7 @@ phase3NoDatabaseDistribution
                     └── phase5fFinalVerification (gradle/phase5/phase5f-context-routing.gradle:749-751)
                           └── phase5g0FinalVerification (gradle/phase5/phase5g-inventories.gradle:89-91)
                                 └── phase5g1aFinalVerification (gradle/phase5/write-oracle.gradle)
+                                      └── phase5g1ayFinalVerification (gradle/phase5/write-oracle.gradle)
 ```
 
 Running each gate as its own CI job therefore re-executes work another job is
@@ -42,7 +44,7 @@ Gradle invocation share a single task graph, so common work executes once.
 ## Measured baseline
 
 Task counts from `./gradlew <task> --dry-run --dependency-verification=strict`,
-re-measured on `phase-5g-1a-write-capture` after the write capture lane landed:
+re-measured on `phase-5g-1a-y-workflow-attribution-oracle`:
 
 | Former job | Gradle task | Tasks scheduled |
 |---|---|---|
@@ -54,11 +56,12 @@ re-measured on `phase-5g-1a-write-capture` after the write capture lane landed:
 | Phase 5e cohort routing contracts | `phase5eFinalVerification` | 196 |
 | Phase 5f Jakarta web contracts and topology | `phase5fFinalVerification` | 282 |
 | Phase 5g-0 discovery inventories | `phase5g0FinalVerification` | 285 |
-| Phase 5g-1a legacy write oracle contracts | `phase5g1aFinalVerification` | 291 |
-| **Sum across the 9 separate jobs** | | **1459** |
-| **`Contracts`, one invocation** | `phase5g1aFinalVerification phase5cFinalVerification` | **297** |
+| Phase 5g-1a legacy write oracle contracts | `phase5g1aFinalVerification` | 292 |
+| Phase 5g-1a-y workflow-attribution amendment | `phase5g1ayFinalVerification` | 296 |
+| **Sum across the 10 separate jobs** | | **1756** |
+| **`Contracts`, one invocation** | `phase5g1ayFinalVerification phase5cFinalVerification` | **302** |
 
-**1162 of 1459 task executions per pull request would be redundant (79.6%).**
+**1454 of 1756 task executions per pull request would be redundant (82.8%).**
 
 Earlier measurements on the same topology: 9 jobs at 1458 against 296 merged
 when the Phase 5g-1a database-neutral half landed, 8 jobs at 1168 against 291
@@ -77,32 +80,46 @@ for t in phase3NoDatabaseDistribution phase4FinalVerification \
          phase5bFinalVerification phase5cFinalVerification \
          phase5dFinalVerification phase5eFinalVerification \
          phase5fFinalVerification phase5g0FinalVerification \
-         phase5g1aFinalVerification; do
+         phase5g1aFinalVerification phase5g1ayFinalVerification; do
   ./gradlew $t --dry-run --dependency-verification=strict \
     | grep SKIPPED | sed 's/ SKIPPED//'
 done | sort -u > union.txt
 
-./gradlew phase5g1aFinalVerification phase5cFinalVerification \
+./gradlew phase5g1ayFinalVerification phase5cFinalVerification \
   --dry-run --dependency-verification=strict \
   | grep SKIPPED | sed 's/ SKIPPED//' | sort -u > merged.txt
 
 comm -23 union.txt merged.txt   # must print nothing
 ```
 
-Result: union 297 tasks, merged 297 tasks, `comm -23` empty. The merged
-invocation schedules **exactly** the same task set as the nine gates combined.
+Result: union 302 tasks, merged 302 tasks, `comm -23` and `comm -13` empty. The
+merged invocation schedules **exactly** the same task set as the ten gates
+combined.
 
-The `Contracts` arguments did not change here - the write capture lane is a
-runtime gate, not a contract gate. What changed is the chain behind them: the
-merged invocation grew from 296 to 297, and the single added task is exactly
-`:verifyPhase5gAmbientClassificationMutationProof`. **No task was removed.**
-Advancing the chain must never drop coverage, so the removal set is checked as
-well as the addition set.
+For `5g-1a-y`, `Contracts` advances to
+`phase5g1ayFinalVerification phase5cFinalVerification`. The first task chains
+the accepted `phase5g1aFinalVerification` graph and adds only the new
+database-neutral patch, source/artifact immutability, materializer, provenance,
+manifest, and mutation validators. `phase5cFinalVerification` remains the
+off-chain argument because it still contributes `:zkwebui:check`. Advancing the
+chain must never drop coverage, so the union proof compares both additions and
+removals. The chain head grows from 292 to 296 scheduled tasks; the merged
+invocation grows from 297 to 302 because it also includes the off-chain Phase 5c
+work. No task is missing from or added beyond the ten-gate union.
 
 The capture lane itself, `phase5g1aLegacyWriteOracleSmoke`, is deliberately
 **not** on this chain. It needs a disposable PostgreSQL, the installed Tomcat 9
 product and a browser, so it belongs to the `Current-phase database smoke` lane
-described below.
+described below. The task's default runtime remains the existing legacy mode;
+this increment selects `corrected-legacy-workflow-attribution` explicitly.
+
+Both Lane 1 jobs retain the default depth-one checkout, then read
+`source_commit` from the reviewed contract and fetch only that exact object when
+it is absent. This avoids an unbounded history fetch while making the pinned
+tree available to the neutral source comparison and the corrected-runtime
+materializer. The materializer repeats the same object check/fetch before
+invoking its validator, so direct task execution cannot depend on workflow
+ordering.
 
 Re-run this whenever the `Contracts` task arguments change.
 
@@ -134,6 +151,13 @@ and `build/phase5f/tomcat10/logs/` in the same change so the outgoing gate's
 evidence is still published. Five paths were added for the incoming gate. This
 is the check that catches the common failure of retiring a smoke into the
 regression lane while leaving its evidence behind in the job it left.
+
+For `5g-1a-y`, both Lane 1 jobs upload `build/phase5g1ay/`: `Contracts` produces
+the neutral summaries and mutation report, while `Current-phase database smoke`
+adds corrected-runtime provenance, class digests, and materialization logs. The
+temporary `ordinary-runtime-guard/` directory is explicitly excluded, so the
+digest-pinned ordinary installed jars used by the failure finalizer cannot be
+published as evidence.
 
 ### What the count does *not* mean
 
@@ -186,6 +210,10 @@ authors already knew about it.
 They are excluded rather than tolerated silently: the step still prints
 `git diff --stat` for the pair, so a change in *which* files the build rewrites
 stays observable, while any mutation of any other tracked file fails the job.
+The Phase 5g-1a-y oracle validator applies the same exception only to its
+separate working-tree inspection. Its pinned-source-to-`HEAD` committed diff
+still protects both files, so the exception cannot hide a committed binary
+change.
 Cleaning this up — either by untracking both artifacts or by making the reactor
 write them to a build directory — is repository hygiene owned by Phase 7, not
 by this CI change.
@@ -213,14 +241,28 @@ the Phase 5e test's own wait configuration.
 longer blocks a pull request, but it still gates the post-merge lane and is
 still worth fixing.
 
-## The current-phase smoke has not yet run
+## The current-phase smoke accepted the corrected oracle
 
-`Current-phase database smoke` now runs `phase5g1aLegacyWriteOracleSmoke`. It
-**has not been executed**, and must not be reported as green until it has. It
-replaces `phase5fJakartaWebRoutesSmoke`, which is green - run 33379849664 on
-commit `9ba62875d` recorded 129 observations with zero vector failures across
-all six shards - and which has been retired into the regression matrix along
-with its evidence paths.
+`Current-phase database smoke` still runs
+`phase5g1aLegacyWriteOracleSmoke`, but now passes
+`-Pphase5g1ayMode=corrected-legacy-workflow-attribution`. Candidate run
+33785079015 executed that corrected mode with freezing enabled and produced the
+domain-reviewed committed facts. It is not acceptance evidence. Required
+current-phase run 33788686426 then executed the same mode with freezing off at
+candidate commit `cebd25609`, re-captured A and B from fresh restores, and
+reported self-diff `pass` with zero scoring problems.
+
+The corrected mode is unconditional in the current-phase slot deliberately.
+Before the reviewed candidate facts were committed, an ordinary PR run was
+expected to fail when it scored the corrected attribution against the old
+frozen zeros. After the candidate was committed, the same ordinary freeze-off
+job became and passed the required separate acceptance run.
+
+Before that task starts, Gradle snapshots both ordinary installed
+`Adempiere.jar` copies. The smoke uses an external guard for activation and
+requires restoration before provenance validation and scoring. The same guard
+is also a Gradle finalizer, so it restores and digest-verifies the ordinary jars
+even when materialization, capture, provenance, or scoring fails.
 
 The job must continue to point at the phase under development rather than at a
 known-green earlier task. See `docs/modernization/phase-5f-evidence.md` for the
@@ -240,26 +282,45 @@ The job's two Phase 5f deviations have been reconsidered rather than inherited:
   snapshot between every one of nine steps. The real duration is unknown until
   the gate runs, and the value should be revisited from observed data then.
 
-### Freeze mode is manual only
+### Freeze mode is isolated from required checks
 
-`workflow_dispatch` carries a `freeze_write_oracle` boolean that passes
-`-Pphase5g1aFreeze=true`. That run emits candidate contract files instead of
-scoring against them, and it is **not an acceptance run**: the run that invents
-the expected answer must not also be the run that verifies it. No pull request,
-push or scheduled run can reach it. The acceptance run is a later ordinary one
-against committed, domain-reviewed files.
+The separate `.github/workflows/phase5g1ay-oracle-candidate.yml` workflow runs
+the uniquely named `Oracle candidate capture (non-acceptance)` job when that
+file is pushed on the exact
+`phase-5g-1a-y-workflow-attribution-oracle` branch. Scoping the push trigger to
+the workflow, corrected-runtime materializer/guard/validators, Gradle wiring,
+and dedicated 5g-1a-y contract makes the initial prerequisite push and any
+capture-mechanism correction request a candidate run without running the
+expensive lane on later frozen-fact or documentation commits. The job passes
+`-Pphase5g1aFreeze=true` in addition to the mandatory
+`-Pphase5g1ayMode=corrected-legacy-workflow-attribution`. That run emits
+candidate contract files instead of scoring against them, and it is **not an
+acceptance run**: the run that invents the expected answer must not also be the
+run that verifies it. The workflow defines neither branch-protected job name,
+so its success or a skipped job cannot satisfy either required check for the
+same commit. Only the exact prerequisite-branch push described above can reach
+freeze mode. Its artifact includes the exact generated
+`contracts/legacy-web-write-v1/` candidate directory as well as the raw runtime
+evidence, so domain review and the later contract commit use the files produced
+by CI rather than a local reconstruction. The acceptance run is a later
+ordinary current-phase smoke against committed, domain-reviewed files, with the
+same corrected mode and freezing off.
 
 ## Debug dispatch
 
-`workflow_dispatch` takes a `debug_gate` choice. `full` runs the ordinary
-manual matrix. Any other value names a single task, runs only `Current-phase
-database smoke`, and suppresses `Contracts` and the regression matrix - without
-that suppression, asking for one task would also launch a half-hour contract
-graph and seven historical database-backed smokes. The allowlist currently
-holds `phase5g1aLegacyWriteOracleSmoke`, the whole capture lane - which is the
-value a freeze run wants - and `phase5g1aWriteOracleCapture`, the browser
-capture alone, so a selector failure can be reproduced without the surrounding
-restore and scoring lane.
+The main workflow's `workflow_dispatch` takes a `debug_gate` choice. `full`
+runs the ordinary manual matrix. Any other value names a single task, runs only
+`Current-phase database smoke`, and suppresses `Contracts` and the regression
+matrix - without that suppression, asking for one task would also launch a
+half-hour contract graph and seven historical database-backed smokes. The
+separate push-triggered candidate-capture workflow has no `debug_gate` and
+always runs the complete corrected-legacy freeze lane. The main workflow's debug allowlist
+currently holds only `phase5g1aLegacyWriteOracleSmoke`, the whole capture lane.
+The former direct
+`phase5g1aWriteOracleCapture` choice is removed because it bypasses
+materialization, activation, provenance, restoration, and scoring; accepting
+the corrected-mode property while silently running the ordinary legacy runtime
+would be a false diagnostic.
 
 The input is a typed `choice` over a fixed allowlist rather than free text
 because `.github/actions/adempiere-build` expands its `task` and `args` inputs

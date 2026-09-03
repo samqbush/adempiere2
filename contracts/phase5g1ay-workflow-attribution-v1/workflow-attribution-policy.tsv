@@ -1,0 +1,15 @@
+# Phase 5g-1a-y workflow-attribution measurement policy.
+#
+# AD_WF_EventAudit is attribution-bearing workflow state, not ambient audit
+# churn. The keyed row is selected through both the capture-created workflow
+# process and its process/node activity. AD_WF_EventAudit has no
+# AD_WF_Activity_ID column, so the supported relationship is:
+#
+#   * a direct symbolic AD_WF_Process_ID foreign-key edge; and
+#   * an exact (AD_WF_Process_ID, AD_WF_Node_ID) join to AD_WF_Activity.
+#
+# The listed business columns are a minimum, not a projection. The generic
+# capture keeps the complete normalized row; this list prevents a later policy
+# or validator change from treating the attribution-bearing fields as optional.
+table_name	key_column	measurement_predicate	required_business_columns	required_foreign_key_edges	required_activity_join
+AD_WF_EventAudit	ad_wf_eventaudit_id	AD_WF_Process_ID IN (SELECT AD_WF_Process_ID FROM AD_WF_Process WHERE AD_Table_ID = 291 AND Record_ID IN (SELECT C_BPartner_ID FROM C_BPartner WHERE Value LIKE 'P5G1A-%')) AND EXISTS (SELECT 1 FROM AD_WF_Activity a WHERE a.AD_WF_Process_ID = AD_WF_EventAudit.AD_WF_Process_ID AND a.AD_WF_Node_ID = AD_WF_EventAudit.AD_WF_Node_ID AND a.AD_Table_ID = 291 AND a.Record_ID IN (SELECT C_BPartner_ID FROM C_BPartner WHERE Value LIKE 'P5G1A-%'))	ad_client_id+ad_org_id+createdby+updatedby+ad_user_id+ad_wf_responsible_id+ad_wf_process_id+ad_wf_node_id+ad_table_id+record_id+eventtype+wfstate	ad_wf_process_id:ad_wf_process	ad_wf_process_id+ad_wf_node_id
