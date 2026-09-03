@@ -188,9 +188,10 @@ while validating https://github.com/samqbush/adempiere2/pull/18. Immutable
 legacy theme images now have a separate, closed `GET`/`HEAD` pass-through policy
 while the redirect barrier is set; general `STATIC_ASSET` routes such as
 `/zkau/view/` remain refused. Routed-session END now assigns one cleanup owner
-and one route-aware navigation owner: AU/XHR receives the ZK redirect command,
-top-level pages receive HTTP redirect, duplicates cannot redirect again, and a
-fresh request is undecided. The neutral and bridge regressions and the 24th
+and one navigation owner per transport: AU/XHR receives the ZK redirect command
+and a racing top-level page receives HTTP redirect to the same context root,
+while same-transport duplicates cannot redirect again and a fresh request is
+undecided. The neutral and bridge regressions and the 24th
 runtime matrix row are implemented; full Phase 5e/5f and regression-matrix
 execution remains a GitHub Actions requirement before this increment merges.
 
@@ -286,10 +287,13 @@ SHA-256-pinned patch under
 `contracts/phase5g1ay-workflow-attribution-v1/`. The patch is applied only in a
 disposable detached worktree to build a capture-only runtime under
 `build/phase5g1ay/`; no `base/src` change or ordinary installed/release artifact
-ships from the oracle branch. The depth-one CI jobs narrowly fetch the pinned
-source object. Validation separates committed pinned-source-to-`HEAD` changes
-from working-tree mutations, excluding only the two documented Ant-regenerated
-tracked outputs from the latter while protecting their committed versions.
+ships from the oracle branch. The two validator-running CI jobs use full
+history so they can prove whether the accepted PR 19 merge is an ancestor of
+the checkout, and still ensure the exact pinned source object is present.
+Before acceptance, validation enforces the exact oracle-only branch scope and
+protected roots. On descendants of the accepted merge, it allows unrelated
+production changes but rejects committed or working-tree changes and renames
+under `contracts/legacy-web-write-v1/`.
 The corrected-source worktree is removed only through exact owned Git cleanup
 that fails closed on unregister errors. The corrected jar removes exactly the
 two contract-pinned stale code-signature entries before replacing classes.
@@ -301,7 +305,7 @@ ordinary installed jars even when the smoke fails. The neutral validator also
 functionally exercises the existing
 generic fact generator against a synthetic event-audit row and fails if the
 table is dropped, reclassified ambient, loses a required attribution column, or
-cannot resolve its process/activity relationships. The 56-case mutation proof
+cannot resolve its process/activity relationships. The 62-case mutation proof
 covers those controls. The current database-neutral chain head is:
 
 ```bash

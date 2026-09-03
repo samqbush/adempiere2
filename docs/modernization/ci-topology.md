@@ -113,13 +113,15 @@ product and a browser, so it belongs to the `Current-phase database smoke` lane
 described below. The task's default runtime remains the existing legacy mode;
 this increment selects `corrected-legacy-workflow-attribution` explicitly.
 
-Both Lane 1 jobs retain the default depth-one checkout, then read
-`source_commit` from the reviewed contract and fetch only that exact object when
-it is absent. This avoids an unbounded history fetch while making the pinned
-tree available to the neutral source comparison and the corrected-runtime
-materializer. The materializer repeats the same object check/fetch before
-invoking its validator, so direct task execution cannot depend on workflow
-ordering.
+Both Lane 1 jobs use full-history checkout because the Phase 5g-1a-y validator
+must distinguish the original oracle branch from descendants of accepted merge
+`439a35e65f31a2c3b72926c1bb21114934444590`. A detached fetch of that object is
+insufficient: `merge-base --is-ancestor` also needs the connecting history,
+including for GitHub's synthetic pull-request merge commit. The jobs still read
+`source_commit` from the reviewed contract and fetch that exact object if it is
+absent, preserving the corrected-runtime materializer's pinned input. The
+materializer repeats the object check/fetch before invoking its validator, so
+direct task execution cannot depend on workflow ordering.
 
 Re-run this whenever the `Contracts` task arguments change.
 
@@ -210,10 +212,12 @@ authors already knew about it.
 They are excluded rather than tolerated silently: the step still prints
 `git diff --stat` for the pair, so a change in *which* files the build rewrites
 stays observable, while any mutation of any other tracked file fails the job.
-The Phase 5g-1a-y oracle validator applies the same exception only to its
-separate working-tree inspection. Its pinned-source-to-`HEAD` committed diff
-still protects both files, so the exception cannot hide a committed binary
-change.
+Before the accepted Phase 5g-1a-y merge, the oracle validator applies the same
+exception only to its separate working-tree inspection; its
+pinned-source-to-`HEAD` committed diff still protects both files. On descendant
+branches, the validator instead permits unrelated production changes while
+requiring the accepted `contracts/legacy-web-write-v1/` tree to remain unchanged
+in both committed and working-tree state.
 Cleaning this up — either by untracking both artifacts or by making the reactor
 write them to a build directory — is repository hygiene owned by Phase 7, not
 by this CI change.

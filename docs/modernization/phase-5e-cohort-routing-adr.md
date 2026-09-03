@@ -323,16 +323,19 @@ The end is therefore signalled, on the internal hop only:
 3. `ModernBackendProxy` reads that header immediately after the response code
    and before a single byte of status, header or body reaches the public
    response, because the router still has to invalidate and redirect.
-4. Every in-flight END response atomically asks the shared affinity for two
-   independent claims. Exactly one response owns Tomcat 9 cleanup and
-   invalidation, which destroys the affinity and decision together and runs the
-   legacy `SessionManagerListener` cleanup. Exactly one eligible, uncommitted
-   response owns browser navigation. A context-root or ZK-page `GET` uses an
-   HTTP redirect; a ZK AU response emits the exact ZK `redirect` command because
-   an HTTP redirect returned to XHR does not navigate the top-level page.
-   Non-owning duplicates return `204 No Content`, and a committed response
-   cannot consume navigation ownership from another in-flight request. The
-   navigation reaches the public context root, where a new undecided session is
+4. Every in-flight END response atomically asks the shared affinity for cleanup
+   and route-aware navigation claims. Exactly one response owns Tomcat 9 cleanup
+   and invalidation, which destroys the affinity and decision together and runs
+   the legacy `SessionManagerListener` cleanup. Navigation ownership is once per
+   transport, not once globally: a context-root or ZK-page `GET` owns one HTTP
+   redirect, while one ZK AU response may emit the exact ZK `redirect` command.
+   This distinction is required because ZK's logout response first starts an
+   `index.zul` navigation; a later AU response can win the END race after that
+   top-level request has already aborted the old AU client. Returning 204 to the
+   in-flight page request in that case strands the browser on a blank
+   `index.zul`. Same-transport duplicates still return `204 No Content`, and a
+   committed response cannot consume its transport's ownership. Both permitted
+   responses name the same public context root, where a new undecided session is
    created and the legacy login form is served.
 
 The header is inside `X-ADempiere-Handoff-`, so a browser can never send one

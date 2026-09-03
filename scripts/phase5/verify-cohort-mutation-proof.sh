@@ -61,7 +61,7 @@ mutations=(
 'transition-safe-prefix~SRC/route/PublicRouteClassifier.java~!path.startsWith(TRANSITION_SAFE_IMAGE_PREFIX)~!path.startsWith("/")~org.adempiere.web.route.PublicRouteClassifierTest'
 'transition-safe-write-method~SRC/route/PublicRouteClassifier.java~&& !"HEAD".equalsIgnoreCase(method))) {~&& !"HEAD".equalsIgnoreCase(method)\n\t\t\t\t\t\t&& !"POST".equalsIgnoreCase(method))) {~org.adempiere.web.route.PublicRouteClassifierTest'
 'session-end-cleanup-owner~SRC/route/ModernSessionAffinity.java~boolean cleanupOwner = !endCleanupClaimed;~boolean cleanupOwner = true;~org.adempiere.web.route.RoutingCoreTest'
-'session-end-navigation-owner~SRC/route/ModernSessionAffinity.java~navigationEligible && !endNavigationClaimed;~navigationEligible;~org.adempiere.web.route.RoutingCoreTest'
+'session-end-navigation-owner~SRC/route/ModernSessionAffinity.java~navigation == EndNavigation.HTTP && !endHttpNavigationClaimed~navigation == EndNavigation.HTTP~org.adempiere.web.route.RoutingCoreTest'
 'session-end-au-protocol~SRC/route/RoutingLifecycle.java~candidate = EndResponse.ZK_AU_REDIRECT;~candidate = EndResponse.HTTP_REDIRECT;~org.adempiere.web.route.RoutingCoreTest'
 'session-end-committed-response~SRC/route/RoutingLifecycle.java~} else if (!responseCommitted\n\t\t\t\t&& "GET".equalsIgnoreCase(method)~} else if ("GET".equalsIgnoreCase(method)~org.adempiere.web.route.RoutingCoreTest'
 )

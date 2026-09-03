@@ -350,9 +350,11 @@ The legacy write oracle therefore needs one narrow corrected-legacy capture
 procedure:
 
 1. the exact source commit is pinned in
-   `contracts/phase5g1ay-workflow-attribution-v1/capture-contract.tsv`, fetched
-   narrowly by each depth-one Lane 1 checkout and independently ensured by the
-   materializer before validation;
+   `contracts/phase5g1ay-workflow-attribution-v1/capture-contract.tsv`; the
+   accepted PR 19 merge is pinned there too, each validator-running Lane 1 job
+   checks out full history to decide whether that merge is an ancestor, and the
+   exact source object is independently ensured by the materializer before
+   validation;
 2. one reviewed patch, with an exact SHA-256, hunk-header sequence, executable
    added/removed line sequence, and exact three-path allowlist, is applied only
    in a disposable detached worktree;
@@ -368,7 +370,11 @@ procedure:
 6. provenance requires `repository_head` to equal `git rev-parse HEAD` and an
    exact artifact inventory of corrected `Adempiere.jar` plus the top-level
    `DocWorkflowManager`, `MWorkflow`, and `MWFProcess` class outputs;
-7. `AD_WF_EventAudit` is removed from ambient classification, keyed by its own
+7. before acceptance, validation enforces the exact oracle-only branch scope
+   and protected roots; after the accepted merge, descendant production changes
+   are allowed but `contracts/legacy-web-write-v1/` cannot change or be renamed
+   in committed or working-tree state;
+8. `AD_WF_EventAudit` is removed from ambient classification, keyed by its own
    generated identity through an exact fixture process/activity predicate, and
    compared with its client/org/created/updated user, workflow
    user/responsible, process, node, table/record, event type, and workflow state
@@ -383,11 +389,11 @@ transaction/savepoint/commit/rollback propagation is untouched.
 
 This is still oracle-before-modern. PR 18,
 https://github.com/samqbush/adempiere2/pull/18, later implements the shared
-production correction against the accepted answer. It remains blocked until
-`5g-1a-y` is captured, domain-reviewed, accepted in a separate freeze-off run,
-and merged. The scope/policy change is not a frozen fact update: until that
-capture, the accepted business-values and foreign-key files remain unchanged
-and carry no keyed event-audit row.
+production correction against the accepted answer. The `5g-1a-y` capture,
+domain review, separate freeze-off acceptance, and PR 19 merge are complete;
+PR 18 remains blocked on the independent R15 routing hardening before
+reconciliation. Descendant work must consume the accepted business values and
+foreign-key graph without changing the frozen oracle.
 
 If this corrected-legacy procedure is not approved, capture cannot proceed.
 The cached-context result is not silently retained or normalized away; the

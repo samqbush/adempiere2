@@ -813,8 +813,8 @@ class CohortRoutingFilterTest {
 	}
 
 	@Test
-	@DisplayName("concurrent AU and page END responses have exactly one navigation owner")
-	void concurrentRoutedSessionEndsHaveOneNavigationOwner() throws Exception {
+	@DisplayName("concurrent AU and page END responses both reach the canonical login route")
+	void concurrentRoutedSessionEndsCannotStrandTopLevelNavigation() throws Exception {
 		ModernSessionAffinity affinity = bootstrappedAffinity();
 		HttpSession session = mock(HttpSession.class);
 		when(session.getAttribute(ModernSessionAffinity.ATTRIBUTE)).thenReturn(affinity);
@@ -854,15 +854,9 @@ class CohortRoutingFilterTest {
 				.filter(invocation ->
 						"sendRedirect".equals(invocation.getMethod().getName()))
 				.count();
-		int auRedirects = auBody.toString().contains("\"redirect\"") ? 1 : 0;
-		assertEquals(1, httpRedirects + auRedirects);
-		if (httpRedirects == 1) {
-			verify(auResponse).setStatus(HttpServletResponse.SC_NO_CONTENT);
-		} else {
-			verify(pageResponse).setStatus(HttpServletResponse.SC_NO_CONTENT);
-			assertEquals("{\"rs\":[[\"redirect\",[\"/webui/\",\"\"]]]}",
-					auBody.toString());
-		}
+		assertEquals(1, httpRedirects);
+		assertEquals("{\"rs\":[[\"redirect\",[\"/webui/\",\"\"]]]}",
+				auBody.toString());
 	}
 
 	@Test

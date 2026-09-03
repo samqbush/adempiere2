@@ -22,6 +22,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -290,7 +291,7 @@ class RoutedCohortMatrixTest {
 			assertNoInternalIdentifier(page, capture);
 			Files.writeString(capture.resolve("served.txt"), served.name(),
 					StandardCharsets.UTF_8);
-			logout(page);
+			logout(page, capture);
 			return served;
 		}
 	}
@@ -463,6 +464,48 @@ class RoutedCohortMatrixTest {
 			logout.first().click();
 			page.locator("[id^='rowUser'] input").first().waitFor();
 		}
+	}
+
+	private void logout(Page page, Path capture) throws IOException {
+		List<Response> auResponses = new CopyOnWriteArrayList<>();
+		Consumer<Response> observer = response -> {
+			if (response.url().contains(contextPath + "/zkau")) {
+				auResponses.add(response);
+			}
+		};
+		String before = page.url();
+		page.onResponse(observer);
+		try {
+			logout(page);
+		} finally {
+			page.offResponse(observer);
+			List<String> rows = new ArrayList<>();
+			rows.add("url-before\t" + before);
+			rows.add("url-after\t" + page.url());
+			for (Response response : auResponses) {
+				String body;
+				try {
+					body = response.text();
+				} catch (RuntimeException unavailable) {
+					body = "";
+				}
+				rows.add("zkau-response\t" + response.status()
+						+ "\tcontent-type="
+						+ sanitiseEvidence(response.headerValue("content-type"))
+						+ "\tcontent-length="
+						+ sanitiseEvidence(response.headerValue("content-length"))
+						+ "\tredirect-command="
+						+ body.equals(
+								"{\"rs\":[[\"redirect\",[\"/webui/\",\"\"]]]}"));
+			}
+			Files.write(capture.resolve("logout-navigation.tsv"), rows,
+					StandardCharsets.UTF_8);
+		}
+	}
+
+	private static String sanitiseEvidence(String value) {
+		return value == null ? "" : value.replace('\t', ' ')
+				.replace('\r', ' ').replace('\n', ' ');
 	}
 
 	private boolean logoutAndObserveFreshLogin(Page page) {

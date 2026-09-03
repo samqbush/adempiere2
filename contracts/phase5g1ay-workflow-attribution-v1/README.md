@@ -61,19 +61,27 @@ problems. The corrected legacy answer is accepted.
 
 The procedure is approved only when all of these controls remain true:
 
+- `accepted_merge_commit` remains exactly the reviewed PR 19 merge commit
+  `439a35e65f31a2c3b72926c1bb21114934444590`;
 - patch SHA-256, hunk headers, touched paths, and the complete executable
   added/removed line sequence match this contract exactly;
-- committed changes from the pinned `source_commit` through `HEAD`, combined
-  with the separately inspected working tree, change exactly the files in
+- before that accepted merge is an ancestor of `HEAD`, committed changes from
+  the pinned `source_commit` through `HEAD`, combined with the separately
+  inspected working tree, change exactly the files in
   `oracle-branch-allowed-paths.txt`, so neither scope can hide production-source
   or ordinary-artifact changes;
+- after that accepted merge is an ancestor of `HEAD`, descendant branches may
+  change production code for later increments, but
+  `contracts/legacy-web-write-v1/` must remain byte-for-byte unchanged from the
+  accepted merge in both committed and working-tree state;
 - working-tree inspection excludes only the two documented Ant-regenerated
   tracked outputs, `lib/ADInterface-1.0.war` and
   `lib/mysql-connector-java-5.1.13-bin.jar`; their committed versions remain
   protected like every other path under `lib`;
-- each depth-one CI checkout narrowly fetches the exact pinned source object,
-  and the materializer independently ensures that object exists before it
-  invokes validation;
+- each validator-running Lane 1 job checks out full history so accepted-merge
+  ancestry is provable, ensures the exact pinned source object exists, and the
+  materializer independently repeats that source-object check before it invokes
+  validation;
 - the patch applies cleanly to the exact source commit and carries the explicit
   invocation context through the reviewed overload chain without adding side
   effects or changing the compatibility overloads;
@@ -109,5 +117,6 @@ blocked until another independently reviewed legacy oracle mechanism exists.
 
 PR 18, https://github.com/samqbush/adempiere2/pull/18, is the later production
 consumer. The corrected legacy answer is captured, domain-reviewed, and
-accepted in a separate freeze-off run; PR 18 remains blocked until this oracle
-amendment is merged to `develop`.
+accepted in a separate freeze-off run. PR 19 merged the amendment to `develop`
+as `439a35e65f31a2c3b72926c1bb21114934444590`; downstream validation now protects
+the accepted oracle while allowing separately reviewed production work.

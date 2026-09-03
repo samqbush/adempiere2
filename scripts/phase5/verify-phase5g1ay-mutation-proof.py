@@ -355,6 +355,41 @@ then''',
             allowed_branch_paths,
         ),
     )
+    must_fail(
+        "post-acceptance-committed-oracle-change-is-ignored",
+        lambda: oracle.validate_frozen_oracle_scope(
+            {"contracts/legacy-web-write-v1/business-values.tsv"}, set()
+        ),
+    )
+    must_fail(
+        "post-acceptance-working-tree-oracle-change-is-ignored",
+        lambda: oracle.validate_frozen_oracle_scope(
+            set(), {"contracts/legacy-web-write-v1/manifest.sha256"}
+        ),
+    )
+    must_fail(
+        "pre-acceptance-working-tree-rename-is-allowed",
+        lambda: oracle.parse_porcelain_v1_z(
+            "R  base/src/New.java\0base/src/Old.java\0"
+        ),
+    )
+    renamed_oracle_paths = oracle.parse_porcelain_v1_z(
+        "R  contracts/legacy-web-write-v1/new.tsv\0"
+        "contracts/legacy-web-write-v1/old.tsv\0",
+        reject_renames=False,
+    )
+    must_fail(
+        "post-acceptance-frozen-oracle-rename-is-ignored",
+        lambda: oracle.validate_frozen_oracle_scope(
+            set(), renamed_oracle_paths
+        ),
+    )
+    unrelated_rename_paths = oracle.parse_porcelain_v1_z(
+        "R  base/src/New.java\0base/src/Old.java\0",
+        reject_renames=False,
+    )
+    if unrelated_rename_paths != {"base/src/New.java", "base/src/Old.java"}:
+        raise RuntimeError("post-acceptance rename parsing lost a path")
 
     must_fail(
         "runtime-exit-restoration-trap-bypassed",
@@ -625,6 +660,42 @@ then''',
         (copied / "unexpected.txt").write_text("unexpected\n", encoding="utf-8")
         must_fail(
             "manifest-detects-unexpected-file", lambda: oracle.verify_manifest(copied)
+        )
+
+    with tempfile.TemporaryDirectory(prefix="phase5g1ay-contract-") as temporary:
+        copied = pathlib.Path(temporary) / "contract"
+        shutil.copytree(contract_dir, copied)
+        capture = copied / "capture-contract.tsv"
+        capture.write_text(
+            replace_once(
+                capture.read_text(encoding="utf-8"),
+                "accepted_merge_commit\t"
+                + oracle.ACCEPTED_MERGE_COMMIT
+                + "\n",
+                "",
+            ),
+            encoding="utf-8",
+        )
+        must_fail(
+            "capture-contract-omits-accepted-merge",
+            lambda: oracle.load_contract(copied),
+        )
+
+    with tempfile.TemporaryDirectory(prefix="phase5g1ay-contract-") as temporary:
+        copied = pathlib.Path(temporary) / "contract"
+        shutil.copytree(contract_dir, copied)
+        capture = copied / "capture-contract.tsv"
+        capture.write_text(
+            replace_once(
+                capture.read_text(encoding="utf-8"),
+                oracle.ACCEPTED_MERGE_COMMIT,
+                "ffffffffffffffffffffffffffffffffffffffff",
+            ),
+            encoding="utf-8",
+        )
+        must_fail(
+            "capture-contract-alters-accepted-merge",
+            lambda: oracle.load_contract(copied),
         )
 
     def mutate_provenance(name: str, mutation) -> None:

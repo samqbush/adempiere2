@@ -142,7 +142,7 @@ class RoutingCoreTest {
 	}
 
 	@Test
-	@DisplayName("session end has one cleanup owner and one route-aware navigation owner")
+	@DisplayName("session end has one cleanup owner and one owner per navigation transport")
 	void sessionEndOwnershipIsAtomicAndRouteAware() {
 		ModernSessionAffinity affinity = bootstrappedAffinity();
 
@@ -160,8 +160,17 @@ class RoutingCoreTest {
 		RoutingLifecycle.EndOutcome page = RoutingLifecycle.end(
 				affinity, "GET", PublicRouteClass.ZK_PAGE, false);
 		assertFalse(page.cleanupOwner());
-		assertEquals(RoutingLifecycle.EndResponse.NONE, page.response(),
-				"the AU response already owns the one browser navigation");
+		assertEquals(
+				RoutingLifecycle.EndResponse.HTTP_REDIRECT, page.response(),
+				"the top-level request must not be stranded by the AU response");
+
+		RoutingLifecycle.EndOutcome duplicateAu = RoutingLifecycle.end(
+				affinity, "POST", PublicRouteClass.ZK_AU, false);
+		assertEquals(RoutingLifecycle.EndResponse.NONE, duplicateAu.response());
+
+		RoutingLifecycle.EndOutcome duplicatePage = RoutingLifecycle.end(
+				affinity, "GET", PublicRouteClass.ZK_PAGE, false);
+		assertEquals(RoutingLifecycle.EndResponse.NONE, duplicatePage.response());
 	}
 
 	@Test

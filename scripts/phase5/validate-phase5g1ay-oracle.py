@@ -18,6 +18,8 @@ from typing import Iterable
 HEX_40 = re.compile(r"^[0-9a-f]{40}$")
 HEX_64 = re.compile(r"^[0-9a-f]{64}$")
 MANIFEST_NAME = "manifest.sha256"
+ACCEPTED_MERGE_COMMIT = "439a35e65f31a2c3b72926c1bb21114934444590"
+FROZEN_ORACLE_PATH = "contracts/legacy-web-write-v1"
 WORKTREE_MUTATION_EXCLUSIONS = (
     "lib/ADInterface-1.0.war",
     "lib/mysql-connector-java-5.1.13-bin.jar",
@@ -528,6 +530,7 @@ def load_contract(contract_dir: pathlib.Path) -> dict[str, str]:
         rows[key] = value
     required = {
         "source_commit",
+        "accepted_merge_commit",
         "patch_file",
         "patch_sha256",
         "mode",
@@ -542,6 +545,11 @@ def load_contract(contract_dir: pathlib.Path) -> dict[str, str]:
         )
     if not HEX_40.fullmatch(rows["source_commit"]):
         raise ValidationError("source_commit must be a full lowercase Git object id")
+    if rows["accepted_merge_commit"] != ACCEPTED_MERGE_COMMIT:
+        raise ValidationError(
+            "accepted_merge_commit must remain the reviewed Phase 5g-1a-y "
+            f"merge commit {ACCEPTED_MERGE_COMMIT}"
+        )
     if not HEX_64.fullmatch(rows["patch_sha256"]):
         raise ValidationError("patch_sha256 must be a lowercase SHA-256")
     if rows["mode"] != "corrected-legacy-workflow-attribution":
@@ -892,22 +900,41 @@ def run_git(repo_root: pathlib.Path, *args: str, check: bool = True) -> str:
     return completed.stdout
 
 
-def parse_porcelain_v1_z(output: str) -> set[str]:
+def parse_porcelain_v1_z(
+    output: str, reject_renames: bool = True
+) -> set[str]:
     paths: set[str] = set()
-    for record in output.split("\0"):
+    records = output.split("\0")
+    index = 0
+    while index < len(records):
+        record = records[index]
         if not record:
+            index += 1
             continue
         if len(record) < 4 or record[2] != " ":
             raise ValidationError(f"invalid git status record: {record!r}")
         status = record[:2]
         relative = record[3:]
         if "R" in status or "C" in status:
-            raise ValidationError(
-                f"oracle branch working tree may not rename or copy paths: {record!r}"
-            )
-        if relative in paths:
-            raise ValidationError(f"duplicate git status path: {relative}")
-        paths.add(relative)
+            if reject_renames:
+                raise ValidationError(
+                    "oracle branch working tree may not rename or copy paths: "
+                    f"{record!r}"
+                )
+            index += 1
+            if index >= len(records) or not records[index]:
+                raise ValidationError(
+                    f"rename or copy record has no source path: {record!r}"
+                )
+            for path in (relative, records[index]):
+                if path in paths:
+                    raise ValidationError(f"duplicate git status path: {path}")
+                paths.add(path)
+        else:
+            if relative in paths:
+                raise ValidationError(f"duplicate git status path: {relative}")
+            paths.add(relative)
+        index += 1
     return paths
 
 
@@ -942,6 +969,33 @@ def validate_repository_scope(
     return visible_worktree_paths, excluded_worktree_paths
 
 
+def validate_frozen_oracle_scope(
+    committed_paths: set[str], working_tree_paths: set[str]
+) -> None:
+    altered = committed_paths | working_tree_paths
+    if altered:
+        raise ValidationError(
+            "the accepted legacy write oracle changed after its merge: "
+            f"{sorted(altered)}"
+        )
+
+
+def is_ancestor(repo_root: pathlib.Path, ancestor: str, descendant: str) -> bool:
+    completed = subprocess.run(
+        ["git", "-C", str(repo_root), "merge-base", "--is-ancestor",
+         ancestor, descendant],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if completed.returncode not in (0, 1):
+        raise ValidationError(
+            "git merge-base --is-ancestor failed: "
+            f"{completed.stderr.decode(errors='replace').strip()}"
+        )
+    return completed.returncode == 0
+
+
 def validate_repository(repo_root: pathlib.Path, contract_dir: pathlib.Path) -> dict[str, int]:
     contract = load_contract(contract_dir)
     manifest_count = verify_manifest(contract_dir)
@@ -956,46 +1010,12 @@ def validate_repository(repo_root: pathlib.Path, contract_dir: pathlib.Path) -> 
     validate_patch_semantics(patch_text, allowed_paths)
 
     run_git(repo_root, "cat-file", "-e", f"{contract['source_commit']}^{{commit}}")
-    for relative in allowed_paths:
-        current = subprocess.run(
-            ["git", "-C", str(repo_root), "show", f"HEAD:{relative}"],
-            check=True,
-            stdout=subprocess.PIPE,
-        ).stdout
-        source = subprocess.run(
-            ["git", "-C", str(repo_root), "show", f"{contract['source_commit']}:{relative}"],
-            check=True,
-            stdout=subprocess.PIPE,
-        ).stdout
-        if current != source:
-            raise ValidationError(
-                f"checked-out production source differs from source_commit: {relative}"
-            )
-
-    committed_protected_paths = set(
-        data_lines_from_output(
-            run_git(
-                repo_root,
-                "diff",
-                "--name-only",
-                contract["source_commit"],
-                "HEAD",
-                "--",
-                *protected_paths,
-            )
-        )
+    run_git(
+        repo_root, "cat-file", "-e",
+        f"{contract['accepted_merge_commit']}^{{commit}}"
     )
-    committed_paths = set(
-        data_lines_from_output(
-            run_git(
-                repo_root,
-                "diff",
-                "--name-only",
-                contract["source_commit"],
-                "HEAD",
-                "--",
-            )
-        )
+    post_acceptance = is_ancestor(
+        repo_root, contract["accepted_merge_commit"], "HEAD"
     )
     working_tree_paths = parse_porcelain_v1_z(
         run_git(
@@ -1005,32 +1025,103 @@ def validate_repository(repo_root: pathlib.Path, contract_dir: pathlib.Path) -> 
             "-z",
             "--untracked-files=all",
             "--ignore-submodules=none",
+        ),
+        reject_renames=not post_acceptance,
+    )
+    if post_acceptance:
+        committed_paths = set(
+            data_lines_from_output(
+                run_git(
+                    repo_root,
+                    "diff",
+                    "--name-only",
+                    contract["accepted_merge_commit"],
+                    "HEAD",
+                    "--",
+                    FROZEN_ORACLE_PATH,
+                )
+            )
         )
-    )
-    visible_worktree_paths, excluded_worktree_paths = validate_repository_scope(
-        committed_paths,
-        committed_protected_paths,
-        working_tree_paths,
-        set(allowed_branch_paths),
-    )
+        frozen_worktree_paths = {
+            path for path in working_tree_paths
+            if path == FROZEN_ORACLE_PATH
+            or path.startswith(FROZEN_ORACLE_PATH + "/")
+        }
+        validate_frozen_oracle_scope(committed_paths, frozen_worktree_paths)
+        visible_worktree_paths = working_tree_paths
+        excluded_worktree_paths: set[str] = set()
+    else:
+        for relative in allowed_paths:
+            current = subprocess.run(
+                ["git", "-C", str(repo_root), "show", f"HEAD:{relative}"],
+                check=True,
+                stdout=subprocess.PIPE,
+            ).stdout
+            source = subprocess.run(
+                [
+                    "git", "-C", str(repo_root), "show",
+                    f"{contract['source_commit']}:{relative}"
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+            ).stdout
+            if current != source:
+                raise ValidationError(
+                    "checked-out production source differs from source_commit: "
+                    f"{relative}"
+                )
 
-    apply_check = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(repo_root),
-            "apply",
-            "--check",
-            "--ignore-whitespace",
-            str(patch),
-        ],
-        check=False,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if apply_check.returncode != 0:
-        raise ValidationError(f"patch does not apply to source_commit: {apply_check.stderr}")
+        committed_protected_paths = set(
+            data_lines_from_output(
+                run_git(
+                    repo_root,
+                    "diff",
+                    "--name-only",
+                    contract["source_commit"],
+                    "HEAD",
+                    "--",
+                    *protected_paths,
+                )
+            )
+        )
+        committed_paths = set(
+            data_lines_from_output(
+                run_git(
+                    repo_root,
+                    "diff",
+                    "--name-only",
+                    contract["source_commit"],
+                    "HEAD",
+                    "--",
+                )
+            )
+        )
+        visible_worktree_paths, excluded_worktree_paths = validate_repository_scope(
+            committed_paths,
+            committed_protected_paths,
+            working_tree_paths,
+            set(allowed_branch_paths),
+        )
+
+        apply_check = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_root),
+                "apply",
+                "--check",
+                "--ignore-whitespace",
+                str(patch),
+            ],
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if apply_check.returncode != 0:
+            raise ValidationError(
+                f"patch does not apply to source_commit: {apply_check.stderr}"
+            )
 
     packaging_files = [
         repo_root / "install/build.xml",
@@ -1098,6 +1189,7 @@ def validate_repository(repo_root: pathlib.Path, contract_dir: pathlib.Path) -> 
         "committed_branch_paths": len(committed_paths),
         "working_tree_paths": len(visible_worktree_paths),
         "excluded_worktree_outputs": len(excluded_worktree_paths),
+        "post_acceptance_mode": int(post_acceptance),
         **event_audit_counts,
         "event_audit_generator_columns": generator_columns,
     }

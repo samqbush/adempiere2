@@ -63,8 +63,8 @@ public final class RoutingLifecycle {
 	}
 
 	/**
-	 * Chooses the one response that may navigate after END and atomically claims
-	 * cleanup/navigation ownership on the shared affinity.
+	 * Chooses the route-appropriate response after END and atomically claims
+	 * cleanup plus per-transport navigation ownership on the shared affinity.
 	 */
 	public static EndOutcome end(
 			ModernSessionAffinity affinity,
@@ -81,7 +81,11 @@ public final class RoutingLifecycle {
 			candidate = EndResponse.HTTP_REDIRECT;
 		}
 		ModernSessionAffinity.EndClaim claim =
-				affinity.claimEnd(candidate != EndResponse.NONE);
+				affinity.claimEnd(switch (candidate) {
+					case HTTP_REDIRECT -> ModernSessionAffinity.EndNavigation.HTTP;
+					case ZK_AU_REDIRECT -> ModernSessionAffinity.EndNavigation.ZK_AU;
+					case NONE -> ModernSessionAffinity.EndNavigation.NONE;
+				});
 		return new EndOutcome(
 				claim.cleanupOwner(),
 				claim.navigationOwner() ? candidate : EndResponse.NONE);
