@@ -220,8 +220,18 @@ public final class ZkCe10Dialect implements ZkDialect {
 		// The Tab is the product's, not the browser's: ADempiere's login panel
 		// reloads the client and role lists from the user's own onChange, and a
 		// password typed before that round trip is submitted against a panel
-		// that has not resolved the user yet.
-		userInput.press("Tab");
+		// that has not resolved the user yet. The wait is load-bearing: run
+		// 33880054466 let the password and OK requests race this response in
+		// capture B, and the legacy ingress authenticated the concatenated
+		// username GardenAdminGardenAdmin instead of GardenAdmin.
+		page.waitForResponse(
+				response -> response.request().url().contains("/zkau")
+						&& response.request().postData() != null
+						&& response.request().postData().contains("onChange")
+						&& response.request().postData().contains(user),
+				() -> userInput.press("Tab"));
+		assertEquals(user, userInput.inputValue(),
+				"the " + sessionLabel + " user field changed during its onChange round trip");
 		page.locator("[id^='rowPassword'] input").first().fill(password);
 		okButton(page).click();
 

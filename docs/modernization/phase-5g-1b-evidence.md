@@ -10,9 +10,10 @@ PR 19 has accepted and merged the corrected workflow-attribution oracle, and PR
 entry points as compatibility delegates, chains `phase5g1ayFinalVerification`,
 and has removed the temporary context probes. The new database-neutral
 production-attribution check proves the process, activity, and event-audit
-construction chain inherits that invocation context. The final CI Contracts and
-database-backed parity run are still pending, so this remains an implementation
-state rather than an accepted parity claim.
+construction chain inherits that invocation context. `Contracts` and the
+reproducible build checks are green on the reconciled PR head, but the
+database-backed parity run is still red, so this remains an implementation state
+rather than an accepted parity claim.
 
 ## The claim
 
@@ -216,6 +217,7 @@ first.
 
 | Run | Reached | Finding |
 |---|---|---|
+| [33880054466](https://github.com/samqbush/adempiere2/actions/runs/33880054466) | Reconciled PR head `c80148dfb`: `Contracts` green; reproducible run 33880054528 green; current-phase smoke completed capture A and failed at capture B login | The failure is in driver synchronization, before any capture-B business step or parity scoring. Capture A completed all 12 steps. Capture B's failure page remained on the public legacy login form while waiting for the role grid. The ingress log records `Login.getAuthenticatedUserId: User=GardenAdminGardenAdmin` followed by `No Apps Password`; the successful capture-A login records `User=GardenAdmin`. The driver fired the password and OK requests without awaiting the username `onChange` AU response. The modern dialect now waits for that exact response and verifies the field before submitting credentials. |
 | [33704883870](https://github.com/samqbush/adempiere2/actions/runs/33704883870) | PR #18's checks: `Contracts` **green**, current-phase smoke failed differently | `phase5g1bFinalVerification` passed in CI for the first time, with the whole chain behind it and the no-tracked-file-mutation postcondition. The smoke failed **before** scoring this time: capture B drove steps 1-10, then timed out after 30s waiting for `[id^='rowUser'] input` on `/webui/index.zul`. The ingress log shows `endRoutedSession` at `02:22:10.715` and `02:22:11.019` and then **no routing decision at all** for the navigation that followed. Recorded against R15; the mechanism is not yet measured |
 | [33700802266](https://github.com/samqbush/adempiere2/actions/runs/33700802266) | The first `full` dispatch on this branch: the regression matrix and `Contracts` both ran for the first time | The regression matrix is **green on all eight gates** - `phase3InstalledProduct`, `phase4InstalledApi`, `phase5bLegacyWebOracleSmoke`, `phase5cRollbackRehearsal`, `phase5dModernWebSmoke`, `phase5eCohortRoutingSmoke`, `phase5fJakartaWebRoutesSmoke` and `phase5g1aLegacyWriteOracleSmoke` - which closes the open assumption that the event-thread descriptor change might regress the earlier modern and routed lanes. `Contracts` **failed** on `verifyPhase5Inventories`: `zk-sources.tsv` had drifted and nobody had seen it, because all 24 previous runs on this branch used a non-`full` `debug_gate`, whose `if:` suppresses that job. The current-phase smoke failed on `business-values.tsv` in both captures and on **nothing else** - the 503 did not recur - so R14 is now the single remaining class |
 | [33696036502](https://github.com/samqbush/adempiere2/actions/runs/33696036502) | 36m; **`c_bpartner` matches the frozen answer exactly** | The `#SalesRep_ID` handoff fix landed: `business-values.tsv` no longer differs on `c_bpartner` at all, and the only remaining rows in that diff are the `ad_wf_process` and `ad_wf_activity` attribution columns, which is R14. The intermittent 503 recurred in capture A only, and the new timeline attributed it for the first time: the **second** editor's session, 0.7s into its sign-in, `class=STATIC_ASSET outcome=redirect-in-progress` in the ingress log - the cohort transition's own redirect barrier, not ZK |
