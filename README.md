@@ -183,17 +183,21 @@ all 23 public-origin cohort, isolation, lifecycle, SOAP-coexistence, and
 secret-hygiene rows as passing; see
 `docs/modernization/phase-5e-evidence.md`.
 
-The dedicated R15 hardening increment addresses two transition defects measured
+The merged R15 hardening increment addresses transition defects measured
 while validating https://github.com/samqbush/adempiere2/pull/18. Immutable
 legacy theme images now have a separate, closed `GET`/`HEAD` pass-through policy
-while the redirect barrier is set; general `STATIC_ASSET` routes such as
+while the deciding response owns the redirect barrier and while the selected
+modern affinity still awaits its context-root rotation; general `STATIC_ASSET` routes such as
 `/zkau/view/` remain refused. Routed-session END now assigns one cleanup owner
 and one navigation owner per transport: AU/XHR receives the ZK redirect command
 and a racing top-level page receives HTTP redirect to the same context root,
 while same-transport duplicates cannot redirect again and a fresh request is
 undecided. The neutral and bridge regressions and the 24th
-runtime matrix row are implemented; full Phase 5e/5f and regression-matrix
-execution remains a GitHub Actions requirement before this increment merges.
+runtime matrix row are implemented. PR 20 merged at `ccffe15ff`, and its
+post-merge `develop` run 33829108255 is green. PR 18 run 33893941634 additionally
+proved the second transition interval: both 12-step modern captures completed
+without the earlier `progress2.gif` refusal, and the corrected `/webui/`
+no-legacy-fallback control passed.
 
 Phase 5f merged to `develop` as PR #11 at `83aeb8536`; both of its gates are
 executed and green:
@@ -306,17 +310,25 @@ functionally exercises the existing
 generic fact generator against a synthetic event-audit row and fails if the
 table is dropped, reclassified ambient, loses a required attribution column, or
 cannot resolve its process/activity relationships. The 62-case mutation proof
-covers those controls. The current database-neutral chain head is:
+covers those controls. The accepted oracle amendment remains a required link beneath the current
+database-neutral chain head:
 
 ```bash
-./gradlew phase5g1ayFinalVerification --dependency-verification=strict
+./gradlew phase5g1bFinalVerification --dependency-verification=strict
 ```
 
 The corrected database-backed capture is selected explicitly with
 `-Pphase5g1ayMode=corrected-legacy-workflow-attribution`; omitting it preserves
 the existing legacy write-oracle behavior. PR 18,
-https://github.com/samqbush/adempiere2/pull/18, remains blocked until this
-accepted oracle amendment merges.
+https://github.com/samqbush/adempiere2/pull/18, now has an accepted candidate:
+exact-head run 33904468993 completed both 12-step modern captures through the
+public `/webui` origin, self-diffed cleanly, matched the frozen contract, passed
+all six H6 controls, and passed the evidence validator. A later final-head run
+exposed a concurrent routed-logout race after the modern session was destroyed;
+the candidate now repeats the internal END handshake for that exact
+loopback-bound stale-session case while keeping unbound requests forbidden.
+Exact-head run 33913861562 passed both captures and all six H6 controls with the
+correction. Merge and the post-merge regression matrix remain.
 
 The Tomcat smoke requires HTTP 2xx/3xx from each deployed context except
 `ADInterface`, whose unrouted base path is explicitly expected to return 404;

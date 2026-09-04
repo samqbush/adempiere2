@@ -62,6 +62,22 @@ sourceSets {
 			srcDirs = [rootProject.file('contracts/legacy-web-browser-v1')]
 		}
 	}
+	// Phase 5g-1b: the runtime-INDEPENDENT half of the write capture -- the flow
+	// orchestration, the step ledger and the dialect seam. Shared by the legacy
+	// oracle lane and the modern parity lane so both execute the same step
+	// order, the same fact keys and the same session choreography; only the
+	// ZkDialect implementation differs.
+	//
+	// A support source set rather than a test one: it carries no @Test, so no
+	// Test task may discover it directly. Its behaviour is proved by the lanes
+	// that use it.
+	writeParitySupport {
+		java {
+			srcDirs = ['src/writeParitySupport/java']
+		}
+		// No resources, for the same reason writeOracleTest has none: the frozen
+		// contract must stay off the driver's classpath.
+	}
 	// Phase 5g-1a: the destructive legacy write driver. Its own source set and
 	// its own Test task, so the Phase 5c read oracle can never discover it: a
 	// task that resets a fixture and asserts a zero-write delta must not have a
@@ -77,6 +93,21 @@ sourceSets {
 		// serve the whole oracle to the browser test. Keeping it off is the
 		// structural guarantee behind the "the driver must not know the answer"
 		// rule; the driver reads nothing from it today, and now it cannot.
+	}
+	// Phase 5g-1b: the destructive MODERN write driver. Its own source set for
+	// the same reason writeOracleTest has one, plus a sharper one: the legacy
+	// and modern captures must never be discoverable by a single Test task.
+	// They drive the same flow against different deployments, and a task that
+	// swept up both would run them against one database in one lane and
+	// attribute the second capture's writes to the first.
+	writeParityTest {
+		java {
+			srcDirs = ['src/writeParityTest/java']
+		}
+		// No resources. The frozen legacy contract stays off this classpath for
+		// a reason that is stronger here than it was for the legacy driver: the
+		// modern driver is being SCORED against that contract, so a driver that
+		// could read it could be written to reproduce it.
 	}
 	browserTest {
 		java {
@@ -137,8 +168,12 @@ configurations {
 	phase5Transformer
 	legacyBrowserSupportImplementation.extendsFrom testImplementation
 	legacyBrowserSupportRuntimeOnly.extendsFrom testRuntimeOnly
+	writeParitySupportImplementation.extendsFrom testImplementation
+	writeParitySupportRuntimeOnly.extendsFrom testRuntimeOnly
 	writeOracleTestImplementation.extendsFrom testImplementation
 	writeOracleTestRuntimeOnly.extendsFrom testRuntimeOnly
+	writeParityTestImplementation.extendsFrom testImplementation
+	writeParityTestRuntimeOnly.extendsFrom testRuntimeOnly
 	browserContractImplementation.extendsFrom testImplementation
 	browserContractRuntimeOnly.extendsFrom testRuntimeOnly
 	browserTestImplementation.extendsFrom testImplementation
@@ -171,11 +206,22 @@ dependencies {
 	browserContractImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
 	browserContractRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
 	legacyBrowserSupportImplementation "com.microsoft.playwright:playwright:${playwrightVersion}"
+	writeParitySupportImplementation sourceSets.legacyBrowserSupport.output
+	writeParitySupportImplementation sourceSets.browserContract.output
+	writeParitySupportImplementation "com.microsoft.playwright:playwright:${playwrightVersion}"
+	writeParitySupportImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+	writeOracleTestImplementation sourceSets.writeParitySupport.output
 	writeOracleTestImplementation sourceSets.legacyBrowserSupport.output
 	writeOracleTestImplementation sourceSets.browserContract.output
 	writeOracleTestImplementation "com.microsoft.playwright:playwright:${playwrightVersion}"
 	writeOracleTestImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
 	writeOracleTestRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+	writeParityTestImplementation sourceSets.writeParitySupport.output
+	writeParityTestImplementation sourceSets.legacyBrowserSupport.output
+	writeParityTestImplementation sourceSets.browserContract.output
+	writeParityTestImplementation "com.microsoft.playwright:playwright:${playwrightVersion}"
+	writeParityTestImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+	writeParityTestRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
 	browserTestImplementation sourceSets.legacyBrowserSupport.output
 	browserTestImplementation sourceSets.browserContract.output
 	browserTestImplementation "com.microsoft.playwright:playwright:${playwrightVersion}"
@@ -250,6 +296,7 @@ dependencies {
 	modernUiTestImplementation 'org.mockito:mockito-inline:4.11.0'
 	modernUiTestImplementation 'net.bytebuddy:byte-buddy:1.15.4'
 	modernUiTestImplementation 'net.bytebuddy:byte-buddy-agent:1.15.4'
+	modernUiTestImplementation 'jakarta.servlet:jakarta.servlet-api:6.0.0'
 	modernUiTestImplementation files(rootProject.file('tools/lib/testing/SuperCSV-with_src-1.52.jar'))
 	modernUiTestImplementation files(rootProject.file('tools/lib/commons-lang-2.1.jar'))
 	modernUiTestRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
@@ -752,6 +799,19 @@ tasks.register('verifyPhase5dModernWebWar') {
 		if (zkConfig.contains('zkmax') || zkConfig.contains('zkex')) {
 			problems << 'WEB-INF/zk.xml still selects a commercial ZK implementation'
 		}
+		// ZK 3.6 ran the event processing thread by default and ZK 5 and later
+		// do not, so this setting can be lost by migrating a descriptor rather
+		// than by editing one -- and losing it is silent at runtime, because
+		// Window.doModal() then degrades to a non-modal mode instead of
+		// failing. Every ADempiere caller that constructs a modal and reads its
+		// result synchronously, such as AbstractADWindowPanel.initialQuery
+		// reading FindWindow.getQuery(), would return a wrong answer with no
+		// error. Assert the setting here so its loss fails the build.
+		if (!(zkConfig =~ /(?s)<disable-event-thread>\s*false\s*<\/disable-event-thread>/)) {
+			problems << 'WEB-INF/zk.xml does not enable the ZK event processing ' +
+				'thread, so Window.doModal() will not block and every modal read ' +
+				'synchronously by its caller returns an untouched dialog'
+		}
 
 		// 3. Forbidden content.
 		def forbidden = [
@@ -1153,84 +1213,148 @@ tasks.register('browserTest', Test) {
 // its fixture and asserts a zero-write delta; discovering a destructive business
 // write inside that task would either fail it or, worse, be excluded by a filter
 // somebody later relaxes. Separate execution, shared drivers.
+// The capture configuration, shared by both write lanes.
+//
+// Every system property below is part of what the capture MEASURES -- the
+// identities, the record value, the organisation, the rendezvous. The legacy
+// lane froze an answer under these inputs, so the modern lane must run under
+// the identical ones: a modern capture that differed in, say, the record's
+// organisation would fail parity for a reason that has nothing to do with the
+// runtime, and a reviewer would have no way to see it from the two task
+// definitions.
+//
+// Sharing them in one closure is therefore a correctness measure, not a
+// deduplication. The two lanes differ in exactly two lines -- which classes to
+// run, and on what classpath -- and that is the difference the increment is
+// about.
+def phase5gWriteCaptureConfiguration = { Test task ->
+	task.with {
+		useJUnitPlatform()
+		systemProperty 'phase5g1a.browser.baseUrl',
+			providers.gradleProperty('phase5g1aBaseUrl').getOrElse('http://127.0.0.1:8888')
+		systemProperty 'phase5g1a.browser.user',
+			providers.gradleProperty('phase5g1aUser').getOrElse('GardenAdmin')
+		systemProperty 'phase5g1a.browser.password',
+			providers.gradleProperty('phase5g1aPassword').getOrElse('GardenAdmin')
+		systemProperty 'phase5g1a.browser.client',
+			providers.gradleProperty('phase5g1aClient').getOrElse('GardenWorld')
+		// The second editor in the concurrency step. It must be a different user
+		// from the primary: a user racing itself records no UpdatedBy transition, so
+		// the capture could not say which editor won.
+		systemProperty 'phase5g1a.browser.secondUser',
+			providers.gradleProperty('phase5g1aSecondUser').getOrElse('GardenUser')
+		systemProperty 'phase5g1a.browser.secondPassword',
+			providers.gradleProperty('phase5g1aSecondPassword').getOrElse('GardenUser')
+		// The capture directory is chosen by the orchestrator, because captures A
+		// and B must not overwrite each other and the self-diff compares them.
+		systemProperty 'phase5g1a.browser.evidenceDir',
+			providers.gradleProperty('phase5g1aEvidenceDir').getOrElse(
+				layout.buildDirectory.dir('phase5g1a/capture').get().asFile.absolutePath)
+		systemProperty 'phase5g1a.browser.rendezvousDir',
+			providers.gradleProperty('phase5g1aRendezvousDir').getOrElse(
+				layout.buildDirectory.dir('phase5g1a/rendezvous').get().asFile.absolutePath)
+		// No default. A shared token is what makes a surviving marker from an
+		// earlier capture detectable, and a constant default would defeat it.
+		systemProperty 'phase5g1a.browser.token',
+			providers.gradleProperty('phase5g1aToken').getOrElse('')
+		systemProperty 'phase5g1a.browser.recordValue',
+			providers.gradleProperty('phase5g1aRecordValue').getOrElse('')
+		// The organisation the captured record is created in.
+		//
+		// It must be an org BOTH capture identities can write. Run 33482988481
+		// created the record in the shared '*' org, because that is GardenAdmin's
+		// login default, and the second editor -- logged into Fertilizer -- was
+		// then served a read-only form. The concurrency step would have captured an
+		// access refusal and frozen it as the product's conflict behaviour.
+		systemProperty 'phase5g1a.browser.recordOrg',
+			providers.gradleProperty('phase5g1aRecordOrg').getOrElse('Fertilizer')
+		systemProperty 'phase5g1a.browser.dbHost',
+			rootProject.providers.gradleProperty('phase3DbHost').getOrElse('127.0.0.1')
+		systemProperty 'phase5g1a.browser.dbPort',
+			rootProject.providers.gradleProperty('phase3DbPort').getOrElse('5432')
+		systemProperty 'phase5g1a.browser.dbName',
+			rootProject.providers.gradleProperty('phase3DbName').getOrElse('adempiere_phase3_ci')
+		systemProperty 'phase5g1a.browser.dbUser',
+			rootProject.providers.gradleProperty('phase3DbUser').getOrElse('adempiere_phase3_ci')
+		systemProperty 'phase5g1a.browser.dbMarker',
+			'ADempiere Phase 3 disposable database'
+		environment 'ADEMPIERE_PHASE5D_DB_PASSWORD',
+			rootProject.providers.gradleProperty('phase3DbPassword')
+				.getOrElse('adempiere_phase3_ci')
+		// The same checksum-verified browser installation the Phase 5c lane uses.
+		// This increment adds no browser artifact.
+		environment 'PLAYWRIGHT_BROWSERS_PATH',
+			rootProject.layout.buildDirectory.dir('phase5c/playwright-browsers')
+				.get().asFile.absolutePath
+		environment 'PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD', '1'
+		doFirst {
+			if (!rootProject.layout.buildDirectory
+					.file('phase5c/playwright-browsers/verified-artifacts.tsv')
+					.get().asFile.isFile()) {
+				throw new GradleException(
+					'The verified Phase 5c browser installation is missing')
+			}
+			['phase5g1aToken', 'phase5g1aRecordValue'].each { name ->
+				if (!providers.gradleProperty(name).getOrElse('')) {
+					throw new GradleException(
+						"-P${name} is required: the write capture must be uniquely " +
+							'identifiable, and a defaulted value would let a stale ' +
+							'rendezvous marker or a previous run\'s record satisfy it.')
+				}
+			}
+		}
+	}
+}
+
 tasks.register('phase5g1aWriteOracleCapture', Test) {
 	group = 'verification'
 	description = 'Captures the legacy Business Partner write flow through the public /webui origin'
 	testClassesDirs = sourceSets.writeOracleTest.output.classesDirs
 	classpath = sourceSets.writeOracleTest.runtimeClasspath
-	useJUnitPlatform()
-	systemProperty 'phase5g1a.browser.baseUrl',
-		providers.gradleProperty('phase5g1aBaseUrl').getOrElse('http://127.0.0.1:8888')
-	systemProperty 'phase5g1a.browser.user',
-		providers.gradleProperty('phase5g1aUser').getOrElse('GardenAdmin')
-	systemProperty 'phase5g1a.browser.password',
-		providers.gradleProperty('phase5g1aPassword').getOrElse('GardenAdmin')
-	systemProperty 'phase5g1a.browser.client',
-		providers.gradleProperty('phase5g1aClient').getOrElse('GardenWorld')
-	// The second editor in the concurrency step. It must be a different user
-	// from the primary: a user racing itself records no UpdatedBy transition, so
-	// the capture could not say which editor won.
-	systemProperty 'phase5g1a.browser.secondUser',
-		providers.gradleProperty('phase5g1aSecondUser').getOrElse('GardenUser')
-	systemProperty 'phase5g1a.browser.secondPassword',
-		providers.gradleProperty('phase5g1aSecondPassword').getOrElse('GardenUser')
-	// The capture directory is chosen by the orchestrator, because captures A
-	// and B must not overwrite each other and the self-diff compares them.
-	systemProperty 'phase5g1a.browser.evidenceDir',
-		providers.gradleProperty('phase5g1aEvidenceDir').getOrElse(
-			layout.buildDirectory.dir('phase5g1a/capture').get().asFile.absolutePath)
-	systemProperty 'phase5g1a.browser.rendezvousDir',
-		providers.gradleProperty('phase5g1aRendezvousDir').getOrElse(
-			layout.buildDirectory.dir('phase5g1a/rendezvous').get().asFile.absolutePath)
-	// No default. A shared token is what makes a surviving marker from an
-	// earlier capture detectable, and a constant default would defeat it.
-	systemProperty 'phase5g1a.browser.token',
-		providers.gradleProperty('phase5g1aToken').getOrElse('')
-	systemProperty 'phase5g1a.browser.recordValue',
-		providers.gradleProperty('phase5g1aRecordValue').getOrElse('')
-	// The organisation the captured record is created in.
-	//
-	// It must be an org BOTH capture identities can write. Run 33482988481
-	// created the record in the shared '*' org, because that is GardenAdmin's
-	// login default, and the second editor -- logged into Fertilizer -- was
-	// then served a read-only form. The concurrency step would have captured an
-	// access refusal and frozen it as the product's conflict behaviour.
-	systemProperty 'phase5g1a.browser.recordOrg',
-		providers.gradleProperty('phase5g1aRecordOrg').getOrElse('Fertilizer')
-	systemProperty 'phase5g1a.browser.dbHost',
-		rootProject.providers.gradleProperty('phase3DbHost').getOrElse('127.0.0.1')
-	systemProperty 'phase5g1a.browser.dbPort',
-		rootProject.providers.gradleProperty('phase3DbPort').getOrElse('5432')
-	systemProperty 'phase5g1a.browser.dbName',
-		rootProject.providers.gradleProperty('phase3DbName').getOrElse('adempiere_phase3_ci')
-	systemProperty 'phase5g1a.browser.dbUser',
-		rootProject.providers.gradleProperty('phase3DbUser').getOrElse('adempiere_phase3_ci')
-	systemProperty 'phase5g1a.browser.dbMarker',
-		'ADempiere Phase 3 disposable database'
-	environment 'ADEMPIERE_PHASE5D_DB_PASSWORD',
-		rootProject.providers.gradleProperty('phase3DbPassword')
-			.getOrElse('adempiere_phase3_ci')
-	// The same checksum-verified browser installation the Phase 5c lane uses.
-	// This increment adds no browser artifact.
-	environment 'PLAYWRIGHT_BROWSERS_PATH',
-		rootProject.layout.buildDirectory.dir('phase5c/playwright-browsers')
-			.get().asFile.absolutePath
-	environment 'PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD', '1'
-	doFirst {
-		if (!rootProject.layout.buildDirectory
-				.file('phase5c/playwright-browsers/verified-artifacts.tsv')
-				.get().asFile.isFile()) {
-			throw new GradleException(
-				'The verified Phase 5c browser installation is missing')
-		}
-		['phase5g1aToken', 'phase5g1aRecordValue'].each { name ->
-			if (!providers.gradleProperty(name).getOrElse('')) {
-				throw new GradleException(
-					"-P${name} is required: the write capture must be uniquely " +
-						'identifiable, and a defaulted value would let a stale ' +
-						'rendezvous marker or a previous run\'s record satisfy it.')
-			}
-		}
+	phase5gWriteCaptureConfiguration(it)
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5g-1b
+// ---------------------------------------------------------------------------
+
+// The modern capture. Same flow, same inputs, same rendezvous; a different
+// dialect against a different deployment, reached through the same public
+// origin. It scores nothing: scoring is score-write-oracle-capture.py's, run by
+// the lane, against the frozen legacy contract this driver cannot read.
+tasks.register('phase5g1bModernWriteParityCapture', Test) {
+	group = 'verification'
+	description = 'Captures the modern Business Partner write flow through the public routed /webui origin'
+	testClassesDirs = sourceSets.writeParityTest.output.classesDirs
+	classpath = sourceSets.writeParityTest.runtimeClasspath
+	phase5gWriteCaptureConfiguration(it)
+	// The writeParityTest source set now holds a second, unrelated control
+	// (ModernNoLegacyFallbackTest). Each capture task selects exactly its own
+	// class so adding the second one did not silently pull the whole set into
+	// this task and drive an H6 fault primitive during the write capture.
+	filter {
+		includeTestsMatching 'org.adempiere.webui.phase5g1b.ModernBusinessPartnerWriteParityTest'
+	}
+}
+
+// The H6 no-legacy-fallback control (design item E, row
+// h6-no-legacy-fallback-mid-write). It ports the mechanics of
+// RoutedCohortMatrixTest.backendOutageNeverFallsBack() into a class the H6
+// matrix can select on its own, reusing the same write-capture configuration
+// (same public origin, same credentials, same verified browser) plus the lane
+// script it needs to stop and start the modern backend. It writes its verdict
+// to no-legacy-fallback.tsv in the evidence directory the caller passes with
+// -Pphase5g1aEvidenceDir, so the H6 script reads a real result.
+tasks.register('phase5g1bNoLegacyFallbackCapture', Test) {
+	group = 'verification'
+	description = 'Asserts a modern write session never falls back to legacy when the backend dies'
+	testClassesDirs = sourceSets.writeParityTest.output.classesDirs
+	classpath = sourceSets.writeParityTest.runtimeClasspath
+	phase5gWriteCaptureConfiguration(it)
+	systemProperty 'phase5g1b.laneScript',
+		rootProject.file('scripts/phase5/capture-routed-lane.sh').absolutePath
+	filter {
+		includeTestsMatching 'org.adempiere.webui.phase5g1b.ModernNoLegacyFallbackTest'
 	}
 }
 

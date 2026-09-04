@@ -65,18 +65,53 @@ tree_grep_count() {
 
 {
 	printf '# path\towner\treference_count\tapi_families\tcompile_gate\tbehavior_gate\tdisposition\n'
+	# A Java source that names org.zkoss only inside a comment is documenting
+	# the migration, not using the API, exactly as namespace-ownership.tsv
+	# already reasons. Scan the comment-stripped text for both membership and
+	# the reference count, so this ledger cannot be moved by an author typing a
+	# fully-qualified name into Javadoc. Perl whole-file mode is used because
+	# GNU and BSD sed disagree on the non-greedy expression.
+	# perl -p exits 0 and prints nothing when it cannot open its argument, so
+	# without this guard an unreadable source would strip to the empty string
+	# and be silently dropped from the ledger - fail-open in a fail-closed
+	# inventory.
+	strip_java_comments() {
+		if [ ! -r "$1" ]; then
+			printf 'cannot read %s while inventorying ZK sources\n' "$1" >&2
+			return 1
+		fi
+		perl -0777 -pe 's{/\*.*?\*/}{}gs; s{//[^\n]*}{}g' -- "$1"
+	}
 	tree_grep_l 'org\.zkoss' '*.java' |
 		sort |
 		while IFS= read -r path; do
-			count=$(tree_grep_count 'org\.zkoss' "$path")
+			stripped=$(strip_java_comments "$path")
+			# grep exits 1 on a comment-only source, and the script runs under
+			# `set -o pipefail`, so the no-match case has to be absorbed here
+			# rather than aborting the whole inventory.
+			count=$(printf '%s' "$stripped" |
+				{ LC_ALL=C grep -oE 'org\.zkoss' || true; } |
+				wc -l | tr -d ' ')
+			if [ "$count" = 0 ]; then
+				continue
+			fi
 			families=
-			if tree_grep_q 'org\.zkoss\.zkmax' "$path"; then
+			# Matched in-process with bash's own ERE rather than by piping to
+			# `grep -q`. Under `set -o pipefail`, `grep -q` exits at its first
+			# match while the writer is still blocked on a pipe larger than the
+			# 64KiB pipe buffer, so the writer takes SIGPIPE and the pipeline
+			# reports 141 - read here as "no match". That would silently drop an
+			# api_families classification, including a zkmax one, on the largest
+			# sources; FindWindow.java already strips to 65,647 bytes. A
+			# false-negative commercial-dependency row is a far worse failure
+			# than the comment-only false positive this rule exists to remove.
+			if [[ $stripped =~ org\.zkoss\.zkmax ]]; then
 				families=zkmax
 			fi
-			if tree_grep_q 'org\.zkoss\.zkex' "$path"; then
+			if [[ $stripped =~ org\.zkoss\.zkex ]]; then
 				families=${families:+$families,}zkex
 			fi
-			if tree_grep_q 'org\.zkoss\.zk|org\.zkoss\.zul|org\.zkoss\.zhtml|org\.zkoss\.util' "$path"; then
+			if [[ $stripped =~ org\.zkoss\.(zk|zul|zhtml|util) ]]; then
 				families=${families:+$families,}ce-core
 			fi
 			# Phase 5e: the isolated Javax/ZK 3.6 bridge is NOT a migration

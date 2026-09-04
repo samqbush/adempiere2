@@ -86,5 +86,5 @@ jobs:
             build/phase5g1ay/
             !build/phase5g1ay/ordinary-runtime-guard/
             build/phase3/runtime/Adempiere/tomcat/logs/
-            zkwebui/build/test-results/writeOracleTest/
-            zkwebui/build/reports/tests/writeOracleTest/
+            zkwebui/build/test-results/phase5g1aWriteOracleCapture/
+            zkwebui/build/reports/tests/phase5g1aWriteOracleCapture/

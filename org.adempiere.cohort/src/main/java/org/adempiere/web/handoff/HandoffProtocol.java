@@ -22,12 +22,15 @@ public final class HandoffProtocol {
 	public static final String TICKET_HEADER = RESERVED_HEADER_PREFIX + "Ticket";
 
 	/**
-	 * Carries the rotated Tomcat 9 session identifier the ticket is bound to.
+	 * Carries the rotated Tomcat 9 session identifier on every routed request.
 	 *
-	 * <p>The router asserts the binding before it sends the ticket, and the
-	 * modern runtime asserts it again on arrival. Neither header can be supplied
-	 * by a browser: the router refuses any request carrying the reserved
-	 * namespace, and the modern runtime accepts them only from loopback.
+	 * <p>On bootstrap, the router asserts the binding before it sends the ticket,
+	 * and the modern runtime asserts it again on arrival. After bootstrap, the
+	 * binding lets the modern runtime distinguish a routed request whose modern
+	 * session has just ended from an unauthenticated direct request. Neither
+	 * header can be supplied by a browser: the router refuses any request
+	 * carrying the reserved namespace, and the modern runtime accepts them only
+	 * from loopback.
 	 */
 	public static final String SESSION_HEADER = RESERVED_HEADER_PREFIX + "Session";
 

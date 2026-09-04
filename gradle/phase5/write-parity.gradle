@@ -1,0 +1,303 @@
+// Phase 5g-1b: modern Business Partner CRUD write parity.
+//
+// 5g-1a produced the answer; this file scores the modern runtime against it.
+// The split between the two halves is the same one write-oracle.gradle makes,
+// and for the same reason: everything registered above the divider is
+// database-neutral and runs on every pull request, and the one task below it
+// needs a booted routed dual-runtime lane and a marker-owned PostgreSQL.
+//
+// What is deliberately ABSENT here is a freeze path. The legacy gate has one,
+// because the legacy lane is what produces an oracle. A parity increment that
+// could re-freeze the contract it is scored against would be inventing its own
+// expected answer, which ADR decision 3 forbids -- so run-write-parity-smoke.sh
+// does not accept a freeze argument at all, and there is no property here that
+// could reach one.
+
+def phase5g1bContractDir =
+	rootProject.layout.projectDirectory.dir('contracts/legacy-web-write-v1')
+def phase5g1bBuildRoot = rootProject.layout.buildDirectory.dir('phase5g1b')
+def phase5g1bScript = { String name -> rootProject.file("scripts/phase5/${name}") }
+
+// ---------------------------------------------------------------------------
+// Database-neutral.
+// ---------------------------------------------------------------------------
+
+// The evidence validator is the thing standing between a green Gradle status
+// and a citable parity claim, so its own refusals are proven here rather than
+// assumed. A fail-closed check that silently never fires is worse than no check
+// at all: it accepts what it should refuse, quietly, forever.
+tasks.register('verifyPhase5g1bEvidenceValidator', Exec) {
+	group = 'verification'
+	description =
+		'Proves the Phase 5g-1b runtime evidence validator rejects every declared defect class'
+	def script = phase5g1bScript('verify-phase5g1b-runtime-evidence-validator.py')
+	inputs.file script
+	inputs.file phase5g1bScript('validate-phase5g1b-runtime-evidence.py')
+	outputs.file phase5g1bBuildRoot.map { it.file('evidence-validator-verified.txt') }
+	commandLine 'python3', script.absolutePath
+	doFirst {
+		phase5g1bBuildRoot.get().asFile.mkdirs()
+	}
+	doLast {
+		phase5g1bBuildRoot.get().file('evidence-validator-verified.txt').asFile.text =
+			"Phase 5g-1b evidence validator mutation proof passed\n"
+	}
+}
+
+// The lane and the smoke are shell, and their guarantees are structural rather
+// than behavioural: the smoke must not be able to accept a freeze argument, and
+// the parity lane must score against the frozen legacy contract rather than
+// against a modern tree of its own. The production logout ordering is also
+// structural: AD_Session must close before its identifier is cleared from the
+// request context. These are cheap to assert statically, and would otherwise
+// only be caught by an expensive database-backed browser run.
+tasks.register('verifyPhase5g1bLaneInvariants') {
+	group = 'verification'
+	description =
+		'Asserts Phase 5g-1b oracle separation, public routing, and session cleanup ordering'
+	def smoke = phase5g1bScript('run-write-parity-smoke.sh')
+	def lane = phase5g1bScript('run-write-parity-lane.sh')
+	def webUi = rootProject.file(
+		'zkwebui/WEB-INF/src/org/adempiere/webui/AdempiereWebUI.java')
+	def marker = phase5g1bBuildRoot.map { it.file('lane-invariants-verified.txt') }
+	inputs.files(smoke, lane, webUi)
+	outputs.file marker
+	doLast {
+		def smokeText = smoke.text
+		// Every assertion below matches an EXECUTABLE line, never anywhere in the
+		// file. A whole-file substring search is satisfied by the very comment
+		// that explains the rule, so a change that deleted the behaviour while
+		// leaving its explanation behind would still pass the gate -- which is
+		// precisely the false green this task exists to prevent.
+		def code = smokeText.readLines().findAll { !it.trim().startsWith('#') }
+		def laneCode = lane.text.readLines().findAll { !it.trim().startsWith('#') }
+
+		if (code.any { it.contains('--freeze') }) {
+			throw new GradleException(
+				'run-write-parity-smoke.sh passes --freeze to the scorer. A parity ' +
+					'increment may never produce the answer it is scored against.')
+		}
+		if (code.any { it.contains('--expect-manifest-sha256') }) {
+			throw new GradleException(
+				'run-write-parity-smoke.sh overrides --expect-manifest-sha256. That ' +
+					'seam exists only for the evidence validator\'s own mutation proof, ' +
+					'which scores a synthetic contract; on the real lane it would let a ' +
+					're-frozen legacy oracle be accepted as the frozen one.')
+		}
+		def contractLine = code.find { it.contains('legacy-web-write-v1') }
+		if (contractLine == null) {
+			throw new GradleException(
+				'run-write-parity-smoke.sh does not score against ' +
+					'contracts/legacy-web-write-v1. The modern runtime must be scored ' +
+					'against the frozen LEGACY answer; a modern contract tree would let ' +
+					'the increment redefine its own comparison semantics.')
+		}
+		// The public routed origin, not the loopback modern one. ADR decision 6
+		// scores the runtime as a user reaches it -- through the router, the
+		// cohort decision, the handoff and the proxy. A capture on
+		// /webui-modern would prove the modern application works with the whole
+		// routing layer bypassed, which is a different and much weaker claim.
+		def baseUrlLine = code.find { it.trim().startsWith('base_url=') }
+		if (baseUrlLine == null || !baseUrlLine.contains('/webui')
+				|| baseUrlLine.contains('/webui-modern')) {
+			throw new GradleException(
+				'run-write-parity-smoke.sh must assign base_url to the public routed ' +
+					"/webui origin and never the direct loopback modern origin; found: ${baseUrlLine}")
+		}
+		if (!laneCode.any { it.contains('runtime-identification.tsv') }) {
+			throw new GradleException(
+				'run-write-parity-lane.sh does not assert which runtime served the ' +
+					'capture. Every other observation in the capture is runtime-blind, ' +
+					'so a lane that failed closed to legacy would score a perfect green ' +
+					'against the legacy oracle and report modern parity.')
+		}
+		def webUiText = webUi.text
+		def logoutStart = webUiText.indexOf('public void logout()')
+		def logoutEnd = webUiText.indexOf('Executions.sendRedirect("index.zul");',
+			logoutStart)
+		def logoutCode = logoutStart >= 0 && logoutEnd >= 0
+			? webUiText.substring(logoutStart, logoutEnd)
+				.replaceAll(/(?s)\/\*.*?\*\//, '')
+				.readLines()
+				.collect { it.replaceFirst(/\/\/.*$/, '') }
+				.join('\n')
+			: ''
+		def closeSession = logoutCode.indexOf(
+			'SessionManager.clearSession(httpSession.getId());')
+		def clearContext = logoutCode.indexOf('Env.getCtx().clear();')
+		if (closeSession < 0 || clearContext < 0 || closeSession > clearContext) {
+			throw new GradleException(
+				'AdempiereWebUI.logout must close AD_Session before clearing the ' +
+					'authenticated context that carries #AD_Session_ID.')
+		}
+		marker.get().asFile.with {
+			parentFile.mkdirs()
+			text = "Phase 5g-1b lane invariants verified\n"
+		}
+	}
+}
+
+tasks.register('verifyPhase5g1bProductionWorkflowAttribution') {
+	group = 'verification'
+	description =
+		'Asserts production workflow process, activity, and audit rows inherit the saving invocation context'
+	def sources = [
+		rootProject.file('base/src/org/compiere/wf/DocWorkflowManager.java'),
+		rootProject.file('base/src/org/compiere/wf/MWorkflow.java'),
+		rootProject.file('base/src/org/compiere/wf/MWFProcess.java'),
+		rootProject.file('base/src/org/compiere/wf/MWFActivity.java'),
+		rootProject.file('base/src/org/compiere/wf/MWFEventAudit.java')
+	]
+	def marker =
+		phase5g1bBuildRoot.map { it.file('production-workflow-attribution-verified.txt') }
+	inputs.files(sources)
+	outputs.file marker
+	doLast {
+		def executable = { File source ->
+			source.text
+				.replaceAll(/(?s)\/\*.*?\*\//, '')
+				.readLines()
+				.collect { it.replaceFirst(/\/\/.*$/, '') }
+				.join('\n')
+		}
+		def requirePattern = { File source, String pattern, String failure ->
+			if (!(executable(source) =~ pattern).find()) {
+				throw new GradleException(failure)
+			}
+		}
+
+		def manager = sources[0]
+		def workflow = sources[1]
+		def process = sources[2]
+		def activity = sources[3]
+		def audit = sources[4]
+
+		requirePattern(
+			manager,
+			/(?s)wf\s*\.\s*start\s*\(\s*document\s*\.\s*getCtx\s*\(\s*\)\s*,\s*pi\s*\)/,
+			'DocWorkflowManager must start document workflows with document.getCtx().')
+		requirePattern(
+			workflow,
+			/(?s)start\s*\(\s*ProcessInfo\s+processInfo\s*\)\s*\{\s*return\s+start\s*\(\s*getCtx\s*\(\s*\)\s*,\s*processInfo\s*\)\s*;/,
+			'MWorkflow.start(ProcessInfo) must remain as a compatibility delegate.')
+		requirePattern(
+			workflow,
+			/(?s)start\s*\(\s*final\s+Properties\s+invocationCtx\s*,\s*ProcessInfo\s+processInfo\s*\).*?new\s+MWFProcess\s*\(\s*this\s*,\s*invocationCtx\s*,\s*processInfo\s*,\s*null\s*\)/,
+			'MWorkflow must pass the invocation context into the new MWFProcess.')
+		if ((executable(workflow) =~ /invocationCtx\s*=/).find()) {
+			throw new GradleException(
+				'MWorkflow must not replace the caller-provided invocation context.')
+		}
+		requirePattern(
+			process,
+			/(?s)MWFProcess\s*\(\s*MWorkflow\s+wf\s*,\s*ProcessInfo\s+pi\s*,\s*String\s+trxName\s*\)\s*throws\s+Exception\s*\{\s*this\s*\(\s*wf\s*,\s*wf\s*\.\s*getCtx\s*\(\s*\)\s*,\s*pi\s*,\s*trxName\s*\)\s*;/,
+			'The existing MWFProcess constructor must remain as a compatibility delegate.')
+		requirePattern(
+			process,
+			/(?s)MWFProcess\s*\(\s*MWorkflow\s+wf\s*,\s*final\s+Properties\s+invocationCtx\s*,\s*ProcessInfo\s+pi\s*,\s*String\s+trxName\s*\)\s*throws\s+Exception\s*\{\s*super\s*\(\s*invocationCtx\s*,\s*0\s*,\s*trxName\s*\)\s*;/,
+			'New workflow process rows must be constructed from the invocation context.')
+		requirePattern(
+			activity,
+			/(?s)MWFActivity\s*\(\s*MWFProcess\s+process\s*,\s*int\s+AD_WF_Node_ID\s*\).*?super\s*\(\s*process\s*\.\s*getCtx\s*\(\s*\)\s*,\s*0\s*,\s*process\s*\.\s*get_TrxName\s*\(\s*\)\s*\).*?setAD_Client_ID\s*\(\s*process\s*\.\s*getAD_Client_ID\s*\(\s*\)\s*\)/,
+			'Workflow activity rows must inherit the process context and client.')
+		requirePattern(
+			audit,
+			/(?s)MWFEventAudit\s*\(\s*MWFActivity\s+activity\s*\).*?super\s*\(\s*activity\s*\.\s*getCtx\s*\(\s*\)\s*,\s*0\s*,\s*activity\s*\.\s*get_TrxName\s*\(\s*\)\s*\).*?setAD_User_ID\s*\(\s*activity\s*\.\s*getAD_User_ID\s*\(\s*\)\s*\)/,
+			'Workflow event-audit rows must inherit the activity context and user.')
+
+		marker.get().asFile.with {
+			parentFile.mkdirs()
+			text = "Phase 5g-1b production workflow attribution verified\n"
+		}
+	}
+}
+
+tasks.register('phase5g1bFinalVerification') {
+	group = 'verification'
+	description =
+		'Runs the database-neutral Phase 5g-1b write parity gate and every earlier phase gate'
+	dependsOn(
+		tasks.named('verifyPhase5g1bEvidenceValidator'),
+		tasks.named('verifyPhase5g1bLaneInvariants'),
+		tasks.named('verifyPhase5g1bProductionWorkflowAttribution'),
+		tasks.named('phase5g1ayFinalVerification'))
+}
+
+// ---------------------------------------------------------------------------
+// The database-backed parity lane.
+// ---------------------------------------------------------------------------
+
+def phase5g1bProperty = { String name, Object fallback ->
+	rootProject.providers.gradleProperty(name).getOrElse(fallback.toString())
+}
+
+def phase5g1bSystemPassword = rootProject.providers
+	.gradleProperty('phase3DbSystemPassword')
+	.orElse(rootProject.providers.environmentVariable(
+		'ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD'))
+	.getOrElse('')
+
+tasks.register('phase5g1bModernWriteParitySmoke', Exec) {
+	group = 'verification'
+	description =
+		'Captures the modern Business Partner write flow twice through the public routed /webui origin and scores both against the frozen legacy oracle'
+	dependsOn tasks.named('phase3AntDatabaseBuild')
+	dependsOn tasks.named('installPhase5cBrowser')
+	// Brings up the routed lane and, transitively, everything it needs: the
+	// handoff key, the staged installed routing, the modern SOAP runtime and the
+	// verified modern war. The reseed primitive then cycles both runtimes
+	// through write-parity-container-adapter.sh on every restore.
+	dependsOn tasks.named('startPhase5eRoutedLane')
+	// THE LEGACY ORACLE IS RE-PROVEN AT PR HEAD, NOT ONLY AT THE EXTRACTION
+	// COMMIT. 5g-1b refactored the legacy driver into a shared flow plus a
+	// dialect, so the legacy answer now depends on code this branch touched. A
+	// regression proven only on an intermediate commit, or only post-merge,
+	// would let the final PR silently move the oracle it is scoring against.
+	dependsOn tasks.named('phase5g1aLegacyWriteOracleSmoke')
+	commandLine 'bash', phase5g1bScript('run-write-parity-smoke.sh').absolutePath,
+		phase5g1bProperty('phase3DbHost', '127.0.0.1'),
+		phase5g1bProperty('phase3DbPort', '5432'),
+		phase5g1bProperty('phase3DbName', 'adempiere_phase3_ci'),
+		phase5g1bProperty('phase3DbUser', 'adempiere_phase3_ci'),
+		phase5g1bProperty('phase3DbSystemUser', 'postgres'),
+		'ADempiere Phase 3 disposable database',
+		phase5g1bBuildRoot.get().dir('runtime-evidence').asFile.absolutePath,
+		// The SAME installed home and handoff key the Phase 5e routed lane uses.
+		// Diverging here would start a second lane beside the one this task
+		// already depends on, against a tree nothing staged.
+		rootProject.layout.buildDirectory.dir('phase3/runtime/Adempiere')
+			.get().asFile.absolutePath,
+		rootProject.layout.buildDirectory.file('phase5e/keys/handoff.key')
+			.get().asFile.absolutePath
+	environment 'ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD', phase5g1bSystemPassword
+	environment 'ADEMPIERE_PHASE5D_DB_PASSWORD',
+		phase5g1bProperty('phase3DbPassword', 'adempiere_phase3_ci')
+	doFirst {
+		if (!phase5g1bSystemPassword) {
+			throw new GradleException(
+				'-Pphase3DbSystemPassword or ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD is ' +
+					'required: the write parity lane restores a golden archive and ' +
+					'cannot do so without the system role.')
+		}
+	}
+}
+
+// BOTH write lanes bind the public port 8888: the legacy oracle lane serves the
+// legacy application there directly, and the routed lane serves the cohort
+// router there. Run concurrently -- or in the wrong order -- the second to start
+// fails to bind, and worse, a legacy capture could be served by the router or a
+// parity capture by the plain legacy application.
+//
+// dependsOn alone does not order them: Gradle is free to start the routed lane
+// while the legacy smoke still holds the port. This is what actually sequences
+// them.
+tasks.named('startPhase5eRoutedLane').configure {
+	mustRunAfter tasks.named('phase5g1aLegacyWriteOracleSmoke')
+}
+
+// Same ordering hazard the legacy smoke documents: the Phase 3 cleanup
+// finalizer drops the disposable database, and without explicit ordering it can
+// run before the lane that still needs it.
+tasks.matching { it.name == 'cleanupPhase3Database' }.configureEach { cleanup ->
+	cleanup.mustRunAfter(tasks.named('phase5g1bModernWriteParitySmoke'))
+}

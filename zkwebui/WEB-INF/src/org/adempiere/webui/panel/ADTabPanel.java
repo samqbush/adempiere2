@@ -181,10 +181,28 @@ public class ADTabPanel extends Div implements Evaluatee, EventListener, DataSta
         grid = new Grid();
         //have problem moving the following out as css class
         grid.setWidth("100%");
-        grid.setHeight("100%");
-        // ZK CE 10 rejects vflex on a component that already carries a height.
-        ZkCompat.setVflex(grid, true);
         grid.setStyle("margin:0; padding:0; position: absolute");
+        // ZK 3.6 accepted height="100%" together with vflex and let the flex
+        // win; ZK CE 10 rejects the pair, so exactly one has to be chosen. For
+        // this grid it must be the height, because the vflex form is not
+        // merely ineffective, it is unreachable: activate(false) below calls
+        // setHeight("100%") on this same grid on every tab switch, and ZK CE
+        // 10's HtmlBasedComponent.setHeight throws
+        //   UiException("Not allowed to set vflex and height at the same time
+        //                except vflex=\"min\"")
+        // whenever a vflex is already set. Keeping the vflex therefore aborts
+        // the event that switches away from a tab.
+        //
+        // This is not asserted to be the cause of the run 33647155695
+        // intercepted-click failure: run 33647155695's own artifacts show this
+        // grid rendered ~2px tall, so the vflex did not size it, but the
+        // mechanism is not established -- activate(true) below replaces the
+        // style, so the "position: absolute" set here is not present on the
+        // rendered element. The percentage height is what ZK CE 10 leaves
+        // available once the vflex is refused; whether it is sufficient is
+        // what the next run decides, and ZkCe10Dialect's geometry probes exist
+        // to decide it.
+        grid.setHeight("100%");
         grid.makeNoStrip();
 
         listPanel = new GridPanel();

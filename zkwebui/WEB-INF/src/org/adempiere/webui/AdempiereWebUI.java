@@ -374,6 +374,9 @@ public class AdempiereWebUI extends Window implements EventListener, IWebClient
 		HttpServletRequest httpRequest = (HttpServletRequest) Executions.getCurrent().getNativeRequest();
 		//Get current session
 		HttpSession httpSession = httpRequest.getSession(false);
+		// Close AD_Session while the authenticated session context still carries
+		// #AD_Session_ID. Clearing the context first makes this a silent no-op.
+		SessionManager.clearSession(httpSession.getId());
 		// save context for re-login
 		Env.getCtx().clear();
 		Properties context = new Properties();
@@ -388,7 +391,6 @@ public class AdempiereWebUI extends Window implements EventListener, IWebClient
 		// request that redirect produces, and signals the router to destroy its
 		// own. Invalidating here would abort the redirect ZK is about to send.
 		CohortHandoff.loggedOut(httpSession);
-		SessionManager.clearSession(httpSession.getId());
 		SessionManager.removeExecutionCarryOver(httpSession.getId());
 		SessionManager.removeDestop(httpSession.getId());
 		SessionManager.removeUserAuthentication(httpSession.getId());

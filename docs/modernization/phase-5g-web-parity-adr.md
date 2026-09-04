@@ -391,9 +391,10 @@ This is still oracle-before-modern. PR 18,
 https://github.com/samqbush/adempiere2/pull/18, later implements the shared
 production correction against the accepted answer. The `5g-1a-y` capture,
 domain review, separate freeze-off acceptance, and PR 19 merge are complete;
-PR 18 remains blocked on the independent R15 routing hardening before
-reconciliation. Descendant work must consume the accepted business values and
-foreign-key graph without changing the frozen oracle.
+the independent R15 routing hardening merged in PR 20, and PR 18 now implements
+the shared production correction while reconciling both prerequisites.
+Descendant work must consume the accepted business values and foreign-key graph
+without changing the frozen oracle.
 
 If this corrected-legacy procedure is not approved, capture cannot proceed.
 The cached-context result is not silently retained or normalized away; the

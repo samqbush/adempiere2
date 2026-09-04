@@ -1778,6 +1778,31 @@ public class FindWindow extends Window implements EventListener,ValueChangeListe
 		//
 
 
+        //  Phase 5g-1b diagnostic: which selection editors this dialog is about
+        //  to read, addressed by the same widget uuid the browser commits an
+        //  onChange for. Legacy ZK 3.6 and modern ZK CE 10 build different
+        //  queries from identical driver actions, and this is the only place
+        //  the two can be compared on the criterion itself rather than on its
+        //  effect. Kept at FINE: getQuery() already logs the resulting query at
+        //  INFO, so the default level still shows whether a criterion was
+        //  applied, without writing every operator's search terms to the log.
+        if (log.isLoggable(Level.FINE))
+        {
+            for (int i = 0; i < m_sEditors.size(); i++)
+            {
+                WEditor probe = (WEditor)m_sEditors.get(i);
+                GridField probed = getTargetMField(probe.getColumnName());
+                Object shown = probe.getValue();
+                //  The loop below encrypts an encrypted column's value before it
+                //  reaches SQL; the diagnostic must not print what that protects.
+                if (probed == null || probed.isEncryptedField() || probed.isEncryptedColumn())
+                    shown = shown == null ? null : "[redacted]";
+                log.fine("selection editor " + probe.getColumnName()
+                        + " uuid=" + probe.getComponent().getUuid()
+                        + " value=" + shown);
+            }
+        }
+
         //  Special Editors
         for (int i = 0; i < m_sEditors.size(); i++)
         {

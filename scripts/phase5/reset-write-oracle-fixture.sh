@@ -61,6 +61,12 @@ Commands:
 
 Options (environment):
   PHASE5G_LANE_PORT             Tomcat port for the lane scripts (default 8888).
+  PHASE5G_CONTAINER_ADAPTER     Path to a container lifecycle adapter script. It is
+                                invoked as `<adapter> stop` and `<adapter> start`
+                                and must exit non-zero when it cannot carry out the
+                                verb. Default: the single legacy Tomcat 9 lane.
+  PHASE5G_CONFIRM_PORTS         Space-separated ports that must carry no listener
+                                after `stop` (default: PHASE5G_LANE_PORT).
   PHASE5G_SKIP_CONTAINER=1      Do not stop/start Tomcat. Diagnostics only; never in a gate.
 USAGE
   exit 64
@@ -131,14 +137,81 @@ require_marked_database() {
   fi
 }
 
+# Container lifecycle is an ADAPTER, not a lane name.
+#
+# Phase 5g-1b restores the same database underneath a DIFFERENT deployment: two
+# containers, a public Tomcat 9 ingress and a loopback Tomcat 10 modern runtime,
+# whose start needs the repository root, the installed home and a handoff key.
+# That is not argument-compatible with `stop-/start-legacy-browser-lane.sh
+# <port>`, so parameterizing by a lane STRING would have meant this script
+# growing a second, lane-specific argument list -- and the isolation guards
+# below would then differ per lane, which is the one thing they must not do.
+#
+# An adapter closes over its own lane's arguments and exposes exactly two verbs.
+# Every guard in this file stays lane-independent and is applied identically.
+container_adapter=${PHASE5G_CONTAINER_ADAPTER:-}
+
 stop_container() {
   [[ "${PHASE5G_SKIP_CONTAINER:-0}" == "1" ]] && return 0
-  bash "$repo_root/scripts/phase5/stop-legacy-browser-lane.sh" "$lane_port" >/dev/null 2>&1 || true
+  if [[ -n "$container_adapter" ]]; then
+    bash "$container_adapter" stop
+  else
+    bash "$repo_root/scripts/phase5/stop-legacy-browser-lane.sh" "$lane_port" >/dev/null 2>&1 || true
+  fi
+  confirm_containers_stopped
 }
 
 start_container() {
   [[ "${PHASE5G_SKIP_CONTAINER:-0}" == "1" ]] && return 0
-  bash "$repo_root/scripts/phase5/start-legacy-browser-lane.sh" "$lane_port"
+  if [[ -n "$container_adapter" ]]; then
+    bash "$container_adapter" start
+  else
+    bash "$repo_root/scripts/phase5/start-legacy-browser-lane.sh" "$lane_port"
+  fi
+}
+
+# Terminating database sessions belonging to a container that is still running
+# does not isolate the capture: the container reconnects, repopulates its pool
+# and can hold the database open again before `dropdb` runs. Worse, in the
+# routed lane a SECOND runtime shares the same database, so an adapter that
+# stopped only the ingress would leave the modern runtime writing into the
+# database the next capture is about to measure. The stop is therefore
+# CONFIRMED at the socket, for every port the lane declares, before anything
+# below this point runs.
+confirm_containers_stopped() {
+  local ports=${PHASE5G_CONFIRM_PORTS:-$lane_port}
+  local port waited
+  for port in $ports; do
+    waited=0
+    while port_has_listener "$port"; do
+      sleep 1
+      waited=$((waited + 1))
+      if (( waited > 60 )); then
+        echo "Refusing to reseed: a listener is still bound to port $port after the" >&2
+        echo "container stop, so the runtime it belongs to could reopen the database." >&2
+        exit 65
+      fi
+    done
+  done
+}
+
+# A LISTENER check, not a connect probe. A probe that fails to connect proves
+# nothing about a process that is shutting down but has not yet released the
+# socket, and that window is exactly when a reseed would race. The connect probe
+# is kept only as a last resort, so a runner with neither tool degrades to a
+# weaker check that still runs rather than failing the lane for a missing
+# utility -- and says so, because a silently weaker guard is worse than a noisy
+# one.
+port_has_listener() {
+  local port=$1
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
+  elif command -v ss >/dev/null 2>&1; then
+    ss -ltnH "sport = :$port" 2>/dev/null | grep -q .
+  else
+    echo "warning: neither lsof nor ss is available; falling back to a connect probe" >&2
+    curl -sS --max-time 2 -o /dev/null "http://127.0.0.1:$port/" 2>/dev/null
+  fi
 }
 
 # Any open connection blocks DROP DATABASE. Terminating them is done explicitly

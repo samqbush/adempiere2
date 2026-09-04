@@ -61,7 +61,8 @@ public class SessionContextListener implements ExecutionInit,
                 .flatMap(parent -> Optional.ofNullable(executionCleanup))
                 .ifPresent(execution -> {
                     ServerPush serverPush = ((DesktopCtrl) execution.getDesktop()).getServerPush();
-                    if (serverPush == null || !serverPush.isActive()) {
+                    boolean pushActive = serverPush != null && serverPush.isActive();
+                    if (!pushActive) {
                         setContextForSession(execution);
                     }
                 });
@@ -89,7 +90,8 @@ public class SessionContextListener implements ExecutionInit,
                 .flatMap(desktop -> Optional.ofNullable(desktop.getExecution()))
                 .ifPresent(execution -> {
                     ServerPush serverPush = ((DesktopCtrl) component.getDesktop()).getServerPush();
-                    if (serverPush == null || !serverPush.isActive()) {
+                    boolean pushActive = serverPush != null && serverPush.isActive();
+                    if (!pushActive) {
                         setContextForSession(execution);
                     }
                 });
@@ -105,7 +107,8 @@ public class SessionContextListener implements ExecutionInit,
                 .flatMap(desktop -> Optional.ofNullable(desktop.getExecution()))
                 .ifPresent(execution -> {
                     ServerPush serverPush = ((DesktopCtrl) component.getDesktop()).getServerPush();
-                    if (serverPush == null || !serverPush.isActive()) {
+                    boolean pushActive = serverPush != null && serverPush.isActive();
+                    if (!pushActive) {
                         setContextForSession(execution);
                     }
                 });
@@ -121,7 +124,8 @@ public class SessionContextListener implements ExecutionInit,
         Optional.ofNullable(component.getDesktop()).ifPresent(desktop ->
                 Optional.ofNullable(desktop.getExecution()).ifPresent(execution -> {
                     ServerPush serverPush = ((DesktopCtrl) desktop).getServerPush();
-                    if (serverPush == null || !serverPush.isActive()) {
+                    boolean pushActive = serverPush != null && serverPush.isActive();
+                    if (!pushActive) {
                         setContextForSession(execution);
                     }
                 }));
@@ -136,7 +140,8 @@ public class SessionContextListener implements ExecutionInit,
         Optional.ofNullable(component.getDesktop()).ifPresent(desktop ->
                 Optional.ofNullable(desktop.getExecution()).ifPresent(execution -> {
                     ServerPush serverPush = ((DesktopCtrl) desktop).getServerPush();
-                    if (serverPush == null || !serverPush.isActive()) {
+                    boolean pushActive = serverPush != null && serverPush.isActive();
+                    if (!pushActive) {
                         setContextForSession(execution);
                     }
                 }));
@@ -151,7 +156,8 @@ public class SessionContextListener implements ExecutionInit,
         Optional.ofNullable(component.getDesktop()).ifPresent(desktop ->
                 Optional.ofNullable(desktop.getExecution()).ifPresent(execution -> {
                     ServerPush serverPush = ((DesktopCtrl) desktop).getServerPush();
-                    if (serverPush == null || !serverPush.isActive()) {
+                    boolean pushActive = serverPush != null && serverPush.isActive();
+                    if (!pushActive) {
                         setContextForSession(execution);
                     }
                 }));
@@ -176,7 +182,8 @@ public class SessionContextListener implements ExecutionInit,
         Optional.ofNullable(component.getDesktop()).ifPresent(desktop ->
                 Optional.ofNullable(desktop.getExecution()).ifPresent(execution -> {
             ServerPush serverPush = ((DesktopCtrl) component.getDesktop()).getServerPush();
-            if (serverPush == null || !serverPush.isActive()) {
+            boolean pushActive = serverPush != null && serverPush.isActive();
+            if (!pushActive) {
                 if (!isValidContext(execution)) {
                     setContextForSession(execution);
                 }
@@ -204,7 +211,8 @@ public class SessionContextListener implements ExecutionInit,
     public void init(Desktop desktopInit, Object request) throws Exception {
         Optional.ofNullable(desktopInit).ifPresent(desktop -> {
             ServerPush serverPush = ((DesktopCtrl) desktop).getServerPush();
-            if (serverPush == null || !serverPush.isActive()) {
+            boolean pushActive = serverPush != null && serverPush.isActive();
+            if (!pushActive) {
                 setContextForSession(desktop.getExecution());
             } else
                 disposeThreadState();
@@ -291,6 +299,7 @@ public class SessionContextListener implements ExecutionInit,
      * concurrent sessions in different languages that is a cross-identity leak,
      * and it is invisible in any test that uses one language.
      */
+
     static void disposeThreadState() {
         ServerContext.dispose();
         Locales.setThreadLocal(null);

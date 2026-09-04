@@ -706,12 +706,23 @@ public class MWorkflow extends X_AD_Workflow
 	 */
 	public MWFProcess start (ProcessInfo processInfo)
 	{
+		return start(getCtx(), processInfo);
+	}
+
+	/**
+	 * 	Start Workflow with the invocation context.
+	 *	@param invocationCtx context of the caller starting the workflow
+	 * 	@param processInfo Process Info (Record_ID)
+	 *	@return process
+	 */
+	public MWFProcess start (final Properties invocationCtx, ProcessInfo processInfo)
+	{
 		MWFProcess workflowProcess = null;
 		Trx workflowProcessTransaction = null;
 		Savepoint savepoint = null;
 		Function<ProcessInfo,Boolean> isWorkflowEngineTransaction = pi -> pi.getTransactionName() == null;
 		try {
-			workflowProcess = new MWFProcess (this, processInfo, null);
+			workflowProcess = new MWFProcess (this, invocationCtx, processInfo, null);
 			// Check if exits activities actives if this way then Other Process Active
 			boolean isOtherProcessActive = workflowProcess.getActivities(true, true).length > 0;
 			if (MWorkflow.WORKFLOWTYPE_DocumentProcess.equals(getWorkflowType())

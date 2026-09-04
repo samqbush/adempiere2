@@ -133,6 +133,17 @@ public final class CohortHandoff {
 		Env.setContext(ctx, "#AD_Client_Name", client.getName());
 		Env.setContext(ctx, "#AD_User_ID", identity.userId());
 		Env.setContext(ctx, "#AD_User_Name", user.getName());
+		// Run 33691649424 measured this: the modern session context held 317
+		// entries, client 11 and user 101, and no #SalesRep_ID at all, so
+		// GridField.getDefault resolved no default for C_BPartner.SalesRep_ID
+		// and the modern capture wrote null where the frozen legacy answer is
+		// 101. Login sets #AD_User_Name, #AD_User_ID and #SalesRep_ID together
+		// in both of its role loops (Login.java:423-425 and 519-521); this
+		// method mirrors that block and had reproduced only the first two.
+		// The loop's one other write, #SysAdmin, is read only by the Swing
+		// client (APanel.java:466) and is deliberately not part of a web
+		// handoff identity.
+		Env.setContext(ctx, "#SalesRep_ID", identity.userId());
 		Env.setContext(ctx, "#AD_Role_ID", identity.roleId());
 		Env.setContext(ctx, "#AD_Role_Name", role.getName());
 		Env.setContext(ctx, "#AD_Org_ID", identity.orgId());

@@ -99,10 +99,12 @@ public final class LoopbackProxy {
 			connection.setRequestProperty(
 					"X-Forwarded-Proto", request.scheme());
 		}
-		if (ticket != null) {
-			connection.setRequestProperty(HandoffProtocol.TICKET_HEADER, ticket);
+		if (boundSessionId != null) {
 			connection.setRequestProperty(
 					HandoffProtocol.SESSION_HEADER, boundSessionId);
+		}
+		if (ticket != null) {
+			connection.setRequestProperty(HandoffProtocol.TICKET_HEADER, ticket);
 		}
 
 		if ("POST".equalsIgnoreCase(request.method())) {

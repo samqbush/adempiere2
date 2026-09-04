@@ -78,6 +78,7 @@ export ADEMPIERE_PHASE5F_DB_PASSWORD=$ADEMPIERE_PHASE5D_DB_PASSWORD
 
 golden_archive=$evidence_root/golden.dump
 quiesce_state=$evidence_root/quiesce-state.tsv
+goal_quiesce_state=$evidence_root/goal-quiesce-state.tsv
 mkdir -p "$evidence_root"
 
 reset() {
@@ -92,6 +93,13 @@ reset() {
 quiesce() {
   bash "$scripts_dir/quiesce-phase5f-background-processors.sh" \
     "$db_host" "$db_port" "$db_name" "$db_user" "$marker" "$1" "$quiesce_state"
+  # PA_Goal is a lazy, WALL-CLOCK-triggered writer rather than a timer source,
+  # so the Phase 5f processor quiesce does not cover it: MGoal.updateGoal saves
+  # whenever DateLastRun is not in the current hour, and getUserGoals calls it
+  # at every login. Two captures of the same runtime that straddle an hour
+  # boundary therefore diverge. See quiesce-performance-goals.sh.
+  bash "$scripts_dir/quiesce-performance-goals.sh" \
+    "$db_host" "$db_port" "$db_name" "$db_user" "$marker" "$1" "$goal_quiesce_state"
 }
 
 measure() {
