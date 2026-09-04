@@ -214,8 +214,8 @@ public class NumberBox extends Div
         String separator = Character.toString(separatorChar);
 
         txtCalc = new Textbox();
-        txtCalc.setWidgetListener("onKeyPress", "return calc.validate('" + 
-        		decimalBox.getId() + "','" + txtCalc.getId() 
+        txtCalc.setWidgetListener("onKeyPress", "return calc.validate('"
+                + decimalBox.getId() + "','" + txtCalc.getId()
                 + "'," + integral + "," + (int)separatorChar + ", event);");
         txtCalc.setMaxlength(250);
         txtCalc.setCols(30);
@@ -294,7 +294,7 @@ public class NumberBox extends Div
         Button btnModulo = new Button();
         btnModulo.setWidth("40px");
         btnModulo.setLabel("%");
-        btnModulo.setWidgetListener("onClick", "calc.percentage('" + decimalBox.getId() + "','" 
+        btnModulo.setWidgetListener("onClick", "calc.percentage('" + decimalBox.getId() + "','"
                 + txtCalcId + "','" + separator + "')");
         
         
@@ -346,7 +346,7 @@ public class NumberBox extends Div
         Button btnEqual = new Button();
         btnEqual.setWidth("30px");
         btnEqual.setLabel("=");
-        btnEqual.setWidgetListener("onClick", "calc.evaluate('" + decimalBox.getId() + "','" 
+        btnEqual.setWidgetListener("onClick", "calc.evaluate('" + decimalBox.getId() + "','"
                 + txtCalcId + "','" + separator + "')");
         
         Button btnAdd = new Button();

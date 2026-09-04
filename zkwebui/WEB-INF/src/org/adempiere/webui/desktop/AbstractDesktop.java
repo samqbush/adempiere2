@@ -241,29 +241,29 @@ public abstract class AbstractDesktop extends AbstractUIPart implements IDesktop
 			
 	}
 
-   	/**
-   	 * Whether ZK's event processing thread is enabled for the window's
-   	 * application, and so whether {@link Window#doModal()} will block. The
-   	 * desktop is resolved the way ZK resolves it, falling back to the current
-   	 * execution when the window has no page of its own. Unknown configuration
-   	 * is reported as enabled, so an inability to read the setting never
-   	 * produces a misleading warning.
-   	 */
-   	private boolean isEventThreadEnabled(Window win)
-   	{
-   		org.zkoss.zk.ui.Desktop desktop = win.getDesktop();
-   		if (desktop == null)
-   		{
-   			org.zkoss.zk.ui.Execution execution =
-   				org.zkoss.zk.ui.Executions.getCurrent();
-   			if (execution != null)
-   				desktop = execution.getDesktop();
-   		}
-   		if (desktop == null || desktop.getWebApp() == null
-   			|| desktop.getWebApp().getConfiguration() == null)
-   			return true;
-   		return desktop.getWebApp().getConfiguration().isEventThreadEnabled();
-   	}
+	/**
+	 * Whether ZK's event processing thread is enabled for the window's
+	 * application, and so whether {@link Window#doModal()} will block. The
+	 * desktop is resolved the way ZK resolves it, falling back to the current
+	 * execution when the window has no page of its own. Unknown configuration
+	 * is reported as enabled, so an inability to read the setting never
+	 * produces a misleading warning.
+	 */
+	private boolean isEventThreadEnabled(Window win)
+	{
+		org.zkoss.zk.ui.Desktop desktop = win.getDesktop();
+		if (desktop == null)
+		{
+			org.zkoss.zk.ui.Execution execution =
+				org.zkoss.zk.ui.Executions.getCurrent();
+			if (execution != null)
+				desktop = execution.getDesktop();
+		}
+		if (desktop == null || desktop.getWebApp() == null
+			|| desktop.getWebApp().getConfiguration() == null)
+			return true;
+		return desktop.getWebApp().getConfiguration().isEventThreadEnabled();
+	}
    	
    	/**
    	 * 
