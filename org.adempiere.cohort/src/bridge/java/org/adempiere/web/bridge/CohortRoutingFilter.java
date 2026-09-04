@@ -178,7 +178,7 @@ public class CohortRoutingFilter implements Filter {
 					pending.status());
 			return;
 		}
-		route(request, response, session, affinity);
+		route(request, response, session, affinity, chain);
 	}
 
 	private void releaseRedirectBarrier(HttpServletRequest request) {
@@ -202,7 +202,8 @@ public class CohortRoutingFilter implements Filter {
 			HttpServletRequest request,
 			HttpServletResponse response,
 			HttpSession session,
-			ModernSessionAffinity affinity) throws IOException {
+			ModernSessionAffinity affinity,
+			FilterChain chain) throws IOException, ServletException {
 		CohortBridge bridge = CohortBridge.current();
 		String rawPath = pathInside(request);
 		RoutingCore.Plan plan = RoutingCore.preflight(
@@ -224,6 +225,11 @@ public class CohortRoutingFilter implements Filter {
 				return;
 			case REFUSE:
 				refuse(response, routeClass, plan.reason(), plan.status());
+				return;
+			case PASS_THROUGH:
+				log.info(RoutingAudit.line(
+						CohortRuntime.MODERN, routeClass, plan.reason()));
+				chain.doFilter(request, response);
 				return;
 			case ROUTE:
 				break;

@@ -183,10 +183,11 @@ all 23 public-origin cohort, isolation, lifecycle, SOAP-coexistence, and
 secret-hygiene rows as passing; see
 `docs/modernization/phase-5e-evidence.md`.
 
-The merged R15 hardening increment addresses two transition defects measured
+The merged R15 hardening increment addresses transition defects measured
 while validating https://github.com/samqbush/adempiere2/pull/18. Immutable
 legacy theme images now have a separate, closed `GET`/`HEAD` pass-through policy
-while the redirect barrier is set; general `STATIC_ASSET` routes such as
+while the deciding response owns the redirect barrier and while the selected
+modern affinity still awaits its context-root rotation; general `STATIC_ASSET` routes such as
 `/zkau/view/` remain refused. Routed-session END now assigns one cleanup owner
 and one navigation owner per transport: AU/XHR receives the ZK redirect command
 and a racing top-level page receives HTTP redirect to the same context root,

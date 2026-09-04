@@ -98,6 +98,10 @@ public final class RoutingCore {
 		if (affinity.phase() == ModernSessionAffinity.Phase.PENDING_ROTATION
 				&& (!"GET".equalsIgnoreCase(method)
 						|| routeClass != PublicRouteClass.CONTEXT_ROOT)) {
+			if (PublicRouteClassifier.transitionSafeAsset(method, pathInside)) {
+				return plan(Action.PASS_THROUGH, routeClass, pathInside,
+						"transition-safe-asset", 0);
+			}
 			if ("GET".equalsIgnoreCase(method)
 					&& routeClass == PublicRouteClass.ZK_RESOURCE
 					&& pathInside.endsWith("/zul/keylistener.js")) {

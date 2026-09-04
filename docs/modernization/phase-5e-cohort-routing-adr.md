@@ -264,11 +264,12 @@ context root, ZUL/ZHTML `GET`, `*.zul` `POST` (URL-rewritten public forms),
 `/zkau` `GET`/`POST` including polling, `/zkau/web/**` resources, and reviewed
 static prefixes. Everything else is `UNKNOWN` and is never proxied.
 
-The redirect barrier has a second, narrower contract:
-`transition-safe-assets.tsv`. While the deciding response still owns that
-barrier, only raw, unencoded `GET`/`HEAD` requests for `.gif` or `.png` files
-below `/theme/default/images/` may pass through the legacy chain. Passing one
-does not clear the barrier, rotate or bootstrap the session, consume a ticket,
+The redirect transition has a second, narrower contract:
+`transition-safe-assets.tsv`. While the deciding response still owns its barrier,
+and after release while the modern affinity still awaits context-root rotation,
+only raw, unencoded `GET`/`HEAD` requests for `.gif` or `.png` files below
+`/theme/default/images/` may pass through the legacy chain. Passing one does not
+clear the barrier, rotate or bootstrap the session, consume a ticket,
 or change affinity. General `STATIC_ASSET` membership is not sufficient:
 generated `/zkau/view/` content, executable ZK resources, encoded or traversing
 paths, path parameters, other asset prefixes and write methods remain refused.

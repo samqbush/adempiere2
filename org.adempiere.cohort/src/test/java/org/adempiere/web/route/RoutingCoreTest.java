@@ -67,6 +67,30 @@ class RoutingCoreTest {
 	}
 
 	@Test
+	@DisplayName("pending rotation reuses the closed transition-safe asset policy")
+	void pendingRotationPassesOnlyTransitionSafeAssets() {
+		RoutingCore.Plan safe = RoutingCore.preflight(
+				true, pendingAffinity(), "GET",
+				"/theme/default/images/zk/progress2.gif");
+		assertEquals(RoutingCore.Action.PASS_THROUGH, safe.action());
+		assertEquals(PublicRouteClass.STATIC_ASSET, safe.routeClass());
+		assertEquals("transition-safe-asset", safe.reason());
+
+		RoutingCore.Plan ordinaryAsset = RoutingCore.preflight(
+				true, pendingAffinity(), "GET", "/images/logo.png");
+		assertEquals(RoutingCore.Action.REFUSE, ordinaryAsset.action());
+		assertEquals("awaiting-context-root", ordinaryAsset.reason());
+		assertEquals(503, ordinaryAsset.status());
+
+		RoutingCore.Plan write = RoutingCore.preflight(
+				true, pendingAffinity(), "POST",
+				"/theme/default/images/zk/progress2.gif");
+		assertEquals(RoutingCore.Action.NOT_FOUND, write.action());
+		assertEquals("route-not-owned", write.reason());
+		assertEquals(404, write.status());
+	}
+
+	@Test
 	@DisplayName("preflight owns route refusal and the one bootstrap transition")
 	void preflightClassifiesBeforeTheAdapterActs() {
 		ModernSessionAffinity affinity = pendingAffinity();

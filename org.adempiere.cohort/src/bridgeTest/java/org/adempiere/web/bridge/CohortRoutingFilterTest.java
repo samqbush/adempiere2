@@ -631,6 +631,38 @@ class CohortRoutingFilterTest {
 	}
 
 	@Test
+	@DisplayName("a transition-safe image passes while the affinity awaits context root")
+	void transitionSafeThemeImagePassesThroughAfterRedirectBarrier()
+			throws Exception {
+		CohortRoutingFilter filter = armedFilter();
+		ModernSessionAffinity affinity = new ModernSessionAffinity(
+				new CohortDecision(CohortRuntime.MODERN,
+						CohortDecision.Reason.USER_ALLOWLISTED),
+				IDENTITY);
+		HttpSession session = mock(HttpSession.class);
+		when(session.getAttribute(ModernSessionAffinity.ATTRIBUTE))
+				.thenReturn(affinity);
+
+		HttpServletRequest request = mock(HttpServletRequest.class);
+		HttpServletResponse response = mock(HttpServletResponse.class);
+		FilterChain chain = mock(FilterChain.class);
+		when(request.getHeaderNames()).thenReturn(names("Accept"));
+		when(request.getSession(false)).thenReturn(session);
+		when(request.getMethod()).thenReturn("GET");
+		when(request.getContextPath()).thenReturn("/webui");
+		when(request.getRequestURI()).thenReturn(
+				"/webui/theme/default/images/zk/progress2.gif");
+
+		filter.doFilter(request, response, chain);
+
+		verify(chain).doFilter(request, response);
+		verify(response, never()).sendError(anyInt());
+		verify(response, never()).addCookie(any());
+		verify(request, never()).changeSessionId();
+		assertEquals(ModernSessionAffinity.Phase.PENDING_ROTATION, affinity.phase());
+	}
+
+	@Test
 	@DisplayName("the frozen key-listener request navigates to the only bootstrap-eligible route")
 	void keyListenerTransitionsToContextRootBeforeRotation() throws Exception {
 		CohortRoutingFilter filter = armedFilter();
