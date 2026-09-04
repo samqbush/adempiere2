@@ -257,7 +257,7 @@ capture() {
   #
   # The instants BRACKET the restore rather than being stamped beside it, so
   # they are causally bound to the restore having actually run: a full seed
-  # restore takes minutes, so a capture that skipped it would record a
+  # restore takes tens of seconds, so a capture that skipped it would record a
   # near-zero interval, and two captures sharing one restore would record
   # overlapping intervals. check_restores() requires the digests to agree, each
   # interval to be non-trivial, and the two intervals to be disjoint.

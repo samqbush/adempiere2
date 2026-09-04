@@ -73,6 +73,8 @@ def build_contract(contract: Path, steps: list[str]) -> None:
     write(contract / "write-flow.tsv",
           "".join(f"{index}\t{step}\n" for index, step in enumerate(steps)))
     write(contract / "ambient-tables.tsv", "ad_session\n")
+    write(contract / "network-classes.tsv",
+          "external\tGET\twww.zkoss.org\n")
     # The manifest is the thing every other Phase 5g gate hashes, so the
     # synthetic contract carries a real one -- in the REAL generator's format,
     # comment headers and tab separators included (write-oracle.gradle). A
@@ -130,7 +132,8 @@ def build_evidence(root: Path, contract: Path, head: str, steps: list[str]) -> N
                         for name in WRITE_FLOW_SESSIONS))
         write(capture / "network-requests.tsv",
               f"GET\t{BASE_URL}/index.zul\n"
-              f"POST\t{BASE_URL}/zkau\n")
+              f"POST\t{BASE_URL}/zkau\n"
+              "GET\thttp://www.zkoss.org/img/zkpowered_s.png\n")
         write(capture / "write-flow.tsv",
               "".join(f"{index}\t{step}\n" for index, step in enumerate(steps)))
         for name in FACT_CLASSES:
@@ -256,6 +259,9 @@ def main() -> int:
             ("a capture that reached the loopback modern origin directly",
              lambda root: write(root / "A" / "network-requests.tsv",
                                 f"GET\thttp://127.0.0.1:{MODERN_PORT}/webui-modern/index.zul\n")),
+            ("a capture that reached an undeclared foreign origin",
+             lambda root: write(root / "A" / "network-requests.tsv",
+                                "GET\thttps://undeclared.example.invalid/pixel.png\n")),
             ("evidence captured against an origin other than the public one",
              lambda root: write(root / "provenance.json", json.dumps({
                  "phase": "5g-1b", "git_head": head, "captured_at": "x",

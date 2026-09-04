@@ -21,6 +21,7 @@ import hashlib
 import json
 import subprocess
 from pathlib import Path
+from urllib.parse import urlsplit
 from xml.etree import ElementTree
 
 CAPTURES = ("A", "B")
@@ -31,9 +32,10 @@ CAPTURES = ("A", "B")
 FREEZE_MARKER = ("mode", "freeze")
 
 # A full seed restore drops, recreates and reloads the database and restarts
-# both Tomcats. Nothing resembling that finishes in under a minute, so a
-# shorter recorded interval means the capture did not restore.
-MIN_RESTORE_SECONDS = 60
+# both Tomcats. Current hosted runners complete that work in roughly 55 seconds,
+# so the floor distinguishes it from a skipped or shared near-zero restore
+# without rejecting a real restore merely because the runner was fast.
+MIN_RESTORE_SECONDS = 30
 
 # sha256 of contracts/legacy-web-write-v1/manifest.sha256 as Phase 5g-1a froze
 # it and its acceptance run scored it. Pinned here, OUTSIDE the contract tree,
@@ -209,16 +211,24 @@ def check_capture(root: Path, label: str, contract: Path,
     # of the blocking rule.
     if not missing("network-requests.tsv"):
         origin = base_url.rsplit("/", 1)[0]
+        declared_external = {
+            (row[1].upper(), row[2].lower())
+            for row in rows(contract / "network-classes.tsv")
+            if len(row) >= 3 and row[0] == "external"
+        }
         for row in rows(capture / "network-requests.tsv"):
+            method = row[0].upper()
             url = row[-1]
             if f":{modern_port}" in url or "/webui-modern" in url:
                 problems.append(
                     f"capture {label} reached the loopback modern origin directly: {url}")
                 break
             if url.startswith("http") and not url.startswith(origin):
-                problems.append(
-                    f"capture {label} reached a foreign origin: {url}")
-                break
+                host = (urlsplit(url).hostname or "").lower()
+                if (method, host) not in declared_external:
+                    problems.append(
+                        f"capture {label} reached undeclared foreign origin: {url}")
+                    break
 
     for name in FACT_CLASSES:
         missing(name)
@@ -267,7 +277,7 @@ def check_restores(root: Path) -> list[str]:
 
     Bracketing, rather than a single stamp taken beside the restore call, is
     what binds the record to the restore having actually run: a full seed
-    restore takes minutes, so a capture that skipped it records a near-zero
+    restore takes tens of seconds, so a capture that skipped it records a near-zero
     interval, and two captures sharing one restore record overlapping
     intervals.
     """
@@ -299,7 +309,7 @@ def check_restores(root: Path) -> list[str]:
         if finished - started < MIN_RESTORE_SECONDS:
             problems.append(
                 f"capture {label} records a {finished - started}s restore. A full "
-                f"seed restore takes minutes, so anything under "
+                f"seed restore takes tens of seconds, so anything under "
                 f"{MIN_RESTORE_SECONDS}s means the capture did not restore")
         intervals[label] = (started, finished)
 
