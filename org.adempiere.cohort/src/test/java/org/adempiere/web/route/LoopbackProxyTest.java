@@ -2,6 +2,7 @@ package org.adempiere.web.route;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
@@ -15,6 +16,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import com.sun.net.httpserver.HttpServer;
+import org.adempiere.web.handoff.HandoffProtocol;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -23,6 +25,40 @@ import org.junit.jupiter.api.Test;
 @Tag("UnitTest")
 @DisplayName("Framework-neutral loopback proxy")
 class LoopbackProxyTest {
+
+	@Test
+	@DisplayName("the routed session binding survives after bootstrap")
+	void routedBindingIsSentWithoutAnotherTicket() throws Exception {
+		HttpServer server = HttpServer.create(
+				new InetSocketAddress("127.0.0.1", 0), 0);
+		java.util.concurrent.atomic.AtomicReference<String> binding =
+				new java.util.concurrent.atomic.AtomicReference<>();
+		java.util.concurrent.atomic.AtomicReference<String> ticket =
+				new java.util.concurrent.atomic.AtomicReference<>();
+		server.createContext("/webui/index.zul", exchange -> {
+			binding.set(exchange.getRequestHeaders().getFirst(
+					HandoffProtocol.SESSION_HEADER));
+			ticket.set(exchange.getRequestHeaders().getFirst(
+					HandoffProtocol.TICKET_HEADER));
+			exchange.sendResponseHeaders(204, -1);
+			exchange.close();
+		});
+		server.start();
+		try {
+			ProxyResult result = new LoopbackProxy(
+					"http://127.0.0.1:" + server.getAddress().getPort()).proxy(
+							new Request(), new CapturedResponse(),
+							PublicRouteClass.ZK_PAGE, "/index.zul",
+							"MODERN", null, "ROTATED");
+
+			assertTrue(result.completed());
+			assertEquals("ROTATED", binding.get());
+			assertNull(ticket.get(),
+					"ordinary routed requests must not replay the bootstrap ticket");
+		} finally {
+			server.stop(0);
+		}
+	}
 
 	@Test
 	@DisplayName("the core consumes the internal cookie and rewrites redirects")

@@ -168,6 +168,19 @@ public class CohortHandoffFilter implements Filter {
 		}
 
 		if (ticket == null) {
+			if (boundSession != null && !boundSession.isBlank()
+					&& loopback(request.getRemoteAddr())) {
+				// A routed request can race the request that destroys the modern
+				// session during logout. The public router preserves the bound
+				// Tomcat 9 session on every internal request, so this exact
+				// no-session case can complete the existing END handshake
+				// instead of exposing Tomcat's 403 page to the browser.
+				log.info("A routed request reached an ended Phase 5e session");
+				response.setHeader(
+						HandoffProtocol.END_HEADER, HandoffProtocol.END_VALUE);
+				response.setStatus(HttpServletResponse.SC_RESET_CONTENT);
+				return;
+			}
 			// Fail closed: in the routed lane the router is the only way in.
 			log.severe("An unbootstrapped modern session made a request with no "
 					+ "Phase 5e ticket");

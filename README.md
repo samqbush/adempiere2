@@ -323,8 +323,11 @@ the existing legacy write-oracle behavior. PR 18,
 https://github.com/samqbush/adempiere2/pull/18, now has an accepted candidate:
 exact-head run 33904468993 completed both 12-step modern captures through the
 public `/webui` origin, self-diffed cleanly, matched the frozen contract, passed
-all six H6 controls, and passed the evidence validator. PR-head Contracts and
-reproducible checks are green; merge and the post-merge regression matrix remain.
+all six H6 controls, and passed the evidence validator. A later final-head run
+exposed a concurrent routed-logout race after the modern session was destroyed;
+the candidate now repeats the internal END handshake for that exact
+loopback-bound stale-session case while keeping unbound requests forbidden.
+Final-head re-verification, merge, and the post-merge regression matrix remain.
 
 The Tomcat smoke requires HTTP 2xx/3xx from each deployed context except
 `ADInterface`, whose unrouted base path is explicitly expected to return 404;

@@ -296,6 +296,7 @@ dependencies {
 	modernUiTestImplementation 'org.mockito:mockito-inline:4.11.0'
 	modernUiTestImplementation 'net.bytebuddy:byte-buddy:1.15.4'
 	modernUiTestImplementation 'net.bytebuddy:byte-buddy-agent:1.15.4'
+	modernUiTestImplementation 'jakarta.servlet:jakarta.servlet-api:6.0.0'
 	modernUiTestImplementation files(rootProject.file('tools/lib/testing/SuperCSV-with_src-1.52.jar'))
 	modernUiTestImplementation files(rootProject.file('tools/lib/commons-lang-2.1.jar'))
 	modernUiTestRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
