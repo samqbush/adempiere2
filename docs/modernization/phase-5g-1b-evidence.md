@@ -1,7 +1,6 @@
 # Phase 5g-1b evidence: modern Business Partner CRUD parity
 
-**Status: in progress. No gate in this document may be reported as green until
-the run id that produced it is recorded here.**
+**Status: accepted on the PR candidate; merge and post-merge regression pending.**
 
 PR 19 has accepted and merged the corrected workflow-attribution oracle, and PR
 20 has merged the independent routing-transition correction. The reconciled PR
@@ -10,10 +9,13 @@ PR 19 has accepted and merged the corrected workflow-attribution oracle, and PR
 entry points as compatibility delegates, chains `phase5g1ayFinalVerification`,
 and has removed the temporary context probes. The new database-neutral
 production-attribution check proves the process, activity, and event-audit
-construction chain inherits that invocation context. `Contracts` and the
-reproducible build checks are green on the reconciled PR head, but the
-database-backed parity run is still red, so this remains an implementation state
-rather than an accepted parity claim.
+construction chain inherits that invocation context. Exact-head run
+[33904468993](https://github.com/samqbush/adempiere2/actions/runs/33904468993)
+accepted the database-backed parity evidence at `740f45b3e`: both captures
+completed all 12 steps, self-diffed cleanly, matched the frozen contract, passed
+all six H6 controls, and passed the fail-closed evidence validator. The PR-head
+Contracts and reproducible checks are also green. Merge and the post-merge
+regression matrix remain before the increment is complete on `develop`.
 
 ## The claim
 
@@ -217,6 +219,7 @@ first.
 
 | Run | Reached | Finding |
 |---|---|---|
+| [33904468993](https://github.com/samqbush/adempiere2/actions/runs/33904468993) | **Accepted exact-head smoke at `740f45b3e`:** captures A and B completed all 12 steps; A/B self-diff passed with zero problems; both matched the frozen legacy contract; all six H6 rows passed; the evidence validator accepted the run | This is the first complete accepted Phase 5g-1b result. The public `/webui` route alone reached the modern runtime; Business Partner create, update, second-editor update, stale-save refusal, duplicate submit, and deactivation matched the frozen answer; production workflow process/activity/event-audit attribution matched the corrected oracle; no loopback origin was reached; no legacy fallback occurred during backend outage; and logout returned live GardenWorld `AD_Session` rows and modern runtime caches to baseline zero. PR-head `Contracts`, core/module, publication, and JDK 21 runtime checks were green at the same commit. |
 | [33899824147](https://github.com/samqbush/adempiere2/actions/runs/33899824147) | Targeted smoke at `72ce2dbcd`: captures A and B completed all 12 steps, A/B self-diff passed with zero problems, the frozen contract comparison passed, and all six H6 rows passed | The production logout-order fix closed the final behavioural failure: post-logout live business sessions returned to baseline `0`, all four modern `AD_Session` rows were `Processed='Y'`, both servlet sessions were destroyed, and every reported modern runtime cache was zero. The evidence validator then rejected the otherwise-green run for two pre-existing assumptions it had never reached while H6 was red: it rejected the contract-declared `www.zkoss.org` badge as an arbitrary foreign origin, and treated genuine independently bracketed 56-57 second full restores as skipped because of a 60-second floor. The validator now permits only method/host pairs declared by the frozen `network-classes.tsv`, retains a mutation proof for an undeclared host, and uses a 30-second non-triviality floor while still requiring equal archive digests and disjoint intervals. |
 | [33893941634](https://github.com/samqbush/adempiere2/actions/runs/33893941634) | Targeted smoke at `60b59ac7f`: captures A and B completed all 12 steps, A/B self-diff passed with zero problems, the frozen contract comparison passed, and H6 passed 5/6 rows | The pending-rotation safe-asset change closed run 33889287297's failure: neither capture recorded a `progress2.gif` refusal. The corrected `/webui/` no-legacy-fallback control also passed (`status=502`, no legacy marker). The only failure is now the session lifecycle row. All four modern servlet sessions were destroyed and the modern `SessionManager` caches returned to zero, but database rows `1000046`, `1000048`, `1000050`, and `1000052` remained `Processed='N'`. `AdempiereWebUI.logout()` cleared the current authenticated context before `SessionManager.clearSession()` read `#AD_Session_ID`; the absence of every expected `ADempiere Session ... Logout` log line confirms that database cleanup was skipped. The production logout now closes `AD_Session` before resetting the context, and the neutral lane invariant pins that order. |
 | [33889287297](https://github.com/samqbush/adempiere2/actions/runs/33889287297) | Targeted smoke at `6c6077218`: captures A and B again completed all 12 steps, but scoring stopped before H6 | Both captures independently observed `GET /webui/theme/default/images/zk/progress2.gif` refused with 503, in different browser sessions and at different flow steps. The public ingress attributed both to `class=STATIC_ASSET outcome=awaiting-context-root`, after `CohortDecisionInterceptor` had selected modern and before the key-listener transition reached the context root. The exact method/path is already in the closed `transition-safe-assets.tsv` allowlist, but PR 20 consulted that predicate only while `REDIRECT_PENDING` remained set. The same closed predicate is now reused while the affinity is `PENDING_ROTATION`; writes, ordinary assets, generated ZK content, and every other awaiting-context-root request remain refused. |

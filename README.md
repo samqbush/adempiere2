@@ -320,10 +320,11 @@ database-neutral chain head:
 The corrected database-backed capture is selected explicitly with
 `-Pphase5g1ayMode=corrected-legacy-workflow-attribution`; omitting it preserves
 the existing legacy write-oracle behavior. PR 18,
-https://github.com/samqbush/adempiere2/pull/18, is reconciling the merged oracle
-and R15 prerequisites, applying the reviewed production saving-context
-overloads, and remains unaccepted until its final Contracts and database smoke
-are green.
+https://github.com/samqbush/adempiere2/pull/18, now has an accepted candidate:
+exact-head run 33904468993 completed both 12-step modern captures through the
+public `/webui` origin, self-diffed cleanly, matched the frozen contract, passed
+all six H6 controls, and passed the evidence validator. PR-head Contracts and
+reproducible checks are green; merge and the post-merge regression matrix remain.
 
 The Tomcat smoke requires HTTP 2xx/3xx from each deployed context except
 `ADInterface`, whose unrouted base path is explicitly expected to return 404;
