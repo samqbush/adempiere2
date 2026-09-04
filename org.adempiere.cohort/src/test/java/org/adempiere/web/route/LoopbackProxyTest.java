@@ -2,7 +2,6 @@ package org.adempiere.web.route;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
@@ -53,7 +52,7 @@ class LoopbackProxyTest {
 
 			assertTrue(result.completed());
 			assertEquals("ROTATED", binding.get());
-			assertNull(ticket.get(),
+			org.junit.jupiter.api.Assertions.assertNull(ticket.get(),
 					"ordinary routed requests must not replay the bootstrap ticket");
 		} finally {
 			server.stop(0);

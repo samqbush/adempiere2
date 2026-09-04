@@ -327,7 +327,8 @@ all six H6 controls, and passed the evidence validator. A later final-head run
 exposed a concurrent routed-logout race after the modern session was destroyed;
 the candidate now repeats the internal END handshake for that exact
 loopback-bound stale-session case while keeping unbound requests forbidden.
-Final-head re-verification, merge, and the post-merge regression matrix remain.
+Exact-head run 33913861562 passed both captures and all six H6 controls with the
+correction. Merge and the post-merge regression matrix remain.
 
 The Tomcat smoke requires HTTP 2xx/3xx from each deployed context except
 `ADInterface`, whose unrouted base path is explicitly expected to return 404;

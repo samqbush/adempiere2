@@ -1,7 +1,7 @@
 # Phase 5g-1b evidence: modern Business Partner CRUD parity
 
-**Status: accepted baseline established; final candidate re-verification,
-merge, and post-merge regression pending.**
+**Status: accepted on the corrected PR candidate; merge and post-merge
+regression pending.**
 
 PR 19 has accepted and merged the corrected workflow-attribution oracle, and PR
 20 has merged the independent routing-transition correction. The reconciled PR
@@ -22,8 +22,10 @@ unbootstrapped-session 403. The candidate now carries the bound Tomcat 9 session
 on every internal routed request, allowing only that loopback-bound stale-session
 case to repeat the existing END handshake; unbound and non-loopback requests
 remain forbidden. Focused proxy and modern-filter tests cover the new decision,
-and the unchanged legacy-bridge suite remains green; the complete routed race
-still requires final-head CI. Merge and the post-merge regression matrix remain
+and the unchanged legacy-bridge suite remains green. Exact-head run
+[33913861562](https://github.com/samqbush/adempiere2/actions/runs/33913861562)
+then passed the complete routed runtime gate at `cda44268c`, including both
+captures and all six H6 rows. Merge and the post-merge regression matrix remain
 before the increment is complete on `develop`.
 
 ## The claim
@@ -228,6 +230,7 @@ first.
 
 | Run | Reached | Finding |
 |---|---|---|
+| [33913861562](https://github.com/samqbush/adempiere2/actions/runs/33913861562) | **Accepted corrected-candidate smoke at `cda44268c`:** both captures, frozen parity, workflow attribution, the evidence validator, and all six H6 controls passed | The exact routed logout race exposed by 33908565898 is closed: the final session-cleanup driver completed rather than receiving Tomcat 10's unbootstrapped-session 403. `Contracts`, publication, and JDK 21 runtime checks also passed on this commit. The Core/module job's tests passed but its final source-inventory comparison detected that one newly added static test import shifted the recorded `HttpServer` line by one; the import was removed without changing runtime behavior. |
 | [33908565898](https://github.com/samqbush/adempiere2/actions/runs/33908565898) | Both captures, frozen comparison, and five H6 controls passed on documentation-only head `92e3e24ca`; the final session-cleanup H6 driver failed while logging out its second editor | The modern session closed correctly, but a concurrent top-level request reached Tomcat 10 after that session had been destroyed and before the public navigation settled. The modern handoff filter therefore returned its expected unbootstrapped-session 403, stranding that browser page. The correction keeps the reserved, router-authored Tomcat 9 binding on ordinary internal proxy requests and converts only a loopback-bound request with no surviving modern session into the existing END response. Focused neutral-proxy and modern-filter tests cover the new behavior, while the unchanged legacy-bridge suite verifies its existing END cleanup/navigation behavior remains green; the complete final-head smoke remains the only proof of the actual routed race. |
 | [33904468993](https://github.com/samqbush/adempiere2/actions/runs/33904468993) | **Accepted exact-head smoke at `740f45b3e`:** captures A and B completed all 12 steps; A/B self-diff passed with zero problems; both matched the frozen legacy contract; all six H6 rows passed; the evidence validator accepted the run | This is the first complete accepted Phase 5g-1b result. The public `/webui` route alone reached the modern runtime; Business Partner create, update, second-editor update, stale-save refusal, duplicate submit, and deactivation matched the frozen answer; production workflow process/activity/event-audit attribution matched the corrected oracle; no loopback origin was reached; no legacy fallback occurred during backend outage; and logout returned live GardenWorld `AD_Session` rows and modern runtime caches to baseline zero. PR-head `Contracts`, core/module, publication, and JDK 21 runtime checks were green at the same commit. |
 | [33899824147](https://github.com/samqbush/adempiere2/actions/runs/33899824147) | Targeted smoke at `72ce2dbcd`: captures A and B completed all 12 steps, A/B self-diff passed with zero problems, the frozen contract comparison passed, and all six H6 rows passed | The production logout-order fix closed the final behavioural failure: post-logout live business sessions returned to baseline `0`, all four modern `AD_Session` rows were `Processed='Y'`, both servlet sessions were destroyed, and every reported modern runtime cache was zero. The evidence validator then rejected the otherwise-green run for two pre-existing assumptions it had never reached while H6 was red: it rejected the contract-declared `www.zkoss.org` badge as an arbitrary foreign origin, and treated genuine independently bracketed 56-57 second full restores as skipped because of a 60-second floor. The validator now permits only method/host pairs declared by the frozen `network-classes.tsv`, retains a mutation proof for an undeclared host, and uses a 30-second non-triviality floor while still requiring equal archive digests and disjoint intervals. |
