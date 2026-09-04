@@ -110,7 +110,7 @@ class ModernNoLegacyFallbackTest {
 			// restart, whereas a dead one silently invalidates everything after it.
 			try {
 				run(laneScript, "backend", "stop");
-				Response response = page.navigate(baseUrl + "/",
+				Response response = page.navigate(baseUrl + "/webui/",
 						new Page.NavigateOptions()
 								.setWaitUntil(WaitUntilState.DOMCONTENTLOADED));
 				// A null response is an absent observation, not an explicit error,
