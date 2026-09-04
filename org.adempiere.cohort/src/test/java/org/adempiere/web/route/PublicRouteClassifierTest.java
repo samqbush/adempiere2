@@ -92,6 +92,27 @@ class PublicRouteClassifierTest {
 		assertEquals(PublicRouteClass.UNKNOWN, PublicRouteClassifier.classify(null, "/"));
 	}
 
+	@ParameterizedTest(name = "{0} {1} transition-safe={2}")
+	@CsvSource({
+			"GET,  /theme/default/images/zk/progress2.gif,       true",
+			"HEAD, /theme/default/images/zul/grid/column-bg.png, true",
+			"POST, /theme/default/images/zk/progress2.gif,       false",
+			"GET,  /theme/default/css/img.css.dsp,               false",
+			"GET,  /theme/default/images/source.pdn,             false",
+			"GET,  /zkau/view/z_abc/image.png,                   false",
+			"GET,  /zkau/web/js/zk.wpd,                          false",
+			"GET,  /images/logo.png,                             false",
+			"GET,  /theme/default/images/../index.zul,           false",
+			"GET,  /theme/default/images/%2e%2e/a.gif,           false",
+			"GET,  /theme/default/images/a.png;jsessionid=X,     false",
+	})
+	@DisplayName("redirect-pending pass-through is narrower than static classification")
+	void transitionSafeAssetsAreClosed(
+			String method, String path, boolean expected) {
+		assertEquals(expected,
+				PublicRouteClassifier.transitionSafeAsset(method, path));
+	}
+
 	@Test
 	@DisplayName("a path that still carries a session parameter never classifies")
 	void unstrippedSessionParameterIsUnknown() {

@@ -89,6 +89,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Fetch the contract-pinned Phase 5g-1a-y source commit
         run: |
           set -euo pipefail
@@ -241,6 +243,8 @@ jobs:
       ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD: postgres
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Fetch the contract-pinned Phase 5g-1a-y source commit
         run: |
           set -euo pipefail

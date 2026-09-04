@@ -58,6 +58,12 @@ mutations=(
 'affinity-one-way~SRC/route/ModernSessionAffinity.java~this.phase = Phase.FAILED;~this.phase = Phase.BOOTSTRAPPED;~org.adempiere.web.route.PublicRouteClassifierTest'
 'handoff-admission-atomic~SRC/route/ModernSessionAffinity.java~phase = Phase.ROTATING;~phase = Phase.PENDING_ROTATION;~org.adempiere.web.route.PublicRouteClassifierTest'
 'ticket-not-persisted~SRC/route/ModernSessionAffinity.java~private transient String ticket;~private String ticket;~org.adempiere.web.route.PublicRouteClassifierTest'
+'transition-safe-prefix~SRC/route/PublicRouteClassifier.java~!path.startsWith(TRANSITION_SAFE_IMAGE_PREFIX)~!path.startsWith("/")~org.adempiere.web.route.PublicRouteClassifierTest'
+'transition-safe-write-method~SRC/route/PublicRouteClassifier.java~&& !"HEAD".equalsIgnoreCase(method))) {~&& !"HEAD".equalsIgnoreCase(method)\n\t\t\t\t\t\t&& !"POST".equalsIgnoreCase(method))) {~org.adempiere.web.route.PublicRouteClassifierTest'
+'session-end-cleanup-owner~SRC/route/ModernSessionAffinity.java~boolean cleanupOwner = !endCleanupClaimed;~boolean cleanupOwner = true;~org.adempiere.web.route.RoutingCoreTest'
+'session-end-navigation-owner~SRC/route/ModernSessionAffinity.java~navigation == EndNavigation.HTTP && !endHttpNavigationClaimed~navigation == EndNavigation.HTTP~org.adempiere.web.route.RoutingCoreTest'
+'session-end-au-protocol~SRC/route/RoutingLifecycle.java~candidate = EndResponse.ZK_AU_REDIRECT;~candidate = EndResponse.HTTP_REDIRECT;~org.adempiere.web.route.RoutingCoreTest'
+'session-end-committed-response~SRC/route/RoutingLifecycle.java~} else if (!responseCommitted\n\t\t\t\t&& "GET".equalsIgnoreCase(method)~} else if ("GET".equalsIgnoreCase(method)~org.adempiere.web.route.RoutingCoreTest'
 )
 
 # The bridge mutation `modern-never-falls-back` is the reason this file records
@@ -75,6 +81,8 @@ bridge_mutations=(
 'identity-completeness~BRIDGE/LegacyIdentity.java~if (warehouseId == null) {~if (false) {~org.adempiere.web.bridge.CohortRoutingFilterTest'
 'decided-modern-fail-closed~BRIDGE/CohortRoutingFilter.java~if (CohortDecisionInterceptor.decidedModern(session)) {~if (false) {~org.adempiere.web.bridge.CohortRoutingFilterTest'
 'routed-session-end~BRIDGE/CohortRoutingFilter.java~if (result.sessionEnded()) {~if (false) {~org.adempiere.web.bridge.CohortRoutingFilterTest'
+'redirect-barrier-preserved~BRIDGE/CohortRoutingFilter.java~pending.reason()));\n\t\t\t\tchain.doFilter(servletRequest, servletResponse);\n\t\t\t\treturn;~pending.reason()));\n\t\t\t\tchain.doFilter(servletRequest, servletResponse);\n\t\t\t\treleaseRedirectBarrier(request);\n\t\t\t\treturn;~org.adempiere.web.bridge.CohortRoutingFilterTest'
+'session-end-au-navigation-wire~BRIDGE/CohortRoutingFilter.java~sendAuRedirect(response, contextRoot(request));~response.sendRedirect(contextRoot(request));~org.adempiere.web.bridge.CohortRoutingFilterTest'
 )
 
 reviewed_count=$(( ${#mutations[@]} + ${#bridge_mutations[@]} ))

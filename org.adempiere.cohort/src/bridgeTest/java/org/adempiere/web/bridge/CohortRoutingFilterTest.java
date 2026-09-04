@@ -10,7 +10,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockingDetails;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -26,6 +28,11 @@ import java.util.Enumeration;
 import java.util.List;
 import java.util.Properties;
 import java.util.Vector;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import javax.servlet.FilterChain;
 import javax.servlet.FilterConfig;
@@ -587,6 +594,43 @@ class CohortRoutingFilterTest {
 	}
 
 	@Test
+	@DisplayName("a legacy theme image racing the deciding response keeps the barrier intact")
+	void transitionSafeThemeImagePassesThroughWithoutConsumingHandoff()
+			throws Exception {
+		CohortRoutingFilter filter = armedFilter();
+		ModernSessionAffinity affinity = new ModernSessionAffinity(
+				new CohortDecision(CohortRuntime.MODERN,
+						CohortDecision.Reason.USER_ALLOWLISTED),
+				IDENTITY);
+		HttpSession session = mock(HttpSession.class);
+		when(session.getAttribute(ModernSessionAffinity.ATTRIBUTE))
+				.thenReturn(affinity);
+		when(session.getAttribute(
+				CohortDecisionInterceptor.REDIRECT_PENDING_ATTRIBUTE))
+				.thenReturn(Boolean.TRUE);
+
+		HttpServletRequest request = mock(HttpServletRequest.class);
+		HttpServletResponse response = mock(HttpServletResponse.class);
+		FilterChain chain = mock(FilterChain.class);
+		when(request.getHeaderNames()).thenReturn(names("Accept"));
+		when(request.getSession(false)).thenReturn(session);
+		when(request.getMethod()).thenReturn("GET");
+		when(request.getContextPath()).thenReturn("/webui");
+		when(request.getRequestURI()).thenReturn(
+				"/webui/theme/default/images/zk/progress2.gif");
+
+		filter.doFilter(request, response, chain);
+
+		verify(chain).doFilter(request, response);
+		verify(response, never()).sendError(anyInt());
+		verify(response, never()).addCookie(any());
+		verify(session, never()).removeAttribute(
+				CohortDecisionInterceptor.REDIRECT_PENDING_ATTRIBUTE);
+		verify(request, never()).changeSessionId();
+		assertEquals(ModernSessionAffinity.Phase.PENDING_ROTATION, affinity.phase());
+	}
+
+	@Test
 	@DisplayName("the frozen key-listener request navigates to the only bootstrap-eligible route")
 	void keyListenerTransitionsToContextRootBeforeRotation() throws Exception {
 		CohortRoutingFilter filter = armedFilter();
@@ -684,6 +728,205 @@ class CohortRoutingFilterTest {
 	}
 
 	@Test
+	@DisplayName("an AU session end uses the ZK response protocol for top-level navigation")
+	void routedAuSessionEndNavigatesTheBrowser() throws Exception {
+		ModernSessionAffinity affinity = bootstrappedAffinity();
+		HttpSession session = mock(HttpSession.class);
+		when(session.getAttribute(ModernSessionAffinity.ATTRIBUTE)).thenReturn(affinity);
+		when(session.getId()).thenReturn("ROTATED");
+
+		HttpServletRequest request = mock(HttpServletRequest.class);
+		HttpServletResponse response = mock(HttpServletResponse.class);
+		FilterChain chain = mock(FilterChain.class);
+		StringWriter body = new StringWriter();
+		when(response.getWriter()).thenReturn(new PrintWriter(body));
+		when(request.getHeaderNames()).thenReturn(names("Accept"));
+		when(request.getSession(false)).thenReturn(session);
+		when(request.getMethod()).thenReturn("POST");
+		when(request.getContextPath()).thenReturn("/webui");
+		when(request.getRequestURI()).thenReturn("/webui/zkau");
+
+		CohortRoutingFilter filter = armedFilter(backend ->
+				new EndingProxy(backend));
+		filter.doFilter(request, response, chain);
+
+		verify(session).invalidate();
+		verify(response).setStatus(HttpServletResponse.SC_OK);
+		verify(response).setContentType("text/plain;charset=UTF-8");
+		verify(response, never()).sendRedirect(any());
+		verify(chain, never()).doFilter(any(), any());
+		assertEquals("{\"rs\":[[\"redirect\",[\"/webui/\",\"\"]]]}",
+				body.toString());
+	}
+
+	@Test
+	@DisplayName("concurrent duplicate END responses invalidate and navigate only once")
+	void duplicateRoutedSessionEndsHaveOneOwner() throws Exception {
+		ModernSessionAffinity affinity = bootstrappedAffinity();
+		HttpSession session = mock(HttpSession.class);
+		when(session.getAttribute(ModernSessionAffinity.ATTRIBUTE)).thenReturn(affinity);
+		when(session.getId()).thenReturn("ROTATED");
+
+		HttpServletRequest firstRequest = routedRequest(
+				session, "GET", "/webui/index.zul");
+		HttpServletRequest duplicateRequest = routedRequest(
+				session, "GET", "/webui/index.zul");
+		HttpServletResponse first = mock(HttpServletResponse.class);
+		HttpServletResponse duplicate = mock(HttpServletResponse.class);
+		CyclicBarrier proxyBarrier = new CyclicBarrier(2);
+		CohortRoutingFilter filter = armedFilter(backend ->
+				new CoordinatedEndingProxy(backend, proxyBarrier));
+		ExecutorService workers = Executors.newFixedThreadPool(2);
+		try {
+			Future<?> firstEnd = workers.submit(() -> {
+				filter.doFilter(
+						firstRequest, first, mock(FilterChain.class));
+				return null;
+			});
+			Future<?> duplicateEnd = workers.submit(() -> {
+				filter.doFilter(
+						duplicateRequest, duplicate, mock(FilterChain.class));
+				return null;
+			});
+			firstEnd.get(30, TimeUnit.SECONDS);
+			duplicateEnd.get(30, TimeUnit.SECONDS);
+		} finally {
+			workers.shutdownNow();
+		}
+
+		verify(session, times(1)).invalidate();
+		long firstRedirects = mockingDetails(first).getInvocations().stream()
+				.filter(invocation ->
+						"sendRedirect".equals(invocation.getMethod().getName()))
+				.count();
+		long duplicateRedirects =
+				mockingDetails(duplicate).getInvocations().stream()
+						.filter(invocation -> "sendRedirect"
+								.equals(invocation.getMethod().getName()))
+						.count();
+		assertEquals(1, firstRedirects + duplicateRedirects);
+		if (firstRedirects == 1) {
+			verify(duplicate).setStatus(HttpServletResponse.SC_NO_CONTENT);
+		} else {
+			verify(first).setStatus(HttpServletResponse.SC_NO_CONTENT);
+		}
+	}
+
+	@Test
+	@DisplayName("concurrent AU and page END responses both reach the canonical login route")
+	void concurrentRoutedSessionEndsCannotStrandTopLevelNavigation() throws Exception {
+		ModernSessionAffinity affinity = bootstrappedAffinity();
+		HttpSession session = mock(HttpSession.class);
+		when(session.getAttribute(ModernSessionAffinity.ATTRIBUTE)).thenReturn(affinity);
+		when(session.getId()).thenReturn("ROTATED");
+
+		HttpServletRequest pageRequest = routedRequest(
+				session, "GET", "/webui/index.zul");
+		HttpServletRequest auRequest = routedRequest(
+				session, "POST", "/webui/zkau");
+		HttpServletResponse pageResponse = mock(HttpServletResponse.class);
+		HttpServletResponse auResponse = mock(HttpServletResponse.class);
+		StringWriter auBody = new StringWriter();
+		when(auResponse.getWriter()).thenReturn(new PrintWriter(auBody));
+		CyclicBarrier proxyBarrier = new CyclicBarrier(2);
+		CohortRoutingFilter filter = armedFilter(backend ->
+				new CoordinatedEndingProxy(backend, proxyBarrier));
+
+		ExecutorService workers = Executors.newFixedThreadPool(2);
+		try {
+			Future<?> page = workers.submit(() -> {
+				filter.doFilter(
+						pageRequest, pageResponse, mock(FilterChain.class));
+				return null;
+			});
+			Future<?> au = workers.submit(() -> {
+				filter.doFilter(auRequest, auResponse, mock(FilterChain.class));
+				return null;
+			});
+			page.get(30, TimeUnit.SECONDS);
+			au.get(30, TimeUnit.SECONDS);
+		} finally {
+			workers.shutdownNow();
+		}
+
+		verify(session, times(1)).invalidate();
+		long httpRedirects = mockingDetails(pageResponse).getInvocations().stream()
+				.filter(invocation ->
+						"sendRedirect".equals(invocation.getMethod().getName()))
+				.count();
+		assertEquals(1, httpRedirects);
+		assertEquals("{\"rs\":[[\"redirect\",[\"/webui/\",\"\"]]]}",
+				auBody.toString());
+	}
+
+	@Test
+	@DisplayName("a concurrent committed END leaves navigation to the AU response")
+	void committedRoutedSessionEndCannotStrandTheBrowser() throws Exception {
+		ModernSessionAffinity affinity = bootstrappedAffinity();
+		HttpSession session = mock(HttpSession.class);
+		when(session.getAttribute(ModernSessionAffinity.ATTRIBUTE)).thenReturn(affinity);
+		when(session.getId()).thenReturn("ROTATED");
+
+		HttpServletResponse committed = mock(HttpServletResponse.class);
+		when(committed.isCommitted()).thenReturn(true);
+		HttpServletResponse auResponse = mock(HttpServletResponse.class);
+		StringWriter auBody = new StringWriter();
+		when(auResponse.getWriter()).thenReturn(new PrintWriter(auBody));
+		CyclicBarrier proxyBarrier = new CyclicBarrier(2);
+		CohortRoutingFilter filter = armedFilter(backend ->
+				new CoordinatedEndingProxy(backend, proxyBarrier));
+		ExecutorService workers = Executors.newFixedThreadPool(2);
+		try {
+			Future<?> page = workers.submit(() -> {
+				filter.doFilter(
+						routedRequest(session, "GET", "/webui/index.zul"),
+						committed, mock(FilterChain.class));
+				return null;
+			});
+			Future<?> au = workers.submit(() -> {
+				filter.doFilter(
+						routedRequest(session, "POST", "/webui/zkau"),
+						auResponse, mock(FilterChain.class));
+				return null;
+			});
+			page.get(30, TimeUnit.SECONDS);
+			au.get(30, TimeUnit.SECONDS);
+		} finally {
+			workers.shutdownNow();
+		}
+
+		verify(session, times(1)).invalidate();
+		verify(committed, never()).sendRedirect(any());
+		assertEquals("{\"rs\":[[\"redirect\",[\"/webui/\",\"\"]]]}",
+				auBody.toString());
+	}
+
+	@Test
+	@DisplayName("a fresh request after routed END is undecided and reaches legacy login")
+	void freshRequestAfterRoutedSessionEndIsUndecided() throws Exception {
+		ModernSessionAffinity affinity = bootstrappedAffinity();
+		HttpSession session = mock(HttpSession.class);
+		when(session.getAttribute(ModernSessionAffinity.ATTRIBUTE)).thenReturn(affinity);
+		when(session.getId()).thenReturn("ROTATED");
+		CohortRoutingFilter filter = armedFilter(backend ->
+				new EndingProxy(backend));
+
+		filter.doFilter(
+				routedRequest(session, "GET", "/webui/index.zul"),
+				mock(HttpServletResponse.class), mock(FilterChain.class));
+
+		HttpServletRequest fresh = routedRequest(null, "GET", "/webui/");
+		HttpServletResponse freshResponse = mock(HttpServletResponse.class);
+		FilterChain legacy = mock(FilterChain.class);
+		filter.doFilter(fresh, freshResponse, legacy);
+
+		verify(session).invalidate();
+		verify(legacy).doFilter(fresh, freshResponse);
+		verify(freshResponse, never()).sendError(anyInt());
+		verify(freshResponse, never()).sendRedirect(any());
+	}
+
+	@Test
 	@DisplayName("rotation can discard every legacy cache without a ZK execution")
 	void rotatedSessionStateIsDiscardedWithoutUiTeardown() {
 		String sessionId = "ABANDONED";
@@ -720,6 +963,47 @@ class CohortRoutingFilterTest {
 				String boundSessionId) {
 			return Result.ended();
 		}
+	}
+
+	/** An ending backend that holds two requests until both are in flight. */
+	private static final class CoordinatedEndingProxy
+			extends ModernBackendProxy {
+
+		private final CyclicBarrier barrier;
+
+		CoordinatedEndingProxy(String backend, CyclicBarrier barrier) {
+			super(backend);
+			this.barrier = barrier;
+		}
+
+		@Override
+		Result proxy(
+				HttpServletRequest request,
+				HttpServletResponse response,
+				org.adempiere.web.route.PublicRouteClass routeClass,
+				String pathInside,
+				String modernCookie,
+				String ticket,
+				String boundSessionId) throws java.io.IOException {
+			try {
+				barrier.await(30, TimeUnit.SECONDS);
+			} catch (Exception interrupted) {
+				throw new java.io.IOException(
+						"Concurrent END test did not rendezvous", interrupted);
+			}
+			return Result.ended();
+		}
+	}
+
+	private static HttpServletRequest routedRequest(
+			HttpSession session, String method, String uri) {
+		HttpServletRequest request = mock(HttpServletRequest.class);
+		when(request.getHeaderNames()).thenReturn(names("Accept"));
+		when(request.getSession(false)).thenReturn(session);
+		when(request.getMethod()).thenReturn(method);
+		when(request.getContextPath()).thenReturn("/webui");
+		when(request.getRequestURI()).thenReturn(uri);
+		return request;
 	}
 
 	private static ModernSessionAffinity bootstrappedAffinity() {

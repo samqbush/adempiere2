@@ -264,6 +264,15 @@ context root, ZUL/ZHTML `GET`, `*.zul` `POST` (URL-rewritten public forms),
 `/zkau` `GET`/`POST` including polling, `/zkau/web/**` resources, and reviewed
 static prefixes. Everything else is `UNKNOWN` and is never proxied.
 
+The redirect barrier has a second, narrower contract:
+`transition-safe-assets.tsv`. While the deciding response still owns that
+barrier, only raw, unencoded `GET`/`HEAD` requests for `.gif` or `.png` files
+below `/theme/default/images/` may pass through the legacy chain. Passing one
+does not clear the barrier, rotate or bootstrap the session, consume a ticket,
+or change affinity. General `STATIC_ASSET` membership is not sufficient:
+generated `/zkau/view/` content, executable ZK resources, encoded or traversing
+paths, path parameters, other asset prefixes and write methods remain refused.
+
 Request and response headers are **allowlists**
 (`contracts/phase5e-routed-web-v1/proxy-header-policy.tsv`). `Host` is replaced,
 hop-by-hop headers are dropped, `Cookie` is synthesised from the server-side
@@ -314,11 +323,20 @@ The end is therefore signalled, on the internal hop only:
 3. `ModernBackendProxy` reads that header immediately after the response code
    and before a single byte of status, header or body reaches the public
    response, because the router still has to invalidate and redirect.
-4. `CohortRoutingFilter` invalidates the Tomcat 9 session — destroying the
-   affinity and the decision together, and running the legacy
-   `SessionManagerListener` cleanup — and redirects the browser to the public
-   context root, where a new session is created and the legacy login form is
-   served.
+4. Every in-flight END response atomically asks the shared affinity for cleanup
+   and route-aware navigation claims. Exactly one response owns Tomcat 9 cleanup
+   and invalidation, which destroys the affinity and decision together and runs
+   the legacy `SessionManagerListener` cleanup. Navigation ownership is once per
+   transport, not once globally: a context-root or ZK-page `GET` owns one HTTP
+   redirect, while one ZK AU response may emit the exact ZK `redirect` command.
+   This distinction is required because ZK's logout response first starts an
+   `index.zul` navigation; a later AU response can win the END race after that
+   top-level request has already aborted the old AU client. Returning 204 to the
+   in-flight page request in that case strands the browser on a blank
+   `index.zul`. Same-transport duplicates still return `204 No Content`, and a
+   committed response cannot consume its transport's ownership. Both permitted
+   responses name the same public context root, where a new undecided session is
+   created and the legacy login form is served.
 
 The header is inside `X-ADempiere-Handoff-`, so a browser can never send one
 (the router refuses the whole namespace inbound) and can never see one
