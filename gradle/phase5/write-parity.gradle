@@ -47,16 +47,20 @@ tasks.register('verifyPhase5g1bEvidenceValidator', Exec) {
 // The lane and the smoke are shell, and their guarantees are structural rather
 // than behavioural: the smoke must not be able to accept a freeze argument, and
 // the parity lane must score against the frozen legacy contract rather than
-// against a modern tree of its own. Both are cheap to assert statically, and
-// both would otherwise only be caught by reading the scripts.
+// against a modern tree of its own. The production logout ordering is also
+// structural: AD_Session must close before its identifier is cleared from the
+// request context. These are cheap to assert statically, and would otherwise
+// only be caught by an expensive database-backed browser run.
 tasks.register('verifyPhase5g1bLaneInvariants') {
 	group = 'verification'
 	description =
-		'Asserts the Phase 5g-1b lane cannot freeze an oracle or score against a modern contract'
+		'Asserts Phase 5g-1b oracle separation, public routing, and session cleanup ordering'
 	def smoke = phase5g1bScript('run-write-parity-smoke.sh')
 	def lane = phase5g1bScript('run-write-parity-lane.sh')
+	def webUi = rootProject.file(
+		'zkwebui/WEB-INF/src/org/adempiere/webui/AdempiereWebUI.java')
 	def marker = phase5g1bBuildRoot.map { it.file('lane-invariants-verified.txt') }
-	inputs.files(smoke, lane)
+	inputs.files(smoke, lane, webUi)
 	outputs.file marker
 	doLast {
 		def smokeText = smoke.text
@@ -106,6 +110,25 @@ tasks.register('verifyPhase5g1bLaneInvariants') {
 					'capture. Every other observation in the capture is runtime-blind, ' +
 					'so a lane that failed closed to legacy would score a perfect green ' +
 					'against the legacy oracle and report modern parity.')
+		}
+		def webUiText = webUi.text
+		def logoutStart = webUiText.indexOf('public void logout()')
+		def logoutEnd = webUiText.indexOf('Executions.sendRedirect("index.zul");',
+			logoutStart)
+		def logoutCode = logoutStart >= 0 && logoutEnd >= 0
+			? webUiText.substring(logoutStart, logoutEnd)
+				.replaceAll(/(?s)\/\*.*?\*\//, '')
+				.readLines()
+				.collect { it.replaceFirst(/\/\/.*$/, '') }
+				.join('\n')
+			: ''
+		def closeSession = logoutCode.indexOf(
+			'SessionManager.clearSession(httpSession.getId());')
+		def clearContext = logoutCode.indexOf('Env.getCtx().clear();')
+		if (closeSession < 0 || clearContext < 0 || closeSession > clearContext) {
+			throw new GradleException(
+				'AdempiereWebUI.logout must close AD_Session before clearing the ' +
+					'authenticated context that carries #AD_Session_ID.')
 		}
 		marker.get().asFile.with {
 			parentFile.mkdirs()

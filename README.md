@@ -194,7 +194,10 @@ and a racing top-level page receives HTTP redirect to the same context root,
 while same-transport duplicates cannot redirect again and a fresh request is
 undecided. The neutral and bridge regressions and the 24th
 runtime matrix row are implemented. PR 20 merged at `ccffe15ff`, and its
-post-merge `develop` run 33829108255 is green.
+post-merge `develop` run 33829108255 is green. PR 18 run 33893941634 additionally
+proved the second transition interval: both 12-step modern captures completed
+without the earlier `progress2.gif` refusal, and the corrected `/webui/`
+no-legacy-fallback control passed.
 
 Phase 5f merged to `develop` as PR #11 at `83aeb8536`; both of its gates are
 executed and green:
