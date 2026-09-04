@@ -309,7 +309,8 @@ apply from: 'gradle/phase5/phase5f-context-routing.gradle'
 // chains phase5fFinalVerification, which that file registers.
 apply from: 'gradle/phase5/phase5g-inventories.gradle'
 // Applied after phase5g-inventories.gradle: phase5g1aFinalVerification chains
-// phase5g0FinalVerification, which that file registers.
+// phase5g0FinalVerification, and phase5g1ayFinalVerification chains
+// phase5g1aFinalVerification.
 apply from: 'gradle/phase5/write-oracle.gradle'
 // Applied after write-oracle.gradle: phase5g1bFinalVerification chains
 // phase5g1aFinalVerification, and the parity smoke orders itself after the

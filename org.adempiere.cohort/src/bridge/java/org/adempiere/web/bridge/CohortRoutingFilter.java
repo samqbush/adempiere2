@@ -166,11 +166,16 @@ public class CohortRoutingFilter implements Filter {
 
 		if (Boolean.TRUE.equals(session.getAttribute(
 				CohortDecisionInterceptor.REDIRECT_PENDING_ATTRIBUTE))) {
-			PublicRouteClass routeClass = PublicRouteClassifier.classify(
-					request.getMethod(),
-					SessionPathParameters.strip(pathInside(request)));
-			refuse(response, routeClass, "redirect-in-progress",
-					HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+			RoutingCore.Plan pending = RoutingCore.redirectPending(
+					request.getMethod(), pathInside(request));
+			if (pending.action() == RoutingCore.Action.PASS_THROUGH) {
+				log.info(RoutingAudit.line(CohortRuntime.MODERN,
+						pending.routeClass(), pending.reason()));
+				chain.doFilter(servletRequest, servletResponse);
+				return;
+			}
+			refuse(response, pending.routeClass(), pending.reason(),
+					pending.status());
 			return;
 		}
 		route(request, response, session, affinity);
@@ -280,7 +285,8 @@ public class CohortRoutingFilter implements Filter {
 			RoutingLifecycle.Outcome lifecycle = RoutingLifecycle.apply(
 					affinity, ticket != null, result.coreResult());
 			if (result.sessionEnded()) {
-				endRoutedSession(request, response, session, routeClass);
+				endRoutedSession(
+						request, response, session, affinity, routeClass);
 				return;
 			}
 			if (lifecycle.action() == RoutingLifecycle.Action.FAIL) {
@@ -336,26 +342,70 @@ public class CohortRoutingFilter implements Filter {
 			HttpServletRequest request,
 			HttpServletResponse response,
 			HttpSession session,
+			ModernSessionAffinity affinity,
 			PublicRouteClass routeClass) throws IOException {
-		// Before the invalidation, not after: the container calls
-		// sessionDestroyed on this thread, and the frozen listener's cleanup
-		// resolves its work through the thread's ServerContext. Cleaning here
-		// installs the abandoned session's own context for the duration, which
-		// is the difference between the caches being emptied and the listener
-		// silently doing nothing.
-		discardLegacySessionState(session.getId());
-		try {
-			session.invalidate();
-		} catch (IllegalStateException alreadyGone) {
-			log.fine("A routed session was already destroyed at its end");
+		RoutingLifecycle.EndOutcome ending = RoutingLifecycle.end(
+				affinity, request.getMethod(), routeClass,
+				response.isCommitted());
+		if (ending.cleanupOwner()) {
+			// Before the invalidation, not after: the container calls
+			// sessionDestroyed on this thread, and the frozen listener's cleanup
+			// resolves its work through the thread's ServerContext. Cleaning here
+			// installs the abandoned session's own context for the duration.
+			discardLegacySessionState(session.getId());
+			try {
+				session.invalidate();
+			} catch (IllegalStateException alreadyGone) {
+				log.fine("A routed session was already destroyed at its end");
+			}
+			log.info(RoutingAudit.line(
+					CohortRuntime.MODERN, routeClass, "routed-session-ended"));
+		} else {
+			log.fine(RoutingAudit.line(
+					CohortRuntime.MODERN, routeClass,
+					"routed-session-end-duplicate"));
 		}
-		log.info(RoutingAudit.line(
-				CohortRuntime.MODERN, routeClass, "routed-session-ended"));
-		if (!response.isCommitted()) {
-			String context = request.getContextPath();
-			response.sendRedirect(
-					(context == null || context.isEmpty() ? "" : context) + "/");
+
+		switch (ending.response()) {
+			case HTTP_REDIRECT:
+				log.info(RoutingAudit.line(
+						CohortRuntime.MODERN, routeClass,
+						"routed-session-http-redirect"));
+				response.sendRedirect(contextRoot(request));
+				return;
+			case ZK_AU_REDIRECT:
+				log.info(RoutingAudit.line(
+						CohortRuntime.MODERN, routeClass,
+						"routed-session-au-redirect"));
+				sendAuRedirect(response, contextRoot(request));
+				return;
+			case NONE:
+			default:
+				if (!response.isCommitted()) {
+					response.setStatus(HttpServletResponse.SC_NO_CONTENT);
+					response.setHeader("Cache-Control", "no-store");
+				}
 		}
+	}
+
+	private static String contextRoot(HttpServletRequest request) {
+		String context = request.getContextPath();
+		return (context == null || context.isEmpty() ? "" : context) + "/";
+	}
+
+	/**
+	 * Emits the wire representation of ZK's {@code AuSendRedirect}. An HTTP
+	 * redirect returned to an AU/XHR request does not navigate the top-level
+	 * browser page.
+	 */
+	private static void sendAuRedirect(
+			HttpServletResponse response, String target) throws IOException {
+		response.setStatus(HttpServletResponse.SC_OK);
+		response.setContentType("text/plain;charset=UTF-8");
+		response.setHeader("Cache-Control", "no-store");
+		String escaped = target.replace("\\", "\\\\").replace("\"", "\\\"");
+		response.getWriter().write(
+				"{\"rs\":[[\"redirect\",[\"" + escaped + "\",\"\"]]]}");
 	}
 
 	/**

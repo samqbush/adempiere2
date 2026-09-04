@@ -183,6 +183,18 @@ all 23 public-origin cohort, isolation, lifecycle, SOAP-coexistence, and
 secret-hygiene rows as passing; see
 `docs/modernization/phase-5e-evidence.md`.
 
+The merged R15 hardening increment addresses two transition defects measured
+while validating https://github.com/samqbush/adempiere2/pull/18. Immutable
+legacy theme images now have a separate, closed `GET`/`HEAD` pass-through policy
+while the redirect barrier is set; general `STATIC_ASSET` routes such as
+`/zkau/view/` remain refused. Routed-session END now assigns one cleanup owner
+and one navigation owner per transport: AU/XHR receives the ZK redirect command
+and a racing top-level page receives HTTP redirect to the same context root,
+while same-transport duplicates cannot redirect again and a fresh request is
+undecided. The neutral and bridge regressions and the 24th
+runtime matrix row are implemented. PR 20 merged at `ccffe15ff`, and its
+post-merge `develop` run 33829108255 is green.
+
 Phase 5f merged to `develop` as PR #11 at `83aeb8536`; both of its gates are
 executed and green:
 
@@ -247,10 +259,9 @@ dictionary processes, 174 callout columns and 197 extension surfaces - under
 ./gradlew phase5g0FinalVerification --dependency-verification=strict
 ```
 
-That gate is now the head of the phase-gate chain and the `Contracts` job runs
-it. It regenerates the inventories from the seed dictionary and the reactor
-sources and requires an exact match, so a new extension callout, model validator
-or changed process class fails the build rather than silently widening a later
+It regenerates the inventories from the seed dictionary and the reactor sources
+and requires an exact match, so a new extension callout, model validator or
+changed process class fails the build rather than silently widening a later
 fixture's blast radius.
 
 `5g-0` also **opens** a named disposition for `/mobile`, `/adempiere` and
@@ -259,6 +270,56 @@ fixture's blast radius.
 their closing gate by the frozen Phase 5f contract - is defined there as the
 `5g-7` gate that requires a recorded `migrate`, `retire` or `narrow-5h-scope`
 disposition with its evidence, and Phase 5h is blocked behind it.
+
+`5g-1a` and `5g-1a-x` froze and accepted the legacy Business Partner write
+oracle. `5g-1a-y` is the merged R14 oracle-only prerequisite from
+https://github.com/samqbush/adempiere2/pull/19: candidate run
+33785079015 replaced cached-startup workflow process/activity attribution with
+the saving client/user `11/101` and added the keyed `AD_WF_EventAudit` fact,
+while separate freeze-off run 33788686426 accepted the committed answer with
+A/B self-diff `pass` and zero scoring problems. The amendment moves event audit
+out of ambient state and into the keyed workflow scope, with an exact
+process/activity predicate, required attribution columns, and symbolic process
+and record edges.
+
+The amendment stores the future three-file production correction only as a
+SHA-256-pinned patch under
+`contracts/phase5g1ay-workflow-attribution-v1/`. The patch is applied only in a
+disposable detached worktree to build a capture-only runtime under
+`build/phase5g1ay/`; no `base/src` change or ordinary installed/release artifact
+ships from the oracle branch. The two validator-running CI jobs use full
+history so they can prove whether the accepted PR 19 merge is an ancestor of
+the checkout, and still ensure the exact pinned source object is present.
+Before acceptance, validation enforces the exact oracle-only branch scope and
+protected roots. On descendants of the accepted merge, it allows unrelated
+production changes but rejects committed or working-tree changes and renames
+under `contracts/legacy-web-write-v1/`.
+The corrected-source worktree is removed only through exact owned Git cleanup
+that fails closed on unregister errors. The corrected jar removes exactly the
+two contract-pinned stale code-signature entries before replacing classes.
+Provenance requires the current repository `HEAD`, that removal list, and the
+exact corrected jar/three-class inventory. Both captures must contain the keyed
+workflow process, activity, and event-audit rows with saving-context
+attribution before scoring, and an independent Gradle finalizer restores both
+ordinary installed jars even when the smoke fails. The neutral validator also
+functionally exercises the existing
+generic fact generator against a synthetic event-audit row and fails if the
+table is dropped, reclassified ambient, loses a required attribution column, or
+cannot resolve its process/activity relationships. The 62-case mutation proof
+covers those controls. The accepted oracle amendment remains a required link beneath the current
+database-neutral chain head:
+
+```bash
+./gradlew phase5g1bFinalVerification --dependency-verification=strict
+```
+
+The corrected database-backed capture is selected explicitly with
+`-Pphase5g1ayMode=corrected-legacy-workflow-attribution`; omitting it preserves
+the existing legacy write-oracle behavior. PR 18,
+https://github.com/samqbush/adempiere2/pull/18, is reconciling the merged oracle
+and R15 prerequisites, applying the reviewed production saving-context
+overloads, and remains unaccepted until its final Contracts and database smoke
+are green.
 
 The Tomcat smoke requires HTTP 2xx/3xx from each deployed context except
 `ADInterface`, whose unrouted base path is explicitly expected to return 404;

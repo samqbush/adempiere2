@@ -13,6 +13,7 @@
 #   capture-routed-lane.sh ephemeral   set <seconds> | restore
 #   capture-routed-lane.sh backend     stop|start
 #   capture-routed-lane.sh interceptor disable|enable
+#   capture-routed-lane.sh routing     mark|observe <evidence_dir> <label>
 #   capture-routed-lane.sh secrets     <evidence_dir>
 set -euo pipefail
 
@@ -53,6 +54,48 @@ unreadable_census() {
 }
 
 case "$operation" in
+routing)
+  action=${2:?mark or observe is required}
+  evidence_dir=${3:?evidence directory is required}
+  label=${4:?label is required}
+  mkdir -p "$evidence_dir"
+  mark="$evidence_dir/routing-$label.offset"
+  target="$evidence_dir/routing-$label.tsv"
+  case "$action" in
+    mark)
+      [[ -r "$public_log" ]] || {
+        echo "The public routing log is unreadable: $public_log" >&2
+        exit 66
+      }
+      wc -c <"$public_log" | tr -d ' ' >"$mark"
+      ;;
+    observe)
+      [[ -r "$mark" && -r "$public_log" ]] || {
+        echo "Routing observation $label has no readable mark or log" >&2
+        exit 66
+      }
+      offset=$(cat "$mark")
+      observed=$(tail -c "+$((offset + 1))" "$public_log")
+      safe=$(printf '%s' "$observed" | grep -c \
+        'class=STATIC_ASSET outcome=transition-safe-asset' || true)
+      refused=$(printf '%s' "$observed" | grep -c \
+        'class=STATIC_ASSET outcome=redirect-in-progress' || true)
+      {
+        printf 'transition-safe-asset\t%s\n' "$safe"
+        printf 'static-asset-refused\t%s\n' "$refused"
+      } >"$target"
+      if [[ "$safe" -lt 1 ]]; then
+        echo "No transition-safe theme image overlapped the redirect barrier" >&2
+        exit 1
+      fi
+      ;;
+    *)
+      echo "Unknown routing action: $action" >&2
+      exit 64
+      ;;
+  esac
+  ;;
+
 soap)
   evidence_dir=${2:?evidence directory is required}
   mkdir -p "$evidence_dir"

@@ -67,7 +67,7 @@ subscriptions.
 | `fixture.sql` | present | Preconditions asserted before any capture |
 | `exclusions.tsv` | present | Owned exclusions, each with a reason and a closing increment |
 | `normalization-policy.md` | present | What is removed, what is deliberately kept, and why both directions are proved |
-| `ambient-tables.tsv` | present | The reviewed session/audit/workflow tables exempt from the undeclared-table backstop |
+| `ambient-tables.tsv` | present | The reviewed session/dictionary-audit/sequence/UI tables exempt from the undeclared-table backstop |
 | `raw/` | present | A committed raw capture sample; the input to the over-normalization mutation proof, **not** an oracle fact |
 | `manifest.sha256` | present | SHA-256 over every file except itself |
 | `write-flow.tsv` | present | The captured step ledger: twelve steps, in the order the driver executed them |
@@ -80,6 +80,42 @@ subscriptions.
 | `concurrency-facts.tsv` | present | The second editor's outcome and the conflicting save's verdict |
 | `allowed-browser-errors.tsv` | present | The browser errors the legacy runtime is permitted to produce |
 | `transport-class-policy.tsv` | present | The reviewed comparison semantics for each fact class, decided on legacy evidence before any modern capture existed |
+
+### Workflow-attribution amendment (`5g-1a-y`)
+
+Corrected-legacy candidate run
+https://github.com/samqbush/adempiere2/actions/runs/33785079015 replaced the
+cached-startup attribution in `AD_WF_Process` and `AD_WF_Activity` with
+`AD_Client_ID=11` and `CreatedBy` / `UpdatedBy=101`, and added the keyed
+`AD_WF_EventAudit` row with the same saving-context attribution. The exact
+CI-generated business values, create effect, propagated identity comments, and
+foreign-key edges were accepted by separate freeze-off run
+https://github.com/samqbush/adempiere2/actions/runs/33788686426.
+
+Residual R14 records the domain decision that a document-triggered workflow must
+use the saving/invocation client and user rather than `MWorkflow`'s cached
+startup context. Increment `5g-1a-y` adds the capture-only corrected-legacy
+mechanism under `contracts/phase5g1ay-workflow-attribution-v1/`. Its exact patch
+is data, is applied only in a disposable detached worktree, and does not change
+the checked-out files under `base/src`.
+
+That amendment also makes `AD_WF_EventAudit` a keyed, non-ambient workflow fact.
+Its primary key is normalized like every other capture-created identity; its
+`AD_WF_Process_ID` resolves to the created process; and its
+`AD_WF_Process_ID`/`AD_WF_Node_ID` pair must match an in-scope
+`AD_WF_Activity`. The complete normalized audit row is captured in
+`business-values.tsv`, with the client/org, created/updated users, workflow user
+and responsible, process, node, table/record, event type, and workflow state all
+retained for comparison. The exact machine-readable requirement is
+`contracts/phase5g1ay-workflow-attribution-v1/workflow-attribution-policy.tsv`.
+
+The candidate was reviewed as one domain change: workflow process/activity
+attribution moves from startup `0/0` to saving client/user `11/101`, and event
+audit becomes a keyed consequence of that same workflow. No unrelated business
+value, semantic fact, concurrency result, or transport fact changed. The
+acceptance run reported A/B self-diff `pass` and zero scoring problems. PR 18,
+https://github.com/samqbush/adempiere2/pull/18, remains blocked until this
+oracle amendment merges.
 
 ### The captured facts
 
@@ -175,6 +211,20 @@ background writer is indistinguishable from a route effect.
 | Evidence digest | `c3ffc902ccca93e149e6984e95240ec0bfc3c7b409cb3cc5ad323ce673ce0ce3` |
 | Disposition | **Approved as the expected answer for Phase 5g-1b.** |
 
+### Workflow-attribution amendment review
+
+| Field | Value |
+|---|---|
+| Reviewer | @samqbush |
+| Date | 2026-09-03 |
+| Corrected-legacy candidate run | https://github.com/samqbush/adempiere2/actions/runs/33785079015 |
+| Captured commit | `b9bab1e44722237b021cee31d7b03badd54f3ecb` |
+| Freeze-off acceptance run | https://github.com/samqbush/adempiere2/actions/runs/33788686426 |
+| Accepted candidate commit | `cebd25609c8d3c30b34972599af95cd0caac778a` |
+| Evidence digest | `a0fc668b69b19ce61901c9a27185aa935c74db33458652080b2abf977fbd2112` |
+| Reviewed change | Process/activity client and audit attribution `0/0` → saving context `11/101`; one keyed event-audit row and its process/record edges added; unrelated facts unchanged |
+| Disposition | **Accepted as the expected workflow-attribution answer for Phase 5g-1b.** |
+
 ### How these bytes were produced
 
 The browser-and-database observation came from the CI run above. The frozen
@@ -243,7 +293,7 @@ own increment rather than during parity.
 
 * **The `[no-effect]` marker became content-aware (residual R12, now closed).**
   The whole-database sentinel was a row **count** per table, so it could not see
-  an `UPDATE` outside the nine-table measurement scope, and an insert paired with
+  an `UPDATE` outside the then-nine-table measurement scope, and an insert paired with
   a delete inside one step netted to zero. It now also carries a per-table
   content fingerprint taken inside the same consistent snapshot, and the marker
   reads `no-keyed-change-in-scope  no-content-change-outside-ambient`. This
@@ -373,7 +423,7 @@ explicit value
 
 That value states precisely what was measured, and no more. Residual **R12**
 closed the two blind spots the earlier row-count sentinel had: an `UPDATE`
-outside the nine-table measurement scope, and an insert paired with a delete
+outside the then-nine-table measurement scope, and an insert paired with a delete
 netting to zero, are both now visible, because the sentinel carries a per-table
 content fingerprint alongside the count and both are taken in the same
 consistent snapshot. `concurrency-conflicting-save` demonstrates the layering: it
@@ -390,7 +440,9 @@ Two limits remain, and are recorded rather than papered over:
   to zero, which would reintroduce a blind spot while appearing to close one.
 * A change confined to an **ambient** table is still not asserted, by design.
   That is what the classification means, and `ambient-tables.tsv` is
-  manifest-covered so widening it requires a reviewer.
+  manifest-covered so widening it requires a reviewer. `AD_WF_EventAudit` is
+  explicitly outside that exemption because its attribution can distinguish a
+  correct workflow save from one using cached startup context.
 
 This is load-bearing for the headline concurrency fact: the refused save's
 entire content is that assertion, so the assertion has to be one the measurement

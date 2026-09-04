@@ -13,12 +13,15 @@
 # asserted: if the flow ever starts writing locations, the sentinel flags the
 # table and this scope shows exactly which rows appeared.
 #
-# AD_WF_Process and AD_WF_Activity are measured because run 33488213231 showed
-# that creating a business partner starts a document workflow: the create step's
-# sentinel reported ad_wf_process, ad_wf_activity and ad_wf_eventaudit each
-# gaining a row. Starting that workflow is a business fact a modern runtime must
-# reproduce, and it is the only fan-out this flow produces that the keyed layer
-# can express as EDGES rather than as counts.
+# AD_WF_Process, AD_WF_Activity and AD_WF_EventAudit are measured because run
+# 33488213231 showed that creating a business partner starts a document
+# workflow: the create step's sentinel reported all three tables gaining a row.
+# Starting that workflow, including its audit attribution, is a business fact a
+# modern runtime must reproduce. The event-audit predicate selects only rows
+# whose process is the fixture workflow and whose process/node pair identifies
+# an activity created by that workflow. AD_WF_EventAudit has no
+# AD_WF_Activity_ID column, so the normalized graph carries its direct process
+# edge while business-values carries the process/node activity join.
 #
 # The accounting fan-out -- C_BP_Customer_Acct, C_BP_Vendor_Acct and
 # C_BP_Employee_Acct -- and the menu tree node AD_TreeNodeBP are declared for a
@@ -37,14 +40,13 @@
 # component -- both found by code review, both now fixed, and the first covered
 # by the `generated-identities-moved` mutation.
 #
-# AD_WF_EventAudit stays ambient: it is an append-only audit of workflow
-# transitions, and it restates what the process and activity rows already carry.
 table	key_column	predicate
 C_BPartner	c_bpartner_id	Value LIKE 'P5G1A-%'
 C_BPartner_Location	c_bpartner_location_id	C_BPartner_ID IN (SELECT C_BPartner_ID FROM C_BPartner WHERE Value LIKE 'P5G1A-%')
 AD_ChangeLog	ad_changelog_id+ad_column_id	AD_Table_ID = 291
 AD_WF_Process	ad_wf_process_id	AD_Table_ID = 291 AND Record_ID IN (SELECT C_BPartner_ID FROM C_BPartner WHERE Value LIKE 'P5G1A-%')
 AD_WF_Activity	ad_wf_activity_id	AD_WF_Process_ID IN (SELECT AD_WF_Process_ID FROM AD_WF_Process WHERE AD_Table_ID = 291 AND Record_ID IN (SELECT C_BPartner_ID FROM C_BPartner WHERE Value LIKE 'P5G1A-%'))
+AD_WF_EventAudit	ad_wf_eventaudit_id	AD_WF_Process_ID IN (SELECT AD_WF_Process_ID FROM AD_WF_Process WHERE AD_Table_ID = 291 AND Record_ID IN (SELECT C_BPartner_ID FROM C_BPartner WHERE Value LIKE 'P5G1A-%')) AND EXISTS (SELECT 1 FROM AD_WF_Activity a WHERE a.AD_WF_Process_ID = AD_WF_EventAudit.AD_WF_Process_ID AND a.AD_WF_Node_ID = AD_WF_EventAudit.AD_WF_Node_ID AND a.AD_Table_ID = 291 AND a.Record_ID IN (SELECT C_BPartner_ID FROM C_BPartner WHERE Value LIKE 'P5G1A-%'))
 AD_TreeNodeBP	node_id+ad_tree_id	Node_ID IN (SELECT C_BPartner_ID FROM C_BPartner WHERE Value LIKE 'P5G1A-%')
 C_BP_Customer_Acct	c_bpartner_id+c_acctschema_id	C_BPartner_ID IN (SELECT C_BPartner_ID FROM C_BPartner WHERE Value LIKE 'P5G1A-%')
 C_BP_Vendor_Acct	c_bpartner_id+c_acctschema_id	C_BPartner_ID IN (SELECT C_BPartner_ID FROM C_BPartner WHERE Value LIKE 'P5G1A-%')

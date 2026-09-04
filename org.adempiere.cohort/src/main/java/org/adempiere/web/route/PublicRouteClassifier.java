@@ -33,6 +33,18 @@ public final class PublicRouteClassifier {
 
 	private static final List<String> STATIC_FILES = List.of("/favicon.ico");
 
+	/**
+	 * The only legacy-chain assets that may be served while the cohort decision
+	 * redirect is still in flight. This is deliberately narrower than
+	 * {@link PublicRouteClass#STATIC_ASSET}: generated {@code /zkau/view/}
+	 * content and executable resources can observe application session state.
+	 */
+	private static final String TRANSITION_SAFE_IMAGE_PREFIX =
+			"/theme/default/images/";
+
+	private static final List<String> TRANSITION_SAFE_IMAGE_SUFFIXES =
+			List.of(".gif", ".png");
+
 	private PublicRouteClassifier() {
 	}
 
@@ -94,6 +106,35 @@ public final class PublicRouteClassifier {
 	/** Whether an AU request gets the longer polling read timeout. */
 	public static boolean polling(PublicRouteClass routeClass) {
 		return routeClass == PublicRouteClass.ZK_AU;
+	}
+
+	/**
+	 * Whether a request may pass through the legacy chain without touching the
+	 * modern affinity while the deciding response still owns the redirect
+	 * barrier.
+	 */
+	public static boolean transitionSafeAsset(
+			String method, String pathInside) {
+		if (method == null
+				|| (!"GET".equalsIgnoreCase(method)
+						&& !"HEAD".equalsIgnoreCase(method))) {
+			return false;
+		}
+		String path = pathInside == null || pathInside.isEmpty()
+				? "/"
+				: pathInside;
+		if (!path.startsWith(TRANSITION_SAFE_IMAGE_PREFIX)
+				|| path.contains("%") || path.contains("..")
+				|| path.contains(";")) {
+			return false;
+		}
+		String lower = path.toLowerCase(Locale.ROOT);
+		for (String suffix : TRANSITION_SAFE_IMAGE_SUFFIXES) {
+			if (lower.endsWith(suffix)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** The reviewed static prefixes, for the frozen route contract. */

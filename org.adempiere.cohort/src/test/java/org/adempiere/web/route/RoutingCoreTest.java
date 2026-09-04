@@ -30,6 +30,43 @@ class RoutingCoreTest {
 	}
 
 	@Test
+	@DisplayName("redirect-pending policy passes only immutable legacy theme images")
+	void redirectPendingPolicyIsClosed() {
+		RoutingCore.Plan safe = RoutingCore.redirectPending(
+				"GET", "/theme/default/images/zk/progress2.gif");
+		assertEquals(RoutingCore.Action.PASS_THROUGH, safe.action());
+		assertEquals(PublicRouteClass.STATIC_ASSET, safe.routeClass());
+		assertEquals("transition-safe-asset", safe.reason());
+
+		for (String unsafe : new String[] {
+				"/zkau/view/z_abc/image.png",
+				"/zkau/web/js/zk.wpd",
+				"/zkau",
+				"/index.zul",
+				"/",
+				"/timeline",
+		}) {
+			RoutingCore.Plan refused =
+					RoutingCore.redirectPending("GET", unsafe);
+			assertEquals(RoutingCore.Action.REFUSE, refused.action(), unsafe);
+			assertEquals("redirect-in-progress", refused.reason(), unsafe);
+			assertEquals(503, refused.status(), unsafe);
+		}
+
+		RoutingCore.Plan write = RoutingCore.redirectPending(
+				"POST", "/theme/default/images/zk/progress2.gif");
+		assertEquals(RoutingCore.Action.REFUSE, write.action());
+		assertEquals(503, write.status());
+
+		RoutingCore.Plan rewritten = RoutingCore.redirectPending(
+				"GET",
+				"/theme/default/images/zk/progress2.gif;jsessionid=FORGED");
+		assertEquals(RoutingCore.Action.REFUSE, rewritten.action());
+		assertEquals("url-rewritten-session", rewritten.reason());
+		assertEquals(400, rewritten.status());
+	}
+
+	@Test
 	@DisplayName("preflight owns route refusal and the one bootstrap transition")
 	void preflightClassifiesBeforeTheAdapterActs() {
 		ModernSessionAffinity affinity = pendingAffinity();
@@ -102,6 +139,55 @@ class RoutingCoreTest {
 		assertNull(end.failure());
 		assertTrue(ended.usable(),
 				"the container adapter owns invalidation after the end signal");
+	}
+
+	@Test
+	@DisplayName("session end has one cleanup owner and one owner per navigation transport")
+	void sessionEndOwnershipIsAtomicAndRouteAware() {
+		ModernSessionAffinity affinity = bootstrappedAffinity();
+
+		RoutingLifecycle.EndOutcome asset = RoutingLifecycle.end(
+				affinity, "GET", PublicRouteClass.STATIC_ASSET, false);
+		assertTrue(asset.cleanupOwner());
+		assertEquals(RoutingLifecycle.EndResponse.NONE, asset.response());
+
+		RoutingLifecycle.EndOutcome au = RoutingLifecycle.end(
+				affinity, "POST", PublicRouteClass.ZK_AU, false);
+		assertFalse(au.cleanupOwner());
+		assertEquals(
+				RoutingLifecycle.EndResponse.ZK_AU_REDIRECT, au.response());
+
+		RoutingLifecycle.EndOutcome page = RoutingLifecycle.end(
+				affinity, "GET", PublicRouteClass.ZK_PAGE, false);
+		assertFalse(page.cleanupOwner());
+		assertEquals(
+				RoutingLifecycle.EndResponse.HTTP_REDIRECT, page.response(),
+				"the top-level request must not be stranded by the AU response");
+
+		RoutingLifecycle.EndOutcome duplicateAu = RoutingLifecycle.end(
+				affinity, "POST", PublicRouteClass.ZK_AU, false);
+		assertEquals(RoutingLifecycle.EndResponse.NONE, duplicateAu.response());
+
+		RoutingLifecycle.EndOutcome duplicatePage = RoutingLifecycle.end(
+				affinity, "GET", PublicRouteClass.ZK_PAGE, false);
+		assertEquals(RoutingLifecycle.EndResponse.NONE, duplicatePage.response());
+	}
+
+	@Test
+	@DisplayName("a committed end response cannot consume navigation ownership")
+	void committedSessionEndLeavesNavigationForAnotherResponse() {
+		ModernSessionAffinity affinity = bootstrappedAffinity();
+
+		RoutingLifecycle.EndOutcome committed = RoutingLifecycle.end(
+				affinity, "GET", PublicRouteClass.ZK_PAGE, true);
+		assertTrue(committed.cleanupOwner());
+		assertEquals(RoutingLifecycle.EndResponse.NONE, committed.response());
+
+		RoutingLifecycle.EndOutcome page = RoutingLifecycle.end(
+				affinity, "GET", PublicRouteClass.ZK_PAGE, false);
+		assertFalse(page.cleanupOwner());
+		assertEquals(
+				RoutingLifecycle.EndResponse.HTTP_REDIRECT, page.response());
 	}
 
 	private static ModernSessionAffinity pendingAffinity() {

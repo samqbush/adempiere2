@@ -1,0 +1,3 @@
+# Exact stale code-signature entries removed from the corrected capture jar.
+META-INF/ADEMPIER.RSA
+META-INF/ADEMPIER.SF

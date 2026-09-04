@@ -102,16 +102,23 @@ public class MWFProcess extends X_AD_WF_Process
 	 */
 	public MWFProcess (MWorkflow wf, ProcessInfo pi, String trxName) throws Exception
 	{
-		super (wf.getCtx(), 0, trxName);
+		this(wf, wf.getCtx(), pi, trxName);
+	}
+
+	/**
+	 * 	New Constructor with the invocation context
+	 *	@param wf workflow
+	 *	@param invocationCtx context of the caller starting the workflow
+	 *	@param pi Process Info (Record_ID)
+	 *  @param trxName transaction
+	 *	@throws Exception
+	 */
+	public MWFProcess (MWorkflow wf, final Properties invocationCtx, ProcessInfo pi, String trxName) throws Exception
+	{
+		super (invocationCtx, 0, trxName);
 		if (!TimeUtil.isValid(wf.getValidFrom(), wf.getValidTo()))
 			throw new IllegalStateException("Workflow not valid");
 		m_wf = wf;
-		// Phase 5g-1b diagnostic: super(wf.getCtx(), ...) above already fixed
-		// this record's AD_Client_ID and CreatedBy from the cached workflow's
-		// retained context. See Phase5gContextProbe.
-		if (org.compiere.util.Phase5gContextProbe.isEnabled())
-			org.compiere.util.Phase5gContextProbe.capture("MWFProcess.new",
-				"AD_Workflow_ID=" + wf.getAD_Workflow_ID(), wf.getCtx());
 		processInfo = pi;
 		setAD_Workflow_ID (wf.getAD_Workflow_ID());
 		setPriority(wf.getPriority());

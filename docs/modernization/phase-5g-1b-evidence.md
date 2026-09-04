@@ -3,6 +3,17 @@
 **Status: in progress. No gate in this document may be reported as green until
 the run id that produced it is recorded here.**
 
+PR 19 has accepted and merged the corrected workflow-attribution oracle, and PR
+20 has merged the independent routing-transition correction. The reconciled PR
+18 branch now carries the reviewed production saving-context overloads from
+`DocWorkflowManager` through `MWorkflow` to `MWFProcess`, keeps the existing
+entry points as compatibility delegates, chains `phase5g1ayFinalVerification`,
+and has removed the temporary context probes. The new database-neutral
+production-attribution check proves the process, activity, and event-audit
+construction chain inherits that invocation context. The final CI Contracts and
+database-backed parity run are still pending, so this remains an implementation
+state rather than an accepted parity claim.
+
 ## The claim
 
 The modern ZK CE `10.3.0.1-jakarta` / Tomcat 10.1 runtime, driven **only**
@@ -607,7 +618,7 @@ one thing it might otherwise be blamed on: the workflow is **not** asynchronous
 on either runtime. `MWFActivity.performWork` logs the same `POSave_<uuid>`
 transaction on both, so both start the workflow inside the save.
 
-**What the next run adds.** A logging-only probe, enabled on **both** lanes
+**What run 33691649424 added.** A logging-only probe, enabled on **both** lanes
 behind `-Dadempiere.phase5g.contextProbe=true`, placed at the points the
 hypothesis is actually about rather than only where it is convenient to observe:
 
@@ -653,6 +664,11 @@ The legacy freeze-off regression scoring green in the same run is a detector for
 a behaviour change that reaches a scored effect. It is not a substitute for the
 probe being read-only, which is why the probe was made read-only. It comes out
 once the question is closed.
+
+The question is now closed by the accepted `5g-1a-y` oracle and the production
+saving-context correction. Reconciliation removes `Phase5gContextProbe`, the
+listener/default-value instrumentation, and the lane JVM property rather than
+carrying investigation-only logging into the accepted runtime.
 
 **What the answer cannot be.** If the mechanism is confirmed, the fix is not to
 relax the scorer. Nor is it obviously to remove the guard: the frozen legacy
@@ -1807,8 +1823,8 @@ can never carry quoting with it.
 
 | Gate | Kind | Status |
 |---|---|---|
-| `phase5g1bFinalVerification` | database-neutral, new `Contracts` chain head | **Green in CI** at PR HEAD `15ec25d13`, run [33704883870](https://github.com/samqbush/adempiere2/actions/runs/33704883870), 32m. Its first CI execution, [33700802266](https://github.com/samqbush/adempiere2/actions/runs/33700802266), failed on `verifyPhase5Inventories`; the inventory rule was fixed and the whole chain then passed |
-| `phase5g1bModernWriteParitySmoke` | database-backed, new current-phase smoke | Executed repeatedly; **failing** and never green. Latest is [33704883870](https://github.com/samqbush/adempiere2/actions/runs/33704883870) at PR HEAD, which failed **before reaching scoring** (R15); the last run that got as far as scoring, [33700802266](https://github.com/samqbush/adempiere2/actions/runs/33700802266), failed on `business-values.tsv` alone (R14) |
+| `phase5g1bFinalVerification` | database-neutral, current `Contracts` chain head | **Pending in CI on the reconciled head.** The earlier PR-head gate was green in run [33704883870](https://github.com/samqbush/adempiere2/actions/runs/33704883870), but it predated the accepted `phase5g1ayFinalVerification` dependency and the production-attribution check, so it is historical evidence rather than the final result. |
+| `phase5g1bModernWriteParitySmoke` | database-backed, current-phase smoke | **Pending on the reconciled head.** Earlier runs exposed R14 and R15; PR 19 accepted the corrected oracle and PR 20 closed the routing prerequisite. The next citable result must run the corrected legacy dependency and the ordinary production modern runtime from the same final commit. |
 
 ### The evidence validator, and its own validator
 
@@ -1872,8 +1888,9 @@ inventing its own expected answer.
 The guard is threefold rather than conventional:
 
 1. `run-write-parity-smoke.sh` does not **accept** a freeze argument at all.
-2. The workflow emits `-Pphase5g1aFreeze=true` only when the selected debug gate
-   starts with `phase5g1a`.
+2. The separate candidate workflow is the only path that emits
+   `-Pphase5g1aFreeze=true`; the main required-check workflow has no freeze
+   input.
 3. `verifyPhase5g1bLaneInvariants` fails the database-neutral gate if that script
    ever passes `--freeze` to the scorer.
 
@@ -1885,10 +1902,11 @@ and a lane that stopped asserting the serving runtime. Each was detected.
 
 - `Contracts` → `phase5g1bFinalVerification phase5cFinalVerification`.
   Re-derived, not re-headed: addition set `{:phase5g1bFinalVerification,
-  :verifyPhase5g1bEvidenceValidator, :verifyPhase5g1bLaneInvariants}`, **removal
-  set empty**, union 301 = merged 301. The empty removal set is the evidence that
-  dropping `phase5g1aFinalVerification` from the arguments is safe, not the
-  assumption behind it.
+  :verifyPhase5g1bEvidenceValidator, :verifyPhase5g1bLaneInvariants,
+  :verifyPhase5g1bProductionWorkflowAttribution}`, **removal set empty**, union
+  306 = merged 306. The empty removal set is the evidence that dropping
+  `phase5g1ayFinalVerification` from the arguments is safe because the 5g-1b
+  head chains it, not the assumption behind the move.
 - `Current-phase database smoke` → `phase5g1bModernWriteParitySmoke`.
 - `Regression matrix` → `phase5g1aLegacyWriteOracleSmoke` added (eight gates).
 - `timeout-minutes` raised 180 → 330, because the parity gate **dependsOn** the
@@ -1896,9 +1914,10 @@ and a lane that stopped asserting the serving runtime. Each was detected.
   Splitting them would need a second required status check, and branch protection
   is administered manually and references jobs by name. The cost is accepted and
   recorded rather than designed around.
-- Debug allowlist gains `phase5g1bModernWriteParitySmoke` and
-  `phase5g1bModernWriteParityCapture`, so ZK CE 10 selector work - the expected
-  failure mode - can be reproduced without the hour-long legacy regression.
+- Debug dispatch exposes `phase5g1bModernWriteParitySmoke`, the complete routed
+  parity orchestration. The leaf browser capture is intentionally not exposed:
+  it requires the generated token, record value, rendezvous loop, restored seed,
+  and running public-origin topology supplied by the parent lane.
 
 Job **names** are unchanged; branch protection references them by name.
 

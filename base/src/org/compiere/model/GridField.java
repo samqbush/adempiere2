@@ -699,17 +699,6 @@ public class GridField
 			}	//	while more Tokens
 		}	//	Default value
 
-		// Phase 5g-1b diagnostic: m_vo.ctx is the context captured when the
-		// tab's field descriptors were built, not the saving thread's. See
-		// Phase5gContextProbe.
-		if (org.compiere.util.Phase5gContextProbe.isEnabled()
-			&& "SalesRep_ID".equals(m_vo.ColumnName))
-		{
-			org.compiere.util.Phase5gContextProbe.capture("GridField.getDefault",
-				"ColumnName=" + m_vo.ColumnName + " AD_Window_ID=" + m_vo.AD_Window_ID
-					+ " DefaultValue=" + m_vo.DefaultValue, m_vo.ctx);
-		}
-
 		/**
 		 *	(d) Preference (user) - P|
 		 */

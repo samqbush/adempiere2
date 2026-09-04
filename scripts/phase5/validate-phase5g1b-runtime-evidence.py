@@ -42,7 +42,7 @@ MIN_RESTORE_SECONDS = 60
 # again, but it cannot make these bytes agree without an explicit edit to this
 # constant, which a reviewer sees in the diff. Change it only in an increment
 # whose own claim is to produce a new legacy answer.
-FROZEN_MANIFEST_SHA256 = "5fc4ee2960f94899656591e9e8f14e2d4f042e33c03e67ccd3df779dcb4c999a"
+FROZEN_MANIFEST_SHA256 = "4d373bca301a1056aa2b36023319b017d1793a53575ce842c05c5fb1c1020750"
 
 # Every session the write flow drives. Cohort routing decides per IDENTITY, and
 # the flow uses two, so proving the primary session was served the modern
@@ -102,7 +102,8 @@ def contract_manifest_digest(contract: Path) -> tuple[str, str]:
     On its own that is only an honesty check, because regenerating the manifest
     is a single Gradle command after which files and manifest agree again. So
     the caller additionally compares the manifest's own bytes against
-    FROZEN_MANIFEST_SHA256 below, pinned from the 5g-1a acceptance run. Any
+    FROZEN_MANIFEST_SHA256 below, pinned from the accepted 5g-1a oracle and its
+    reviewed amendments. Any
     re-freeze inside a parity increment must then also edit that constant,
     which is a reviewable act in the diff rather than a silent one.
     """
@@ -443,7 +444,8 @@ def main() -> int:
     parser.add_argument(
         "--expect-manifest-sha256", default=FROZEN_MANIFEST_SHA256,
         help="Expected sha256 of the frozen contract's manifest.sha256 bytes. "
-             "Defaults to the digest Phase 5g-1a froze and accepted. Overridden "
+             "Defaults to the digest the accepted legacy oracle and amendments "
+             "froze. Overridden "
              "ONLY by this validator's own mutation proof, which scores a "
              "synthetic contract; verifyPhase5g1bLaneInvariants fails if the "
              "smoke script ever passes it.")

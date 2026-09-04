@@ -45,38 +45,12 @@ on:
         type: choice
         options:
           - full
-          # The whole capture lane, alone. This is the value a freeze run wants:
-          # `full` would also launch the contract graph and seven historical
-          # database-backed smokes, none of which the oracle capture needs.
+          # The complete guarded legacy lane, alone. `full` would also launch
+          # the contract graph and eight historical database-backed smokes,
+          # none of which this diagnostic needs.
           - phase5g1aLegacyWriteOracleSmoke
-          # The browser capture alone, so a selector failure can be reproduced
-          # without the surrounding restore and scoring lane.
-          - phase5g1aWriteOracleCapture
           # The Phase 5g-1b routed parity lane, alone.
           - phase5g1bModernWriteParitySmoke
-          # The modern browser capture alone. ZK CE 10 selector work is the
-          # expected failure mode of 5g-1b, and reproducing it should not also
-          # require the legacy regression the smoke depends on.
-          - phase5g1bModernWriteParityCapture
-      # The Phase 5g-1a oracle has to come from somewhere, and a run that
-      # invents the expected answer must not also be the run that verifies it.
-      # Freeze mode is therefore MANUAL ONLY: no pull request, push or nightly
-      # run can reach it, and the acceptance run is a later, ordinary one
-      # against the committed and domain-reviewed files.
-      #
-      # It applies to the Phase 5g-1a LEGACY lane only. It cannot reach a 5g-1b
-      # task, and not merely by convention: the expansion below is guarded on
-      # the selected gate, and run-write-parity-smoke.sh does not accept a
-      # freeze argument at all, so even a mis-edited expansion could not
-      # produce a frozen modern answer.
-      freeze_write_oracle:
-        description: >-
-          Capture the Phase 5g-1a write oracle and emit candidate contract
-          files instead of scoring against them. NOT an acceptance run.
-          Ignored unless the selected debug gate is a Phase 5g-1a task.
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -117,6 +91,19 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch the contract-pinned Phase 5g-1a-y source commit
+        run: |
+          set -euo pipefail
+          source_commit=$(
+            awk -F'\t' '$1 == "source_commit" { print $2 }' \
+              contracts/phase5g1ay-workflow-attribution-v1/capture-contract.tsv
+          )
+          if ! git cat-file -e "${source_commit}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$source_commit"
+          fi
+          git cat-file -e "${source_commit}^{commit}"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -124,18 +111,18 @@ jobs:
           cache: gradle
 
       # One invocation, one task graph. phase5g1bFinalVerification chains
-      # phase5g1aFinalVerification, which chains phase5g0FinalVerification,
-      # which chains phase5fFinalVerification, which transitively covers
+      # phase5g1ayFinalVerification, which chains phase5g1aFinalVerification,
+      # which chains phase5g0FinalVerification, which chains
+      # phase5fFinalVerification, which transitively covers
       # phase3NoDatabaseDistribution, phase4FinalVerification and the Phase
       # 5a/5b/5c/5d/5e gates; phase5cFinalVerification contributes only
       # :zkwebui:check, which is not on that chain.
       #
-      # Re-derived when 5g-1b landed, not merely re-headed: the addition set is
-      # {phase5g1bFinalVerification} and the removal set is
-      # {phase5g1aFinalVerification}, which is safe ONLY because the new head
-      # chains the old one. phase5cFinalVerification stays on the list for the
-      # reason it was ever on it -- it is deliberately off the chain, so
-      # dropping it would silently drop its coverage rather than move it.
+      # Re-derived for the reconciled 5g-1b head, not merely re-headed: it adds
+      # the aggregate and its three neutral validators, with no removals.
+      # phase5g1ayFinalVerification leaves the argument list only because the
+      # new head chains it. phase5cFinalVerification stays because it is
+      # deliberately off-chain; dropping it would silently drop :zkwebui:check.
       - name: Verify every database-neutral phase gate
         uses: ./.github/actions/adempiere-build
         with:
@@ -209,6 +196,8 @@ jobs:
             build/phase5e/rollback/rollback-evidence.txt
             build/phase5e/rollback/setupwlib-ant.log
             build/phase5f/
+            build/phase5g1ay/
+            build/phase5g1b/
             build/phase3/release/Adempiere_394LTS.zip
             build/phase3/release/Adempiere_394LTS.tar.gz
             serverRoot/build/phase5f-wars/
@@ -222,14 +211,12 @@ jobs:
             zkwebui/build/libs/webui-modern.war
 
   # The runtime gate for the phase under active development. This slot holds
-  # phase5g1aLegacyWriteOracleSmoke; phase5fJakartaWebRoutesSmoke has been
-  # retired into the regression matrix below.
+  # phase5g1bModernWriteParitySmoke; phase5g1aLegacyWriteOracleSmoke remains in
+  # the regression matrix and is also re-proven as this gate's dependency.
   #
-  # The gate captures the legacy Business Partner write flow twice, from an
-  # independently restored database each time, and scores both against the
-  # frozen oracle. It observes the LEGACY runtime only: no modern business
-  # write is executed or claimed here.
-  # See docs/modernization/phase-5f-evidence.md for the outgoing gate.
+  # The dependency captures the corrected legacy answer; the parity half drives
+  # the modern Business Partner flow twice through the public routed /webui
+  # origin and scores it against that frozen answer.
   current-phase-smoke:
     name: Current-phase database smoke
     runs-on: ubuntu-24.04
@@ -279,6 +266,19 @@ jobs:
       ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD: postgres
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch the contract-pinned Phase 5g-1a-y source commit
+        run: |
+          set -euo pipefail
+          source_commit=$(
+            awk -F'\t' '$1 == "source_commit" { print $2 }' \
+              contracts/phase5g1ay-workflow-attribution-v1/capture-contract.tsv
+          )
+          if ! git cat-file -e "${source_commit}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$source_commit"
+          fi
+          git cat-file -e "${source_commit}^{commit}"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -306,16 +306,12 @@ jobs:
           # capture would score a half-driven flow against the frozen oracle
           # and report a second, derived failure that explains nothing.
           #
-          # The freeze property is emitted only when the selected gate is the
-          # Phase 5g-1a legacy lane. A parity increment may never produce the
-          # answer it is scored against, so the input is inert for every 5g-1b
-          # gate rather than merely unused by it.
+          # The legacy dependency must use the accepted corrected-attribution
+          # runtime. The modern half still uses the ordinary production runtime,
+          # so this cannot make the parity implementation pass by substituting
+          # the capture-only jar.
           args: >-
-            ${{ (github.event_name == 'workflow_dispatch'
-                 && inputs.freeze_write_oracle
-                 && startsWith(inputs.debug_gate, 'phase5g1a'))
-                && '-Pphase5g1aFreeze=true'
-                || '' }}
+            -Pphase5g1ayMode=corrected-legacy-workflow-attribution
       # build/phase5e/keys holds the generated handoff secret and is excluded
       # from every path below. A CI artifact is a published archive.
       - name: Upload current-phase runtime evidence
@@ -329,12 +325,15 @@ jobs:
             build/phase5g1a/normalizer-mutations.tsv
             build/phase5g1a/ambient-mutations.tsv
             build/phase5g1a/transport-class-policy-proof.tsv
+            build/phase5g1ay/
+            !build/phase5g1ay/ordinary-runtime-guard/
             build/phase3/runtime/Adempiere/tomcat/logs/
             zkwebui/build/test-results/phase5g1aWriteOracleCapture/
             zkwebui/build/reports/tests/phase5g1aWriteOracleCapture/
             build/phase5g1b/runtime-evidence/
             build/phase5g1b/evidence-validator-verified.txt
             build/phase5g1b/lane-invariants-verified.txt
+            build/phase5g1b/production-workflow-attribution-verified.txt
             zkwebui/build/test-results/phase5g1bModernWriteParityCapture/
             zkwebui/build/reports/tests/phase5g1bModernWriteParityCapture/
             zkwebui/build/test-results/phase5g1bNoLegacyFallbackCapture/

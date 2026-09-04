@@ -109,6 +109,20 @@ public final class ModernSessionAffinity implements Serializable {
 	public record Admission(Step step, String ticket) {
 	}
 
+	/**
+	 * Atomic ownership of the two terminal side effects. Cleanup and browser
+	 * navigation are separate because an asset response may observe END first,
+	 * while a later page or AU response is the first one able to navigate.
+	 */
+	public record EndClaim(boolean cleanupOwner, boolean navigationOwner) {
+	}
+
+	public enum EndNavigation {
+		NONE,
+		HTTP,
+		ZK_AU
+	}
+
 	private final CohortDecision decision;
 	private final CohortIdentity identity;
 	private Phase phase = Phase.PENDING_ROTATION;
@@ -116,6 +130,9 @@ public final class ModernSessionAffinity implements Serializable {
 	private transient String ticket;
 	private String modernSessionId;
 	private String failureReason;
+	private transient boolean endCleanupClaimed;
+	private transient boolean endHttpNavigationClaimed;
+	private transient boolean endAuNavigationClaimed;
 
 	public ModernSessionAffinity(CohortDecision decision, CohortIdentity identity) {
 		if (decision == null || !decision.modern()) {
@@ -249,6 +266,31 @@ public final class ModernSessionAffinity implements Serializable {
 	/** Whether this session may still be proxied. */
 	public synchronized boolean usable() {
 		return phase != Phase.FAILED;
+	}
+
+	/**
+	 * Claims routed-session cleanup and at most one navigation response per
+	 * transport. An AU response and a top-level HTTP request may race during
+	 * logout; both must receive the same canonical destination because the
+	 * top-level request can abort the AU client before it processes its body.
+	 * The flags are transient so a container restart before actual invalidation
+	 * can safely retry the effects.
+	 */
+	public synchronized EndClaim claimEnd(EndNavigation navigation) {
+		boolean cleanupOwner = !endCleanupClaimed;
+		if (cleanupOwner) {
+			endCleanupClaimed = true;
+		}
+		boolean navigationOwner = false;
+		if (navigation == EndNavigation.HTTP && !endHttpNavigationClaimed) {
+			endHttpNavigationClaimed = true;
+			navigationOwner = true;
+		} else if (navigation == EndNavigation.ZK_AU
+				&& !endAuNavigationClaimed) {
+			endAuNavigationClaimed = true;
+			navigationOwner = true;
+		}
+		return new EndClaim(cleanupOwner, navigationOwner);
 	}
 
 	@Override

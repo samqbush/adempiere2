@@ -129,7 +129,7 @@ public class DocWorkflowManager implements DocWorkflowMgr
 			pi.setAD_Client_ID(document.getAD_Client_ID());
 			pi.setTransactionName(document.get_TrxName());
 			//
-			if (wf.start(pi) != null)
+			if (wf.start(document.getCtx(), pi) != null)
 			{
 				log.config(wf.getName());
 				m_noStarted++;

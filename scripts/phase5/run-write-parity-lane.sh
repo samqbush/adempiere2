@@ -96,15 +96,6 @@ export PHASE5G1B_HANDOFF_KEY=$handoff_key
 # reseed is about to drop and the next capture is about to measure.
 export PHASE5G_CONFIRM_PORTS="$public_port $api_port"
 
-# Phase 5g-1b diagnostic, logging only. SessionContextListener installs the
-# ADempiere thread context only when the desktop's server push is inactive, and
-# the two runtimes select different push implementations, so the guard may not
-# take the same branch on each. Run 33683942292's three business-value
-# divergences all have the sign that would produce. Enabled by default so the
-# legacy freeze-off regression in the same run supplies the comparison; it emits
-# log lines and changes no behaviour, and comes out once the question is closed.
-export PHASE5G_CONTEXT_PROBE_OPT=${PHASE5G_CONTEXT_PROBE_OPT:--Dadempiere.phase5g.contextProbe=true}
-
 golden_archive=$evidence_root/golden.dump
 # The archive the LEGACY lane captured from the quiesced installed product: the
 # starting state the frozen answer itself was produced from. See prepare().

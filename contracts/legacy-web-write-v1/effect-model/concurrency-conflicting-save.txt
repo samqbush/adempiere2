@@ -11,6 +11,7 @@ concurrency-conflicting-save
 [identities]
 # @ad_treenodebp#1	ad_treenodebp	1000000
 # @ad_wf_activity#1	ad_wf_activity	1000000
+# @ad_wf_eventaudit#1	ad_wf_eventaudit	1000000
 # @ad_wf_process#1	ad_wf_process	1000000
 # @c_bp_customer_acct#1	c_bp_customer_acct	1000000
 # @c_bp_employee_acct#1	c_bp_employee_acct	1000000

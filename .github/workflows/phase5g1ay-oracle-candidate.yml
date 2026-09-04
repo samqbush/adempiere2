@@ -1,0 +1,90 @@
+# Phase 5g-1a-y candidate capture is intentionally separate from main.yml.
+# Freeze mode writes the proposed oracle and returns before scoring, so this
+# workflow must not create the branch-protected Contracts or Current-phase
+# database smoke check names.
+name: Phase 5g-1a-y oracle candidate capture
+
+on:
+  push:
+    branches:
+      - phase-5g-1a-y-workflow-attribution-oracle
+    paths:
+      - .github/workflows/phase5g1ay-oracle-candidate.yml
+      - contracts/phase5g1ay-workflow-attribution-v1/**
+      - gradle/phase5/write-oracle.gradle
+      - scripts/phase5/guard-phase5g1ay-ordinary-runtime.sh
+      - scripts/phase5/materialize-phase5g1ay-corrected-runtime.sh
+      - scripts/phase5/run-write-oracle-smoke.sh
+      - scripts/phase5/validate-phase5g1ay-oracle.py
+      - scripts/phase5/validate-phase5g1ay-provenance.py
+      - scripts/phase5/verify-phase5g1ay-mutation-proof.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  oracle-candidate-capture:
+    name: Oracle candidate capture (non-acceptance)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    services:
+      postgres:
+        image: postgres:14.6
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      ADEMPIERE_PHASE2_DB_SYSTEM_PASSWORD: postgres
+      ADEMPIERE_PHASE3_DB_SYSTEM_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch the contract-pinned Phase 5g-1a-y source commit
+        run: |
+          set -euo pipefail
+          source_commit=$(
+            awk -F'\t' '$1 == "source_commit" { print $2 }' \
+              contracts/phase5g1ay-workflow-attribution-v1/capture-contract.tsv
+          )
+          if ! git cat-file -e "${source_commit}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$source_commit"
+          fi
+          git cat-file -e "${source_commit}^{commit}"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Capture the corrected legacy oracle candidate
+        uses: ./.github/actions/adempiere-build
+        with:
+          task: phase5g1aLegacyWriteOracleSmoke
+          args: >-
+            -Pphase5g1ayMode=corrected-legacy-workflow-attribution
+            -Pphase5g1aFreeze=true
+      - name: Upload oracle candidate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oracle-candidate-capture-evidence
+          if-no-files-found: warn
+          path: |
+            contracts/legacy-web-write-v1/
+            build/phase5g1a/runtime-evidence/
+            build/phase5g1a/normalizer-mutations.tsv
+            build/phase5g1a/ambient-mutations.tsv
+            build/phase5g1a/transport-class-policy-proof.tsv
+            build/phase5g1ay/
+            !build/phase5g1ay/ordinary-runtime-guard/
+            build/phase3/runtime/Adempiere/tomcat/logs/
+            zkwebui/build/test-results/phase5g1aWriteOracleCapture/
+            zkwebui/build/reports/tests/phase5g1aWriteOracleCapture/

@@ -24,7 +24,7 @@ fi
 export CATALINA_BASE="$adempiere_home/tomcat"
 export CATALINA_PID="$CATALINA_BASE/temp/phase5c-browser.pid"
 export CATALINA_TMPDIR="$CATALINA_BASE/temp"
-export CATALINA_OPTS="$ADEMPIERE_JAVA_OPTIONS -Duser.timezone=UTC -Duser.language=en -Duser.country=US ${PHASE5G_CONTEXT_PROBE_OPT:-}"
+export CATALINA_OPTS="$ADEMPIERE_JAVA_OPTIONS -Duser.timezone=UTC -Duser.language=en -Duser.country=US"
 mkdir -p "$CATALINA_TMPDIR"
 
 if curl -sS -o /dev/null "http://127.0.0.1:$port/" 2>/dev/null; then

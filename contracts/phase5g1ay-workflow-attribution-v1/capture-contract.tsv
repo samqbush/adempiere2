@@ -1,0 +1,9 @@
+# Phase 5g-1a-y corrected-legacy workflow-attribution capture contract.
+# key	value
+source_commit	60af453aab0e6537a6189241366c857c239c959f
+accepted_merge_commit	439a35e65f31a2c3b72926c1bb21114934444590
+patch_file	corrected-legacy-workflow-attribution.patch
+patch_sha256	80c95bb044e23bdd36788582892e309eb4a519e0f2c9bb7124c66bb4e1aacca2
+mode	corrected-legacy-workflow-attribution
+consumer_pr	https://github.com/samqbush/adempiere2/pull/18
+provenance_schema_version	1

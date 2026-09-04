@@ -62,7 +62,6 @@ public class SessionContextListener implements ExecutionInit,
                 .ifPresent(execution -> {
                     ServerPush serverPush = ((DesktopCtrl) execution.getDesktop()).getServerPush();
                     boolean pushActive = serverPush != null && serverPush.isActive();
-                    probe("executionInit", serverPush, pushActive);
                     if (!pushActive) {
                         setContextForSession(execution);
                     }
@@ -78,7 +77,7 @@ public class SessionContextListener implements ExecutionInit,
      * @see ExecutionCleanup#cleanup(Execution, Execution, List)
      */
     public void cleanup(Execution executionCleanup, Execution parentCleanup, List errors) {
-        disposeThreadState("executionCleanup");
+        disposeThreadState();
     }
 
     /**
@@ -92,7 +91,6 @@ public class SessionContextListener implements ExecutionInit,
                 .ifPresent(execution -> {
                     ServerPush serverPush = ((DesktopCtrl) component.getDesktop()).getServerPush();
                     boolean pushActive = serverPush != null && serverPush.isActive();
-                    probe("eventThreadPrepare", serverPush, pushActive);
                     if (!pushActive) {
                         setContextForSession(execution);
                     }
@@ -110,7 +108,6 @@ public class SessionContextListener implements ExecutionInit,
                 .ifPresent(execution -> {
                     ServerPush serverPush = ((DesktopCtrl) component.getDesktop()).getServerPush();
                     boolean pushActive = serverPush != null && serverPush.isActive();
-                    probe("eventThreadInit", serverPush, pushActive);
                     if (!pushActive) {
                         setContextForSession(execution);
                     }
@@ -128,7 +125,6 @@ public class SessionContextListener implements ExecutionInit,
                 Optional.ofNullable(desktop.getExecution()).ifPresent(execution -> {
                     ServerPush serverPush = ((DesktopCtrl) desktop).getServerPush();
                     boolean pushActive = serverPush != null && serverPush.isActive();
-                    probe("beforeResume", serverPush, pushActive);
                     if (!pushActive) {
                         setContextForSession(execution);
                     }
@@ -145,7 +141,6 @@ public class SessionContextListener implements ExecutionInit,
                 Optional.ofNullable(desktop.getExecution()).ifPresent(execution -> {
                     ServerPush serverPush = ((DesktopCtrl) desktop).getServerPush();
                     boolean pushActive = serverPush != null && serverPush.isActive();
-                    probe("afterResume", serverPush, pushActive);
                     if (!pushActive) {
                         setContextForSession(execution);
                     }
@@ -162,7 +157,6 @@ public class SessionContextListener implements ExecutionInit,
                 Optional.ofNullable(desktop.getExecution()).ifPresent(execution -> {
                     ServerPush serverPush = ((DesktopCtrl) desktop).getServerPush();
                     boolean pushActive = serverPush != null && serverPush.isActive();
-                    probe("abortResume", serverPush, pushActive);
                     if (!pushActive) {
                         setContextForSession(execution);
                     }
@@ -176,7 +170,7 @@ public class SessionContextListener implements ExecutionInit,
      * @see EventThreadCleanup#cleanup(Component, Event, List)
      */
     public void cleanup(Component component, Event event, List errors) throws Exception {
-        disposeThreadState("eventThreadCleanup");
+        disposeThreadState();
     }
 
     /**
@@ -189,7 +183,6 @@ public class SessionContextListener implements ExecutionInit,
                 Optional.ofNullable(desktop.getExecution()).ifPresent(execution -> {
             ServerPush serverPush = ((DesktopCtrl) component.getDesktop()).getServerPush();
             boolean pushActive = serverPush != null && serverPush.isActive();
-            probe("complete", serverPush, pushActive);
             if (!pushActive) {
                 if (!isValidContext(execution)) {
                     setContextForSession(execution);
@@ -205,7 +198,7 @@ public class SessionContextListener implements ExecutionInit,
      */
     @Override
     public void cleanup(Desktop desktopClean) throws Exception {
-        disposeThreadState("desktopCleanup");
+        disposeThreadState();
     }
 
     /**
@@ -219,11 +212,10 @@ public class SessionContextListener implements ExecutionInit,
         Optional.ofNullable(desktopInit).ifPresent(desktop -> {
             ServerPush serverPush = ((DesktopCtrl) desktop).getServerPush();
             boolean pushActive = serverPush != null && serverPush.isActive();
-            probe("desktopInit", serverPush, pushActive);
             if (!pushActive) {
                 setContextForSession(desktop.getExecution());
             } else
-                disposeThreadState("desktopInit-pushActive");
+                disposeThreadState();
         });
     }
 
@@ -287,7 +279,7 @@ public class SessionContextListener implements ExecutionInit,
             // already handles.
             log.warning("No session context for " + httpSession.getId()
                     + "; the thread is left without an ADempiere identity");
-            disposeThreadState("noSessionContext");
+            disposeThreadState();
             return;
         }
         ServerContext.setCurrentInstance(sessionContext);
@@ -308,79 +300,7 @@ public class SessionContextListener implements ExecutionInit,
      * and it is invisible in any test that uses one language.
      */
 
-    /**
-     * Phase 5g-1b diagnostic. Reads state and logs; installs nothing.
-     *
-     * <p>Every context-installing hook in this listener is guarded by "install
-     * the ADempiere context only if the desktop's server push is not active",
-     * and three further hooks dispose it unconditionally. Legacy ZK 3.6 selects
-     * org.zkoss.zkmax.ui.comet.CometServerPush and the modern descriptor selects
-     * org.zkoss.zk.ui.impl.PollingServerPush, and the two do not report
-     * isActive() over the same windows, so the guard need not take the same
-     * branch on each runtime at the same point in a flow.
-     *
-     * <p>Run 33683942292 scored the first modern capture and left three
-     * deterministic business-value divergences whose signs are what a context
-     * that is sometimes installed and sometimes not would produce. This records
-     * which branch each hook took and what identity the thread was left
-     * holding, including whether that identity IS the session's context by
-     * object identity rather than by a client/user coincidence.
-     *
-     * <p>It uses {@link ServerContext#getIfPresent()}, not
-     * {@code getCurrentInstance()}: the latter installs an empty context on a
-     * thread that had none, which would both erase the distinction this probe
-     * exists to draw and hand that thread's future children a shared context.
-     * It is retained, not removed, now that the question is half-closed:
-     * residual risk R14's oracle increment {@code 5g-1a-y} has to re-take the
-     * modern-side measurement this probe produces. Remove it when R14 closes.
-     */
-    static boolean probeEnabled() {
-        return "true".equals(System.getProperty("adempiere.phase5g.contextProbe"));
-    }
-
-    private static void probe(String hook, ServerPush serverPush, boolean pushActive) {
-        if (!probeEnabled()) {
-            return;
-        }
-        emit(hook, " push=" + (serverPush == null ? "none" : serverPush.getClass().getSimpleName())
-                + " pushActive=" + pushActive
-                + " guardInstalls=" + (serverPush == null || !pushActive));
-    }
-
-    private static void emit(String hook, String prelude) {
-        try {
-            Properties ctx = ServerContext.getIfPresent();
-            StringBuilder line = new StringBuilder("phase5g-ctx hook=").append(hook).append(prelude);
-            if (ctx == null) {
-                line.append(" ctx=absent");
-            } else {
-                line.append(" ctx=id").append(System.identityHashCode(ctx))
-                        .append(" ctxSize=").append(ctx.size())
-                        .append(" client=").append(Env.getAD_Client_ID(ctx))
-                        .append(" user=").append(Env.getAD_User_ID(ctx))
-                        .append(" hashSalesRep=").append(ctx.getProperty("#SalesRep_ID"))
-                        .append(" dollarSalesRep=").append(ctx.getProperty("$SalesRep_ID"))
-                        .append(" prefSalesRep=").append(ctx.getProperty("P|SalesRep_ID"))
-                        .append(" pref123SalesRep=").append(ctx.getProperty("P123|SalesRep_ID"));
-            }
-            line.append(" thread=").append(Thread.currentThread().getName());
-            log.info(line.toString());
-        } catch (RuntimeException probeFailure) {
-            log.info("phase5g-ctx hook=" + hook + " probe-failed " + probeFailure);
-        }
-    }
-
-    /**
-     * @param caller identifies which of the five teardown sites is running, so
-     *               a timeline can attribute a dispose to ExecutionCleanup,
-     *               EventThreadCleanup, DesktopCleanup, the push-active branch
-     *               of desktop init, or a removed session context. The three
-     *               unconditional teardowns are otherwise indistinguishable.
-     */
-    static void disposeThreadState(String caller) {
-        if (probeEnabled()) {
-            emit("dispose", " caller=" + caller);
-        }
+    static void disposeThreadState() {
         ServerContext.dispose();
         Locales.setThreadLocal(null);
     }

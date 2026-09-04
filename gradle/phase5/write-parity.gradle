@@ -114,6 +114,81 @@ tasks.register('verifyPhase5g1bLaneInvariants') {
 	}
 }
 
+tasks.register('verifyPhase5g1bProductionWorkflowAttribution') {
+	group = 'verification'
+	description =
+		'Asserts production workflow process, activity, and audit rows inherit the saving invocation context'
+	def sources = [
+		rootProject.file('base/src/org/compiere/wf/DocWorkflowManager.java'),
+		rootProject.file('base/src/org/compiere/wf/MWorkflow.java'),
+		rootProject.file('base/src/org/compiere/wf/MWFProcess.java'),
+		rootProject.file('base/src/org/compiere/wf/MWFActivity.java'),
+		rootProject.file('base/src/org/compiere/wf/MWFEventAudit.java')
+	]
+	def marker =
+		phase5g1bBuildRoot.map { it.file('production-workflow-attribution-verified.txt') }
+	inputs.files(sources)
+	outputs.file marker
+	doLast {
+		def executable = { File source ->
+			source.text
+				.replaceAll(/(?s)\/\*.*?\*\//, '')
+				.readLines()
+				.collect { it.replaceFirst(/\/\/.*$/, '') }
+				.join('\n')
+		}
+		def requirePattern = { File source, String pattern, String failure ->
+			if (!(executable(source) =~ pattern).find()) {
+				throw new GradleException(failure)
+			}
+		}
+
+		def manager = sources[0]
+		def workflow = sources[1]
+		def process = sources[2]
+		def activity = sources[3]
+		def audit = sources[4]
+
+		requirePattern(
+			manager,
+			/(?s)wf\s*\.\s*start\s*\(\s*document\s*\.\s*getCtx\s*\(\s*\)\s*,\s*pi\s*\)/,
+			'DocWorkflowManager must start document workflows with document.getCtx().')
+		requirePattern(
+			workflow,
+			/(?s)start\s*\(\s*ProcessInfo\s+processInfo\s*\)\s*\{\s*return\s+start\s*\(\s*getCtx\s*\(\s*\)\s*,\s*processInfo\s*\)\s*;/,
+			'MWorkflow.start(ProcessInfo) must remain as a compatibility delegate.')
+		requirePattern(
+			workflow,
+			/(?s)start\s*\(\s*final\s+Properties\s+invocationCtx\s*,\s*ProcessInfo\s+processInfo\s*\).*?new\s+MWFProcess\s*\(\s*this\s*,\s*invocationCtx\s*,\s*processInfo\s*,\s*null\s*\)/,
+			'MWorkflow must pass the invocation context into the new MWFProcess.')
+		if ((executable(workflow) =~ /invocationCtx\s*=/).find()) {
+			throw new GradleException(
+				'MWorkflow must not replace the caller-provided invocation context.')
+		}
+		requirePattern(
+			process,
+			/(?s)MWFProcess\s*\(\s*MWorkflow\s+wf\s*,\s*ProcessInfo\s+pi\s*,\s*String\s+trxName\s*\)\s*throws\s+Exception\s*\{\s*this\s*\(\s*wf\s*,\s*wf\s*\.\s*getCtx\s*\(\s*\)\s*,\s*pi\s*,\s*trxName\s*\)\s*;/,
+			'The existing MWFProcess constructor must remain as a compatibility delegate.')
+		requirePattern(
+			process,
+			/(?s)MWFProcess\s*\(\s*MWorkflow\s+wf\s*,\s*final\s+Properties\s+invocationCtx\s*,\s*ProcessInfo\s+pi\s*,\s*String\s+trxName\s*\)\s*throws\s+Exception\s*\{\s*super\s*\(\s*invocationCtx\s*,\s*0\s*,\s*trxName\s*\)\s*;/,
+			'New workflow process rows must be constructed from the invocation context.')
+		requirePattern(
+			activity,
+			/(?s)MWFActivity\s*\(\s*MWFProcess\s+process\s*,\s*int\s+AD_WF_Node_ID\s*\).*?super\s*\(\s*process\s*\.\s*getCtx\s*\(\s*\)\s*,\s*0\s*,\s*process\s*\.\s*get_TrxName\s*\(\s*\)\s*\).*?setAD_Client_ID\s*\(\s*process\s*\.\s*getAD_Client_ID\s*\(\s*\)\s*\)/,
+			'Workflow activity rows must inherit the process context and client.')
+		requirePattern(
+			audit,
+			/(?s)MWFEventAudit\s*\(\s*MWFActivity\s+activity\s*\).*?super\s*\(\s*activity\s*\.\s*getCtx\s*\(\s*\)\s*,\s*0\s*,\s*activity\s*\.\s*get_TrxName\s*\(\s*\)\s*\).*?setAD_User_ID\s*\(\s*activity\s*\.\s*getAD_User_ID\s*\(\s*\)\s*\)/,
+			'Workflow event-audit rows must inherit the activity context and user.')
+
+		marker.get().asFile.with {
+			parentFile.mkdirs()
+			text = "Phase 5g-1b production workflow attribution verified\n"
+		}
+	}
+}
+
 tasks.register('phase5g1bFinalVerification') {
 	group = 'verification'
 	description =
@@ -121,7 +196,8 @@ tasks.register('phase5g1bFinalVerification') {
 	dependsOn(
 		tasks.named('verifyPhase5g1bEvidenceValidator'),
 		tasks.named('verifyPhase5g1bLaneInvariants'),
-		tasks.named('phase5g1aFinalVerification'))
+		tasks.named('verifyPhase5g1bProductionWorkflowAttribution'),
+		tasks.named('phase5g1ayFinalVerification'))
 }
 
 // ---------------------------------------------------------------------------

@@ -181,7 +181,7 @@ grep -Fq 'address="127.0.0.1"' "$tomcat10_dir/conf/server.xml"
 grep -Fq '<Server port="-1"' "$tomcat10_dir/conf/server.xml"
 
 export CATALINA_PID="$pid_file"
-export CATALINA_OPTS="${CATALINA_OPTS:-} -Duser.timezone=UTC -Duser.language=en -Duser.country=US -Dadempiere.phase5e.handoffKey=$handoff_key ${PHASE5G_CONTEXT_PROBE_OPT:-}"
+export CATALINA_OPTS="${CATALINA_OPTS:-} -Duser.timezone=UTC -Duser.language=en -Duser.country=US -Dadempiere.phase5e.handoffKey=$handoff_key"
 rm -f "$pid_file"
 "$tomcat10_dir/bin/catalina.sh" start >/dev/null 2>&1
 
@@ -244,7 +244,7 @@ set -u
 export CATALINA_BASE="$catalina_base"
 export CATALINA_PID="$catalina_base/temp/${lane_phase}-public.pid"
 export CATALINA_TMPDIR="$catalina_base/temp"
-export CATALINA_OPTS="$ADEMPIERE_JAVA_OPTIONS -Duser.timezone=UTC -Duser.language=en -Duser.country=US ${PHASE5G_CONTEXT_PROBE_OPT:-} -Dadempiere.phase5e.handoffKey=$handoff_key -Dadempiere.phase5e.modernBackend=http://127.0.0.1:$api_port -Dadempiere.phase5e.configurationTtlMillis=0 -Dadempiere.phase5f.modernBackend=http://127.0.0.1:$api_port"
+export CATALINA_OPTS="$ADEMPIERE_JAVA_OPTIONS -Duser.timezone=UTC -Duser.language=en -Duser.country=US -Dadempiere.phase5e.handoffKey=$handoff_key -Dadempiere.phase5e.modernBackend=http://127.0.0.1:$api_port -Dadempiere.phase5e.configurationTtlMillis=0 -Dadempiere.phase5f.modernBackend=http://127.0.0.1:$api_port"
 mkdir -p "$CATALINA_TMPDIR"
 
 if [[ "$lane_phase" == phase5f ]]; then
