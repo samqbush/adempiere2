@@ -320,7 +320,8 @@ database-neutral chain head:
 The corrected database-backed capture is selected explicitly with
 `-Pphase5g1ayMode=corrected-legacy-workflow-attribution`; omitting it preserves
 the existing legacy write-oracle behavior. PR 18,
-https://github.com/samqbush/adempiere2/pull/18, now has an accepted candidate:
+https://github.com/samqbush/adempiere2/pull/18, merged the accepted candidate at
+`e02c82ed5cae77ec9eb3067be291cb78332ffccc`:
 exact-head run 33904468993 completed both 12-step modern captures through the
 public `/webui` origin, self-diffed cleanly, matched the frozen contract, passed
 all six H6 controls, and passed the evidence validator. A later final-head run
@@ -328,7 +329,12 @@ exposed a concurrent routed-logout race after the modern session was destroyed;
 the candidate now repeats the internal END handshake for that exact
 loopback-bound stale-session case while keeping unbound requests forbidden.
 Exact-head run 33913861562 passed both captures and all six H6 controls with the
-correction. Merge and the post-merge regression matrix remain.
+correction. Post-merge run 33922390350 kept the current Phase 5g-1b smoke and
+seven historical lanes green, but stopped the line on Phase 5e's
+`missing-affinity` control: the first correction mistook any surviving router
+binding after a Tomcat 10 restart for a completed logout. R18 narrows END
+recovery to the exact recently ended modern session identifier; the full
+post-merge matrix remains required before demo work starts.
 
 The Tomcat smoke requires HTTP 2xx/3xx from each deployed context except
 `ADInterface`, whose unrouted base path is explicitly expected to return 404;

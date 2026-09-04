@@ -26,11 +26,13 @@ public final class HandoffProtocol {
 	 *
 	 * <p>On bootstrap, the router asserts the binding before it sends the ticket,
 	 * and the modern runtime asserts it again on arrival. After bootstrap, the
-	 * binding lets the modern runtime distinguish a routed request whose modern
-	 * session has just ended from an unauthenticated direct request. Neither
-	 * header can be supplied by a browser: the router refuses any request
-	 * carrying the reserved namespace, and the modern runtime accepts them only
-	 * from loopback.
+	 * binding participates in the modern runtime's fail-closed handling of a
+	 * routed request whose modern session is absent. Logout-race recovery also
+	 * requires the exact requested modern session identifier to be present in
+	 * the runtime's short-lived ended-session record; the binding alone is not
+	 * proof of logout. Neither header can be supplied by a browser: the router
+	 * refuses any request carrying the reserved namespace, and the modern runtime
+	 * accepts them only from loopback.
 	 */
 	public static final String SESSION_HEADER = RESERVED_HEADER_PREFIX + "Session";
 

@@ -19,6 +19,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.file.Paths;
 import java.util.Enumeration;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 import org.adempiere.web.handoff.HandoffKey;
@@ -68,6 +69,7 @@ import jakarta.servlet.http.HttpSession;
 public class CohortHandoffFilter implements Filter {
 
 	private static final CLogger log = CLogger.getCLogger(CohortHandoffFilter.class);
+	private static final long ENDED_SESSION_TTL_MILLIS = 30_000L;
 
 	/** System property naming the shared handoff key file. */
 	public static final String KEY_PROPERTY = "adempiere.phase5e.handoffKey";
@@ -77,6 +79,8 @@ public class CohortHandoffFilter implements Filter {
 
 	private final HandoffTicketCodec codec = new HandoffTicketCodec();
 	private final ReplayCache replayCache = new ReplayCache();
+	private final ConcurrentHashMap<String, Long> endedSessions =
+			new ConcurrentHashMap<>();
 	private HandoffKey key;
 
 	@Override
@@ -106,6 +110,7 @@ public class CohortHandoffFilter implements Filter {
 	@Override
 	public void destroy() {
 		replayCache.clear();
+		endedSessions.clear();
 		key = null;
 	}
 
@@ -137,7 +142,19 @@ public class CohortHandoffFilter implements Filter {
 		}
 
 		HttpSession existing = request.getSession(false);
-		if (CohortHandoff.ended(existing)) {
+		boolean ended = false;
+		boolean bootstrapped = false;
+		try {
+			ended = CohortHandoff.ended(existing);
+			bootstrapped = !ended && CohortHandoff.bootstrapped(existing);
+		} catch (IllegalStateException concurrentlyDestroyed) {
+			// Another logout request can invalidate the session after Tomcat
+			// returns it but before its attributes are read. Continue as a
+			// no-session request so the exact ended-session record decides
+			// whether this is recoverable or must remain forbidden.
+			existing = null;
+		}
+		if (ended) {
 			// The routed session was logged out on this runtime. Destroying it
 			// here - before the chain, so nothing is committed yet - is what
 			// makes a routed logout a real server-side destruction on BOTH
@@ -146,6 +163,7 @@ public class CohortHandoffFilter implements Filter {
 			// session, which runs the legacy one.
 			log.info("Destroying a logged-out Phase 5e routed session");
 			try {
+				rememberEnded(existing.getId());
 				existing.invalidate();
 			} catch (IllegalStateException alreadyGone) {
 				log.fine("The logged-out routed session was already destroyed");
@@ -154,7 +172,7 @@ public class CohortHandoffFilter implements Filter {
 			response.setStatus(HttpServletResponse.SC_RESET_CONTENT);
 			return;
 		}
-		if (CohortHandoff.bootstrapped(existing)) {
+		if (bootstrapped) {
 			if (ticket != null) {
 				// A second ticket on an already bootstrapped session is either a
 				// retry that must not create a second identity, or misuse.
@@ -169,12 +187,12 @@ public class CohortHandoffFilter implements Filter {
 
 		if (ticket == null) {
 			if (boundSession != null && !boundSession.isBlank()
-					&& loopback(request.getRemoteAddr())) {
+					&& loopback(request.getRemoteAddr())
+					&& recentlyEnded(request.getRequestedSessionId())) {
 				// A routed request can race the request that destroys the modern
-				// session during logout. The public router preserves the bound
-				// Tomcat 9 session on every internal request, so this exact
-				// no-session case can complete the existing END handshake
-				// instead of exposing Tomcat's 403 page to the browser.
+				// session during logout. The router-authored binding and a
+				// short-lived record of the exact modern session distinguish
+				// that race from affinity loss after a backend restart.
 				log.info("A routed request reached an ended Phase 5e session");
 				response.setHeader(
 						HandoffProtocol.END_HEADER, HandoffProtocol.END_VALUE);
@@ -217,6 +235,31 @@ public class CohortHandoffFilter implements Filter {
 			return;
 		}
 		chain.doFilter(servletRequest, servletResponse);
+	}
+
+	private void rememberEnded(String sessionId) {
+		long now = System.currentTimeMillis();
+		endedSessions.entrySet().removeIf(
+				entry -> entry.getValue().longValue() < now);
+		if (sessionId != null && !sessionId.isBlank()) {
+			endedSessions.put(
+					sessionId, Long.valueOf(now + ENDED_SESSION_TTL_MILLIS));
+		}
+	}
+
+	private boolean recentlyEnded(String sessionId) {
+		if (sessionId == null || sessionId.isBlank()) {
+			return false;
+		}
+		Long expiresAt = endedSessions.get(sessionId);
+		if (expiresAt == null) {
+			return false;
+		}
+		if (expiresAt.longValue() < System.currentTimeMillis()) {
+			endedSessions.remove(sessionId, expiresAt);
+			return false;
+		}
+		return true;
 	}
 
 	private static boolean carriesReserved(HttpServletRequest request) {
