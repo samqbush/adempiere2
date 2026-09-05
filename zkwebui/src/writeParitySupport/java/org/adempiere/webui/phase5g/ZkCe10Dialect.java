@@ -939,6 +939,11 @@ public final class ZkCe10Dialect implements ZkDialect {
 		reloadRecord(page, value);
 	}
 
+	@Override
+	public void readBackRecord(Page page, String value) {
+		reloadRecord(page, value);
+	}
+
 	/**
 	 * Commits a Find-dialog search key and proves the commit reached the server.
 	 *

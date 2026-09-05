@@ -159,6 +159,9 @@ public interface ZkDialect {
 	/** Ensures the window's current record is the one identified by {@code value}. */
 	void focusRecord(Page page, String value);
 
+	/** Re-reads {@code value} through the window lookup and proves it persisted. */
+	void readBackRecord(Page page, String value);
+
 	/** Starts a new record and waits for the form to be ready to type into. */
 	void newRecord(Page page);
 

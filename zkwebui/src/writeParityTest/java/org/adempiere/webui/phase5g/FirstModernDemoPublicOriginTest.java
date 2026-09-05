@@ -1,7 +1,5 @@
 package org.adempiere.webui.phase5g;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -37,11 +35,10 @@ class FirstModernDemoPublicOriginTest {
 			dialect.fill(page, "Value", recordValue);
 			dialect.fill(page, "Name", recordValue + " Public Modern UI");
 			dialect.save(page);
+			dialect.readBackRecord(page, recordValue);
 			page.screenshot(new Page.ScreenshotOptions()
 				.setPath(evidenceDir.resolve("business-partner-created.png"))
 				.setFullPage(true));
-			assertTrue(page.content().contains(recordValue),
-				"saved Business Partner is not visible in the modern UI");
 			dialect.logout(page);
 		}
 	}

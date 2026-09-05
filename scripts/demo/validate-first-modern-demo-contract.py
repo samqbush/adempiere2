@@ -47,6 +47,58 @@ def require_executable(path: Path) -> None:
     )
 
 
+def java_without_comments(source: str) -> str:
+    result: list[str] = []
+    index = 0
+    state = "code"
+    while index < len(source):
+        current = source[index]
+        following = source[index + 1] if index + 1 < len(source) else ""
+        if state == "code":
+            if current == "/" and following == "/":
+                state = "line-comment"
+                index += 2
+                continue
+            if current == "/" and following == "*":
+                state = "block-comment"
+                index += 2
+                continue
+            if current == '"':
+                state = "string"
+                result.append(" ")
+                index += 1
+                continue
+            elif current == "'":
+                state = "character"
+                result.append(" ")
+                index += 1
+                continue
+            result.append(current)
+        elif state == "line-comment":
+            if current == "\n":
+                result.append(current)
+                state = "code"
+        elif state == "block-comment":
+            if current == "*" and following == "/":
+                state = "code"
+                index += 2
+                continue
+            if current == "\n":
+                result.append(current)
+        else:
+            if current == "\\" and following:
+                result.extend((" ", " "))
+                index += 2
+                continue
+            if (state == "string" and current == '"') or (
+                state == "character" and current == "'"
+            ):
+                state = "code"
+            result.append("\n" if current == "\n" else " ")
+        index += 1
+    return "".join(result)
+
+
 properties = load_properties(CONTRACT)
 required_properties = {
     "contract.version",
@@ -360,6 +412,36 @@ require(
 workflow = (
     ROOT / ".github" / "workflows" / "first-modern-business-demo.yml"
 ).read_text(encoding="utf-8")
+browser_smoke = (
+    ROOT
+    / "zkwebui"
+    / "src"
+    / "writeParityTest"
+    / "java"
+    / "org"
+    / "adempiere"
+    / "webui"
+    / "phase5g"
+    / "FirstModernDemoPublicOriginTest.java"
+).read_text(encoding="utf-8")
+browser_smoke_code = java_without_comments(browser_smoke)
+dialect_sources = [
+    java_without_comments(
+        (
+            ROOT
+            / "zkwebui"
+            / "src"
+            / "writeParitySupport"
+            / "java"
+            / "org"
+            / "adempiere"
+            / "webui"
+            / "phase5g"
+            / name
+        ).read_text(encoding="utf-8")
+    )
+    for name in ("Zk36Dialect.java", "ZkCe10Dialect.java")
+]
 require(
     "github.ref == 'refs/heads/develop'" in workflow,
     "bundle workflow must be restricted to develop",
@@ -372,6 +454,29 @@ require(
     "./demo reset" in workflow and "./demo verify" in workflow,
     "bundle smoke must exercise reset and verification",
 )
+require(
+    re.search(
+        r"dialect\.save\(page\);\s*"
+        r"dialect\.readBackRecord\(page, recordValue\);",
+        browser_smoke_code,
+    )
+    is not None,
+    "browser smoke must save then re-read the created Business Partner",
+)
+require(
+    re.search(r"\bpage\s*\.\s*content\s*\(", browser_smoke_code) is None,
+    "browser smoke must not inspect serialized page HTML for live input values",
+)
+for dialect_source in dialect_sources:
+    require(
+        re.search(
+            r"public void readBackRecord\(Page page, String value\)\s*\{\s*"
+            r"reloadRecord\(page, value\);\s*\}",
+            dialect_source,
+        )
+        is not None,
+        "each browser dialect must implement read-back through its window lookup",
+    )
 main_workflow = (ROOT / ".github" / "workflows" / "main.yml").read_text(
     encoding="utf-8"
 )
