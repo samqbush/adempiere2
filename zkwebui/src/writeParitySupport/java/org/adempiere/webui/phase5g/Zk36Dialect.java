@@ -501,11 +501,6 @@ public final class Zk36Dialect implements ZkDialect {
 		reloadRecord(page, value);
 	}
 
-	@Override
-	public void readBackRecord(Page page, String value) {
-		reloadRecord(page, value);
-	}
-
 	/**
 	 * Re-reads the record from the database through the window's own lookup,
 	 * discarding whatever the session was holding.

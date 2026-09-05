@@ -425,23 +425,20 @@ browser_smoke = (
     / "FirstModernDemoPublicOriginTest.java"
 ).read_text(encoding="utf-8")
 browser_smoke_code = java_without_comments(browser_smoke)
-dialect_sources = [
-    java_without_comments(
-        (
-            ROOT
-            / "zkwebui"
-            / "src"
-            / "writeParitySupport"
-            / "java"
-            / "org"
-            / "adempiere"
-            / "webui"
-            / "phase5g"
-            / name
-        ).read_text(encoding="utf-8")
-    )
-    for name in ("Zk36Dialect.java", "ZkCe10Dialect.java")
-]
+modern_dialect = java_without_comments(
+    (
+        ROOT
+        / "zkwebui"
+        / "src"
+        / "writeParitySupport"
+        / "java"
+        / "org"
+        / "adempiere"
+        / "webui"
+        / "phase5g"
+        / "ZkCe10Dialect.java"
+    ).read_text(encoding="utf-8")
+)
 require(
     "github.ref == 'refs/heads/develop'" in workflow,
     "bundle workflow must be restricted to develop",
@@ -467,16 +464,15 @@ require(
     re.search(r"\bpage\s*\.\s*content\s*\(", browser_smoke_code) is None,
     "browser smoke must not inspect serialized page HTML for live input values",
 )
-for dialect_source in dialect_sources:
-    require(
-        re.search(
-            r"public void readBackRecord\(Page page, String value\)\s*\{\s*"
-            r"reloadRecord\(page, value\);\s*\}",
-            dialect_source,
-        )
-        is not None,
-        "each browser dialect must implement read-back through its window lookup",
+require(
+    re.search(
+        r"public void readBackRecord\(Page page, String value\)\s*\{\s*"
+        r"reloadRecord\(page, value\);\s*\}",
+        modern_dialect,
     )
+    is not None,
+    "the modern browser dialect must implement read-back through its window lookup",
+)
 main_workflow = (ROOT / ".github" / "workflows" / "main.yml").read_text(
     encoding="utf-8"
 )

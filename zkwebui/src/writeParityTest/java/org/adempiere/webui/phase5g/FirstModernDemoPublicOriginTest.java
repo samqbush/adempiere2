@@ -20,7 +20,7 @@ class FirstModernDemoPublicOriginTest {
 		Path evidenceDir = Path.of(requiredProperty("firstModernDemo.evidenceDir"));
 		Files.createDirectories(evidenceDir);
 
-		ZkDialect dialect = new ZkCe10Dialect();
+		ZkCe10Dialect dialect = new ZkCe10Dialect();
 		try (Playwright playwright = Playwright.create();
 				Browser browser = playwright.chromium().launch(
 					new BrowserType.LaunchOptions().setHeadless(true));

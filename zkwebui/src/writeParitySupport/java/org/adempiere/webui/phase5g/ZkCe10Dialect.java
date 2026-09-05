@@ -939,7 +939,6 @@ public final class ZkCe10Dialect implements ZkDialect {
 		reloadRecord(page, value);
 	}
 
-	@Override
 	public void readBackRecord(Page page, String value) {
 		reloadRecord(page, value);
 	}

@@ -16,8 +16,6 @@ tasks.register('verifyFirstModernDemoContract', Exec) {
 		rootProject.file('gradle/phase4/runtime.properties'),
 		rootProject.file('gradle/phase5/zk-target.properties'),
 		rootProject.file(
-			'zkwebui/src/writeParitySupport/java/org/adempiere/webui/phase5g/Zk36Dialect.java'),
-		rootProject.file(
 			'zkwebui/src/writeParitySupport/java/org/adempiere/webui/phase5g/ZkCe10Dialect.java'),
 		rootProject.file(
 			'zkwebui/src/writeParityTest/java/org/adempiere/webui/phase5g/FirstModernDemoPublicOriginTest.java'))
