@@ -55,6 +55,7 @@ services:
       retries: 90
       start_period: 30s
     networks:
+      - demo-ingress
       - demo-internal
 
 volumes:
@@ -66,5 +67,7 @@ volumes:
       org.adempiere.demo.instance: ${DEMO_INSTANCE_ID}
 
 networks:
+  demo-ingress:
+    driver: bridge
   demo-internal:
     internal: true
