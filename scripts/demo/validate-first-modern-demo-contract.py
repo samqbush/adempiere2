@@ -195,6 +195,13 @@ require(
     "Compose must receive only the launcher-validated instance environment",
 )
 require(
+    'write_random_bytes 48 "$state_dir/handoff.key"' in launcher_text
+    and 'random_hex 32 >"$state_dir/handoff.key"' not in launcher_text
+    and '"$handoff_size" == 48 && "$handoff_mode" == 600' in launcher_text
+    and '"$handoff_non_printable" != 0' in launcher_text,
+    "the handoff key must be raw random material validated before startup",
+)
+require(
     'docker volume rm "$database_volume"' in launcher_text,
     "reset must remove only the exact resolved demo volume",
 )
