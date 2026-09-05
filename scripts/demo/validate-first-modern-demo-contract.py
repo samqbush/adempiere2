@@ -135,6 +135,35 @@ require(
 compose = (DEMO / "compose.yaml").read_text(encoding="utf-8")
 published_ports: list[str] = []
 lines = compose.splitlines()
+
+
+def service_list(service: str, key: str) -> list[str]:
+    service_header = f"  {service}:"
+    key_header = f"    {key}:"
+    try:
+        service_start = lines.index(service_header)
+    except ValueError:
+        return []
+    service_end = len(lines)
+    for index in range(service_start + 1, len(lines)):
+        line = lines[index]
+        if line and not line.startswith("    "):
+            service_end = index
+            break
+    try:
+        key_start = lines.index(key_header, service_start + 1, service_end)
+    except ValueError:
+        return []
+    values: list[str] = []
+    for line in lines[key_start + 1 : service_end]:
+        if line.startswith("      - "):
+            values.append(line.strip()[2:].strip('"'))
+            continue
+        if line and not line.startswith("      "):
+            break
+    return values
+
+
 for index, line in enumerate(lines):
     if line == "    ports:":
         for candidate in lines[index + 1 :]:
@@ -147,7 +176,24 @@ require(
     published_ports == ["127.0.0.1:8888:8888"],
     "compose must publish exactly 127.0.0.1:8888 to Tomcat 9 port 8888",
 )
-require("internal: true" in compose, "compose network must be internal")
+require(
+    service_list("database", "networks") == ["demo-internal"],
+    "database must attach only to the internal demo network",
+)
+require(
+    service_list("application", "networks")
+    == ["demo-ingress", "demo-internal"],
+    "application must attach to host ingress and the internal database network",
+)
+require(
+    re.search(
+        r"(?ms)^networks:\n  demo-ingress:\n    driver: bridge\n"
+        r"  demo-internal:\n    internal: true\s*$",
+        compose,
+    )
+    is not None,
+    "only the database network may be externally isolated",
+)
 require(
     "http://127.0.0.1:8888/webui/ 200" in compose
     and "http://127.0.0.1:8890/webui/ 200,403" in compose,
