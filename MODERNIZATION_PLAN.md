@@ -189,7 +189,7 @@ necessarily block merges.
 | R1 | Core | Phase 2 smoke and Phase 3 DB-backed metadata validation protect selected runtime and dictionary seams; broader business behavior remains | Phase 5 | Expand representative document, accounting, and UI behavior coverage. |
 | R2 | Swing/POS | Closed for the Phase 2 Garden World login/role/menu/process slice; broader operator workflows remain outside this phase | Closed in Phase 2; broader coverage Phase 5 | The semantic Xvfb smoke is now gated; expand coverage during the ZK/client modernization. |
 | R3 | Background jobs | Exact-once scheduler execution and context/transaction cleanup are proven; production discovery breadth and observability remain | Phase 6 | Expand processor discovery and add operational metrics/alerts. |
-| R4 | Web UI | Phase 5d replaced the 503 marker with a functional modern slice and crossed the Testability Milestone. Phase 5e added proven fail-closed `/webui` cohort routing, concurrent identity isolation, and logout/timeout/container cleanup. Phase 5f merged at `83aeb8536` with both gates green: isolated generated Jakarta source/web trees, five source-native context WARs, the source-native `/timeline` route and exact static DSP compatibility resource, and independently reversible context routing for the closed 82-deployed/30-non-deployed scope, observed in run 33379849664 with 129 observations and zero vector failures across all six contexts. Phase 5g-1b is accepted on `develop` at `0e5b42c18`: modern Business Partner create, update, second-editor update, stale-save refusal, duplicate-submit behavior, deactivation, workflow attribution, session cleanup, and no-legacy-fallback behavior matched the frozen oracle through public `/webui`; post-merge run 33932245213 passed the current smoke and all eight historical lanes. Modern Sales Order completion, accounting, reports, upload/download, dashboards, POS, extensions, production customizations, 13 non-reproducible legacy entries, the four `/*` reachability-only vectors, disabled `/mobile` and `/adempiere`, unowned `/admin`, JasperReports interactive web, and screen-level visual parity remain residuals. | Phase 5g sub-increments `5g-1c`..`5g-7` for the remaining write/process/report/upload/dashboard/POS/extension parity and screen-level visual parity; Phase 7 for full artifact reproducibility | Do not treat implemented packaging or database-neutral contracts as runtime route parity. Production owners must validate custom overlays. Both Phase 5f gates and Phase 5g-1b are green; the 25 `/wstore` JSP precompile rows remain runtime-pending because only three of those pages are reached by a route vector. `contract-only-runtime-observation-pending` is **not** an acceptable disposition for a Phase 5g acceptance criterion. |
+| R4 | Web UI | Phase 5d replaced the 503 marker with a functional modern slice and crossed the Testability Milestone. Phase 5e added proven fail-closed `/webui` cohort routing, concurrent identity isolation, and logout/timeout/container cleanup. Phase 5f merged at `83aeb8536` with both gates green: isolated generated Jakarta source/web trees, five source-native context WARs, the source-native `/timeline` route and exact static DSP compatibility resource, and independently reversible context routing for the closed 82-deployed/30-non-deployed scope, observed in run 33379849664 with 129 observations and zero vector failures across all six contexts. Phase 5g-1b is accepted on `develop` at `0e5b42c18`: modern Business Partner create, update, second-editor update, stale-save refusal, duplicate-submit behavior, deactivation, workflow attribution, session cleanup, and no-legacy-fallback behavior matched the frozen oracle through public `/webui`; post-merge run 33932245213 passed the current smoke and all eight historical lanes. The first portable modern-business artifact is accepted from workflow run [33994400756](https://github.com/samqbush/adempiere2/actions/runs/33994400756) at `f362c1f40`: a clean downloaded bundle completed initialization, public-origin authenticated browser create/read-back, workflow attribution, marker-owned reset/re-seed, a second pristine verifier pass, healthy status capture, and teardown. Modern Sales Order completion, accounting, reports, upload/download, dashboards, POS, extensions, production customizations, 13 non-reproducible legacy entries, the four `/*` reachability-only vectors, disabled `/mobile` and `/adempiere`, unowned `/admin`, JasperReports interactive web, and screen-level visual parity remain residuals. | Phase 5g sub-increments `5g-1c`..`5g-7` for the remaining write/process/report/upload/dashboard/POS/extension parity and screen-level visual parity; Phase 7 for full production deployment and artifact reproducibility | The accepted bundle is a disposable localhost-only demonstration, not production readiness. Production owners must validate custom overlays. Both Phase 5f gates and Phase 5g-1b are green; the 25 `/wstore` JSP precompile rows remain runtime-pending because only three of those pages are reached by a route vector. `contract-only-runtime-observation-pending` is **not** an acceptable disposition for a Phase 5g acceptance criterion. |
 | R5 | SOAP/servlets | Unknown consumers and undocumented route classes may break | Phase 4 | Inventory consumers, freeze WSDL/HTTP fixtures, and run parallel replay. |
 | R6 | Database | Production size, custom schema, supported engines, and rollback windows are unknown | Phase 6 | Approve customer-specific migration runbook and rehearse on a sanitized copy. |
 | R7 | Extension metadata | The fail-closed validator names 16 pre-existing active `AD_Process` bindings with absent or incompatible classes | Phase 7 | Obtain usage evidence, then correct or retire every row in `gradle/phase3/metadata-quarantine.tsv`; additions and stale quarantine rows fail CI. |
@@ -1127,8 +1127,8 @@ requires a `served.<session>` row equal to `modern` for all four. Relatedly, `re
 only the total `AD_SysConfig` row count and is recorded as a tamper check, not as
 proof of routing.
 
-`phase5g1bFinalVerification` becomes the head of the phase-gate chain and must
-chain the accepted `phase5g1ayFinalVerification`:
+`phase5g1bFinalVerification` remains the accepted Business Partner parity link
+in the phase-gate chain and chains `phase5g1ayFinalVerification`:
 
 ```bash
 ./gradlew phase5g1bFinalVerification --dependency-verification=strict
@@ -1143,19 +1143,17 @@ tests and the modern runtime smoke to prove the shared production implementation
 actually carries saving context through `DocWorkflowManager`, `MWorkflow`, and
 `MWFProcess`.
 
-`phase5g1bModernWriteParitySmoke` is the current-phase database smoke. It has
-been executed repeatedly and is **not yet accepted green**. Runs 33683942292,
-33691649424 and 33696036502 produced scored modern business writes:
-`semantic-facts.tsv` and `concurrency-facts.tsv` matched the frozen answer,
-including the refused conflicting save, and the `C_BPartner` business values
-matched after the `#SalesRep_ID` handoff correction. Those runs then exposed
-R14 workflow attribution and R15 routing transitions. R14's expected answer was
-accepted by PR 19; R15 was closed by PR 20. PR 18 must now reconcile both
-merged prerequisites. The reconciled branch carries the accepted production
-saving-context correction without changing the oracle, removes the temporary
-context probes, and adds a blocking neutral check over the process, activity,
-and event-audit construction chain. The complete smoke still has to run. No
-pre-reconciliation run is acceptance evidence for the final branch.
+`phase5g1bModernWriteParitySmoke` remains the current-phase database smoke and
+is accepted green. PR 18 merged the reconciled production implementation at
+`e02c82ed5`; the R18 follow-up merged at `0e5b42c18`. Exact-head run
+33913861562 completed both modern captures and all six H6 rows, and post-merge
+run 33932245213 passed the current smoke plus all eight historical
+database-backed lanes. The same required smoke passed again in run 33992295802
+for the final demo read-back PR. Those accepted runs include the frozen
+Business Partner semantics, stale-save refusal, duplicate-submit behavior,
+session/routing controls, and process/activity/event-audit saving-context
+attribution. Earlier runs 33683942292, 33691649424 and 33696036502 remain useful
+diagnostic history, not acceptance evidence.
 
 The smoke deliberately depends on
 `phase5g1aLegacyWriteOracleSmoke`, so the legacy oracle is re-proven at pull
@@ -1185,7 +1183,7 @@ crossed from dark to lit at Phase 5d and now expands.
 | 5d | Migrate the complete ZK compile closure and cross the Testability Milestone at login -> role -> menu -> read-only window | Web UI | 5c |
 | 5e | Prove concurrent client/org/role/user/language/session cleanup and add fail-closed cohort routing | Security/session | 5d (**merged and verified** at `6eda2bc8`; see "Phase 5e decisions and findings") |
 | 5f | Migrate all 82 deployed non-SOAP mappings by independently reversible context; disposition all 30 non-deployed mappings; build isolated generated Jakarta trees and five modern context WARs; preserve `/webui` while adding source-native `/timeline` and the exact static DSP compatibility resource | Web routes | 5e (**merged and verified** at `83aeb8536`; database-neutral gate green twice, six-shard database smoke green in run 33379849664) |
-| 5g | Complete read/write UI, process, report, upload/download, POS, dashboard, server-push, and extension parity. Delivered through sub-increments `5g-0` and `5g-1a` .. `5g-7`; see "Phase 5g decomposition" | Web UI/extensions | 5f (**active**; `5g-0`, `5g-1a`, `5g-1a-x`, the R14 oracle amendment, and R15 routing hardening are merged; PR 18 / `5g-1b` is being reconciled and remains unaccepted) |
+| 5g | Complete read/write UI, process, report, upload/download, POS, dashboard, server-push, and extension parity. Delivered through sub-increments `5g-0` and `5g-1a` .. `5g-7`; see "Phase 5g decomposition" | Web UI/extensions | 5f (**active**; `5g-0`, `5g-1a`, `5g-1a-x`, `5g-1a-y`, R15 routing hardening, and `5g-1b` plus its R18 follow-up are merged and accepted; the first portable Business Partner demo is accepted in run 33994400756; `5g-1c` through `5g-7` remain open and oracle-blocked) |
 | 5h | Finish source-native Jakarta, preserve both historical SOAP paths on final ingress, then remove the router, Tomcat 9, transformer, and ZK 3.6 | Runtime/source | 5g |
 
 #### Risks & mitigations
@@ -1767,20 +1765,31 @@ Two ordering rules bind every Phase 5g increment:
 | 5g-6 | POS parity | Yes | **unassigned - blocking** |
 | 5g-7 | The Phase 5g exit roll-up: screen-level visual comparison, parallel-run performance and error thresholds, full distribution/database CI, the complete rollback rehearsal, the `phase5g-web-parity-gate` disposition gate for `/mobile`, `/adempiere` and `/admin`, and residual/transitional reconciliation | Yes | **unassigned - blocking** |
 
-**First modern business demo milestone (implementation in progress).** After
-5g-1b and R18 were accepted, branch `phase-5g-first-business-demo` was cut
-directly from `develop` to package that already-proven vertical slice without
-claiming the remaining Phase 5g work. The reviewed contract is
-`demo/first-modern-business/contract.properties`: a `linux/amd64` OCI bundle
-with digest-pinned JDK 21 and PostgreSQL 14.6 inputs, the accepted Tomcat
-9/Tomcat 10 routed topology, an internal database network, only
-`127.0.0.1:8888` published, generated post-download secrets, a marker-owned
-database volume, and `init/up/status/verify/reset/down` lifecycle commands. The
-manual `develop`-only workflow must build the unconfigured product, test the
-downloaded artifact in a clean directory, create a Business Partner through
-the authenticated public modern UI, verify production workflow attribution,
-prove reset/reinitialization, and upload screenshot and log evidence before
-this milestone is accepted. It does not close or bypass 5g-1c through 5g-7.
+**First modern business demo milestone (complete).** The accepted
+`linux/amd64` OCI/Compose bundle packages the already-proven Phase 5g-1b
+vertical slice without claiming the remaining Phase 5g work. Its reviewed
+contract is `demo/first-modern-business/contract.properties`: digest-pinned
+JDK 21 and PostgreSQL 14.6 inputs, the accepted Tomcat 9/Tomcat 10 routed
+topology, an internal database network plus a separate application ingress
+network, only `127.0.0.1:8888` published, generated post-download secrets, a
+marker-owned database volume, and `init/up/status/verify/reset/down` lifecycle
+commands.
+
+Manual workflow run
+[33994400756](https://github.com/samqbush/adempiere2/actions/runs/33994400756)
+accepted the milestone at source commit
+`f362c1f401c7c539a5e722f58abfb68d98d2b990`. From the uploaded bundle in a
+clean directory, it completed initialization and startup, verified a
+Business Partner plus process/activity/event-audit attribution, created and
+read back `DEMO-CI-33994400756` through the authenticated public `/webui`
+origin on the modern runtime, reset the marker-owned volume, reinitialized to
+a pristine seed, passed a second independent verifier with a new record value,
+captured both services healthy, and removed both containers and networks.
+The uploaded evidence includes the successful JUnit report, runtime identity,
+screenshot, two verifier outputs, status, and teardown logs. This is the first
+demoable modern business workflow; it remains disposable and localhost-only,
+and it does not close or bypass 5g-1c through 5g-7 or establish production
+deployment readiness.
 
 `5g-7` exists because the Phase 5 exit criteria below - screen-level parity,
 performance and error thresholds, full distribution/database CI, and the
