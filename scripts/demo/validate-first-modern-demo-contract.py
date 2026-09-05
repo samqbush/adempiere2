@@ -213,6 +213,13 @@ require(
     and 'cp /opt/demo/artifacts/webui-routed.war "$home/lib/webui.war"' in startup,
     "silent setup must not replace the reviewed routed public WAR",
 )
+database_healthcheck = (
+    DEMO / "runtime" / "database" / "database-healthcheck.sh"
+).read_text(encoding="utf-8")
+require(
+    "<<'SQL'" in database_healthcheck and "--command" not in database_healthcheck,
+    "database health SQL must use stdin so psql expands marker variables",
+)
 
 tracked = subprocess.check_output(
     [
