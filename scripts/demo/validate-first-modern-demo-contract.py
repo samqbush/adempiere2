@@ -213,6 +213,15 @@ require(
     and 'cp /opt/demo/artifacts/webui-routed.war "$home/lib/webui.war"' in startup,
     "silent setup must not replace the reviewed routed public WAR",
 )
+for java_launcher in (
+    startup,
+    (DEMO / "runtime" / "demo-database-tool").read_text(encoding="utf-8"),
+    (DEMO / "runtime" / "run-verifier.sh").read_text(encoding="utf-8"),
+):
+    require(
+        '"$JAVA_HOME/bin/java"' in java_launcher,
+        "runtime Java launchers must survive the non-root su PATH reset",
+    )
 database_healthcheck = (
     DEMO / "runtime" / "database" / "database-healthcheck.sh"
 ).read_text(encoding="utf-8")
