@@ -17,6 +17,11 @@ Lane 1 is what a pull request must pass. Lane 2 records that the phases already
 merged still hold. The demo-bundle workflow rebuilds the unconfigured product,
 assembles two digest-pinned `linux/amd64` images, and tests the downloaded
 artifact in a clean directory; it does not replace either protected Lane 1 job.
+Its first accepted end-to-end run is
+[33994400756](https://github.com/samqbush/adempiere2/actions/runs/33994400756)
+at `f362c1f40`: all three jobs passed, including public-origin browser
+create/read-back, workflow attribution before and after a marker-owned reset,
+healthy status capture, and teardown.
 
 ## Why the contract gates are one job
 
@@ -267,15 +272,17 @@ the Phase 5e test's own wait configuration.
 longer blocks a pull request, but it still gates the post-merge lane and is
 still worth fixing.
 
-## The current-phase smoke is Phase 5g-1b and is not yet accepted
+## The current-phase smoke is accepted Phase 5g-1b
 
 `Current-phase database smoke` now runs `phase5g1bModernWriteParitySmoke`. It
 passes `-Pphase5g1ayMode=corrected-legacy-workflow-attribution`, so its legacy
 dependency is re-proven against the accepted corrected oracle while its modern
-half continues to use the ordinary production runtime. It has prior scored
-runs, but none is acceptance evidence for the final reconciled PR 18 head; it
-must not be reported as green until the post-PR-19/20 production correction and
-full smoke pass are recorded.
+half continues to use the ordinary production runtime. Phase 5g-1b and the R18
+follow-up are accepted at `0e5b42c18`; post-merge run
+[33932245213](https://github.com/samqbush/adempiere2/actions/runs/33932245213)
+passed the current smoke and all eight historical database-backed lanes. The
+same required current-phase job passed again for the demo read-back PR in run
+[33992295802](https://github.com/samqbush/adempiere2/actions/runs/33992295802).
 
 The previous current-phase oracle slot was accepted in corrected mode by run
 33788686426, after candidate run 33785079015 produced the separately reviewed

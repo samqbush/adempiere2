@@ -21,6 +21,39 @@ accepted on `develop` by
 `contract.properties` and `provenance.json` identify the exact accepted
 behavioral baseline and the source commit used to build a particular bundle.
 
+## Accepted artifact evidence
+
+The first accepted portable bundle was built and exercised by
+[workflow run 33994400756](https://github.com/samqbush/adempiere2/actions/runs/33994400756)
+from `develop` commit
+`f362c1f401c7c539a5e722f58abfb68d98d2b990`.
+
+The workflow downloaded its own uploaded bundle into a clean directory and
+proved the complete automated lifecycle:
+
+1. `demo init` generated instance-bound secrets outside the image.
+2. `demo up` initialized PostgreSQL, applied migrations, configured cohort
+   routing, started both Tomcats, and reached healthy status.
+3. The first verifier created `DEMO-MTOYVAB5` and read back Business Partner
+   `1000000`, workflow process `1000000`, client `11`, and saving user `101`.
+4. The browser signed in through `http://127.0.0.1:8888/webui/`, identified the
+   ZK CE 10 routed runtime, created `DEMO-CI-33994400756`, saved it, and re-read
+   it through the Business Partner lookup. Its JUnit report recorded one passing
+   test with no failures or errors.
+5. `demo reset` deleted only the marker-owned database volume and recreated the
+   pristine seed.
+6. The second verifier created `DEMO-MTOZ178W` with the same pristine
+   Business Partner/workflow identifiers and correct client/user attribution.
+7. `demo status` recorded both services healthy and only the public loopback
+   port published.
+8. The always-run teardown removed both containers and both Compose networks.
+
+The evidence artifact contains `verification.txt`, `status.txt`,
+`runtime-identification.tsv`, the passing JUnit XML/report, the browser
+screenshot, and container/teardown logs. The bundle artifact is retained by
+GitHub Actions for 14 days; the run and source commit are the durable
+provenance after artifact expiry.
+
 ## Host requirements
 
 - Docker Engine with the Compose v2 plugin.

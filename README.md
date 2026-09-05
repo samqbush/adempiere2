@@ -248,11 +248,12 @@ sequential sub-increments `5g-0` through `5g-7`, each cut from `develop` and
 merged before the next begins; `MODERNIZATION_PLAN.md` carries the decomposition
 and `docs/modernization/phase-5g-web-parity-adr.md` is binding.
 
-**No modern business write, document transition, process execution, report or
-upload/download has ever been observed.** The modern runtime is proven for
-login, role selection, menu and a read-only window. Phase 5f proved that 82
-routes behave like the frozen legacy oracle; that is route parity, not write
-parity.
+The modern runtime is proven for login, role selection, menu, read-only
+windows, and the accepted Business Partner write vertical slice. No modern
+Sales Order document transition, accounting post, general dictionary process,
+report, or upload/download flow has yet been accepted. Phase 5f's 82 route
+observations remain route parity rather than proof of those later functional
+classes.
 
 `5g-0` ships no runtime code. It reconciles the Phase 5f documentation, records
 the Phase 5g ADR, and adds the reviewed discovery inventories - 351 classified
@@ -339,13 +340,17 @@ https://github.com/samqbush/adempiere2/actions/runs/33932245213 passed the
 current Phase 5g-1b smoke and all eight historical regression lanes. Phase
 5g-1b and R18 are therefore accepted on `develop`.
 
-The first portable modern-business demo is now implemented as a manual
-GitHub Actions bundle: a pinned `linux/amd64` application image, a pinned
-PostgreSQL 14.6 seed image, loopback-only Compose topology, generated local
-secrets, safe lifecycle commands, and an artifact-level Business Partner
-create/read-back/workflow verifier. See
-`docs/modernization/first-modern-business-demo.md`. The bundle is disposable
-and is not production-supported.
+The first portable modern-business demo is accepted from
+[workflow run 33994400756](https://github.com/samqbush/adempiere2/actions/runs/33994400756)
+at `f362c1f401c7c539a5e722f58abfb68d98d2b990`. The uploaded `linux/amd64`
+OCI/Compose bundle completed a clean-directory `init/up/verify` lifecycle,
+created and read back a Business Partner through the authenticated public
+modern `/webui` origin, verified workflow attribution, reset and re-seeded the
+marker-owned database volume, passed a second verifier, reported both services
+healthy, and shut down cleanly. See
+`docs/modernization/first-modern-business-demo.md` for download and presentation
+instructions. This is the first demoable modern business vertical slice; the
+bundle is disposable, localhost-only, and not production-supported.
 
 The Tomcat smoke requires HTTP 2xx/3xx from each deployed context except
 `ADInterface`, whose unrouted base path is explicitly expected to return 404;
