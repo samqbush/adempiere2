@@ -17,7 +17,8 @@ public final class RoutingLifecycle {
 	public enum EndResponse {
 		NONE,
 		HTTP_REDIRECT,
-		ZK_AU_REDIRECT
+		ZK_AU_REDIRECT,
+		FRESH_LOGIN
 	}
 
 	/**
@@ -76,14 +77,19 @@ public final class RoutingLifecycle {
 			candidate = EndResponse.ZK_AU_REDIRECT;
 		} else if (!responseCommitted
 				&& "GET".equalsIgnoreCase(method)
-				&& (routeClass == PublicRouteClass.CONTEXT_ROOT
-						|| routeClass == PublicRouteClass.ZK_PAGE)) {
+				&& routeClass == PublicRouteClass.ZK_PAGE) {
 			candidate = EndResponse.HTTP_REDIRECT;
+		} else if (!responseCommitted
+				&& "GET".equalsIgnoreCase(method)
+				&& routeClass == PublicRouteClass.CONTEXT_ROOT) {
+			candidate = EndResponse.FRESH_LOGIN;
 		}
 		ModernSessionAffinity.EndClaim claim =
 				affinity.claimEnd(switch (candidate) {
 					case HTTP_REDIRECT -> ModernSessionAffinity.EndNavigation.HTTP;
 					case ZK_AU_REDIRECT -> ModernSessionAffinity.EndNavigation.ZK_AU;
+					case FRESH_LOGIN ->
+						ModernSessionAffinity.EndNavigation.CONTEXT_ROOT;
 					case NONE -> ModernSessionAffinity.EndNavigation.NONE;
 				});
 		return new EndOutcome(

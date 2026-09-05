@@ -90,6 +90,7 @@ public class CohortRoutingFilter implements Filter {
 
 	/** One operator error per burst of backstop firings. */
 	private static final long BACKSTOP_REPORT_INTERVAL_MILLIS = 60_000L;
+	private static final long END_CLEANUP_WAIT_MILLIS = 30_000L;
 
 	private final AtomicLong lastBackstopReport = new AtomicLong(0);
 	private FilterConfig config;
@@ -139,33 +140,59 @@ public class CohortRoutingFilter implements Filter {
 		}
 
 		HttpSession session = request.getSession(false);
-		ModernSessionAffinity affinity = session == null
-				? null
-				: (ModernSessionAffinity) session.getAttribute(
+		ModernSessionAffinity affinity;
+		boolean decidedModern;
+		boolean decisionRecorded;
+		boolean redirectPending;
+		String initialSessionId;
+		try {
+			if (session == null) {
+				affinity = null;
+				decidedModern = false;
+				decisionRecorded = false;
+				redirectPending = false;
+				initialSessionId = null;
+			} else {
+				affinity = (ModernSessionAffinity) session.getAttribute(
 						ModernSessionAffinity.ATTRIBUTE);
-
+				Object decision = session.getAttribute(
+						CohortDecisionInterceptor.DECIDED_ATTRIBUTE);
+				decidedModern = CohortRuntime.MODERN.name().equals(decision);
+				decisionRecorded = decision != null;
+				redirectPending = Boolean.TRUE.equals(session.getAttribute(
+						CohortDecisionInterceptor.REDIRECT_PENDING_ATTRIBUTE));
+				initialSessionId = session.getId();
+			}
+		} catch (IllegalStateException concurrentlyInvalidated) {
+			PublicRouteClass routeClass = PublicRouteClassifier.classify(
+					request.getMethod(), pathInside(request));
+			if (!handleFreshLoginAfterEnd(
+					request, response, chain, null, routeClass)) {
+				refuse(response, routeClass, "session-ended-during-route",
+						HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+			}
+			return;
+		}
 		if (affinity == null) {
-			RoutingCore.Plan plan = RoutingCore.withoutAffinity(
-					CohortDecisionInterceptor.decidedModern(session));
+			RoutingCore.Plan plan = RoutingCore.withoutAffinity(decidedModern);
 			// A session that was decided modern and has no affinity is NOT an
 			// undecided session. It is a session whose affinity the container
 			// dropped or refused to restore, and handing it to the legacy
 			// application would show a different product to a user who is
 			// already logged in to this one. Fail closed instead.
-			if (CohortDecisionInterceptor.decidedModern(session)) {
+			if (decidedModern) {
 				log.severe(RoutingAudit.line(CohortRuntime.MODERN,
 						plan.routeClass(), plan.reason()));
 				response.sendError(plan.status());
 				return;
 			}
-			backstop(request, session);
+			backstop(request, decisionRecorded, initialSessionId);
 			chain.doFilter(servletRequest, servletResponse);
 			releaseRedirectBarrier(request);
 			return;
 		}
 
-		if (Boolean.TRUE.equals(session.getAttribute(
-				CohortDecisionInterceptor.REDIRECT_PENDING_ATTRIBUTE))) {
+		if (redirectPending) {
 			RoutingCore.Plan pending = RoutingCore.redirectPending(
 					request.getMethod(), pathInside(request));
 			if (pending.action() == RoutingCore.Action.PASS_THROUGH) {
@@ -276,8 +303,25 @@ public class CohortRoutingFilter implements Filter {
 				return;
 		}
 
+		String currentSessionId;
+		try {
+			HttpSession currentSession = request.getSession(false);
+			currentSessionId = currentSession == null
+					? null
+					: currentSession.getId();
+		} catch (IllegalStateException concurrentlyInvalidated) {
+			currentSessionId = null;
+		}
+		if (currentSessionId == null) {
+			if (!handleFreshLoginAfterEnd(
+					request, response, chain, affinity, routeClass)) {
+				refuse(response, routeClass, "session-ended-during-route",
+						HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+			}
+			return;
+		}
 		RoutingCore.Plan binding = RoutingCore.validateBinding(
-				affinity, routeClass, request.getSession(false).getId());
+				affinity, routeClass, currentSessionId);
 		if (binding.action() == RoutingCore.Action.FAIL) {
 			fail(response, affinity, routeClass,
 					binding.reason(), binding.status());
@@ -292,7 +336,7 @@ public class CohortRoutingFilter implements Filter {
 					affinity, ticket != null, result.coreResult());
 			if (result.sessionEnded()) {
 				endRoutedSession(
-						request, response, session, affinity, routeClass);
+						request, response, session, affinity, routeClass, chain);
 				return;
 			}
 			if (lifecycle.action() == RoutingLifecycle.Action.FAIL) {
@@ -349,7 +393,8 @@ public class CohortRoutingFilter implements Filter {
 			HttpServletResponse response,
 			HttpSession session,
 			ModernSessionAffinity affinity,
-			PublicRouteClass routeClass) throws IOException {
+			PublicRouteClass routeClass,
+			FilterChain chain) throws IOException, ServletException {
 		RoutingLifecycle.EndOutcome ending = RoutingLifecycle.end(
 				affinity, request.getMethod(), routeClass,
 				response.isCommitted());
@@ -364,6 +409,7 @@ public class CohortRoutingFilter implements Filter {
 			} catch (IllegalStateException alreadyGone) {
 				log.fine("A routed session was already destroyed at its end");
 			}
+			affinity.completeEndCleanup();
 			log.info(RoutingAudit.line(
 					CohortRuntime.MODERN, routeClass, "routed-session-ended"));
 		} else {
@@ -385,6 +431,10 @@ public class CohortRoutingFilter implements Filter {
 						"routed-session-au-redirect"));
 				sendAuRedirect(response, contextRoot(request));
 				return;
+			case FRESH_LOGIN:
+				handleFreshLoginAfterEnd(
+						request, response, chain, affinity, routeClass);
+				return;
 			case NONE:
 			default:
 				if (!response.isCommitted()) {
@@ -397,6 +447,36 @@ public class CohortRoutingFilter implements Filter {
 	private static String contextRoot(HttpServletRequest request) {
 		String context = request.getContextPath();
 		return (context == null || context.isEmpty() ? "" : context) + "/";
+	}
+
+	private static boolean freshLoginRequest(
+			HttpServletRequest request, PublicRouteClass routeClass) {
+		return routeClass == PublicRouteClass.CONTEXT_ROOT
+				&& "GET".equalsIgnoreCase(request.getMethod());
+	}
+
+	private boolean handleFreshLoginAfterEnd(
+			HttpServletRequest request,
+			HttpServletResponse response,
+			FilterChain chain,
+			ModernSessionAffinity affinity,
+			PublicRouteClass routeClass) throws IOException, ServletException {
+		if (!freshLoginRequest(request, routeClass)) {
+			return false;
+		}
+		if (affinity != null
+				&& !affinity.awaitEndCleanup(END_CLEANUP_WAIT_MILLIS)) {
+			log.severe(RoutingAudit.line(
+					CohortRuntime.MODERN, routeClass,
+					"routed-session-cleanup-timeout"));
+			response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+			return true;
+		}
+		log.info(RoutingAudit.line(
+				CohortRuntime.MODERN, routeClass,
+				"routed-session-fresh-login"));
+		chain.doFilter(request, response);
+		return true;
 	}
 
 	/**
@@ -567,10 +647,11 @@ public class CohortRoutingFilter implements Filter {
 	 * produces, and it must be visible rather than presenting as "everybody
 	 * happens to be legacy today".
 	 */
-	private void backstop(HttpServletRequest request, HttpSession session) {
-		if (session == null
-				|| session.getAttribute(CohortDecisionInterceptor.DECIDED_ATTRIBUTE)
-						!= null) {
+	private void backstop(
+			HttpServletRequest request,
+			boolean decisionRecorded,
+			String sessionId) {
+		if (sessionId == null || decisionRecorded) {
 			return;
 		}
 		if (!"GET".equals(request.getMethod())
@@ -585,7 +666,7 @@ public class CohortRoutingFilter implements Filter {
 			return;
 		}
 		if (!LegacyIdentity.complete(
-				SessionManager.getSessionContext(session.getId()))) {
+				SessionManager.getSessionContext(sessionId))) {
 			return;
 		}
 		if (config != null) {

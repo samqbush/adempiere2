@@ -188,6 +188,13 @@ class RoutingCoreTest {
 				RoutingLifecycle.EndResponse.HTTP_REDIRECT, page.response(),
 				"the top-level request must not be stranded by the AU response");
 
+		RoutingLifecycle.EndOutcome contextRoot = RoutingLifecycle.end(
+				affinity, "GET", PublicRouteClass.CONTEXT_ROOT, false);
+		assertFalse(contextRoot.cleanupOwner());
+		assertEquals(
+				RoutingLifecycle.EndResponse.FRESH_LOGIN, contextRoot.response(),
+				"the redirect target must render a fresh login");
+
 		RoutingLifecycle.EndOutcome duplicateAu = RoutingLifecycle.end(
 				affinity, "POST", PublicRouteClass.ZK_AU, false);
 		assertEquals(RoutingLifecycle.EndResponse.NONE, duplicateAu.response());
@@ -195,6 +202,11 @@ class RoutingCoreTest {
 		RoutingLifecycle.EndOutcome duplicatePage = RoutingLifecycle.end(
 				affinity, "GET", PublicRouteClass.ZK_PAGE, false);
 		assertEquals(RoutingLifecycle.EndResponse.NONE, duplicatePage.response());
+
+		RoutingLifecycle.EndOutcome duplicateContextRoot = RoutingLifecycle.end(
+				affinity, "GET", PublicRouteClass.CONTEXT_ROOT, false);
+		assertEquals(
+				RoutingLifecycle.EndResponse.NONE, duplicateContextRoot.response());
 	}
 
 	@Test

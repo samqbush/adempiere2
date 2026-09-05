@@ -120,7 +120,8 @@ public final class ModernSessionAffinity implements Serializable {
 	public enum EndNavigation {
 		NONE,
 		HTTP,
-		ZK_AU
+		ZK_AU,
+		CONTEXT_ROOT
 	}
 
 	private final CohortDecision decision;
@@ -131,8 +132,10 @@ public final class ModernSessionAffinity implements Serializable {
 	private String modernSessionId;
 	private String failureReason;
 	private transient boolean endCleanupClaimed;
+	private transient boolean endCleanupComplete;
 	private transient boolean endHttpNavigationClaimed;
 	private transient boolean endAuNavigationClaimed;
+	private transient boolean endContextRootClaimed;
 
 	public ModernSessionAffinity(CohortDecision decision, CohortIdentity identity) {
 		if (decision == null || !decision.modern()) {
@@ -289,8 +292,43 @@ public final class ModernSessionAffinity implements Serializable {
 				&& !endAuNavigationClaimed) {
 			endAuNavigationClaimed = true;
 			navigationOwner = true;
+		} else if (navigation == EndNavigation.CONTEXT_ROOT
+				&& !endContextRootClaimed) {
+			endContextRootClaimed = true;
+			navigationOwner = true;
 		}
 		return new EndClaim(cleanupOwner, navigationOwner);
+	}
+
+	/** Publishes that the Tomcat 9 session has been invalidated. */
+	public synchronized void completeEndCleanup() {
+		endCleanupComplete = true;
+		notifyAll();
+	}
+
+	/**
+	 * Waits until the request that owns cleanup has invalidated the Tomcat 9
+	 * session. The context-root completion must not enter the legacy chain with
+	 * a still-live modern affinity.
+	 */
+	public synchronized boolean awaitEndCleanup(long timeoutMillis) {
+		if (timeoutMillis < 0) {
+			throw new IllegalArgumentException("Cleanup timeout cannot be negative");
+		}
+		long deadline = System.nanoTime() + timeoutMillis * 1_000_000L;
+		while (!endCleanupComplete) {
+			long remaining = deadline - System.nanoTime();
+			if (remaining <= 0) {
+				return false;
+			}
+			try {
+				wait(Math.max(1L, remaining / 1_000_000L));
+			} catch (InterruptedException interrupted) {
+				Thread.currentThread().interrupt();
+				return false;
+			}
+		}
+		return true;
 	}
 
 	@Override
