@@ -7,6 +7,7 @@ handoff_key=/run/adempiere-demo/handoff.key
 modern_home="$home/tomcat10-api"
 public_home=/opt/tomcat
 public_base="$home/tomcat"
+modern_context="$modern_home/conf/Catalina/localhost/webui.xml"
 
 if [[ $(id -u) -eq 0 ]]; then
   install -o adempiere -g adempiere -m 0600 \
@@ -41,6 +42,9 @@ rm -rf "$public_base/webapps/webui"
 rm -f "$modern_home/webapps/webui-modern.war"
 rm -rf "$modern_home/webapps/webui-modern"
 mkdir -p "$modern_home/logs" "$modern_home/temp" "$modern_home/work"
+sed "s#\${catalina.base}#$modern_home#g" \
+  "$modern_context" >"$modern_context.tmp"
+mv "$modern_context.tmp" "$modern_context"
 
 export CATALINA_HOME="$modern_home"
 export CATALINA_BASE="$modern_home"
@@ -48,8 +52,16 @@ export CATALINA_PID="$modern_home/temp/demo-modern.pid"
 export CATALINA_OPTS="${CATALINA_OPTS:-} -Duser.timezone=UTC -Duser.language=en -Duser.country=US -Dadempiere.phase5e.handoffKey=$handoff_key"
 "$modern_home/bin/catalina.sh" start
 
-"$JAVA_HOME/bin/java" -cp /opt/demo/classes org.adempiere.demo.DemoHttpProbe \
-  http://127.0.0.1:8890/webui/ 200,403 900
+if ! "$JAVA_HOME/bin/java" -cp /opt/demo/classes \
+  org.adempiere.demo.DemoHttpProbe \
+  http://127.0.0.1:8890/webui/ 200,403 900; then
+  for log in "$modern_home"/logs/*; do
+    [[ -f "$log" ]] || continue
+    echo "===== $log =====" >&2
+    tail -n 400 "$log" >&2
+  done
+  exit 70
+fi
 
 set +u
 source "$home/utils/myEnvironment.sh" nosave

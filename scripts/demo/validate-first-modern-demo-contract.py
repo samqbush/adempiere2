@@ -218,6 +218,16 @@ require(
     in startup,
     "startup must create mutable Tomcat 10 runtime directories",
 )
+require(
+    'sed "s#\\${catalina.base}#$modern_home#g"' in startup
+    and '"$modern_context" >"$modern_context.tmp"' in startup
+    and 'mv "$modern_context.tmp" "$modern_context"' in startup,
+    "startup must render the accepted modern context descriptor for its runtime",
+)
+require(
+    'tail -n 400 "$log" >&2' in startup,
+    "startup must expose modern Tomcat logs when its context is not ready",
+)
 for java_launcher in (
     startup,
     (DEMO / "runtime" / "demo-database-tool").read_text(encoding="utf-8"),
