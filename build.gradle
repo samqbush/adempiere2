@@ -316,6 +316,7 @@ apply from: 'gradle/phase5/write-oracle.gradle'
 // phase5g1aFinalVerification, and the parity smoke orders itself after the
 // legacy write oracle smoke, both of which that file registers.
 apply from: 'gradle/phase5/write-parity.gradle'
+apply from: 'gradle/phase5/first-modern-demo.gradle'
 // Applied last: it registers a task that depends on phase5fJakartaWebWars and
 // on the zkwebui/webservice archives declared above.
 apply from: 'gradle/phase5/jar-scan.gradle'

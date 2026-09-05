@@ -62,8 +62,11 @@ mutations=(
 'transition-safe-write-method~SRC/route/PublicRouteClassifier.java~&& !"HEAD".equalsIgnoreCase(method))) {~&& !"HEAD".equalsIgnoreCase(method)\n\t\t\t\t\t\t&& !"POST".equalsIgnoreCase(method))) {~org.adempiere.web.route.PublicRouteClassifierTest'
 'session-end-cleanup-owner~SRC/route/ModernSessionAffinity.java~boolean cleanupOwner = !endCleanupClaimed;~boolean cleanupOwner = true;~org.adempiere.web.route.RoutingCoreTest'
 'session-end-navigation-owner~SRC/route/ModernSessionAffinity.java~navigation == EndNavigation.HTTP && !endHttpNavigationClaimed~navigation == EndNavigation.HTTP~org.adempiere.web.route.RoutingCoreTest'
+'session-end-context-root-owner~SRC/route/ModernSessionAffinity.java~navigation == EndNavigation.CONTEXT_ROOT\n\t\t\t\t&& !endContextRootClaimed~navigation == EndNavigation.CONTEXT_ROOT~org.adempiere.web.route.RoutingCoreTest'
+'session-end-cleanup-completion~SRC/route/ModernSessionAffinity.java~endCleanupComplete = true;~endCleanupComplete = false;~org.adempiere.web.route.RoutingCoreTest'
 'session-end-au-protocol~SRC/route/RoutingLifecycle.java~candidate = EndResponse.ZK_AU_REDIRECT;~candidate = EndResponse.HTTP_REDIRECT;~org.adempiere.web.route.RoutingCoreTest'
-'session-end-committed-response~SRC/route/RoutingLifecycle.java~} else if (!responseCommitted\n\t\t\t\t&& "GET".equalsIgnoreCase(method)~} else if ("GET".equalsIgnoreCase(method)~org.adempiere.web.route.RoutingCoreTest'
+'session-end-committed-response~SRC/route/RoutingLifecycle.java~} else if (!responseCommitted\n\t\t\t\t&& "GET".equalsIgnoreCase(method)\n\t\t\t\t&& routeClass == PublicRouteClass.ZK_PAGE) {~} else if ("GET".equalsIgnoreCase(method)\n\t\t\t\t&& routeClass == PublicRouteClass.ZK_PAGE) {~org.adempiere.web.route.RoutingCoreTest'
+'session-end-context-root-committed-response~SRC/route/RoutingLifecycle.java~} else if (!responseCommitted\n\t\t\t\t&& "GET".equalsIgnoreCase(method)\n\t\t\t\t&& routeClass == PublicRouteClass.CONTEXT_ROOT) {~} else if ("GET".equalsIgnoreCase(method)\n\t\t\t\t&& routeClass == PublicRouteClass.CONTEXT_ROOT) {~org.adempiere.web.route.RoutingCoreTest'
 )
 
 # The bridge mutation `modern-never-falls-back` is the reason this file records
@@ -79,7 +82,7 @@ bridge_mutations=(
 'reserved-header-rejection~BRIDGE/CohortRoutingFilter.java~if (carriesReservedHeader(request)) {~if (false) {~org.adempiere.web.bridge.CohortRoutingFilterTest'
 'deployment-completeness~BRIDGE/CohortBridgeStartupListener.java~if (problems.length() > 0) {~if (false) {~org.adempiere.web.bridge.CohortRoutingFilterTest'
 'identity-completeness~BRIDGE/LegacyIdentity.java~if (warehouseId == null) {~if (false) {~org.adempiere.web.bridge.CohortRoutingFilterTest'
-'decided-modern-fail-closed~BRIDGE/CohortRoutingFilter.java~if (CohortDecisionInterceptor.decidedModern(session)) {~if (false) {~org.adempiere.web.bridge.CohortRoutingFilterTest'
+'decided-modern-fail-closed~BRIDGE/CohortRoutingFilter.java~if (decidedModern) {~if (false) {~org.adempiere.web.bridge.CohortRoutingFilterTest'
 'routed-session-end~BRIDGE/CohortRoutingFilter.java~if (result.sessionEnded()) {~if (false) {~org.adempiere.web.bridge.CohortRoutingFilterTest'
 'redirect-barrier-preserved~BRIDGE/CohortRoutingFilter.java~pending.reason()));\n\t\t\t\tchain.doFilter(servletRequest, servletResponse);\n\t\t\t\treturn;~pending.reason()));\n\t\t\t\tchain.doFilter(servletRequest, servletResponse);\n\t\t\t\treleaseRedirectBarrier(request);\n\t\t\t\treturn;~org.adempiere.web.bridge.CohortRoutingFilterTest'
 'session-end-au-navigation-wire~BRIDGE/CohortRoutingFilter.java~sendAuRedirect(response, contextRoot(request));~response.sendRedirect(contextRoot(request));~org.adempiere.web.bridge.CohortRoutingFilterTest'

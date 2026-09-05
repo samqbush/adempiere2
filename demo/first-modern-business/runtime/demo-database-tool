@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec java \
+  -cp '/opt/demo/classes:/opt/Adempiere/lib/postgresql.jar' \
+  org.adempiere.demo.DemoDatabaseTool "$@"

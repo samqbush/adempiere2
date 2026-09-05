@@ -1,0 +1,118 @@
+def firstModernDemoRoot =
+	rootProject.layout.projectDirectory.dir('demo/first-modern-business')
+def firstModernDemoBuild =
+	rootProject.layout.buildDirectory.dir('first-modern-demo')
+def firstModernDemoContext =
+	firstModernDemoBuild.map { it.dir('context') }
+
+tasks.register('verifyFirstModernDemoContract', Exec) {
+	group = 'verification'
+	description = 'Validates the pinned artifact, topology, lifecycle and secret-exclusion contract for the first modern demo'
+	inputs.dir firstModernDemoRoot
+	inputs.file rootProject.file(
+		'scripts/demo/validate-first-modern-demo-contract.py')
+	inputs.files(
+		rootProject.file('gradle/phase2/runtime.properties'),
+		rootProject.file('gradle/phase4/runtime.properties'),
+		rootProject.file('gradle/phase5/zk-target.properties'))
+	outputs.file firstModernDemoBuild.map {
+		it.file('contract-summary.json')
+	}
+	commandLine(
+		'python3',
+		rootProject.file(
+			'scripts/demo/validate-first-modern-demo-contract.py'))
+}
+
+tasks.register('prepareFirstModernDemoContext', Sync) {
+	group = 'distribution'
+	description = 'Stages the accepted unconfigured release product and immutable demo image inputs without building inside the container'
+	dependsOn(
+		tasks.named('verifyFirstModernDemoContract'),
+		tasks.named('phase3NoDatabaseDistribution'),
+		tasks.named('stagePhase5eReleaseRouting'))
+	into firstModernDemoContext
+
+	from(rootProject.layout.buildDirectory.dir('phase3/release')) {
+		include 'Adempiere/**'
+		exclude(
+			'Adempiere/AdempiereEnv.properties',
+			'Adempiere/AdempiereEnv.properties.save',
+			'Adempiere/Adempiere.properties',
+			'Adempiere/Adempiere.properties.save',
+			'Adempiere/utils/myEnvironment.sh',
+			'Adempiere/utils/myEnvironment.bat',
+			'Adempiere/keystore/**',
+			'Adempiere/.demo-setup-complete',
+			'Adempiere/**/*.log',
+			'Adempiere/**/*.key',
+			'Adempiere/**/*.password',
+			'Adempiere/tomcat/logs/**',
+			'Adempiere/tomcat10-api/logs/**',
+			'Adempiere/tomcat/temp/**',
+			'Adempiere/tomcat10-api/temp/**',
+			'Adempiere/tomcat/work/**',
+			'Adempiere/tomcat10-api/work/**')
+		into 'product'
+	}
+	// SilentSetup requires distinct CATALINA_HOME and CATALINA_BASE paths. The
+	// release tree supplies the generated base under Adempiere/tomcat; stage the
+	// checksum-verified upstream runtime separately as /opt/tomcat in the image.
+	from(rootProject.layout.buildDirectory.dir('phase3/tomcat')) {
+		exclude 'logs/**', 'temp/**', 'work/**'
+		into 'tomcat9'
+	}
+	from(firstModernDemoRoot.dir('runtime')) {
+		into 'runtime'
+	}
+	from({ zipTree(rootProject.file('data/seed/Adempiere_pg.jar')) }) {
+		include 'Adempiere_pg.dmp'
+		rename { '20-Adempiere_pg.dmp' }
+		into 'runtime/database'
+	}
+
+	doLast {
+		def context = firstModernDemoContext.get().asFile
+		def product = new File(context, 'product/Adempiere')
+		def forbiddenNames = [
+			'AdempiereEnv.properties',
+			'AdempiereEnv.properties.save',
+			'Adempiere.properties',
+			'Adempiere.properties.save',
+			'myEnvironment.sh',
+			'myEnvironment.bat',
+			'myKeystore',
+			'.demo-setup-complete'
+		] as Set
+		def leaked = fileTree(product).matching {
+			include '**/*'
+		}.files.findAll { forbiddenNames.contains(it.name) }
+		if (!leaked.empty) {
+			throw new GradleException(
+				"Configured runtime files leaked into the demo context: ${leaked}")
+		}
+		def required = [
+			'product/Adempiere/lib/webui.war',
+			'product/Adempiere/tomcat',
+			'tomcat9/bin/catalina.sh',
+			'product/Adempiere/tomcat10-api',
+			'product/Adempiere/tomcat10-api/phase5e/webui-modern.war',
+			'runtime/database/20-Adempiere_pg.dmp'
+		]
+		def missing = required.findAll {
+			!new File(context, it).exists()
+		}
+		if (!missing.empty) {
+			throw new GradleException(
+				"Demo context is incomplete: ${missing}")
+		}
+	}
+}
+
+tasks.register('firstModernDemoFinalVerification') {
+	group = 'verification'
+	description = 'Runs the accepted Phase 5g-1b chain plus the first modern demo artifact contract'
+	dependsOn(
+		tasks.named('phase5g1bFinalVerification'),
+		tasks.named('verifyFirstModernDemoContract'))
+}

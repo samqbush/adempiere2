@@ -1,0 +1,279 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+bundle_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+state_dir="$bundle_dir/.demo-state"
+env_file="$state_dir/demo.env"
+compose_file="$bundle_dir/compose.yaml"
+contract_file="$bundle_dir/contract.properties"
+
+contract_value() {
+  awk -F= -v key="$1" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' "$contract_file"
+}
+
+compose_project_base=$(contract_value compose.project)
+database_volume_base=$(contract_value compose.database.volume)
+database_marker_base=$(contract_value database.marker)
+application_image=$(contract_value application.image)
+database_image=$(contract_value database.image)
+compose_project=
+database_volume=
+database_marker=
+instance_id=
+database_name=
+database_user=
+database_password=
+postgres_password=
+keystore_password=
+
+random_hex() {
+  local bytes=$1
+  od -An -N"$bytes" -tx1 /dev/urandom | tr -d ' \n'
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || {
+    echo "Required command is unavailable: $1" >&2
+    exit 69
+  }
+}
+
+require_initialized() {
+  [[ -r "$env_file" && -r "$state_dir/handoff.key" ]] || {
+    echo "Demo state is absent. Run: ./demo init" >&2
+    exit 66
+  }
+  local line_count
+  line_count=$(grep -Ec '^[A-Z0-9_]+=[^[:space:]]+$' "$env_file")
+  [[ "$line_count" == 11 && $(wc -l <"$env_file" | tr -d ' ') == 11 ]] || {
+    echo "Demo environment file has an unexpected shape" >&2
+    exit 65
+  }
+  env_value() {
+    local matches
+    matches=$(grep -Ec "^$1=" "$env_file")
+    [[ "$matches" == 1 ]] || {
+      echo "Demo environment must define $1 exactly once" >&2
+      exit 65
+    }
+    awk -F= -v key="$1" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' "$env_file"
+  }
+  instance_id=$(env_value DEMO_INSTANCE_ID)
+  [[ "$instance_id" =~ ^[0-9a-f]{32}$ ]] || {
+    echo "Demo instance identifier is invalid" >&2
+    exit 65
+  }
+  compose_project=$(env_value DEMO_COMPOSE_PROJECT)
+  database_volume=$(env_value DEMO_DATABASE_VOLUME)
+  database_marker=$(env_value DEMO_DATABASE_MARKER)
+  [[ "$compose_project" == "$compose_project_base-$instance_id" &&
+     "$database_volume" == "$database_volume_base-$instance_id" &&
+     "$database_marker" == "$database_marker_base:$instance_id" ]] || {
+    echo "Demo resource identity does not match its generated instance" >&2
+    exit 65
+  }
+  database_name=$(env_value DEMO_DATABASE_NAME)
+  database_user=$(env_value DEMO_DATABASE_USER)
+  database_password=$(env_value DEMO_DATABASE_PASSWORD)
+  postgres_password=$(env_value DEMO_POSTGRES_PASSWORD)
+  keystore_password=$(env_value DEMO_KEYSTORE_PASSWORD)
+  [[ "$(env_value DEMO_APPLICATION_IMAGE)" == "$application_image" &&
+     "$(env_value DEMO_DATABASE_IMAGE)" == "$database_image" &&
+     "$database_name" == "$(contract_value database.name)" &&
+     "$database_user" == "$(contract_value database.user)" ]] || {
+    echo "Demo environment differs from the artifact contract" >&2
+    exit 65
+  }
+  [[ "$database_password" =~ ^[0-9a-f]{48}$ &&
+     "$postgres_password" =~ ^[0-9a-f]{48}$ &&
+     "$keystore_password" =~ ^[0-9a-f]{48}$ ]] || {
+    echo "One or more generated secrets have an invalid shape" >&2
+    exit 65
+  }
+}
+
+compose() {
+  env \
+    DEMO_COMPOSE_PROJECT="$compose_project" \
+    DEMO_DATABASE_VOLUME="$database_volume" \
+    DEMO_DATABASE_MARKER="$database_marker" \
+    DEMO_APPLICATION_IMAGE="$application_image" \
+    DEMO_DATABASE_IMAGE="$database_image" \
+    DEMO_DATABASE_NAME="$database_name" \
+    DEMO_DATABASE_USER="$database_user" \
+    DEMO_DATABASE_PASSWORD="$database_password" \
+    DEMO_POSTGRES_PASSWORD="$postgres_password" \
+    DEMO_KEYSTORE_PASSWORD="$keystore_password" \
+    DEMO_INSTANCE_ID="$instance_id" \
+    docker compose --project-name "$compose_project" \
+      --file "$compose_file" "$@"
+}
+
+verify_volume_labels() {
+  local owner project volume_instance
+  owner=$(docker volume inspect --format \
+    '{{index .Labels "org.adempiere.demo.owner"}}' "$database_volume")
+  project=$(docker volume inspect --format \
+    '{{index .Labels "org.adempiere.demo.project"}}' "$database_volume")
+  volume_instance=$(docker volume inspect --format \
+    '{{index .Labels "org.adempiere.demo.instance"}}' "$database_volume")
+  if [[ "$owner" != "$database_marker" || "$project" != "$compose_project" ||
+        "$volume_instance" != "$instance_id" ]]; then
+    echo "Demo database volume has unexpected ownership labels: $database_volume" >&2
+    exit 65
+  fi
+}
+
+verify_bundle() {
+  (
+    cd "$bundle_dir"
+    if command -v sha256sum >/dev/null 2>&1; then
+      sha256sum --check SHA256SUMS
+    else
+      shasum -a 256 --check SHA256SUMS
+    fi
+  )
+}
+
+initialize() {
+  require_command docker
+  mkdir -p "$state_dir"
+  chmod 700 "$state_dir"
+  if [[ -e "$env_file" || -e "$state_dir/handoff.key" ]]; then
+    echo "Demo state already exists at $state_dir" >&2
+    exit 65
+  fi
+
+  umask 077
+  local new_instance
+  new_instance=$(random_hex 16)
+  random_hex 32 >"$state_dir/handoff.key"
+  cat >"$env_file" <<EOF
+DEMO_COMPOSE_PROJECT=$compose_project_base-$new_instance
+DEMO_DATABASE_VOLUME=$database_volume_base-$new_instance
+DEMO_DATABASE_MARKER=$database_marker_base:$new_instance
+DEMO_APPLICATION_IMAGE=$application_image
+DEMO_DATABASE_IMAGE=$database_image
+DEMO_DATABASE_NAME=$(contract_value database.name)
+DEMO_DATABASE_USER=$(contract_value database.user)
+DEMO_DATABASE_PASSWORD=$(random_hex 24)
+DEMO_POSTGRES_PASSWORD=$(random_hex 24)
+DEMO_KEYSTORE_PASSWORD=$(random_hex 24)
+DEMO_INSTANCE_ID=$new_instance
+EOF
+  chmod 600 "$env_file" "$state_dir/handoff.key"
+  echo "Initialized private demo state at $state_dir"
+}
+
+wait_for_health() {
+  local service=$1 timeout=${2:-1200} deadline status container
+  deadline=$((SECONDS + timeout))
+  while (( SECONDS < deadline )); do
+    container=$(compose ps -q "$service")
+    if [[ -n "$container" ]]; then
+      status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container")
+      case "$status" in
+        healthy|running)
+          [[ "$service" == application && "$status" != healthy ]] || return 0
+          ;;
+        unhealthy|exited|dead)
+          compose logs --no-color "$service" >&2
+          return 1
+          ;;
+      esac
+    fi
+    sleep 5
+  done
+  compose logs --no-color "$service" >&2
+  echo "Timed out waiting for $service health" >&2
+  return 1
+}
+
+load_images() {
+  local expected_application expected_database actual_application actual_database
+  docker load --input "$bundle_dir/adempiere-modern-demo-images.tar" >/dev/null
+  expected_application=$(
+    awk -F'"' '/"application_image_id"/ {print $4; exit}' \
+      "$bundle_dir/provenance.json"
+  )
+  expected_database=$(
+    awk -F'"' '/"database_image_id"/ {print $4; exit}' \
+      "$bundle_dir/provenance.json"
+  )
+  actual_application=$(docker image inspect --format '{{.Id}}' "$application_image")
+  actual_database=$(docker image inspect --format '{{.Id}}' "$database_image")
+  if [[ -z "$expected_application" || "$actual_application" != "$expected_application" ||
+        -z "$expected_database" || "$actual_database" != "$expected_database" ]]; then
+    echo "Loaded image identities do not match bundle provenance" >&2
+    exit 65
+  fi
+}
+
+up() {
+  require_initialized
+  require_command docker
+  verify_bundle
+  load_images
+  if docker volume inspect "$database_volume" >/dev/null 2>&1; then
+    verify_volume_labels
+  fi
+  compose up --detach --force-recreate
+  verify_volume_labels
+  wait_for_health database 300
+  wait_for_health application 1200
+  echo "Demo ready at http://127.0.0.1:8888/webui/"
+}
+
+status() {
+  require_initialized
+  compose ps
+  echo "Public URL: http://127.0.0.1:8888/webui/"
+  printf 'Accepted source: %s\n' "$(contract_value accepted.develop.commit)"
+  printf 'Accepted Phase 5g-1b run: %s\n' "$(contract_value accepted.phase5g1b.run.url)"
+}
+
+verify() {
+  require_initialized
+  wait_for_health application 30
+  compose exec --no-TTY application /opt/demo/run-verifier.sh
+}
+
+down() {
+  require_initialized
+  compose down
+}
+
+logs() {
+  require_initialized
+  compose logs --no-color
+}
+
+reset() {
+  require_initialized
+  compose exec --no-TTY application /opt/demo/demo-database-tool guard
+  compose down
+
+  verify_volume_labels
+  docker volume rm "$database_volume" >/dev/null
+  compose up --detach
+  wait_for_health database 300
+  wait_for_health application 1200
+  compose exec --no-TTY application /opt/demo/demo-database-tool pristine
+  echo "Demo reset to a pristine seeded state"
+}
+
+usage() {
+  echo "Usage: ./demo {init|up|status|verify|logs|reset|down}" >&2
+  exit 64
+}
+
+case "${1:-}" in
+  init) initialize ;;
+  up) up ;;
+  status) status ;;
+  verify) verify ;;
+  logs) logs ;;
+  reset) reset ;;
+  down) down ;;
+  *) usage ;;
+esac

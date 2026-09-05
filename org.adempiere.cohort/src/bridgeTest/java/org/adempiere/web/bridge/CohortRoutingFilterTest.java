@@ -12,6 +12,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockingDetails;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -28,11 +29,13 @@ import java.util.Enumeration;
 import java.util.List;
 import java.util.Properties;
 import java.util.Vector;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.servlet.FilterChain;
 import javax.servlet.FilterConfig;
@@ -956,6 +959,142 @@ class CohortRoutingFilterTest {
 		verify(legacy).doFilter(fresh, freshResponse);
 		verify(freshResponse, never()).sendError(anyInt());
 		verify(freshResponse, never()).sendRedirect(any());
+	}
+
+	@Test
+	@DisplayName("a racing redirect target after routed END reaches fresh login")
+	void racingRedirectTargetAfterRoutedSessionEndReachesFreshLogin() throws Exception {
+		ModernSessionAffinity affinity = bootstrappedAffinity();
+		HttpSession session = mock(HttpSession.class);
+		when(session.getAttribute(ModernSessionAffinity.ATTRIBUTE)).thenReturn(affinity);
+		when(session.getId()).thenReturn("ROTATED");
+		CountDownLatch invalidationStarted = new CountDownLatch(1);
+		CountDownLatch allowInvalidation = new CountDownLatch(1);
+		CountDownLatch redirectTargetLostSession = new CountDownLatch(1);
+		doAnswer(invocation -> {
+			invalidationStarted.countDown();
+			if (!allowInvalidation.await(30, TimeUnit.SECONDS)) {
+				throw new IllegalStateException("Test did not release invalidation");
+			}
+			return null;
+		}).when(session).invalidate();
+		CohortRoutingFilter filter = armedFilter(backend ->
+				new EndingProxy(backend));
+		ExecutorService workers = Executors.newFixedThreadPool(2);
+		HttpServletResponse redirectResponse = mock(HttpServletResponse.class);
+		HttpServletRequest redirectTarget =
+				routedRequest(session, "GET", "/webui/");
+		AtomicInteger targetSessionReads = new AtomicInteger();
+		doAnswer(invocation -> {
+			if (targetSessionReads.getAndIncrement() == 0) {
+				return session;
+			}
+			redirectTargetLostSession.countDown();
+			return null;
+		}).when(redirectTarget).getSession(false);
+		HttpServletResponse loginResponse = mock(HttpServletResponse.class);
+		FilterChain legacy = mock(FilterChain.class);
+		try {
+			Future<?> redirect = workers.submit(() -> {
+				filter.doFilter(
+						routedRequest(session, "GET", "/webui/index.zul"),
+						redirectResponse, mock(FilterChain.class));
+				return null;
+			});
+			assertTrue(invalidationStarted.await(30, TimeUnit.SECONDS));
+			Future<?> target = workers.submit(() -> {
+				filter.doFilter(redirectTarget, loginResponse, legacy);
+				return null;
+			});
+			assertTrue(redirectTargetLostSession.await(30, TimeUnit.SECONDS));
+			verify(legacy, never()).doFilter(any(), any());
+
+			allowInvalidation.countDown();
+			redirect.get(30, TimeUnit.SECONDS);
+			target.get(30, TimeUnit.SECONDS);
+		} finally {
+			allowInvalidation.countDown();
+			workers.shutdownNow();
+		}
+
+		verify(session).invalidate();
+		verify(redirectResponse).sendRedirect("/webui/");
+		verify(legacy).doFilter(redirectTarget, loginResponse);
+		verify(loginResponse, never()).setStatus(HttpServletResponse.SC_NO_CONTENT);
+		verify(loginResponse, never()).sendRedirect(any());
+	}
+
+	@Test
+	@DisplayName("a session invalidated at entry allows only the fresh login route")
+	void invalidatedSessionAtEntryAllowsOnlyFreshLogin() throws Exception {
+		CohortRoutingFilter filter = armedFilter();
+
+		HttpSession rootSession = mock(HttpSession.class);
+		when(rootSession.getAttribute(ModernSessionAffinity.ATTRIBUTE))
+				.thenThrow(new IllegalStateException("invalidated"));
+		HttpServletRequest rootRequest =
+				routedRequest(rootSession, "GET", "/webui/");
+		HttpServletResponse rootResponse = mock(HttpServletResponse.class);
+		FilterChain rootChain = mock(FilterChain.class);
+		filter.doFilter(rootRequest, rootResponse, rootChain);
+
+		verify(rootChain).doFilter(rootRequest, rootResponse);
+		verify(rootResponse, never()).sendError(anyInt());
+
+		HttpSession pageSession = mock(HttpSession.class);
+		when(pageSession.getAttribute(ModernSessionAffinity.ATTRIBUTE))
+				.thenThrow(new IllegalStateException("invalidated"));
+		HttpServletRequest pageRequest =
+				routedRequest(pageSession, "GET", "/webui/index.zul");
+		HttpServletResponse pageResponse = mock(HttpServletResponse.class);
+		FilterChain pageChain = mock(FilterChain.class);
+		filter.doFilter(pageRequest, pageResponse, pageChain);
+
+		verify(pageChain, never()).doFilter(any(), any());
+		verify(pageResponse).sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+	}
+
+	@Test
+	@DisplayName("invalidation during redirect-barrier read reaches fresh login")
+	void invalidationDuringRedirectBarrierReadReachesFreshLogin() throws Exception {
+		ModernSessionAffinity affinity = bootstrappedAffinity();
+		affinity.claimEnd(ModernSessionAffinity.EndNavigation.HTTP);
+		affinity.completeEndCleanup();
+		HttpSession session = mock(HttpSession.class);
+		when(session.getAttribute(ModernSessionAffinity.ATTRIBUTE))
+				.thenReturn(affinity);
+		when(session.getAttribute(
+				CohortDecisionInterceptor.REDIRECT_PENDING_ATTRIBUTE))
+				.thenThrow(new IllegalStateException("invalidated"));
+		HttpServletRequest request =
+				routedRequest(session, "GET", "/webui/");
+		HttpServletResponse response = mock(HttpServletResponse.class);
+		FilterChain legacy = mock(FilterChain.class);
+
+		CohortRoutingFilter filter = armedFilter();
+		filter.doFilter(request, response, legacy);
+
+		verify(legacy).doFilter(request, response);
+		verify(response, never()).sendError(anyInt());
+	}
+
+	@Test
+	@DisplayName("invalidation after an empty affinity read reaches fresh login")
+	void invalidationAfterEmptyAffinityReadReachesFreshLogin() throws Exception {
+		HttpSession session = mock(HttpSession.class);
+		when(session.getAttribute(ModernSessionAffinity.ATTRIBUTE)).thenReturn(null);
+		when(session.getAttribute(CohortDecisionInterceptor.DECIDED_ATTRIBUTE))
+				.thenThrow(new IllegalStateException("invalidated"));
+		HttpServletRequest request =
+				routedRequest(session, "GET", "/webui/");
+		HttpServletResponse response = mock(HttpServletResponse.class);
+		FilterChain legacy = mock(FilterChain.class);
+
+		CohortRoutingFilter filter = armedFilter();
+		filter.doFilter(request, response, legacy);
+
+		verify(legacy).doFilter(request, response);
+		verify(response, never()).sendError(anyInt());
 	}
 
 	@Test
