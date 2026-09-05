@@ -31,6 +31,27 @@ random_hex() {
   od -An -N"$bytes" -tx1 /dev/urandom | tr -d ' \n'
 }
 
+file_mode() {
+  if stat -c '%a' "$1" >/dev/null 2>&1; then
+    stat -c '%a' "$1"
+  else
+    stat -f '%Lp' "$1"
+  fi
+}
+
+write_random_bytes() {
+  local bytes=$1 destination=$2 size non_printable
+  dd if=/dev/urandom of="$destination" bs=1 count="$bytes" 2>/dev/null
+  size=$(wc -c <"$destination" | tr -d ' ')
+  non_printable=$(LC_ALL=C tr -d '[:print:]' <"$destination" |
+    wc -c | tr -d ' ')
+  if [[ "$size" != "$bytes" || "$non_printable" == 0 ]]; then
+    rm -f "$destination"
+    echo "The generated handoff key does not contain $bytes random bytes" >&2
+    exit 70
+  fi
+}
+
 require_command() {
   command -v "$1" >/dev/null 2>&1 || {
     echo "Required command is unavailable: $1" >&2
@@ -42,6 +63,16 @@ require_initialized() {
   [[ -r "$env_file" && -r "$state_dir/handoff.key" ]] || {
     echo "Demo state is absent. Run: ./demo init" >&2
     exit 66
+  }
+  local handoff_size handoff_mode handoff_non_printable
+  handoff_size=$(wc -c <"$state_dir/handoff.key" | tr -d ' ')
+  handoff_mode=$(file_mode "$state_dir/handoff.key")
+  handoff_non_printable=$(LC_ALL=C tr -d '[:print:]' \
+    <"$state_dir/handoff.key" | wc -c | tr -d ' ')
+  [[ "$handoff_size" == 48 && "$handoff_mode" == 600 &&
+     "$handoff_non_printable" != 0 ]] || {
+    echo "Demo handoff key must be 48 non-placeholder bytes at mode 600" >&2
+    exit 65
   }
   local line_count
   line_count=$(grep -Ec '^[A-Z0-9_]+=[^[:space:]]+$' "$env_file")
@@ -147,7 +178,7 @@ initialize() {
   umask 077
   local new_instance
   new_instance=$(random_hex 16)
-  random_hex 32 >"$state_dir/handoff.key"
+  write_random_bytes 48 "$state_dir/handoff.key"
   cat >"$env_file" <<EOF
 DEMO_COMPOSE_PROJECT=$compose_project_base-$new_instance
 DEMO_DATABASE_VOLUME=$database_volume_base-$new_instance
