@@ -10,10 +10,13 @@ what that grouping deliberately gives up. This implements
 |---|---|---|---|
 | 1 | `pull_request` → `develop`/`master` | Yes | `Contracts`, `Current-phase database smoke` |
 | 2 | `push` → `develop`/`master`, nightly `schedule`, `workflow_dispatch` | No | `Regression matrix` (8 database-backed gates) |
+| Demo bundle | Manual `workflow_dispatch` on `develop` only | No; publication acceptance lane | `Validate demo contract`, `Build demo bundle`, `Smoke downloaded demo bundle` |
 | Candidate capture | Push adding/changing `phase5g1ay-oracle-candidate.yml` on `phase-5g-1a-y-workflow-attribution-oracle` | No; creates no required-check names | `Oracle candidate capture (non-acceptance)` |
 
 Lane 1 is what a pull request must pass. Lane 2 records that the phases already
-merged still hold.
+merged still hold. The demo-bundle workflow rebuilds the unconfigured product,
+assembles two digest-pinned `linux/amd64` images, and tests the downloaded
+artifact in a clean directory; it does not replace either protected Lane 1 job.
 
 ## Why the contract gates are one job
 
@@ -32,6 +35,7 @@ phase3NoDatabaseDistribution
                                 └── phase5g1aFinalVerification (gradle/phase5/write-oracle.gradle)
                                       └── phase5g1ayFinalVerification (gradle/phase5/write-oracle.gradle)
                                             └── phase5g1bFinalVerification (gradle/phase5/write-parity.gradle)
+                                                  └── firstModernDemoFinalVerification (gradle/phase5/first-modern-demo.gradle)
 ```
 
 Running each gate as its own CI job therefore re-executes work another job is
@@ -60,10 +64,11 @@ re-measured after reconciling Phase 5g-1b with the accepted 5g-1a-y chain:
 | Phase 5g-1a legacy write oracle contracts | `phase5g1aFinalVerification` | 292 |
 | Phase 5g-1a-y workflow-attribution amendment | `phase5g1ayFinalVerification` | 296 |
 | Phase 5g-1b modern write parity contracts | `phase5g1bFinalVerification` | 300 |
-| **Sum across the 11 separate jobs** | | **2056** |
-| **`Contracts`, one invocation** | `phase5g1bFinalVerification phase5cFinalVerification` | **306** |
+| First modern business demo artifact contract | `firstModernDemoFinalVerification` | 302 |
+| **Sum across the 12 separate jobs** | | **2358** |
+| **`Contracts`, one invocation** | `firstModernDemoFinalVerification phase5cFinalVerification` | **308** |
 
-**1750 of 2056 task executions per pull request would be redundant (85.1%).**
+**2050 of 2358 task executions per pull request would be redundant (86.9%).**
 
 Earlier measurements on the same topology: 9 jobs at 1459 against 298 merged
 when Phase 5g-1a-x re-froze the oracle, 9 jobs at 1458 against 296 merged
@@ -84,40 +89,40 @@ for t in phase3NoDatabaseDistribution phase4FinalVerification \
          phase5dFinalVerification phase5eFinalVerification \
          phase5fFinalVerification phase5g0FinalVerification \
          phase5g1aFinalVerification phase5g1ayFinalVerification \
-         phase5g1bFinalVerification; do
+         phase5g1bFinalVerification firstModernDemoFinalVerification; do
   ./gradlew $t --dry-run --dependency-verification=strict \
     | grep SKIPPED | sed 's/ SKIPPED//'
 done | sort -u > union.txt
 
-./gradlew phase5g1bFinalVerification phase5cFinalVerification \
+./gradlew firstModernDemoFinalVerification phase5cFinalVerification \
   --dry-run --dependency-verification=strict \
   | grep SKIPPED | sed 's/ SKIPPED//' | sort -u > merged.txt
 
 comm -23 union.txt merged.txt   # must print nothing
 ```
 
-Result: union 306 tasks, merged 306 tasks, `comm -23` and `comm -13` empty. The
-merged invocation schedules **exactly** the same task set as the eleven gates
+Result: union 308 tasks, merged 308 tasks, `comm -23` and `comm -13` empty. The
+merged invocation schedules **exactly** the same task set as the twelve gates
 combined.
 
-Re-derived for Phase 5g-1b rather than merely re-headed. The argument list moved
-from `phase5g1ayFinalVerification phase5cFinalVerification` to
-`phase5g1bFinalVerification phase5cFinalVerification`:
+Re-derived for the first modern demo rather than merely re-headed. The argument
+list moved from `phase5g1bFinalVerification phase5cFinalVerification` to
+`firstModernDemoFinalVerification phase5cFinalVerification`:
 
-- **addition set** (4): `:phase5g1bFinalVerification`,
-  `:verifyPhase5g1bEvidenceValidator`, `:verifyPhase5g1bLaneInvariants`,
-  `:verifyPhase5g1bProductionWorkflowAttribution`
+- **addition set** (2): `:firstModernDemoFinalVerification`,
+  `:verifyFirstModernDemoContract`
 - **removal set**: empty
 
 The removal set is what actually matters. Dropping
-`phase5g1ayFinalVerification` from the arguments is safe **only** because
-`phase5g1bFinalVerification` chains it
-(`gradle/phase5/write-parity.gradle`); the empty removal set is the evidence of
-that, not the assumption behind it. `phase5cFinalVerification` remains because
-it is deliberately off the chain and still contributes `:zkwebui:check`.
+`phase5g1bFinalVerification` from the arguments is safe **only** because
+`firstModernDemoFinalVerification` chains it
+(`gradle/phase5/first-modern-demo.gradle`); the empty removal set is the
+evidence of that, not the assumption behind it. `phase5cFinalVerification`
+remains because it is deliberately off the chain and still contributes
+`:zkwebui:check`.
 
-The previous merged count was 302. Phase 5g-1b adds exactly its aggregate and
-three neutral validators, producing the measured 306-task invocation.
+The previous merged count was 306. The demo contract adds exactly its aggregate
+and one neutral validator, producing the measured 308-task invocation.
 
 The capture lane itself, `phase5g1aLegacyWriteOracleSmoke`, is deliberately
 **not** on this chain. It needs a disposable PostgreSQL, the installed Tomcat 9

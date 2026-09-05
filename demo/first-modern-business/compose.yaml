@@ -1,0 +1,70 @@
+name: ${DEMO_COMPOSE_PROJECT}
+
+services:
+  database:
+    image: ${DEMO_DATABASE_IMAGE}
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: ${DEMO_DATABASE_NAME}
+      POSTGRES_PASSWORD: ${DEMO_POSTGRES_PASSWORD}
+      ADEMPIERE_DB_USER: ${DEMO_DATABASE_USER}
+      ADEMPIERE_DB_PASSWORD: ${DEMO_DATABASE_PASSWORD}
+      ADEMPIERE_DEMO_MARKER: ${DEMO_DATABASE_MARKER}
+    healthcheck:
+      test:
+        - CMD
+        - /opt/adempiere-demo/database-healthcheck.sh
+      interval: 5s
+      timeout: 5s
+      retries: 60
+    volumes:
+      - demo-database:/var/lib/postgresql/data
+    networks:
+      - demo-internal
+
+  application:
+    image: ${DEMO_APPLICATION_IMAGE}
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      ADEMPIERE_DB_SERVER: database
+      ADEMPIERE_DB_PORT: "5432"
+      ADEMPIERE_DB_NAME: ${DEMO_DATABASE_NAME}
+      ADEMPIERE_DB_USER: ${DEMO_DATABASE_USER}
+      ADEMPIERE_DB_PASSWORD: ${DEMO_DATABASE_PASSWORD}
+      ADEMPIERE_DB_SYSTEM_PASSWORD: ${DEMO_POSTGRES_PASSWORD}
+      ADEMPIERE_DEMO_MARKER: ${DEMO_DATABASE_MARKER}
+      ADEMPIERE_DEMO_PROJECT: ${DEMO_COMPOSE_PROJECT}
+      ADEMPIERE_KEYSTORE_PASSWORD: ${DEMO_KEYSTORE_PASSWORD}
+      ADEMPIERE_INSTANCE_ID: ${DEMO_INSTANCE_ID}
+    ports:
+      - "127.0.0.1:8888:8888"
+    volumes:
+      - ./.demo-state/handoff.key:/run/adempiere-demo-source/handoff.key:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          java -cp /opt/demo/classes org.adempiere.demo.DemoHttpProbe
+          http://127.0.0.1:8888/webui/ 200
+          && java -cp /opt/demo/classes org.adempiere.demo.DemoHttpProbe
+          http://127.0.0.1:8890/webui/ 200,403
+      interval: 10s
+      timeout: 10s
+      retries: 90
+      start_period: 30s
+    networks:
+      - demo-internal
+
+volumes:
+  demo-database:
+    name: ${DEMO_DATABASE_VOLUME}
+    labels:
+      org.adempiere.demo.owner: ${DEMO_DATABASE_MARKER}
+      org.adempiere.demo.project: ${DEMO_COMPOSE_PROJECT}
+      org.adempiere.demo.instance: ${DEMO_INSTANCE_ID}
+
+networks:
+  demo-internal:
+    internal: true

@@ -1,0 +1,13 @@
+ARG POSTGRES_IMAGE
+FROM ${POSTGRES_IMAGE}
+
+COPY database/10-create-role.sh /docker-entrypoint-initdb.d/10-create-role.sh
+COPY database/20-Adempiere_pg.dmp /opt/adempiere-demo/Adempiere_pg.dmp
+COPY database/database-healthcheck.sh /opt/adempiere-demo/database-healthcheck.sh
+COPY database/20-import-seed.sh /docker-entrypoint-initdb.d/20-import-seed.sh
+COPY database/30-mark-database.sh /docker-entrypoint-initdb.d/30-mark-database.sh
+
+RUN chmod 0755 /docker-entrypoint-initdb.d/10-create-role.sh \
+    /docker-entrypoint-initdb.d/20-import-seed.sh \
+    /docker-entrypoint-initdb.d/30-mark-database.sh \
+    /opt/adempiere-demo/database-healthcheck.sh

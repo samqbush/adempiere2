@@ -110,7 +110,8 @@ jobs:
           java-version: '21'
           cache: gradle
 
-      # One invocation, one task graph. phase5g1bFinalVerification chains
+      # One invocation, one task graph. firstModernDemoFinalVerification chains
+      # phase5g1bFinalVerification, which chains
       # phase5g1ayFinalVerification, which chains phase5g1aFinalVerification,
       # which chains phase5g0FinalVerification, which chains
       # phase5fFinalVerification, which transitively covers
@@ -118,15 +119,14 @@ jobs:
       # 5a/5b/5c/5d/5e gates; phase5cFinalVerification contributes only
       # :zkwebui:check, which is not on that chain.
       #
-      # Re-derived for the reconciled 5g-1b head, not merely re-headed: it adds
-      # the aggregate and its three neutral validators, with no removals.
-      # phase5g1ayFinalVerification leaves the argument list only because the
-      # new head chains it. phase5cFinalVerification stays because it is
+      # The demo gate adds only its database-neutral artifact contract.
+      # phase5g1bFinalVerification leaves the argument list only because the
+      # new head chains it. phase5cFinalVerification stays because it remains
       # deliberately off-chain; dropping it would silently drop :zkwebui:check.
       - name: Verify every database-neutral phase gate
         uses: ./.github/actions/adempiere-build
         with:
-          task: phase5g1bFinalVerification phase5cFinalVerification
+          task: firstModernDemoFinalVerification phase5cFinalVerification
 
       # if-no-files-found: error is satisfied by any one matching path, so an
       # upload block that also matches an evidence directory cannot detect a
@@ -198,6 +198,7 @@ jobs:
             build/phase5f/
             build/phase5g1ay/
             build/phase5g1b/
+            build/first-modern-demo/
             build/phase3/release/Adempiere_394LTS.zip
             build/phase3/release/Adempiere_394LTS.tar.gz
             serverRoot/build/phase5f-wars/

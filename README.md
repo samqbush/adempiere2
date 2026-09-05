@@ -329,12 +329,23 @@ exposed a concurrent routed-logout race after the modern session was destroyed;
 the candidate now repeats the internal END handshake for that exact
 loopback-bound stale-session case while keeping unbound requests forbidden.
 Exact-head run 33913861562 passed both captures and all six H6 controls with the
-correction. Post-merge run 33922390350 kept the current Phase 5g-1b smoke and
-seven historical lanes green, but stopped the line on Phase 5e's
+correction. Post-merge run 33922390350 then stopped the line on Phase 5e's
 `missing-affinity` control: the first correction mistook any surviving router
-binding after a Tomcat 10 restart for a completed logout. R18 narrows END
-recovery to the exact recently ended modern session identifier; the full
-post-merge matrix remains required before demo work starts.
+binding after a Tomcat 10 restart for a completed logout. R18 narrowed END
+recovery to the exact recently ended modern session identifier. PR 21,
+https://github.com/samqbush/adempiere2/pull/21, merged that correction at
+`0e5b42c18522eb6e3925d9a367ef8c348223e994`; post-merge run
+https://github.com/samqbush/adempiere2/actions/runs/33932245213 passed the
+current Phase 5g-1b smoke and all eight historical regression lanes. Phase
+5g-1b and R18 are therefore accepted on `develop`.
+
+The first portable modern-business demo is now implemented as a manual
+GitHub Actions bundle: a pinned `linux/amd64` application image, a pinned
+PostgreSQL 14.6 seed image, loopback-only Compose topology, generated local
+secrets, safe lifecycle commands, and an artifact-level Business Partner
+create/read-back/workflow verifier. See
+`docs/modernization/first-modern-business-demo.md`. The bundle is disposable
+and is not production-supported.
 
 The Tomcat smoke requires HTTP 2xx/3xx from each deployed context except
 `ADInterface`, whose unrouted base path is explicitly expected to return 404;

@@ -1358,6 +1358,37 @@ tasks.register('phase5g1bNoLegacyFallbackCapture', Test) {
 	}
 }
 
+tasks.register('firstModernDemoPublicOriginSmoke', Test) {
+	group = 'verification'
+	description = 'Creates one Business Partner through the downloaded demo public routed modern UI'
+	dependsOn rootProject.tasks.named('installPhase5cBrowser')
+	testClassesDirs = sourceSets.writeParityTest.output.classesDirs
+	classpath = sourceSets.writeParityTest.runtimeClasspath
+	useJUnitPlatform()
+	filter {
+		includeTestsMatching 'org.adempiere.webui.phase5g.FirstModernDemoPublicOriginTest'
+	}
+	systemProperty 'firstModernDemo.baseUrl',
+		providers.gradleProperty('firstModernDemoBaseUrl')
+			.getOrElse('http://127.0.0.1:8888')
+	systemProperty 'firstModernDemo.recordValue',
+		providers.gradleProperty('firstModernDemoRecordValue').getOrElse('')
+	systemProperty 'firstModernDemo.evidenceDir',
+		providers.gradleProperty('firstModernDemoEvidenceDir').getOrElse(
+			layout.buildDirectory.dir('first-modern-demo').get().asFile.absolutePath)
+	environment 'PLAYWRIGHT_BROWSERS_PATH',
+		rootProject.layout.buildDirectory.dir('phase5c/playwright-browsers')
+			.get().asFile.absolutePath
+	environment 'PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD', '1'
+	doFirst {
+		if (providers.gradleProperty('firstModernDemoRecordValue')
+				.getOrElse('').blank) {
+			throw new GradleException(
+				'firstModernDemoRecordValue must identify the CI-created record')
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Phase 5e
 // ---------------------------------------------------------------------------
