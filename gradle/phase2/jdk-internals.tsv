@@ -113,7 +113,7 @@ version-gate	install/src/test/java/org/compiere/install/JavaToolSupportTest.java
 reflection	jbossfacet/src/org/adempiere/as/jboss/JBoss.java:31	Class.forName("org.jboss.security.jndi.JndiLoginInitialContextFactory"); 	Phase 2: reviewed application extension/reflection seam
 reflection	migration/src/oracle/DBDifference.java:1908	Class.forName(driverName); 	Phase 2: reviewed application extension/reflection seam
 reflection	org.adempiere.cohort/src/bridge/java/org/adempiere/web/bridge/CohortBridgeStartupListener.java:55	Class.forName(required, false, getClass().getClassLoader());	Phase 2: reviewed application extension/reflection seam
-internal-import	org.adempiere.cohort/src/bridgeTest/java/org/adempiere/web/bridge/CohortRoutingFilterTest.java:47	import com.sun.net.httpserver.HttpServer;	Phase 5f: supported JDK loopback HTTP test fixture
+internal-import	org.adempiere.cohort/src/bridgeTest/java/org/adempiere/web/bridge/CohortRoutingFilterTest.java:50	import com.sun.net.httpserver.HttpServer;	Phase 5f: supported JDK loopback HTTP test fixture
 internal-import	org.adempiere.cohort/src/contextBridgeTest/java/org/adempiere/web/context/ContextRoutingFilterTest.java:23	import com.sun.net.httpserver.HttpServer;	Phase 5f: supported JDK loopback HTTP test fixture
 internal-import	org.adempiere.cohort/src/test/java/org/adempiere/web/route/LoopbackProxyTest.java:17	import com.sun.net.httpserver.HttpServer;	Phase 5f: supported JDK loopback HTTP test fixture
 reflection	org.adempiere.pos/src/main/java/base/org/adempiere/pos/util/POSTicketHandler.java:104	constructor = clazz.getDeclaredConstructor(new Class[]{CPOS.class});	Phase 2: reviewed application extension/reflection seam
