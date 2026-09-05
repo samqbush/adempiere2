@@ -1,10 +1,12 @@
 # Phase 5g-1b evidence: modern Business Partner CRUD parity
 
-**Status: accepted on the corrected PR candidate; merge and post-merge
-regression pending.**
+**Status: merged; post-merge regression is stop-the-line pending the R18
+correction.**
 
-PR 19 has accepted and merged the corrected workflow-attribution oracle, and PR
-20 has merged the independent routing-transition correction. The reconciled PR
+PR 19 accepted and merged the corrected workflow-attribution oracle, PR 20
+merged the independent routing-transition correction, and PR 18 merged the
+reconciled Phase 5g-1b implementation at
+`e02c82ed5cae77ec9eb3067be291cb78332ffccc`. The reconciled PR
 18 branch now carries the reviewed production saving-context overloads from
 `DocWorkflowManager` through `MWorkflow` to `MWFProcess`, keeps the existing
 entry points as compatibility delegates, chains `phase5g1ayFinalVerification`,
@@ -25,8 +27,20 @@ remain forbidden. Focused proxy and modern-filter tests cover the new decision,
 and the unchanged legacy-bridge suite remains green. Exact-head run
 [33913861562](https://github.com/samqbush/adempiere2/actions/runs/33913861562)
 then passed the complete routed runtime gate at `cda44268c`, including both
-captures and all six H6 rows. Merge and the post-merge regression matrix remain
-before the increment is complete on `develop`.
+captures and all six H6 rows.
+
+Post-merge run
+[33922390350](https://github.com/samqbush/adempiere2/actions/runs/33922390350)
+passed the current Phase 5g-1b smoke and every historical regression lane except
+`phase5eCohortRoutingSmoke`. That failure is deterministic rather than the
+recorded Playwright flake: the `missing-affinity` row restarted Tomcat 10 and
+expected the surviving Tomcat 9 affinity to fail explicitly, but the R17
+correction treated the router binding alone as an ended-session signal and
+returned END. R18 narrows recovery to the exact modern session identifier that
+the filter recorded when it destroyed a session already marked logged out.
+Unknown identifiers, including all sessions lost by a backend restart, remain
+403. The full post-merge matrix must pass before this increment is complete on
+`develop` or demo-bundle work begins.
 
 ## The claim
 
@@ -230,6 +244,7 @@ first.
 
 | Run | Reached | Finding |
 |---|---|---|
+| [33922390350](https://github.com/samqbush/adempiere2/actions/runs/33922390350) | **Post-merge stop-the-line run at `e02c82ed5`:** current Phase 5g-1b smoke and seven of eight historical regression lanes passed; only `phase5eCohortRoutingSmoke` failed | The Phase 5e `missing-affinity` control restarted Tomcat 10 and expected an explicit failure for the stale public affinity. The broad R17 condition accepted any loopback no-session request carrying the router binding, returned END, and therefore made the control observe a successful public response. This is not the recorded Playwright flake. R18 retains the END recovery only for the exact recently ended modern session identifier and leaves restart-induced affinity loss forbidden. |
 | [33913861562](https://github.com/samqbush/adempiere2/actions/runs/33913861562) | **Accepted corrected-candidate smoke at `cda44268c`:** both captures, frozen parity, workflow attribution, the evidence validator, and all six H6 controls passed | The exact routed logout race exposed by 33908565898 is closed: the final session-cleanup driver completed rather than receiving Tomcat 10's unbootstrapped-session 403. `Contracts`, publication, and JDK 21 runtime checks also passed on this commit. The Core/module job's tests passed but its final source-inventory comparison detected that one newly added static test import shifted the recorded `HttpServer` line by one; the import was removed without changing runtime behavior. |
 | [33908565898](https://github.com/samqbush/adempiere2/actions/runs/33908565898) | Both captures, frozen comparison, and five H6 controls passed on documentation-only head `92e3e24ca`; the final session-cleanup H6 driver failed while logging out its second editor | The modern session closed correctly, but a concurrent top-level request reached Tomcat 10 after that session had been destroyed and before the public navigation settled. The modern handoff filter therefore returned its expected unbootstrapped-session 403, stranding that browser page. The correction keeps the reserved, router-authored Tomcat 9 binding on ordinary internal proxy requests and converts only a loopback-bound request with no surviving modern session into the existing END response. Focused neutral-proxy and modern-filter tests cover the new behavior, while the unchanged legacy-bridge suite verifies its existing END cleanup/navigation behavior remains green; the complete final-head smoke remains the only proof of the actual routed race. |
 | [33904468993](https://github.com/samqbush/adempiere2/actions/runs/33904468993) | **Accepted exact-head smoke at `740f45b3e`:** captures A and B completed all 12 steps; A/B self-diff passed with zero problems; both matched the frozen legacy contract; all six H6 rows passed; the evidence validator accepted the run | This is the first complete accepted Phase 5g-1b result. The public `/webui` route alone reached the modern runtime; Business Partner create, update, second-editor update, stale-save refusal, duplicate submit, and deactivation matched the frozen answer; production workflow process/activity/event-audit attribution matched the corrected oracle; no loopback origin was reached; no legacy fallback occurred during backend outage; and logout returned live GardenWorld `AD_Session` rows and modern runtime caches to baseline zero. PR-head `Contracts`, core/module, publication, and JDK 21 runtime checks were green at the same commit. |
@@ -1967,8 +1982,10 @@ Job **names** are unchanged; branch protection references them by name.
   either already proven against ZK CE 10 by the Phase 5d modern slice, or owned
   by ADempiere's own source and therefore identical across runtimes because both
   compile the same `WEB-INF/src`. Only a CI capture can validate them.
-- `phase5eCohortRoutingSmoke` is a known intermittent Playwright flake under
-  heavy parallel CI load.
+- `phase5eCohortRoutingSmoke` has a known intermittent Playwright flake under
+  heavy parallel CI load, but post-merge run 33922390350 is not that flake: its
+  complete evidence deterministically names the `missing-affinity` assertion
+  regressed by R17's overly broad recovery condition.
 - **T5e-1 and T5f-1 remain open** through Phase 5h. This increment re-exercises
   them; it does not close them.
 
