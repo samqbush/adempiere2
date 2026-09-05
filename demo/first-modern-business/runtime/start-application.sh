@@ -47,7 +47,7 @@ export CATALINA_PID="$modern_home/temp/demo-modern.pid"
 export CATALINA_OPTS="${CATALINA_OPTS:-} -Duser.timezone=UTC -Duser.language=en -Duser.country=US -Dadempiere.phase5e.handoffKey=$handoff_key"
 "$modern_home/bin/catalina.sh" start
 
-java -cp /opt/demo/classes org.adempiere.demo.DemoHttpProbe \
+"$JAVA_HOME/bin/java" -cp /opt/demo/classes org.adempiere.demo.DemoHttpProbe \
   http://127.0.0.1:8890/webui/ 200,403 900
 
 set +u

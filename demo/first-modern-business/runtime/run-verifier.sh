@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-exec java \
+exec "$JAVA_HOME/bin/java" \
   -Dfile.encoding=UTF-8 \
   -Duser.timezone=UTC \
   -DADEMPIERE_HOME=/opt/Adempiere \
