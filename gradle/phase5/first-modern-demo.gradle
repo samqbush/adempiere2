@@ -14,7 +14,11 @@ tasks.register('verifyFirstModernDemoContract', Exec) {
 	inputs.files(
 		rootProject.file('gradle/phase2/runtime.properties'),
 		rootProject.file('gradle/phase4/runtime.properties'),
-		rootProject.file('gradle/phase5/zk-target.properties'))
+		rootProject.file('gradle/phase5/zk-target.properties'),
+		rootProject.file(
+			'zkwebui/src/writeParitySupport/java/org/adempiere/webui/phase5g/ZkCe10Dialect.java'),
+		rootProject.file(
+			'zkwebui/src/writeParityTest/java/org/adempiere/webui/phase5g/FirstModernDemoPublicOriginTest.java'))
 	outputs.file firstModernDemoBuild.map {
 		it.file('contract-summary.json')
 	}
