@@ -40,6 +40,8 @@ git grep -nI -E \
         owner='Phase 4: SOAP contract and runtime verification tooling' ;;
       scripts/phase5/*)
         owner='Phase 5: legacy web oracle verification tooling' ;;
+      demo/first-modern-business/contract.properties)
+        owner='First modern business demo: reviewed JDK 21 runtime pin' ;;
       org.adempiere.cohort/src/bridgeTest/*|org.adempiere.cohort/src/contextBridgeTest/*|org.adempiere.cohort/src/test/*)
         owner='Phase 5f: supported JDK loopback HTTP test fixture' ;;
       base/src/org/compiere/util/CLogMgt.java)

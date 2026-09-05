@@ -89,6 +89,7 @@ reflection	com.kkalice.adempiere.migrate/src/com/kkalice/adempiere/migrate/DBCon
 reflection	com.kkalice.adempiere.migrate/src/com/kkalice/adempiere/migrate/DBEngine.java:1165	engineClass = (Class<DBEngineInterface>) Class.forName(interfaceName);	Phase 2: reviewed application extension/reflection seam
 reflection	com.kkalice.adempiere.migrate/src/com/kkalice/adempiere/migrate/Gui.java:1625	Class.forName(driver);	Phase 2: reviewed application extension/reflection seam
 reflection	com.kkalice.adempiere.migrate/src/com/kkalice/adempiere/migrate/HelpAbout.java:138	Class ademp = Class.forName("org.compiere.Adempiere", false, this.getClass().getClassLoader());	Phase 2: reviewed application extension/reflection seam
+version-gate	demo/first-modern-business/contract.properties:6	java.version=21	First modern business demo: reviewed JDK 21 runtime pin
 internal-import	glassfishfacet/src/org/adempiere/as/glassfish/AdempiereLoginModule.java:21	import com.sun.appserv.security.AppservPasswordLoginModule; 	Phase 3: quarantined GlassFish adapter
 internal-import	glassfishfacet/src/org/adempiere/as/glassfish/AdempiereRealm.java:15	import com.sun.appserv.security.AppservRealm; 	Phase 3: quarantined GlassFish adapter
 internal-import	glassfishfacet/src/org/adempiere/as/glassfish/AdempiereRealm.java:16	import com.sun.enterprise.security.auth.realm.BadRealmException; 	Phase 3: quarantined GlassFish adapter
