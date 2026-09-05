@@ -213,6 +213,11 @@ require(
     and 'cp /opt/demo/artifacts/webui-routed.war "$home/lib/webui.war"' in startup,
     "silent setup must not replace the reviewed routed public WAR",
 )
+require(
+    'mkdir -p "$modern_home/logs" "$modern_home/temp" "$modern_home/work"'
+    in startup,
+    "startup must create mutable Tomcat 10 runtime directories",
+)
 for java_launcher in (
     startup,
     (DEMO / "runtime" / "demo-database-tool").read_text(encoding="utf-8"),

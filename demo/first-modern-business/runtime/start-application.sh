@@ -40,6 +40,7 @@ cp "$home/lib/webui.war" "$public_base/webapps/webui.war"
 rm -rf "$public_base/webapps/webui"
 rm -f "$modern_home/webapps/webui-modern.war"
 rm -rf "$modern_home/webapps/webui-modern"
+mkdir -p "$modern_home/logs" "$modern_home/temp" "$modern_home/work"
 
 export CATALINA_HOME="$modern_home"
 export CATALINA_BASE="$modern_home"
