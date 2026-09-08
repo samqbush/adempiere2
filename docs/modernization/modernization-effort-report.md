@@ -1,0 +1,137 @@
+# ADempiere modernization effort through the first business demo
+
+> **Measurement window:** 2026-08-20T19:41:26.272Z through 2026-09-05T23:29:39Z (merge of [PR #30](https://github.com/samqbush/adempiere2/pull/30)).
+> **Data snapshot:** 2026-09-08T18:03:45.631Z at repository commit `feb2c6500`. GitHub PR source SHA-256: `2b6ff8c61aa0c0bc2b628996783748590d6d46b906435910c9ab1e904e78512a`. All timestamps are UTC.
+
+## Executive summary
+
+ADempiere is a large Java business suite covering ERP, CRM, manufacturing, supply chain, accounting, and point of sale. This modernization did not rewrite it as a new product. It built a safety system around the existing modular monolith, moved the runtime to JDK 21, replaced obsolete API and web technology behind compatibility boundaries, proved real business behavior against the legacy application, and packaged the first portable modern Business Partner demo.
+
+| Measure | Result |
+|---|---:|
+| Merged modernization PRs | 30 |
+| Usage-bearing Copilot CLI sessions | 31 |
+| Recorded model calls | 12,118 |
+| Known measured AI credits | 95,627.72 |
+| Recorded active AI execution | 1d 7h 24m 17s |
+| Program calendar span | 16d 3h 48m 13s |
+| Union of measured session spans | 12d 8h 34m 7s |
+| Sum of individual session spans | 16d 11h 55m 16s |
+| Models used | 9 |
+
+**Important:** 95,627.72 is the known measured Copilot credit total, not a dollar cost. Active AI time is model execution time, not human labor. Session spans include idle waits and overlapping sessions. PR #18 and PRs #20-#30 have incomplete or absent usage telemetry; missing values are reported as unknown, never as zero.
+
+### Glossary
+
+| Term | Meaning |
+|---|---|
+| Session | One top-level Copilot CLI conversation with recorded usage. Public aliases such as `CLI-001` replace internal session IDs. |
+| AI credit | The recorded Copilot billing unit from session usage. It is not dollars, tokens, compute cost, or labor cost. |
+| Active AI time | Aggregate recorded model-runtime duration. Concurrent model calls are additive, so this value can exceed wall-clock elapsed time. For a session split across PRs, PR-level active time is an allocation estimate unless the entire model/session belongs to one PR. |
+| PR activity window | Earliest to latest attributed usage event for a PR. It is not additive across PRs. |
+| Attributed elapsed span | Union of attributed session-segment intervals for a PR, avoiding overlap double-counting. It still includes waiting inside a segment. |
+
+## Modernization journey
+
+The work progressed in six understandable steps: establish a reproducible build and real tests; move the runtime to JDK 21 and prove a complete installed product; replace the obsolete SOAP stack; freeze the old web behavior and introduce ZK CE 10/Jakarta incrementally; prove a real Business Partner write against a legacy oracle; and package the accepted vertical slice as a clean-download demo. The result is a credible first demonstration, not yet a claim that every ADempiere screen or production deployment is modernized.
+
+### Phase rollup
+
+| Workstream | PRs | Unique measured sessions | Known credits | Telemetry gaps | Business outcome |
+|---|---:|---:|---:|---|---|
+| Build and runtime foundation | 1-3 | 5 | 1,390 | None identified | Repeatable builds, real tests, JDK 21, and a guarded installed product. |
+| API modernization | 4-5 | 4 | 4,221.72 | None identified | Legacy SOAP contracts preserved on a modern CXF/Jakarta implementation. |
+| Web migration foundation | 6-11 | 15 | 44,946 | None identified | Legacy behavior frozen; modern ZK/Jakarta UI, routing, sessions, and routes proven incrementally. |
+| CI efficiency | 12 | 1 | 2,291 | None identified | Duplicate PR validation consolidated without dropping measured coverage. |
+| Business write oracle and parity | 13-21 | 7 | 42,439 | #18, #20, #21 | The first modern business write matched an independently frozen legacy answer. |
+| Portable demo | 22-30 | 1 | 328 | #22, #23, #24, #25, #26, #27, #28, #29, #30 | A downloaded bundle can demonstrate a real Business Partner workflow on the modern UI. |
+
+Phase session counts are unique within each workstream but are not additive across workstreams because a session can cross a PR/workstream boundary.
+
+## Pull-request effort and outcomes
+
+The credits below are measured values where telemetry exists. A value marked **unknown** means no matching usage-bearing session was available. **Allocated** active time is estimated from the reconciled model-call share of a session that crossed PR boundaries.
+
+| PR | What changed and why it mattered | Verified outcome | Sessions | Known credits | Attributed elapsed | Active AI time | Models | Telemetry |
+|---|---|---|---:|---:|---:|---:|---|---|
+| [#1](https://github.com/samqbush/adempiere2/pull/1) Phase 1: establish reproducible Gradle core gate and modernization baseline | **Changed:** Made the core build repeatable by adding a pinned Gradle wrapper, dependency verification, lockfiles, real test discovery, publication checks, and a software bill of materials.<br>**Why:** A future change could now be judged against a reproducible baseline instead of a machine-specific build. | Recorded 832 Gradle tests, 1,075 Ant tests, strict dependency verification, publication checks, and mutation detection. | 2 | 375 | 54m 16s | 20m 36s measured | claude-opus-5, gpt-5.6-sol | `measured_cli` |
+| [#2](https://github.com/samqbush/adempiere2/pull/2) Phase 2: JDK 21 runtime modernization and reproducible build stabilization | **Changed:** Moved the Gradle modules and runtime path to JDK 21, replaced unsupported JDK internals, and added database, desktop, scheduler, installer, LDAP, and Tomcat compatibility checks.<br>**Why:** This removed the main runtime-age blocker while proving that core login, processing, scheduling, and database behavior still worked. | Recorded 863 Gradle tests, 1,387 Ant tests, PostgreSQL restore/migration, Swing login/menu/process, scheduler, and Tomcat 9 smoke evidence. | 1 | 462 | 1h 19m 5s | 1h 20m 25s measured | claude-sonnet-5, gpt-5.4, gpt-5.6-sol | `measured_cli` |
+| [#3](https://github.com/samqbush/adempiere2/pull/3) Phase 3 installed distribution: guardrails, metadata validation, and install smoke | **Changed:** Created a guarded full-product build and install lifecycle with disposable database protection, metadata validation, installer checks, and installed-product smoke coverage.<br>**Why:** The project moved from compiling libraries to proving that a complete ADempiere distribution could be assembled and started safely. | Installed-distribution and metadata gates became the foundation for later API and web runtime tests. | 2 | 553 | 5h 24m 34s | 39m 16s measured | claude-opus-5, gpt-5.6-sol | `measured_cli` |
+| [#4](https://github.com/samqbush/adempiere2/pull/4) Phase 4 API edge modernization: XFire-free web-service seam and contract evidence | **Changed:** Captured the existing SOAP contracts and introduced an XFire-free service seam and test evidence without yet removing the legacy runtime.<br>**Why:** Freezing the external API behavior made it possible to replace obsolete technology without asking integrations to change unexpectedly. | WSDL, HTTP, routing, and round-trip evidence established the migration oracle. | 2 | 342.61 | 2h 30m 35s | 35m 46s measured | claude-haiku-4.5, claude-opus-4.8, claude-sonnet-4.6, gpt-5.6-sol | `measured_cli` |
+| [#5](https://github.com/samqbush/adempiere2/pull/5) Phase 4 API edge modernization completion | **Changed:** Completed the SOAP replacement with a CXF/Jakarta runtime, compatibility routing, installed-product packaging, security scenarios, and removal of active XFire assets.<br>**Why:** Customers and integrations could keep the established SOAP contract while the unsupported implementation underneath it was replaced. | The modern runtime replayed 33 operation baselines and security/mutation scenarios through the installed product. | 2 | 3,879.11 | 6h 33m 3s | 2h 48m 26s measured | claude-opus-4.8, claude-opus-5, claude-sonnet-5, gpt-5.4-mini, gpt-5.6-sol | `measured_cli` |
+| [#6](https://github.com/samqbush/adempiere2/pull/6) Phase 5a: establish web inventory and Jakarta target | **Changed:** Inventoried ZK source, web assets, namespaces, descriptors, and routes, then selected checksum-pinned ZK CE 10.3.0.1-jakarta as the target.<br>**Why:** The web migration gained a complete map and a legally usable public target instead of relying on a risky blanket namespace rewrite. | Database-neutral inventory and target verification passed while runtime behavior remained unchanged. | 1 | 729 | 2h 46m 41s | 31m 5s measured | claude-opus-5, claude-sonnet-5, gpt-5.6-sol | `measured_cli` |
+| [#7](https://github.com/samqbush/adempiere2/pull/7) Phase 5b: freeze the legacy Tomcat 9 web oracle and pin legacy web artifacts | **Changed:** Froze the legacy Tomcat 9/ZK 3.6 web behavior and deployable artifacts as a rollback and comparison oracle.<br>**Why:** Once the old web framework changed, this evidence preserved the answer to 'what did the application do before?' for login, menu, sessions, routes, and packaging. | The oracle covered six WARs, the login/role/menu/logout flow, 82 reviewed request vectors, exclusions, digests, and pinned runtime coordinates. | 2 | 3,233 | 2h 3m 46s | 37m 6s measured | claude-opus-5, gpt-5.6-sol | `measured_cli` |
+| [#8](https://github.com/samqbush/adempiere2/pull/8) Phase 5c: add Jakarta web packaging beachhead | **Changed:** Added an isolated Jakarta packaging beachhead and rollback tooling beside the unchanged legacy web product.<br>**Why:** This created a reversible place to begin the web migration without forcing an unsafe all-at-once cutover. | The packaging overlay, browser artifacts, legacy replay, and rollback contracts were verified. | 2 | 602 | 4h 6m 35s | 59m 8s measured | claude-opus-4.8, claude-sonnet-5, gpt-5.6-luna, gpt-5.6-sol | `measured_cli` |
+| [#9](https://github.com/samqbush/adempiere2/pull/9) Complete Phase 5d ZK functional slice | **Changed:** Turned the beachhead into a functional ZK CE 10 slice supporting login, role selection, menus, and a read-only business window on Tomcat 10.<br>**Why:** Business users could reach a real modern UI path while the team proved that it did not accidentally change database state or break SOAP. | The modern slice matched 11 comparable legacy semantic facts, produced zero writes, and replayed the SOAP corpus during an authenticated session. | 2 | 1,263 | 1h 17m 44s | 27m 56s measured | claude-opus-5, claude-sonnet-5, gpt-5.6-luna, gpt-5.6-sol | `measured_cli` |
+| [#10](https://github.com/samqbush/adempiere2/pull/10) Phase 5e: cohort routing and modern web session handoff | **Changed:** Added fail-closed cohort routing and secure session handoff from the public Tomcat 9 entry point to selected users on Tomcat 10.<br>**Why:** The application could introduce the modern UI gradually, preserve one public URL, isolate user identities, and fall back safely only where explicitly allowed. | A 23-row routed matrix covered identities, logout, timeout, container cleanup, re-decision, and SOAP coexistence. | 2 | 14,927 | 1d 3h 10m 7s | 4h 39m 37s measured | claude-opus-5, claude-sonnet-4.6, gpt-5.6-luna, gpt-5.6-sol | `measured_cli` |
+| [#11](https://github.com/samqbush/adempiere2/pull/11) Phase 5f: add Jakarta web route contracts, topology, and runtime evidence | **Changed:** Converted the remaining non-SOAP route foundations and six web contexts to deterministic Jakarta artifacts with route contracts, rollback, and runtime evidence.<br>**Why:** The modernization expanded beyond one UI slice to the broader web estate while keeping every route owned and testable. | The accepted runtime run recorded 129 public-origin observations across 82 legacy routes and six contexts with zero vector failures. | 6 | 24,192 | 3d 17h 31m 8s | 6h 39m 59s measured; 17m 7s allocated | claude-opus-5, claude-sonnet-4.6, gpt-5.6-sol | `measured_cli` |
+| [#12](https://github.com/samqbush/adempiere2/pull/12) Consolidate CI phase gates into two lanes | **Changed:** Collapsed duplicated pull-request validation from 12 separate jobs into two stable lanes plus a post-merge regression matrix.<br>**Why:** This reduced repeated hour-long work and made the modernization feedback loop materially faster without dropping coverage. | Dry-run task-set proofs showed the consolidated lane preserved the prior database-neutral coverage. | 1 | 2,291 | 2h 9m 19s | 21m 8s allocated | claude-opus-5, gpt-5.6-sol | `measured_cli` |
+| [#13](https://github.com/samqbush/adempiere2/pull/13) Phase 5g-0: reconcile Phase 5f, decompose Phase 5g, add discovery inventories | **Changed:** Reconciled Phase 5f, decomposed the remaining UI parity work, and generated discovery inventories before attempting business writes.<br>**Why:** The team reduced a very large 'finish the UI' goal into independently reviewable increments with explicit oracle-before-modern governance. | No runtime behavior changed; inventories and the Phase 5g sequencing ADR were accepted. | 2 | 4,413 | 2h 55m 45s | 44m 49s measured | claude-opus-5, gpt-5.6-sol | `measured_cli` |
+| [#14](https://github.com/samqbush/adempiere2/pull/14) Phase 5g-1a: legacy Business Partner write oracle (database-neutral half) | **Changed:** Defined the database-neutral contract, attribution scope, measurement rules, normalization policy, and mutation checks for the first Business Partner write oracle.<br>**Why:** This prevented the modern implementation from inventing its own expected answer. | The contract skeleton and fail-closed checks landed without modern runtime code or a parity claim. | 1 | 2,847 | 2h 53m 45s | 38m 31s measured | claude-opus-5, gpt-5.6-sol | `measured_cli` |
+| [#15](https://github.com/samqbush/adempiere2/pull/15) Trim copilot-instructions to durable conventions, not phase status | **Changed:** Trimmed Copilot instructions to durable engineering rules and moved changing phase status back to the modernization plan and evidence documents.<br>**Why:** This reduced documentation drift and prevented every phase from rewriting the operating instructions. | A documentation review verified that deleted status facts remained available in authoritative living documents. | 1 | 1,346 | 2h 59m 38s | 16m 33s allocated | claude-opus-5, gpt-5.6-sol | `measured_cli` |
+| [#16](https://github.com/samqbush/adempiere2/pull/16) Phase 5g-1a: legacy Business Partner write capture lane | **Changed:** Built the real legacy browser capture lane for Business Partner create, update, two-user conflict, duplicate behavior, and deactivation with a database snapshot after each step.<br>**Why:** The legacy application finally produced the independently frozen business answer that the modern UI would have to match. | The accepted oracle used full database restore isolation, per-step effects, self-diff, domain review, and fail-closed scoring. | 1 | 11,655 | 8h 54m 35s | 1h 59m 0s allocated | claude-opus-5 | `measured_cli` |
+| [#17](https://github.com/samqbush/adempiere2/pull/17) Phase 5g-1a-x: amend and re-freeze the legacy write oracle | **Changed:** Amended and re-froze the legacy oracle to cover transport policy, duplicate submission, content-sensitive effects, and modern-versus-legacy browser error classification.<br>**Why:** The comparison rules were completed before looking at the modern answer, preserving the integrity of the parity test. | The updated oracle remained legacy-only and added mutation proofs for the newly frozen obligations. | 1 | 3,300 | 5h 18m 38s | 34m 26s allocated | claude-opus-5 | `measured_cli` |
+| [#18](https://github.com/samqbush/adempiere2/pull/18) Phase 5g-1b: modern Business Partner CRUD parity | **Changed:** Implemented modern ZK CE 10 Business Partner create, update, second-editor update, stale-save refusal, duplicate-submit protection, deactivation, workflow attribution, and session cleanup through the public route.<br>**Why:** This was the first proven business write on the modern UI and the first direct legacy-versus-modern business parity result. | Two 12-step captures self-diffed, matched the frozen oracle, passed six fail-closed controls, and later passed the complete post-merge regression matrix after follow-up fixes. | 3 | 18,155 | 1d 3h 38m 43s | 4h 21m 50s allocated | claude-opus-4.8, claude-opus-5, claude-sonnet-5, gpt-5.6-luna, gpt-5.6-sol | `partial_measured_late_commits_unrecorded` |
+| [#19](https://github.com/samqbush/adempiere2/pull/19) Phase 5g-1a-y: correct workflow attribution oracle | **Changed:** Corrected the legacy workflow-attribution oracle so process, activity, and event-audit records were measured against the saving user's invocation context.<br>**Why:** The parity result now proved that audit ownership was correct, not merely that a workflow row existed. | The corrected legacy candidate was provenance-pinned, mutation-tested, reviewed, frozen, and accepted before PR #18 used it. | 1 | 723 | 3h 36m 47s | 2h 11m 18s allocated | claude-sonnet-5, gpt-5.6-sol | `measured_cli` |
+| [#20](https://github.com/samqbush/adempiere2/pull/20) Harden Phase 5e routed transitions | **Changed:** Hardened routing during handoff transitions so approved theme assets could load safely and concurrent logout responses had one cleanup/navigation owner.<br>**Why:** This removed user-visible errors and stuck logout pages without weakening the routing security boundary. | Targeted routing contracts and later PR #18 runtime evidence verified the correction. | 0 measured | unknown | unknown | unknown | unknown | `unknown_not_recorded` |
+| [#21](https://github.com/samqbush/adempiere2/pull/21) Fix routed logout affinity classification | **Changed:** Distinguished a recently logged-out session from a session whose modern-server affinity was lost after restart.<br>**Why:** The router could complete a legitimate logout handshake while still rejecting unknown or stale sessions instead of silently falling back. | The post-merge regression matrix passed the current parity smoke and all eight historical database-backed lanes. | 0 measured | unknown | unknown | unknown | unknown | `unknown_not_recorded` |
+| [#22](https://github.com/samqbush/adempiere2/pull/22) Add first modern Business Partner demo bundle | **Changed:** Packaged the accepted Business Partner slice as a digest-pinned OCI/Compose bundle with generated secrets, safe database ownership markers, one public loopback port, browser smoke, and an operator walkthrough.<br>**Why:** A business user could run the modern workflow from a downloaded artifact without Git, Java, Gradle, Ant, or repository sources. | The initial bundle was structurally complete; later PRs corrected clean-host defects before final acceptance. | 1 | 328 | 23m 44s | 18m 44s allocated | claude-opus-4.8, gpt-5.6-sol | `planning_measured_implementation_unknown` |
+| [#23](https://github.com/samqbush/adempiere2/pull/23) Fix demo database health probe | **Changed:** Fixed the PostgreSQL health probe so psql variables were expanded instead of sent literally.<br>**Why:** The downloaded demo could correctly determine when its private database was ready. | The validator was made fail-closed against the broken command form that the first artifact run exposed. | 0 measured | unknown | unknown | unknown | unknown | `unknown_not_recorded` |
+| [#24](https://github.com/samqbush/adempiere2/pull/24) Use absolute Java path in demo runtime | **Changed:** Changed application launchers to use the preserved absolute JAVA_HOME executable.<br>**Why:** The non-root runtime no longer depended on a shell PATH that Debian reset during startup. | The demo contract now rejects PATH-dependent Java launchers. | 0 measured | unknown | unknown | unknown | unknown | `unknown_not_recorded` |
+| [#25](https://github.com/samqbush/adempiere2/pull/25) Create Tomcat runtime directories in demo bundle | **Changed:** Created Tomcat 10's mutable logs, temp, work, and webapps directories before startup.<br>**Why:** The packaged server could start on a clean host instead of assuming directories left by a build machine. | A contract mutation check prevents removal of the directory initialization. | 0 measured | unknown | unknown | unknown | unknown | `unknown_not_recorded` |
+| [#26](https://github.com/samqbush/adempiere2/pull/26) Render the modern demo context before startup | **Changed:** Rendered the modern Tomcat context descriptor with the actual runtime base path before deployment and improved failure logs.<br>**Why:** The public /webui route could find the modern application instead of timing out on a 404. | Focused descriptor substitution and contract checks reproduced and closed the artifact failure. | 0 measured | unknown | unknown | unknown | unknown | `unknown_not_recorded` |
+| [#27](https://github.com/samqbush/adempiere2/pull/27) Generate raw handoff key material for the demo | **Changed:** Generated the handoff secret as 48 raw cryptographic bytes and validated its length, permissions, and non-placeholder shape.<br>**Why:** The two web runtimes could authenticate their private handoff without accepting predictable printable key material. | The demo rejected printable or malformed keys before Docker execution. | 0 measured | unknown | unknown | unknown | unknown | `unknown_not_recorded` |
+| [#28](https://github.com/samqbush/adempiere2/pull/28) Separate demo host ingress from the database network | **Changed:** Separated host ingress from the internal database network while keeping PostgreSQL private and publishing only 127.0.0.1:8888.<br>**Why:** The host browser could reach the application without exposing the database or the modern backend directly. | The rendered Compose topology and mutation proof verified the exact network and port boundary. | 0 measured | unknown | unknown | unknown | unknown | `unknown_not_recorded` |
+| [#29](https://github.com/samqbush/adempiere2/pull/29) Verify demo browser writes by read-back | **Changed:** Changed the browser smoke to save a Business Partner and then force a database-backed lookup/read-back rather than trusting serialized page HTML.<br>**Why:** The demo proved that the business record was actually persisted and retrievable through the modern UI. | The accepted browser test remained modern-only and the contract rejects weaker page-content assertions. | 0 measured | unknown | unknown | unknown | unknown | `unknown_not_recorded` |
+| [#30](https://github.com/samqbush/adempiere2/pull/30) Record first modern business demo acceptance | **Changed:** Recorded the first fully accepted clean-download demo run and documented the presenter path, lifecycle, evidence, and limits.<br>**Why:** The modernization had a repeatable artifact and a clear business-user story rather than only engineering gates. | Workflow run 33994400756 completed init, startup, browser create/read-back, workflow verification, reset, second verification, health capture, and teardown. | 0 measured | unknown | unknown | unknown | unknown | `unknown_not_recorded` |
+
+## Models used
+
+| Model | Sessions | Calls | Credits | Recorded active AI time |
+|---|---:|---:|---:|---:|
+| claude-opus-5 | 19 | 5,710 | 85,650 | 16h 2m 14s |
+| gpt-5.6-sol | 28 | 4,458 | 4,458 | 10h 45m 45s |
+| claude-opus-4.8 | 5 | 259 | 3,885 | 56m 59s |
+| gpt-5.6-luna | 6 | 642 | 642 | 40m 54s |
+| claude-sonnet-5 | 7 | 637 | 637 | 1h 27m 13s |
+| gpt-5.4 | 1 | 215 | 215 | 41m 19s |
+| claude-sonnet-4.6 | 4 | 113 | 113 | 40m 48s |
+| gpt-5.4-mini | 1 | 67 | 22.11 | 8m 3s |
+| claude-haiku-4.5 | 1 | 17 | 5.61 | 1m 2s |
+
+## Telemetry coverage and gaps
+
+- The cloud session store contained **31** usage-bearing Copilot CLI sessions associated with this checkout and the two repository identities used during the modernization.
+- The same cutoff contained **7** Copilot Coding Agent run records grouped into **2** tasks, but their event content showed work on another repository (`samqbush/dp-katabatic-research`), so they are excluded.
+- The best-effort local history retained **28** pre-cutoff rows: **19** cloud/local duplicates and **9** local-only transient handoff or `/pr create` records without model, credit, or duration telemetry. Local retention did not cover the earliest PRs, so transient counts are a lower bound.
+- The last matching usage-bearing modernization session ended at 2026-09-04T19:46:11.758Z. PR #18 contains two later commits. PR #20's implementation commits have no corresponding usage-bearing segment, although unrelated measured modernization activity continued afterward. PRs #21-#30 were created after the last matching recorded implementation activity for their work. Their unrecorded usage cannot be reconstructed safely.
+- PR #22 has **328 known credits** for the approved demo plan. The implementation and the clean-host fix sequence in PRs #22-#30 have unknown usage, so the 328 credits are not presented as the full demo cost.
+- **12 credits** and 89.60 seconds of allocated active AI time remain in a program-wide, non-PR-specific row for progress and demo-readiness discussions.
+
+## Methodology and reconciliation
+
+1. The activity window is fixed at the first identified modernization session and the merge of PR #30. Report-generation activity is excluded.
+2. GitHub PR metadata, commit membership, PR timestamps, session PR/commit references, branch context, and user-turn transitions were used together. A PR mention alone was not treated as proof.
+3. Whole sessions were assigned directly when one PR owned the work. Five sessions crossed PR boundaries; their `assistant.usage` event counts reconciled exactly to authoritative session/model API-call totals before segmentation. The reconciliation CSV independently checks all 72 session/model aggregates.
+4. Credits for a split session/model were allocated by its exact reconciled call count. Active model duration has no event-level duration field, so split duration is explicitly an estimate using the same call share.
+5. Every measured model call is assigned exactly once to a PR or the shared/unallocated row. Raw CSV values retain full precision; Markdown values are rounded for readability.
+
+| Reconciliation check | Result |
+|---|---:|
+| Verified merged PR records | 30 |
+| Canonical usage-bearing sessions | 31 |
+| Authoritative / attributed model calls | 12,118 / 12,118 |
+| Authoritative / attributed credits | 95627.720001 / 95627.720001 |
+| Authoritative / measured-plus-allocated active seconds | 113057.410 / 113057.410 |
+| Session/model aggregates reconciled | 72 / 72 |
+| Session/model allocations with overlapping segment intervals | 0 |
+| Missing telemetry represented as zero | 0 |
+
+## Audit files
+
+- `docs/modernization/modernization-effort-by-pr.csv` - one derived row per PR plus the shared/unallocated row.
+- `docs/modernization/modernization-effort-sessions.csv` - one row per public session alias and model aggregate.
+- `docs/modernization/modernization-effort-attribution.csv` - the session/model/PR segment ledger and allocation basis.
+- `docs/modernization/modernization-effort-reconciliation.csv` - per-session/model source-versus-attribution checks.
+
+Raw Copilot session IDs and transcript excerpts are intentionally excluded from these generated report artifacts. The public aliases are sufficient to reconcile the committed effort files without adding internal identifiers to this report.
