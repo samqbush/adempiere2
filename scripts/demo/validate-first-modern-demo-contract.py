@@ -303,6 +303,16 @@ require(
     'docker volume rm "$database_volume"' in launcher_text,
     "reset must remove only the exact resolved demo volume",
 )
+require(
+    '"application_image_config_digest"' in launcher_text
+    and '"application_image_manifest_digest"' in launcher_text
+    and '"database_image_config_digest"' in launcher_text
+    and '"database_image_manifest_digest"' in launcher_text
+    and "actual_application" in launcher_text
+    and "actual_database" in launcher_text
+    and "Loaded image content does not match archive provenance" in launcher_text,
+    "loaded tags must match an archive config or OCI manifest identity",
+)
 dockerfile = (DEMO / "runtime" / "Dockerfile.app").read_text(encoding="utf-8")
 environment_renderer = (
     DEMO / "runtime" / "render-environment.sh"
@@ -442,6 +452,17 @@ modern_dialect = java_without_comments(
 require(
     "github.ref == 'refs/heads/develop'" in workflow,
     "bundle workflow must be restricted to develop",
+)
+require(
+    "tarfile.open(archive_path)" in workflow
+    and 'read_json_member("manifest.json")' in workflow
+    and 'read_json_member("index.json")' in workflow
+    and "members_by_name.setdefault(member.name, []).append(member)" in workflow
+    and '"schema": 2' in workflow
+    and '"application_image_config_digest"' in workflow
+    and '"application_image_manifest_digest"' in workflow
+    and "len(legacy_manifest) != 2" in workflow,
+    "bundle provenance must uniquely record config and OCI manifest identities",
 )
 require(
     ":zkwebui:firstModernDemoPublicOriginSmoke" in workflow,

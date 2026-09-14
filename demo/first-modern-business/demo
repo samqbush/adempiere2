@@ -221,21 +221,54 @@ wait_for_health() {
 }
 
 load_images() {
-  local expected_application expected_database actual_application actual_database
+  local application_config application_manifest database_config database_manifest
+  local actual_application actual_database expected_platform
+  local application_platform database_platform
+  application_config=$(
+    awk -F'"' '/"application_image_config_digest"/ {print $4; exit}' \
+      "$bundle_dir/provenance.json"
+  )
+  application_manifest=$(
+    awk -F'"' '/"application_image_manifest_digest"/ {print $4; exit}' \
+      "$bundle_dir/provenance.json"
+  )
+  database_config=$(
+    awk -F'"' '/"database_image_config_digest"/ {print $4; exit}' \
+      "$bundle_dir/provenance.json"
+  )
+  database_manifest=$(
+    awk -F'"' '/"database_image_manifest_digest"/ {print $4; exit}' \
+      "$bundle_dir/provenance.json"
+  )
+  if [[ ! "$application_config" =~ ^sha256:[0-9a-f]{64}$ ||
+        ! "$application_manifest" =~ ^sha256:[0-9a-f]{64}$ ||
+        ! "$database_config" =~ ^sha256:[0-9a-f]{64}$ ||
+        ! "$database_manifest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    echo "Bundle provenance contains invalid image identities" >&2
+    exit 65
+  fi
+
   docker load --input "$bundle_dir/adempiere-modern-demo-images.tar" >/dev/null
-  expected_application=$(
-    awk -F'"' '/"application_image_id"/ {print $4; exit}' \
-      "$bundle_dir/provenance.json"
-  )
-  expected_database=$(
-    awk -F'"' '/"database_image_id"/ {print $4; exit}' \
-      "$bundle_dir/provenance.json"
-  )
   actual_application=$(docker image inspect --format '{{.Id}}' "$application_image")
   actual_database=$(docker image inspect --format '{{.Id}}' "$database_image")
-  if [[ -z "$expected_application" || "$actual_application" != "$expected_application" ||
-        -z "$expected_database" || "$actual_database" != "$expected_database" ]]; then
-    echo "Loaded image identities do not match bundle provenance" >&2
+  if [[ "$actual_application" != "$application_config" &&
+        "$actual_application" != "$application_manifest" ]] ||
+     [[ "$actual_database" != "$database_config" &&
+        "$actual_database" != "$database_manifest" ]]; then
+    echo "Loaded image content does not match archive provenance" >&2
+    exit 65
+  fi
+
+  expected_platform=$(contract_value platform)
+  application_platform=$(
+    docker image inspect --format '{{.Os}}/{{.Architecture}}' "$application_image"
+  )
+  database_platform=$(
+    docker image inspect --format '{{.Os}}/{{.Architecture}}' "$database_image"
+  )
+  if [[ "$application_platform" != "$expected_platform" ||
+        "$database_platform" != "$expected_platform" ]]; then
+    echo "Loaded image platforms do not match the artifact contract" >&2
     exit 65
   fi
 }
