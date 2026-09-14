@@ -352,6 +352,12 @@ healthy, and shut down cleanly. See
 instructions. This is the first demoable modern business vertical slice; the
 bundle is disposable, localhost-only, and not production-supported.
 
+For the measured progress through this milestone and the low/base/high estimate
+to complete the repository roadmap through Phase 7, see the
+[modernization completion forecast](docs/modernization/modernization-completion-forecast.md).
+Customer-specific production deployment is deliberately outside that
+repository forecast.
+
 The Tomcat smoke requires HTTP 2xx/3xx from each deployed context except
 `ADInterface`, whose unrouted base path is explicitly expected to return 404;
 SOAP behavior remains a Phase 4 contract gate.
