@@ -23,6 +23,7 @@ EXPECTED_PACKAGES = {
 }
 SCENARIOS = ("low", "base", "high")
 HISTORICAL_CALENDAR_DAYS = Decimal("16.158483")
+SECONDS_PER_DAY = Decimal(86400)
 SMALL_TEAM_FACTOR = Decimal("0.70")
 
 
@@ -91,7 +92,12 @@ def historical_totals(path):
     if len(prs) != 30:
         raise ValueError(f"historical ledger must contain 30 PR rows, found {len(prs)}")
     credits = sum(Decimal(row["ai_credits"]) for row in rows)
-    return len(prs), credits
+    active_seconds = sum(
+        Decimal(row["measured_active_ai_seconds"] or 0)
+        + Decimal(row["allocated_active_ai_seconds_estimate"] or 0)
+        for row in rows
+    )
+    return len(prs), credits, active_seconds
 
 
 def main():
@@ -102,13 +108,17 @@ def main():
     with ledger_path.open(newline="") as handle:
         rows = list(csv.DictReader(handle))
     validate_rows(rows)
-    historical_prs, historical_credits = historical_totals(history_path)
+    historical_prs, historical_credits, historical_active_seconds = historical_totals(
+        history_path
+    )
     credits_per_week = historical_credits / (HISTORICAL_CALENDAR_DAYS / Decimal(7))
+    active_seconds_per_credit = historical_active_seconds / historical_credits
 
     print(
         "scenario\tremaining_prs\tremaining_credits\tsolo_weeks\t"
         "solo_sprints\tsmall_team_weeks\tsmall_team_sprints\t"
-        "raw_throughput_floor_weeks\tcost_weighted_complete_pct"
+        "observed_ai_cadence_weeks\tactive_model_days_lower_bound\t"
+        "cost_weighted_complete_pct"
     )
     for scenario in SCENARIOS:
         prs = sum(decimal(row, f"pr_{scenario}") for row in rows)
@@ -117,12 +127,14 @@ def main():
         solo_sprints = solo_weeks / Decimal(2)
         small_team_weeks = solo_weeks * SMALL_TEAM_FACTOR
         small_team_sprints = small_team_weeks / Decimal(2)
-        raw_floor = credits / credits_per_week
+        observed_ai_cadence = credits / credits_per_week
+        active_model_days = credits * active_seconds_per_credit / SECONDS_PER_DAY
         complete_pct = historical_credits / (historical_credits + credits) * Decimal(100)
         print(
             f"{scenario}\t{prs:.0f}\t{credits:.0f}\t{solo_weeks:.2f}\t"
             f"{solo_sprints:.2f}\t{small_team_weeks:.2f}\t"
-            f"{small_team_sprints:.2f}\t{raw_floor:.2f}\t{complete_pct:.2f}"
+            f"{small_team_sprints:.2f}\t{observed_ai_cadence:.2f}\t"
+            f"{active_model_days:.2f}\t{complete_pct:.2f}"
         )
 
     print(

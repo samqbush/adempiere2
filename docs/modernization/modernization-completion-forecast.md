@@ -32,17 +32,25 @@ merged legacy oracle before its modern parity work can start
 |---|---:|---:|---:|
 | Likely remaining PRs | 37 | **74** | 125 |
 | Remaining Copilot credits | 348,000 | **646,000** | 1,116,000 |
+| AI-driven wall time at the original observed cadence | 7.8 weeks | **14.5 weeks** | 25.1 weeks |
+| Active model-execution time, lower bound | 4.4 days | **8.2 days** | 14.2 days |
 | Solo maintainer + Copilot planning calendar | 23 weeks | **46 weeks** | 92 weeks |
 | Solo two-week sprints | 12 | **23** | 46 |
 | Three-person team planning calendar | 16 weeks | **32 weeks** | 64 weeks |
 | Three-person team two-week sprints | 8 | **16** | 32 |
 | Cost-weighted roadmap complete | 23% | **14%** | 8% |
 
-The base case is therefore approximately **74 more PRs, 646,000 Copilot
-credits, and 46 calendar weeks for the current solo-maintainer-plus-Copilot
-delivery shape**. A small team improves the base case to about 32 weeks, not 15
-weeks, because oracle-before-modern, merge-before-next, and Phase 5 -> Phase 6
--> Phase 7 create hard serialization.
+If "using AI" means the same delivery model used for the original effort -
+Copilot performs the analysis, implementation, debugging, documentation, and CI
+iteration while a human directs and approves the work - the base estimate is
+**about 14.5 weeks, or 3.5 months, of similarly concentrated AI-driven
+delivery**. The low/high range is 7.8-25.1 weeks.
+
+The separate 46-week base is a conservative planning calendar that adds ordinary
+availability, domain-review and stakeholder latency, and wider uncertainty for
+Phases 5h-7. A small team improves that planning calendar to about 32 weeks,
+not 14.5 weeks, because oracle-before-modern, merge-before-next, and Phase 5 ->
+Phase 6 -> Phase 7 create hard serialization.
 
 These figures are a planning model, not a commitment. The strongest conclusion
 is directional: **the accepted demo is closer to the end of the feasibility and
@@ -153,22 +161,58 @@ PR count and credits are modeled independently. The historical distribution is
 too uneven to infer one from the other: the nine demo PRs consumed only 1,465
 credits, while individual oracle/parity PRs consumed more than 10,000 credits.
 
-### Calendar interpretation
+### AI-driven completion time
 
-The validator reports a **raw throughput floor** by dividing forecast credits
-by the historical 16-day credit throughput:
+The original modernization was already an AI-driven implementation: Copilot
+performed the repository work and the user supplied direction, review, and
+approval. Extrapolating the forecast credits at the observed rate of
+102,587.72 credits over 16.158 calendar days gives:
 
-| Scenario | Raw continuous-intensity floor | Planning calendar |
+| Scenario | AI-driven wall time at the original observed cadence | Approximate duration |
+|---|---:|---:|
+| Low | 7.8 weeks | 1.8 months |
+| Base | **14.5 weeks** | **3.5 months** |
+| High | 25.1 weeks | 5.8 months |
+
+This is the direct answer to "how long if we continue doing it with AI as we did
+before?" It assumes the unusually concentrated original cadence is sustained,
+including the human steering and CI iteration that were part of that observed
+workflow.
+
+The recorded active model-runtime duration provides a second, narrower measure:
+
+| Scenario | Projected active model execution |
+|---|---:|
+| Low | 4.4 days |
+| Base | **8.2 days** |
+| High | 14.2 days |
+
+Those are aggregate model-running days, not elapsed calendar time. They are
+explicit lower bounds because the historical audit did not retain active
+runtime for every recovered model call, concurrent calls are additive, and the
+future model mix may differ. They must not be presented as "the roadmap will be
+done in eight days."
+
+A literally autonomous, no-human workflow is not estimated. The original work
+was AI-executed but human-directed, and the roadmap requires domain review,
+oracle acceptance, disabled-context decisions, database inputs, and retirement
+approvals that the repository cannot authorize by itself.
+
+### Conservative planning calendar
+
+The conservative planning view compares the AI-driven cadence with package-level
+calendar allowances:
+
+| Scenario | AI-driven observed cadence | Conservative planning calendar |
 |---|---:|---:|
 | Low | 7.8 weeks | 22.75 weeks |
 | Base | 14.5 weeks | 46 weeks |
 | High | 25.1 weeks | 92 weeks |
 
-The floor assumes the unusually concentrated demo-period intensity continues
-without interruption. It excludes ordinary availability, separate domain
-review, branch sequencing, CI queue/failure cycles, stakeholder decisions, and
-the five-day no-merge tail between PR #31 and this forecast date. It is useful
-as a mathematical lower bound, not as a delivery commitment.
+The AI-driven column assumes the unusually concentrated demo-period intensity
+continues. The conservative column allows for ordinary availability, separate
+domain review, branch sequencing, CI queue/failure cycles, stakeholder
+decisions, and the five-day no-merge tail between PR #31 and this forecast date.
 
 The planning calendar is the sum of package-level low/base/high estimates in
 the forecast ledger. It preserves the known serialization and widens
