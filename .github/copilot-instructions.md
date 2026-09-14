@@ -151,6 +151,35 @@ reproduced locally by invoking that script or compiler directly rather than
 through its Gradle task. Prefer writing new gates that way, so they stay cheap
 to reproduce.
 
+### Documentation contract preflight
+
+Documentation-only does not mean contract-free. Some fail-closed inventories
+scan Markdown and other text files across the repository, so adding or removing
+a historical technology reference can fail `Contracts` even when no runtime
+code changed.
+
+Before pushing any documentation change, run:
+
+```bash
+python3 scripts/phase4/validate-xfire-removal-inventory.py --repo-root .
+```
+
+This is the standalone equivalent of `verifyPhase4XFireRemovalInventory` and
+must stay fast enough to run locally. It catches both sides of inventory drift:
+a new XFire reference that needs a reviewed row in
+`gradle/phase4/xfire-removal.tsv`, and a stale row after the last reference in a
+file is removed. If the completion forecast changes, also update its CSV ledger
+and run:
+
+```bash
+python3 scripts/modernization/validate-modernization-completion-forecast.py
+```
+
+For future documentation-sensitive contracts, provide a standalone validator
+and add its command here when the gate is introduced. Do not spend a full
+`Contracts` run to discover drift that a repository-only script can report in
+seconds.
+
 Use `gh run watch`, `gh run view --log-failed`, and `gh run download` to drive
 and diagnose CI. Diagnose a failure from the run's **own uploaded evidence**
 before attempting any local reproduction; Phase 5f established that every

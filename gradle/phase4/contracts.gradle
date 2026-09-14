@@ -316,74 +316,20 @@ tasks.register('verifyPhase4RouteClasses') {
 	}
 }
 
-tasks.register('verifyPhase4XFireRemovalInventory') {
+tasks.register('verifyPhase4XFireRemovalInventory', Exec) {
 	group = 'verification'
 	description = 'Fails when an XFire reference is missing from the reviewed removal inventory'
-	inputs.file phase4XFireRemoval
-	doLast {
-		if (!phase4XFireRemoval.isFile()) {
-			throw new GradleException('Phase 4 XFire removal inventory is missing')
-		}
-
-		def rows = phase4XFireRemoval.readLines()
-			.collect { it.trim() }
-			.findAll { it && !it.startsWith('#') }
-			.collect { line ->
-				def fields = line.split('\t', -1)
-				if (fields.length != 3) {
-					throw new GradleException("Malformed XFire inventory row: ${line}")
-				}
-				[path: fields[0], disposition: fields[1], rationale: fields[2]]
-			}
-		def duplicatePaths = rows.groupBy { it.path }.findAll { _, entries -> entries.size() != 1 }
-		if (!duplicatePaths.isEmpty()) {
-			throw new GradleException("Duplicate XFire inventory paths: ${duplicatePaths.keySet()}")
-		}
-		def validDispositions = ['remove', 'retain-evidence', 'migrate']
-		def invalid = rows.findAll {
-			!validDispositions.contains(it.disposition) || !it.rationale
-		}
-		if (!invalid.isEmpty()) {
-			throw new GradleException("Invalid XFire inventory rows: ${invalid}")
-		}
-
-		def textExtensions = [
-			'classpath', 'gradle', 'iml', 'java', 'md', 'sh', 'tsv', 'txt', 'xml'
-		]
-		def discovered = rootProject.fileTree(rootProject.projectDir)
-			.matching {
-				exclude '.git/**'
-				exclude '.gradle/**'
-				exclude 'build/**'
-				exclude '**/.gradle/**'
-				exclude '**/build/**'
-				exclude '**/WEB-INF/classes/**'
-				exclude '**/dist/**'
-			}
-			.files
-			.findAll { it.isFile() }
-			.collect { rootProject.projectDir.toPath().relativize(it.toPath()).toString()
-				.replace(File.separatorChar, '/' as char) }
-			.findAll { relativePath ->
-				relativePath != 'gradle/phase4/xfire-removal.tsv'
-			}
-			.findAll { relativePath ->
-				def file = rootProject.file(relativePath)
-				def extension = relativePath.contains('.') ?
-					relativePath.substring(relativePath.lastIndexOf('.') + 1) : ''
-				def namedArtifact = file.name.toLowerCase().contains('xfire')
-				namedArtifact || (textExtensions.contains(extension) &&
-					file.getText('UTF-8').toLowerCase().contains('xfire'))
-			}
-			.toSet()
-		def expected = rows*.path.toSet()
-		def untracked = discovered - expected
-		def stale = expected - discovered
-		if (!untracked.isEmpty() || !stale.isEmpty()) {
-			throw new GradleException(
-				"XFire inventory drifted; untracked=${untracked.sort()}, stale=${stale.sort()}")
-		}
-	}
+	def validator = rootProject.file(
+		'scripts/phase4/validate-xfire-removal-inventory.py')
+	inputs.files phase4XFireRemoval, validator
+	workingDir rootProject.projectDir
+	commandLine(
+		'python3',
+		validator.absolutePath,
+		'--repo-root',
+		rootProject.projectDir.absolutePath,
+		'--inventory',
+		phase4XFireRemoval.absolutePath)
 }
 
 tasks.register('verifyPhase4XFireAbsent') {

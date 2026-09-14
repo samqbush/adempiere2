@@ -1,9 +1,11 @@
 # path	disposition	rationale
+.github/copilot-instructions.md	retain-evidence	Require the fast documentation preflight that keeps historical XFire references synchronized with this reviewed inventory.
 ARCHITECTURE.md	retain-evidence	Keep the historical architecture and migration decision explicit.
 docs/modernization/phase-4-evidence.md	retain-evidence	Retain the approved legacy oracle, rollback, and removal evidence.
 docs/modernization/phase-4-transitional-state.md	retain-evidence	Record the now-closed T4-1 dual-runtime state and controls.
 docs/modernization/phase-5a-evidence.md	retain-evidence	Retain evidence that Phase 5 route ownership handoff preserves the completed XFire removal gate.
 docs/modernization/phase-5e-evidence.md	retain-evidence	Phase 5e records that the Phase 4 SOAP corpus still passes under routed modern sessions; the reference is historical, not an active dependency.
+docs/modernization/modernization-completion-forecast.md	retain-evidence	Retain the roadmap forecast's completed XFire-to-CXF modernization scope as historical planning evidence.
 docs/modernization/modernization-effort-report.md	retain-evidence	Retain the historical modernization effort record; its XFire references describe the completed migration, not an active dependency.
 gradle/phase4/contracts.gradle	migrate	Retain frozen-oracle tasks as historical evidence and enforce active XFire absence.
 gradle/phase4/route-classes.tsv	migrate	Preserve the historical public XFireServlet URL as a CXF-only router alias.
@@ -17,10 +19,10 @@ org.adempiere.webservice/Notes/HowToAddNewWebService.txt	retain-evidence	Referen
 org.adempiere.webservice/build.xml	migrate	Package only the frozen XFire-versioned static WSDL resources in the CXF-only compatibility WAR.
 org.adempiere.webservice/src/router/java/org/adempiere/webservice/router/SoapCompatibilityRouter.java	migrate	Retain the historical public alias and reject any retired XFire target audit.
 org.adempiere.webservice/WEB-INF/web.xml	migrate	Preserve the public XFireServlet URL alias while routing only to CXF.
-README.md	retain-evidence	Keep the modernization history while documenting the active CXF runtime.
 scripts/phase4/smoke-xfire-oracle.sh	retain-evidence	Retain the approved rollback-oracle harness without active packaging.
 scripts/phase4/smoke-cxf-api.sh	retain-evidence	Retain XFire-free replay assertions and frozen-oracle paths.
 scripts/phase4/smoke-compatibility-router.sh	migrate	Verify CXF-only routing through both historical public paths.
+scripts/phase4/validate-xfire-removal-inventory.py	retain-evidence	Provide the repository-only validator used by both the Gradle gate and the fast documentation preflight.
 scripts/phase4/verify-installed-api.sh	migrate	Reject XFire artifacts and publication from the installed compatibility WAR.
 scripts/phase4/verify-modern-soap-war.sh	retain-evidence	Retain the XFire absence gate for the modern deployable.
 scripts/phase4/verify-release-api.sh	migrate	Reject XFire artifacts and publication from both release archives.
