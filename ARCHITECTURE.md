@@ -14,7 +14,7 @@
 
 ADempiere is a Java-based open-source business suite spanning ERP, CRM,
 manufacturing, supply-chain management, and point-of-sale capabilities
-(`README.md#L25-L27`). This repository is not only an application source tree:
+(`README.md#L6-L7`). This repository is not only an application source tree:
 it also contains the desktop and web clients, metadata-driven business engine,
 background processors, SOAP and servlet applications, database seeds and
 migrations, installer construction, release packaging, and a large checked-in
@@ -128,7 +128,7 @@ developer-oriented experimental path with machine-specific assumptions.
 **CI enforcement remains manual.** Workflow files prove that checks run, but a
 GitHub repository administrator must configure branch protection and required
 status checks for `develop`; until then they do not block merges. README badges
-likewise prove visibility, not merge blocking (`README.md#L1-L10`).
+likewise prove visibility, not merge blocking (`README.md#L3-L4`).
 
 ### Directory and module layout
 
@@ -385,7 +385,7 @@ on both code and metadata compatibility.
 | HEAD | `59557cc2ee85ac938cd4f31a246d891bc2b15b8f` | Local `git log -1`; subject: `Merge branch 'master' into develop`. |
 | Commit date | `2023-12-11T13:48:19-06:00` | Local `git log -1`. |
 | Closest description | `3.9.4.001` | Local `git describe`; product properties report `3.9.4`/`394LTS` (`utils_dev/build.properties#L5-L6`). |
-| Product | ADempiere ERP, CRM, MFG, SCM and POS | `README.md#L25-L27`. |
+| Product | ADempiere ERP, CRM, MFG, SCM and POS | `README.md#L6-L7`. |
 | Root license | GNU GPL version 2 | `LICENSE#L1-L4`. |
 
 Some source files contain different or "version 2 or later" notices. The root
@@ -395,8 +395,9 @@ legal compatibility determination.
 
 ### Repository-specific guidance
 
-- `README.md` is primarily a project introduction and CI-status surface; it does
-  not provide a complete build or contribution guide (`README.md#L1-L27`).
+- `README.md` provides stable demo, source-build, and installed-product entry
+  points while delegating changing phase status and gate details to
+  `MODERNIZATION_PLAN.md` and `docs/modernization/`.
 - No root `CONTRIBUTING`, `AGENTS.md`, `CODEOWNERS`, or existing
   `ARCHITECTURE.md` was found in this checkout.
 - The real operational rules are encoded in Ant/Gradle/sbt files and CI
