@@ -14,7 +14,7 @@
 
 ADempiere is a Java-based open-source business suite spanning ERP, CRM,
 manufacturing, supply-chain management, and point-of-sale capabilities
-(`README.md#L25-L27`). This repository is not only an application source tree:
+(`README.md#L6-L7`). This repository is not only an application source tree:
 it also contains the desktop and web clients, metadata-driven business engine,
 background processors, SOAP and servlet applications, database seeds and
 migrations, installer construction, release packaging, and a large checked-in
@@ -75,7 +75,7 @@ developer-oriented experimental path with machine-specific assumptions.
 | `xvfb-run -a ./gradlew phase3InstalledProduct ... --dependency-verification=strict` | Full installed-product gate against marker-owned disposable PostgreSQL 14.6 and Tomcat 9, including the Phase 2 DB-backed smoke and final database/role cleanup. Context base paths require HTTP 2xx/3xx except the explicitly deployment-only `ADInterface` 404. Phase 3 merged with all five PR checks green; Phase 4 owns live SOAP behavior. | `gradle/phase3/distribution.gradle`, `scripts/phase3/`, `.github/workflows/main.yml`, `docs/modernization/phase-3-evidence.md`. |
 | `./gradlew phase4ModernSoapRuntimeSmoke --dependency-verification=strict` | Builds the separate CXF/Jakarta WAR after the Phase 3 distribution, rejects XFire/shared-core servlet linkage, prepares checksum-pinned Tomcat 10.1.59 on loopback, and verifies four static WSDLs plus scalar dispatch. | `gradle/phase4/contracts.gradle`, `gradle/phase4/runtime.properties`, `scripts/phase4/smoke-cxf-runtime.sh`. |
 | `./gradlew phase4ModernSoapDatabaseSmoke -Pphase3DbSystemPassword='<password>' -Pphase3DbPort=5433 --dependency-verification=strict` | Database-backed CXF gate: creates the marker-owned Phase 3 database, rebuilds the modern WAR after the Ant runtime, replays all 33 frozen operation baselines plus 11 valid-credential/security scenarios, verifies four mutation-state deltas, and orders marker-guarded cleanup after replay. | `gradle/phase4/contracts.gradle`, `scripts/phase4/smoke-cxf-api.sh`. |
-| `./gradlew phase4FinalVerification --dependency-verification=strict` | Database-neutral final Phase 4 gate for frozen contracts, operation scenarios, route classes, active XFire absence, retained-evidence inventory, neutral/business/router tests, and modern-WAR linkage. | `gradle/phase4/contracts.gradle`, `.github/workflows/main.yml`. |
+| `./gradlew phase4FinalVerification --dependency-verification=strict` | Database-neutral final Phase 4 gate for frozen contracts, operation scenarios, route classes, active XFire absence, retained-evidence inventory, neutral/business/router tests, and modern-WAR linkage. | `gradle/phase4/contracts.gradle`, `scripts/phase4/validate-xfire-removal-inventory.py`, `.github/workflows/main.yml`. |
 | `./gradlew phase4InstalledApi -Pphase3DbSystemPassword='<password>' -Pphase3DbPort=5433 --dependency-verification=strict` | Canonical Phase 4 installed-product API gate: stages the modern WAR and checksum-pinned Tomcat 10.1 beside the installed Tomcat 9 product, embeds and verifies the same unconfigured topology in the existing 394LTS ZIP/TAR artifacts, rejects XFire runtime/publication, and replays 33 baselines through both historical forms plus 11 additional scenarios through the primary path with CXF-only route audits. | `gradle/phase4/contracts.gradle`, `gradle/phase4/installed-artifacts.txt`, `scripts/phase4/verify-installed-api.sh`, `scripts/phase4/verify-release-api.sh`, `scripts/phase4/smoke-compatibility-router.sh`. |
 | `./gradlew phase5aFinalVerification --dependency-verification=strict` | Database-neutral Phase 5a gate: regenerates and byte-compares ZK source/runtime, web-asset, namespace, and route inventories; verifies the public ZK CE 10.3.0.1-jakarta target; and preserves Phase 4 SOAP assertions during the non-SOAP route hand-off. | `gradle/phase5/contracts.gradle`, `scripts/phase5/generate-inventories.sh`, `scripts/phase5/verify-zk-target.sh`, `docs/modernization/phase-5a-evidence.md`. |
 | `./gradlew phase5bFinalVerification --dependency-verification=strict` | Database-neutral Phase 5b gate: verifies the frozen legacy web oracle in `contracts/legacy-web-v1/` against recursive WAR/nested-JAR logical digests, asserts every deployed non-SOAP route is covered with a stated proof strength or excluded with an owner and closing gate, proves the normalizer is not over-normalizing, and pins 24 runtime coordinates. Chains `phase5aFinalVerification`. | `gradle/phase5/oracle.gradle`, `scripts/phase5/`, `contracts/legacy-web-v1/`. |
@@ -128,7 +128,7 @@ developer-oriented experimental path with machine-specific assumptions.
 **CI enforcement remains manual.** Workflow files prove that checks run, but a
 GitHub repository administrator must configure branch protection and required
 status checks for `develop`; until then they do not block merges. README badges
-likewise prove visibility, not merge blocking (`README.md#L1-L10`).
+likewise prove visibility, not merge blocking (`README.md#L3-L4`).
 
 ### Directory and module layout
 
@@ -385,7 +385,7 @@ on both code and metadata compatibility.
 | HEAD | `59557cc2ee85ac938cd4f31a246d891bc2b15b8f` | Local `git log -1`; subject: `Merge branch 'master' into develop`. |
 | Commit date | `2023-12-11T13:48:19-06:00` | Local `git log -1`. |
 | Closest description | `3.9.4.001` | Local `git describe`; product properties report `3.9.4`/`394LTS` (`utils_dev/build.properties#L5-L6`). |
-| Product | ADempiere ERP, CRM, MFG, SCM and POS | `README.md#L25-L27`. |
+| Product | ADempiere ERP, CRM, MFG, SCM and POS | `README.md#L6-L7`. |
 | Root license | GNU GPL version 2 | `LICENSE#L1-L4`. |
 
 Some source files contain different or "version 2 or later" notices. The root
@@ -395,8 +395,9 @@ legal compatibility determination.
 
 ### Repository-specific guidance
 
-- `README.md` is primarily a project introduction and CI-status surface; it does
-  not provide a complete build or contribution guide (`README.md#L1-L27`).
+- `README.md` provides stable demo, source-build, and installed-product entry
+  points while delegating changing phase status and gate details to
+  `MODERNIZATION_PLAN.md` and `docs/modernization/`.
 - No root `CONTRIBUTING`, `AGENTS.md`, `CODEOWNERS`, or existing
   `ARCHITECTURE.md` was found in this checkout.
 - The real operational rules are encoded in Ant/Gradle/sbt files and CI

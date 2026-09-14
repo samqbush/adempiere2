@@ -1,9 +1,9 @@
 # ADR: Phase 5g web UI functional parity
 
 Status: accepted; `5g-0` merged to `develop` as PR #13 at `91c4c2029`;
-`5g-1a` merged as PR #16 at `1a761b55b`; amended by decision 15, added by
-increment `5g-1a-x`; amended by decision 16, added by in-progress increment
-`5g-1a-y`
+`5g-1a` merged as PR #16 at `1a761b55b`; amended by decision 15 in
+`5g-1a-x` and decision 16 in merged `5g-1a-y`; `5g-1b` and its R18 correction
+are accepted on `develop` at `0e5b42c18`
 
 Extends:
 
@@ -391,10 +391,11 @@ This is still oracle-before-modern. PR 18,
 https://github.com/samqbush/adempiere2/pull/18, later implements the shared
 production correction against the accepted answer. The `5g-1a-y` capture,
 domain review, separate freeze-off acceptance, and PR 19 merge are complete;
-the independent R15 routing hardening merged in PR 20, and PR 18 now implements
-the shared production correction while reconciling both prerequisites.
-Descendant work must consume the accepted business values and foreign-key graph
-without changing the frozen oracle.
+the independent R15 routing hardening merged in PR 20, and PR 18 implemented
+the shared production correction while reconciling both prerequisites. PR 21
+then closed the R18 fail-closed boundary regression. Descendant work must
+consume the accepted business values and foreign-key graph without changing
+the frozen oracle.
 
 If this corrected-legacy procedure is not approved, capture cannot proceed.
 The cached-context result is not silently retained or normalized away; the

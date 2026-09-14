@@ -87,21 +87,111 @@ jobs:
             "$bundle/contract.properties"
           cp docs/modernization/first-modern-business-demo.md \
             "$bundle/first-modern-business-demo.md"
-          APP_IMAGE="$(docker image inspect --format '{{.Id}}' "$(value application.image)")" \
-          DB_IMAGE="$(docker image inspect --format '{{.Id}}' "$(value database.image)")" \
+          APP_IMAGE_NAME="$(value application.image)" \
+          DB_IMAGE_NAME="$(value database.image)" \
           python3 - <<'PY'
           import json
           import os
+          import tarfile
           from pathlib import Path
 
+          archive_path = Path(
+              "build/first-modern-demo/bundle/adempiere-modern-demo-images.tar"
+          )
+          with tarfile.open(archive_path) as archive:
+              members_by_name = {}
+              for member in archive.getmembers():
+                  members_by_name.setdefault(member.name, []).append(member)
+
+              def read_json_member(name):
+                  members = members_by_name.get(name, [])
+                  if len(members) != 1:
+                      raise SystemExit(
+                          f"demo image archive must contain exactly one {name}"
+                      )
+                  extracted = archive.extractfile(members[0])
+                  if extracted is None:
+                      raise SystemExit(
+                          f"demo image archive member is unreadable: {name}"
+                      )
+                  return json.load(extracted)
+
+              legacy_manifest = read_json_member("manifest.json")
+              image_index = read_json_member("index.json")
+
+              expected_tags = {
+                  os.environ["APP_IMAGE_NAME"],
+                  os.environ["DB_IMAGE_NAME"],
+              }
+              archived_tags = {
+                  entry["RepoTags"][0]
+                  for entry in legacy_manifest
+                  if len(entry.get("RepoTags", [])) == 1
+              }
+              if len(legacy_manifest) != 2 or archived_tags != expected_tags:
+                  raise SystemExit(
+                      "demo image archive must contain exactly the two expected tags"
+                  )
+
+              def image_identities(tag):
+                  matches = [
+                      entry
+                      for entry in legacy_manifest
+                      if entry.get("RepoTags") == [tag]
+                  ]
+                  if len(matches) != 1:
+                      raise SystemExit(
+                          f"demo image archive does not contain exactly one {tag}"
+                      )
+                  config_path = matches[0].get("Config", "")
+                  config_prefix = "blobs/sha256/"
+                  if not config_path.startswith(config_prefix):
+                      raise SystemExit(
+                          f"demo image {tag} has invalid config {config_path}"
+                      )
+                  config_digest = "sha256:" + config_path.removeprefix(
+                      config_prefix
+                  )
+
+                  descriptors = []
+                  for descriptor in image_index.get("manifests", []):
+                      manifest_digest = descriptor.get("digest", "")
+                      digest_prefix = "sha256:"
+                      if not manifest_digest.startswith(digest_prefix):
+                          continue
+                      image_manifest = read_json_member(
+                          "blobs/sha256/"
+                          + manifest_digest.removeprefix(digest_prefix)
+                      )
+                      if (
+                          image_manifest.get("config", {}).get("digest")
+                          == config_digest
+                      ):
+                          descriptors.append(descriptor)
+                  if len(descriptors) != 1:
+                      raise SystemExit(
+                          f"demo image archive does not uniquely map {tag}"
+                          " to an OCI manifest"
+                      )
+                  return config_digest, descriptors[0]["digest"]
+
+              app_config, app_manifest = image_identities(
+                  os.environ["APP_IMAGE_NAME"]
+              )
+              db_config, db_manifest = image_identities(
+                  os.environ["DB_IMAGE_NAME"]
+              )
+
           payload = {
-              "schema": 1,
+              "schema": 2,
               "repository": os.environ["GITHUB_REPOSITORY"],
               "source_commit": os.environ["SOURCE_COMMIT"],
               "workflow_run_id": os.environ["SOURCE_RUN_ID"],
               "workflow_run_url": os.environ["SOURCE_RUN_URL"].strip(),
-              "application_image_id": os.environ["APP_IMAGE"],
-              "database_image_id": os.environ["DB_IMAGE"],
+              "application_image_config_digest": app_config,
+              "application_image_manifest_digest": app_manifest,
+              "database_image_config_digest": db_config,
+              "database_image_manifest_digest": db_manifest,
           }
           Path("build/first-modern-demo/bundle/provenance.json").write_text(
               json.dumps(payload, indent=2) + "\n", encoding="utf-8"

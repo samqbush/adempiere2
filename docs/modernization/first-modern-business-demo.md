@@ -163,6 +163,11 @@ database volume; use `./demo reset` first when a pristine database is required.
   artifact contract intentionally fixes the only published binding at
   `127.0.0.1:8888`.
 - **Application health timeout**: run `./demo status`, then `./demo logs`.
+- **`Loaded image identities do not match bundle provenance`**: this message
+  comes from an older bundle whose launcher compared Docker daemon image IDs.
+  Docker Desktop containerd stores can report a platform-manifest ID instead of
+  the archived config digest. Download a newer workflow artifact whose launcher
+  validates the checksummed archive manifest.
 - **Reset refusal**: do not rename or manually relabel the volume. The refusal
   is intentional; it prevents broad or ambiguous volume deletion.
 - **Slow ARM startup**: allow additional time for amd64 emulation or use a

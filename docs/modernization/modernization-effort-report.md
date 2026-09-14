@@ -2,6 +2,11 @@
 
 > **Measurement window:** 2026-08-20T19:41:26.272Z through 2026-09-05T23:29:39Z (merge of [PR #30](https://github.com/samqbush/adempiere2/pull/30)).
 > **Data snapshot:** 2026-09-09T01:02:26.380Z at repository commit `feb2c6500`. GitHub PR source SHA-256: `2b6ff8c61aa0c0bc2b628996783748590d6d46b906435910c9ab1e904e78512a`. All timestamps are UTC.
+>
+> This document is the backward-looking audit through the first demo. The
+> forward-looking repository-roadmap estimate is
+> [`modernization-completion-forecast.md`](modernization-completion-forecast.md);
+> PR #31, which added this audit, is outside the measured usage window.
 
 ## Executive summary
 
