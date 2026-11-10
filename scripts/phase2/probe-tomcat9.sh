@@ -9,7 +9,7 @@ test -n "$tomcat_version"
 work_dir=$(mktemp -d "${TMPDIR:-/tmp}/adempiere-tomcat9.XXXXXX")
 tomcat_home="$work_dir/apache-tomcat-$tomcat_version"
 archive="$work_dir/apache-tomcat-$tomcat_version.tar.gz"
-base_url="https://downloads.apache.org/tomcat/tomcat-9/v$tomcat_version/bin"
+base_url="https://archive.apache.org/dist/tomcat/tomcat-9/v$tomcat_version/bin"
 
 cleanup() {
   if [[ -x "$tomcat_home/bin/catalina.sh" ]]; then

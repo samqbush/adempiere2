@@ -33,7 +33,7 @@ fi
 archive="$phase3_root/apache-tomcat-$tomcat_version.tar.gz"
 checksum="$archive.sha512"
 extract_root="$phase3_root/tomcat-extract"
-base_url="https://downloads.apache.org/tomcat/tomcat-9/v$tomcat_version/bin"
+base_url="https://archive.apache.org/dist/tomcat/tomcat-9/v$tomcat_version/bin"
 
 rm -rf "$tomcat_home" "$extract_root"
 mkdir -p "$extract_root"
